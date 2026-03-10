@@ -10,7 +10,8 @@ from collections import defaultdict
 # ============================================================
 #  CONFIG — remplace TOKEN par ton vrai token
 # ============================================================
-TOKEN = "METS_TON_TOKEN_ICI"
+import os
+TOKEN = os.getenv("TOKEN")
 PREFIX = "."
 AI_API_KEY = "METS_TA_CLE_OPENAI_ICI"  # optionnel pour l'IA
 # ============================================================
