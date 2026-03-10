@@ -10,7 +10,7 @@ from collections import defaultdict
 # ============================================================
 #  CONFIG — remplace TOKEN par ton vrai token
 # ============================================================
-TOKEN = os.getenv("TOKEN")
+TOKEN = "METS_TON_TOKEN_ICI"
 PREFIX = "."
 AI_API_KEY = "METS_TA_CLE_OPENAI_ICI"  # optionnel pour l'IA
 # ============================================================
@@ -48,62 +48,96 @@ def get_tier(level):
 #  DONNÉES KDRAMA / ANIMÉ / GAMING
 # ============================================================
 KDRAMAS = [
-    {"title": "Crash Landing on You", "genre": "Romance", "note": "⭐ 9.2/10", "emoji": "🪂"},
-    {"title": "Goblin", "genre": "Fantasy/Romance", "note": "⭐ 9.5/10", "emoji": "🕯️"},
-    {"title": "My Love from the Star", "genre": "Romance/SF", "note": "⭐ 8.9/10", "emoji": "⭐"},
-    {"title": "Descendants of the Sun", "genre": "Romance/Action", "note": "⭐ 8.8/10", "emoji": "☀️"},
-    {"title": "Reply 1988", "genre": "Slice of Life", "note": "⭐ 9.7/10", "emoji": "📼"},
-    {"title": "Vincenzo", "genre": "Thriller/Comédie", "note": "⭐ 9.0/10", "emoji": "🦅"},
-    {"title": "Itaewon Class", "genre": "Drama/Romance", "note": "⭐ 8.7/10", "emoji": "🍺"},
-    {"title": "Kingdom", "genre": "Historique/Horreur", "note": "⭐ 9.1/10", "emoji": "👑"},
-    {"title": "Squid Game", "genre": "Thriller", "note": "⭐ 8.0/10", "emoji": "🦑"},
-    {"title": "Signal", "genre": "Policier/Thriller", "note": "⭐ 9.3/10", "emoji": "📻"},
-    {"title": "Hospital Playlist", "genre": "Médical/Slice of Life", "note": "⭐ 9.4/10", "emoji": "🩺"},
-    {"title": "Weightlifting Fairy Kim Bok-joo", "genre": "Romance/Sport", "note": "⭐ 8.9/10", "emoji": "🏋️"},
+    {"title": "Crash Landing on You", "genre": "Romance", "note": "⭐ 9.2/10", "emoji": "🪂", "image": "https://image.tmdb.org/t/p/w500/3cccEF9QZgV9bLWyupJO41HSrOV.jpg"},
+    {"title": "Goblin", "genre": "Fantasy/Romance", "note": "⭐ 9.5/10", "emoji": "🕯️", "image": "https://image.tmdb.org/t/p/w500/bEfZBQx0ewnPrMgwuXRBCPArpCI.jpg"},
+    {"title": "My Love from the Star", "genre": "Romance/SF", "note": "⭐ 8.9/10", "emoji": "⭐", "image": "https://image.tmdb.org/t/p/w500/mXpzbgeG9xYkuXCFMBwRJJnFgRr.jpg"},
+    {"title": "Descendants of the Sun", "genre": "Romance/Action", "note": "⭐ 8.8/10", "emoji": "☀️", "image": "https://image.tmdb.org/t/p/w500/4BqCcBEFbQsKsPmSXNGMtJQk5ZG.jpg"},
+    {"title": "Reply 1988", "genre": "Slice of Life", "note": "⭐ 9.7/10", "emoji": "📼", "image": "https://image.tmdb.org/t/p/w500/mXpzbgeG9xYkuXCFMBwRJJnFgRr.jpg"},
+    {"title": "Vincenzo", "genre": "Thriller/Comédie", "note": "⭐ 9.0/10", "emoji": "🦅", "image": "https://image.tmdb.org/t/p/w500/pMzqMClkMoFCCBxr0JFPNLf1L0k.jpg"},
+    {"title": "Itaewon Class", "genre": "Drama/Romance", "note": "⭐ 8.7/10", "emoji": "🍺", "image": "https://image.tmdb.org/t/p/w500/oKbmvTLQnwsYBFGy5OZDxlb9FNA.jpg"},
+    {"title": "Kingdom", "genre": "Historique/Horreur", "note": "⭐ 9.1/10", "emoji": "👑", "image": "https://image.tmdb.org/t/p/w500/zjWNEbvYT8fGGqZVkG7Hc0E7pN5.jpg"},
+    {"title": "Squid Game", "genre": "Thriller", "note": "⭐ 8.0/10", "emoji": "🦑", "image": "https://image.tmdb.org/t/p/w500/dDlEmu3EZ0Pgg93K2SVNLCjCSvE.jpg"},
+    {"title": "Signal", "genre": "Policier/Thriller", "note": "⭐ 9.3/10", "emoji": "📻", "image": "https://image.tmdb.org/t/p/w500/mXpzbgeG9xYkuXCFMBwRJJnFgRr.jpg"},
+    {"title": "Hospital Playlist", "genre": "Médical/Slice of Life", "note": "⭐ 9.4/10", "emoji": "🩺", "image": "https://image.tmdb.org/t/p/w500/mXpzbgeG9xYkuXCFMBwRJJnFgRr.jpg"},
+    {"title": "Weightlifting Fairy Kim Bok-joo", "genre": "Romance/Sport", "note": "⭐ 8.9/10", "emoji": "🏋️", "image": "https://image.tmdb.org/t/p/w500/mXpzbgeG9xYkuXCFMBwRJJnFgRr.jpg"},
 ]
 
 ANIMES = [
-    {"title": "Attack on Titan", "genre": "Action/Drame", "note": "⭐ 9.1/10", "emoji": "⚔️"},
-    {"title": "Demon Slayer", "genre": "Action/Aventure", "note": "⭐ 8.7/10", "emoji": "🗡️"},
-    {"title": "One Piece", "genre": "Aventure", "note": "⭐ 9.0/10", "emoji": "🏴‍☠️"},
-    {"title": "Death Note", "genre": "Psychologique/Thriller", "note": "⭐ 9.0/10", "emoji": "📓"},
-    {"title": "Fullmetal Alchemist: Brotherhood", "genre": "Action/Fantasy", "note": "⭐ 9.5/10", "emoji": "⚗️"},
-    {"title": "Haikyuu!!", "genre": "Sport/Drame", "note": "⭐ 9.1/10", "emoji": "🏐"},
-    {"title": "Jujutsu Kaisen", "genre": "Action/Dark Fantasy", "note": "⭐ 8.8/10", "emoji": "💥"},
-    {"title": "Vinland Saga", "genre": "Historique/Action", "note": "⭐ 9.0/10", "emoji": "🪓"},
-    {"title": "Your Lie in April", "genre": "Romance/Musique", "note": "⭐ 9.3/10", "emoji": "🎹"},
-    {"title": "Naruto Shippuden", "genre": "Action/Aventure", "note": "⭐ 8.7/10", "emoji": "🍥"},
+    {"title": "Attack on Titan", "genre": "Action/Drame", "note": "⭐ 9.1/10", "emoji": "⚔️", "image": "https://image.tmdb.org/t/p/w500/hTP1DtLGFamjfu8WqjnuScPZ0L7.jpg"},
+    {"title": "Demon Slayer", "genre": "Action/Aventure", "note": "⭐ 8.7/10", "emoji": "🗡️", "image": "https://image.tmdb.org/t/p/w500/xUfRZu2mi8jH6SzQEJGP6tjBuYj.jpg"},
+    {"title": "One Piece", "genre": "Aventure", "note": "⭐ 9.0/10", "emoji": "🏴‍☠️", "image": "https://image.tmdb.org/t/p/w500/fcXdJlbSqiIkGKy4lmNikBVMND7.jpg"},
+    {"title": "Death Note", "genre": "Psychologique/Thriller", "note": "⭐ 9.0/10", "emoji": "📓", "image": "https://image.tmdb.org/t/p/w500/iigTMoHDrMFNJILsaGHQv7HBKN0.jpg"},
+    {"title": "Fullmetal Alchemist: Brotherhood", "genre": "Action/Fantasy", "note": "⭐ 9.5/10", "emoji": "⚗️", "image": "https://image.tmdb.org/t/p/w500/qvktm0BHcnmDpIESF7LNUF0EIUO.jpg"},
+    {"title": "Haikyuu!!", "genre": "Sport/Drame", "note": "⭐ 9.1/10", "emoji": "🏐", "image": "https://image.tmdb.org/t/p/w500/bjXltNawmKvEBMoqfFHMjbMg5qf.jpg"},
+    {"title": "Jujutsu Kaisen", "genre": "Action/Dark Fantasy", "note": "⭐ 8.8/10", "emoji": "💥", "image": "https://image.tmdb.org/t/p/w500/oGyJoUmWf7os7cQfVDiEQcoADyb.jpg"},
+    {"title": "Vinland Saga", "genre": "Historique/Action", "note": "⭐ 9.0/10", "emoji": "🪓", "image": "https://image.tmdb.org/t/p/w500/wFzCudeLabAMQnGSkyuLqcMBnFm.jpg"},
+    {"title": "Your Lie in April", "genre": "Romance/Musique", "note": "⭐ 9.3/10", "emoji": "🎹", "image": "https://image.tmdb.org/t/p/w500/jtAI6OJIWLWiRItNSZoWjrsUtmi.jpg"},
+    {"title": "Naruto Shippuden", "genre": "Action/Aventure", "note": "⭐ 8.7/10", "emoji": "🍥", "image": "https://image.tmdb.org/t/p/w500/xppeysfvDKVx775MFuH8Z9ex6ew.jpg"},
 ]
 
 GAMES = [
-    {"title": "Genshin Impact", "genre": "RPG/Gacha", "emoji": "🌸"},
-    {"title": "Valorant", "genre": "FPS Tactique", "emoji": "🎯"},
-    {"title": "League of Legends", "genre": "MOBA", "emoji": "⚔️"},
-    {"title": "Elden Ring", "genre": "Action RPG", "emoji": "💀"},
-    {"title": "Stardew Valley", "genre": "Simulation", "emoji": "🌾"},
-    {"title": "Minecraft", "genre": "Sandbox", "emoji": "⛏️"},
-    {"title": "Overwatch 2", "genre": "FPS", "emoji": "🦸"},
-    {"title": "Hollow Knight", "genre": "Metroidvania", "emoji": "🦋"},
+    {"title": "Genshin Impact", "genre": "RPG/Gacha", "emoji": "🌸", "image": "https://image.tmdb.org/t/p/w500/mXpzbgeG9xYkuXCFMBwRJJnFgRr.jpg"},
+    {"title": "Valorant", "genre": "FPS Tactique", "emoji": "🎯", "image": "https://image.tmdb.org/t/p/w500/mXpzbgeG9xYkuXCFMBwRJJnFgRr.jpg"},
+    {"title": "League of Legends", "genre": "MOBA", "emoji": "⚔️", "image": "https://image.tmdb.org/t/p/w500/mXpzbgeG9xYkuXCFMBwRJJnFgRr.jpg"},
+    {"title": "Elden Ring", "genre": "Action RPG", "emoji": "💀", "image": "https://image.tmdb.org/t/p/w500/mXpzbgeG9xYkuXCFMBwRJJnFgRr.jpg"},
+    {"title": "Stardew Valley", "genre": "Simulation", "emoji": "🌾", "image": "https://image.tmdb.org/t/p/w500/mXpzbgeG9xYkuXCFMBwRJJnFgRr.jpg"},
+    {"title": "Minecraft", "genre": "Sandbox", "emoji": "⛏️", "image": "https://image.tmdb.org/t/p/w500/mXpzbgeG9xYkuXCFMBwRJJnFgRr.jpg"},
+    {"title": "Overwatch 2", "genre": "FPS", "emoji": "🦸", "image": "https://image.tmdb.org/t/p/w500/mXpzbgeG9xYkuXCFMBwRJJnFgRr.jpg"},
+    {"title": "Hollow Knight", "genre": "Metroidvania", "emoji": "🦋", "image": "https://image.tmdb.org/t/p/w500/mXpzbgeG9xYkuXCFMBwRJJnFgRr.jpg"},
 ]
 
-QUIZ_QG = [
-    # Kdrama
+# Quiz par catégorie
+QUIZ_KDRAMA = [
     {"q": "Dans quel drama joue Lee Min-ho dans le rôle de Gu Jun-pyo ?", "a": "boys over flowers"},
     {"q": "Comment s'appelle le goblin dans le drama 'Goblin' ?", "a": "kim shin"},
     {"q": "Dans 'Crash Landing on You', dans quel pays atterrit Yoon Se-ri ?", "a": "corée du nord"},
     {"q": "Quel drama coréen a été le premier à entrer dans le top 1 mondial Netflix ?", "a": "squid game"},
     {"q": "Dans 'Reply 1988', dans quel quartier de Séoul vivent les personnages ?", "a": "ssangmun-dong"},
-    # Animé
+    {"q": "Dans quel drama Park Seo-joon tient un restaurant après avoir été viré ?", "a": "itaewon class"},
+    {"q": "Quel acteur joue le rôle principal dans Vincenzo ?", "a": "song joong-ki"},
+    {"q": "Dans Goblin, quelle est la profession de Ji Eun-tak ?", "a": "lycéenne"},
+    {"q": "Combien d'épisodes compte la saison 1 de Squid Game ?", "a": "9"},
+    {"q": "Dans Kingdom, quel est le nom du prince héritier ?", "a": "lee chang"},
+]
+
+QUIZ_ANIME = [
     {"q": "Quel est le vrai nom de Light Yagami dans Death Note ?", "a": "light yagami"},
     {"q": "Dans Demon Slayer, quelle est la technique signature de Tanjiro ?", "a": "respiration de l'eau"},
     {"q": "Combien de membres compte l'équipe de volleyball de Karasuno dans Haikyuu ?", "a": "12"},
     {"q": "Dans FMA Brotherhood, quel est l'équivalent sacrifié par Ed pour ramener Alphonse ?", "a": "son bras"},
     {"q": "Quel animé se passe dans le monde des Titans derrière des murs ?", "a": "attack on titan"},
-    # Gaming
-    {"q": "Dans Genshin Impact, quel est le nom de la région de départ ?", "a": "mondstadt"},
-    {"q": "Combien de joueurs survivent à la fin d'une partie normale de Valorant ?", "a": "5"},
-    {"q": "Dans Elden Ring, comment s'appelle le monde ouvert principal ?", "a": "entre-terre"},
+    {"q": "Comment s'appelle le démon que Tanjiro affronte dans Demon Slayer ?", "a": "muzan"},
+    {"q": "Dans One Piece, quel est le fruit du diable de Luffy ?", "a": "gomu gomu"},
+    {"q": "Quel est le prénom du personnage principal de Jujutsu Kaisen ?", "a": "yuji"},
+    {"q": "Dans Your Lie in April, de quel instrument joue Kousei ?", "a": "piano"},
+    {"q": "Combien de titans primordiaux existent dans Attack on Titan ?", "a": "9"},
 ]
+
+QUIZ_GAMING = [
+    {"q": "Dans Genshin Impact, quel est le nom de la région de départ ?", "a": "mondstadt"},
+    {"q": "Dans Elden Ring, comment s'appelle le monde ouvert principal ?", "a": "entre-terre"},
+    {"q": "Dans Valorant, combien de rounds faut-il gagner pour remporter une partie ?", "a": "13"},
+    {"q": "Dans League of Legends, comment s'appelle la tour centrale à détruire ?", "a": "nexus"},
+    {"q": "Dans Minecraft, quel matériau est le plus résistant ?", "a": "netherite"},
+    {"q": "Quel est le nom du dragon final dans Skyrim ?", "a": "alduin"},
+    {"q": "Dans Genshin Impact, quel élément représente Zhongli ?", "a": "géo"},
+    {"q": "Dans Hollow Knight, comment s'appelle le royaume des insectes ?", "a": "hallownest"},
+]
+
+QUIZ_CULTURE = [
+    {"q": "Quelle est la capitale de la Corée du Sud ?", "a": "séoul"},
+    {"q": "En quelle année a eu lieu la Révolution française ?", "a": "1789"},
+    {"q": "Qui a peint la Joconde ?", "a": "léonard de vinci"},
+    {"q": "Quelle planète est la plus proche du Soleil ?", "a": "mercure"},
+    {"q": "Combien de côtés a un hexagone ?", "a": "6"},
+    {"q": "Quel est le plus grand océan du monde ?", "a": "pacifique"},
+    {"q": "Dans quel pays se trouve la Tour de Pise ?", "a": "italie"},
+    {"q": "Combien font 17 × 8 ?", "a": "136"},
+    {"q": "Quelle est la langue la plus parlée au monde ?", "a": "mandarin"},
+    {"q": "Qui a écrit Roméo et Juliette ?", "a": "shakespeare"},
+]
+
+QUIZ_QG = QUIZ_KDRAMA + QUIZ_ANIME + QUIZ_GAMING  # Pour compatibilité
 
 KDRAMA_QUOTES = [
     "\"Même si tu oublies tout, je me souviendrai pour deux.\" — Goblin 🕯️",
@@ -200,26 +234,155 @@ async def on_message(message):
 #  HELP
 # ============================================================
 @bot.command(name="help")
-async def help_cmd(ctx):
-    embed = discord.Embed(
-        title="📖 Commandes du Bot QG Kdrama",
-        description="Préfixe : `.`   |   Le bot de la communauté 🎬🎮✨",
-        color=0xff6b9d
-    )
-    embed.add_field(name="🎬 Kdrama", value="`drama` `dramarec` `quote` `oppachallenge`", inline=False)
-    embed.add_field(name="✨ Animé", value="`anime` `animerec` `animequote`", inline=False)
-    embed.add_field(name="🎮 Gaming", value="`gamerec` `lfg` `dice` `rps`", inline=False)
-    embed.add_field(name="🎯 Quiz QG", value="`quiz` — Questions Kdrama/Animé/Gaming", inline=False)
-    embed.add_field(name="⚔️ Duels", value="`duel @user` `accept` `decline`", inline=False)
-    embed.add_field(name="📊 Niveaux", value="`rank` `leaderboard`", inline=False)
-    embed.add_field(name="💰 Économie", value="`daily` `balance` `pay`", inline=False)
-    embed.add_field(name="🎫 Support", value="`ticket` `close`", inline=False)
-    embed.add_field(name="🛡️ Modération", value="`ban` `kick` `mute` `unmute` `clear`", inline=False)
-    embed.add_field(name="🤖 IA", value="`ask <question>`", inline=False)
-    embed.add_field(name="🐺 Loup Garou", value="`lg` `lgcreate` `lgjoin` `lgstart` `lgvote` `lgnuit` `lgsorciere` `lgnextday` `lgstatus` `lgstop` `lgroles`", inline=False)
-    embed.add_field(name="😄 Fun", value="`roast` `compliment` `8ball` `meme`", inline=False)
-    embed.set_footer(text="QG Kdrama 🎬 • Bon drama et bonnes parties !")
-    await ctx.send(embed=embed)
+async def help_cmd(ctx, categorie: str = None):
+    if categorie is None:
+        # Menu principal
+        embed = discord.Embed(
+            title="📖 Aide — Bot QG Kdrama",
+            description=(
+                "Bienvenue ! Voici toutes les catégories de commandes.\n"
+                "Tape `.help <catégorie>` pour voir les détails !\n\n"
+                "**Exemple :** `.help kdrama` ou `.help loupgarou`"
+            ),
+            color=0xff6b9d
+        )
+        embed.add_field(name="🎬 `.help kdrama`", value="Dramas coréens, recommandations, citations", inline=True)
+        embed.add_field(name="✨ `.help anime`", value="Animés, recommandations, citations", inline=True)
+        embed.add_field(name="🎮 `.help gaming`", value="Jeux, LFG, mini-jeux", inline=True)
+        embed.add_field(name="📊 `.help niveaux`", value="XP, rang, classement", inline=True)
+        embed.add_field(name="💰 `.help economie`", value="Pièces, boutique, transferts", inline=True)
+        embed.add_field(name="⚔️ `.help duels`", value="Défis entre membres", inline=True)
+        embed.add_field(name="🐺 `.help loupgarou`", value="Jeu de rôle complet", inline=True)
+        embed.add_field(name="🎫 `.help support`", value="Tickets d'aide", inline=True)
+        embed.add_field(name="🛡️ `.help modo`", value="Outils de modération", inline=True)
+        embed.add_field(name="🤖 `.help ia`", value="Intelligence artificielle", inline=True)
+        embed.add_field(name="😄 `.help fun`", value="Commandes fun et délire", inline=True)
+        embed.set_footer(text="QG Kdrama 🎬 • Préfixe : .  •  Bon drama et bonnes parties !")
+        await ctx.send(embed=embed)
+
+    elif categorie.lower() == "kdrama":
+        embed = discord.Embed(title="🎬 Commandes Kdrama", color=0xff6b9d)
+        embed.add_field(name="`.drama`", value="Affiche un drama coréen aléatoire avec sa note et son genre", inline=False)
+        embed.add_field(name="`.dramarec [genre]`", value="Recommande un drama selon le genre\nEx: `.dramarec romance` ou `.dramarec thriller`", inline=False)
+        embed.add_field(name="`.quote`", value="Affiche une citation inspirante tirée d'un Kdrama", inline=False)
+        embed.add_field(name="`.oppachallenge`", value="Lance un défi fun lié aux Kdramas pour toi ou le serveur !", inline=False)
+        embed.set_footer(text="💡 Genres dispo : romance, thriller, fantasy, historique, médical...")
+        await ctx.send(embed=embed)
+
+    elif categorie.lower() == "anime":
+        embed = discord.Embed(title="✨ Commandes Animé", color=0x5865F2)
+        embed.add_field(name="`.anime`", value="Affiche un animé aléatoire avec sa note et son genre", inline=False)
+        embed.add_field(name="`.animerec [genre]`", value="Recommande un animé selon le genre\nEx: `.animerec action` ou `.animerec romance`", inline=False)
+        embed.add_field(name="`.animequote`", value="Affiche une citation culte d'un animé", inline=False)
+        embed.set_footer(text="💡 Genres dispo : action, romance, sport, psychologique, fantasy...")
+        await ctx.send(embed=embed)
+
+    elif categorie.lower() == "gaming":
+        embed = discord.Embed(title="🎮 Commandes Gaming", color=0x2ecc71)
+        embed.add_field(name="`.gamerec [genre]`", value="Recommande un jeu vidéo selon le genre\nEx: `.gamerec rpg` ou `.gamerec fps`", inline=False)
+        embed.add_field(name="`.lfg [jeu]`", value="Cherche des coéquipiers pour jouer ensemble\nEx: `.lfg Valorant` — les intéressés réagissent avec 🎮", inline=False)
+        embed.add_field(name="`.rps <choix>`", value="Pierre Feuille Ciseaux contre le bot !\nEx: `.rps pierre` / `.rps feuille` / `.rps ciseaux`\n✅ Victoire = +20 pièces", inline=False)
+        embed.add_field(name="`.dice [faces]`", value="Lance un dé ! Par défaut 6 faces\nEx: `.dice` ou `.dice 20` pour un dé à 20 faces", inline=False)
+        await ctx.send(embed=embed)
+
+    elif categorie.lower() == "niveaux":
+        embed = discord.Embed(title="📊 Commandes Niveaux & XP", color=0xf1c40f)
+        embed.add_field(name="`.rank [@joueur]`", value="Affiche ton niveau, XP et titre actuel\nEx: `.rank` ou `.rank @ami`", inline=False)
+        embed.add_field(name="`.leaderboard`", value="Affiche le top 10 des membres les plus actifs du serveur", inline=False)
+        embed.add_field(name="📈 Comment gagner de l'XP ?", value="Tu gagnes de l'XP automatiquement en **chattant** dans le serveur !\nChaque message = 3 à 8 XP aléatoires", inline=False)
+        embed.add_field(name="🏆 Titres disponibles", value=(
+            "Niv.1 → 🎬 Spectateur Débutant\n"
+            "Niv.5 → 📺 Fan de Kdrama\n"
+            "Niv.10 → 🎮 Gamer Kdrama\n"
+            "Niv.15 → ✨ Otaku Confirmé\n"
+            "Niv.20 → 👑 Légende du QG\n"
+            "Niv.30 → 💫 Dieu du QG Kdrama"
+        ), inline=False)
+        await ctx.send(embed=embed)
+
+    elif categorie.lower() == "economie":
+        embed = discord.Embed(title="💰 Commandes Économie", color=0xf39c12)
+        embed.add_field(name="`.daily`", value="Récupère tes pièces journalières (100 à 500 pièces)\n⏳ Disponible une fois toutes les 24h", inline=False)
+        embed.add_field(name="`.balance [@joueur]`", value="Affiche ton solde de pièces\nEx: `.balance` ou `.balance @ami`", inline=False)
+        embed.add_field(name="`.pay @joueur <montant>`", value="Envoie des pièces à un autre membre\nEx: `.pay @ami 100`", inline=False)
+        embed.add_field(name="💡 Comment gagner des pièces ?", value=(
+            "• `.daily` — Pièces journalières\n"
+            "• `.quiz` — Bonne réponse = 50-150 pièces\n"
+            "• `.rps` — Victoire = 20 pièces\n"
+            "• `.duel` — Victoire = 50-200 pièces"
+        ), inline=False)
+        await ctx.send(embed=embed)
+
+    elif categorie.lower() == "duels":
+        embed = discord.Embed(title="⚔️ Commandes Duels", color=0xe74c3c)
+        embed.add_field(name="`.duel @joueur`", value="Lance un défi à un membre du serveur\nEx: `.duel @ami`", inline=False)
+        embed.add_field(name="`.accept`", value="Accepte un défi qui t'a été lancé", inline=False)
+        embed.add_field(name="`.decline`", value="Refuse un défi qui t'a été lancé", inline=False)
+        embed.add_field(name="⚡ Comment ça marche ?", value=(
+            "1. Tu lances `.duel @joueur`\n"
+            "2. L'adversaire tape `.accept`\n"
+            "3. Le bot tire au sort le gagnant\n"
+            "4. Le gagnant remporte **50-200 pièces** au perdant !"
+        ), inline=False)
+        await ctx.send(embed=embed)
+
+    elif categorie.lower() in ["loupgarou", "lg", "loup"]:
+        embed = discord.Embed(title="🐺 Commandes Loup Garou", color=0x2c3e50)
+        embed.add_field(name="`.lg`", value="Affiche l'aide complète du Loup Garou", inline=False)
+        embed.add_field(name="`.lgroles`", value="Affiche tous les rôles disponibles et leurs pouvoirs", inline=False)
+        embed.add_field(name="`.lgcreate`", value="Crée une nouvelle partie (tu deviens l'hôte)", inline=False)
+        embed.add_field(name="`.lgjoin`", value="Rejoins la partie en attente", inline=False)
+        embed.add_field(name="`.lgstart`", value="Lance la partie — envoie les rôles en DM (hôte uniquement)", inline=False)
+        embed.add_field(name="`.lgvote @joueur`", value="Vote pour éliminer un suspect pendant le jour", inline=False)
+        embed.add_field(name="`.lgnuit @joueur`", value="⚠️ En MP avec le bot — Action de nuit selon ton rôle\n• Loup : désigne ta victime\n• Voyante : découvre un rôle\n• Cupidon : lie deux amoureux", inline=False)
+        embed.add_field(name="`.lgsorciere vie/mort @joueur`", value="⚠️ En MP — Utilise une potion\n• `vie` : sauve la victime de la nuit\n• `mort @joueur` : empoisonne quelqu'un", inline=False)
+        embed.add_field(name="`.lgnextday`", value="Passe à la phase de jour et révèle les morts (hôte uniquement)", inline=False)
+        embed.add_field(name="`.lgstatus`", value="Affiche les joueurs encore en vie et les éliminés", inline=False)
+        embed.add_field(name="`.lgstop`", value="Annule la partie en cours (hôte ou admin)", inline=False)
+        embed.set_footer(text="🐺 5 à 12 joueurs • Rôles envoyés en DM automatiquement !")
+        await ctx.send(embed=embed)
+
+    elif categorie.lower() == "support":
+        embed = discord.Embed(title="🎫 Commandes Support", color=0x5865F2)
+        embed.add_field(name="`.ticket`", value="Ouvre un ticket de support privé\nUn salon secret est créé, visible uniquement par toi et le staff", inline=False)
+        embed.add_field(name="`.close`", value="Ferme et supprime le ticket (dans le salon ticket uniquement)", inline=False)
+        embed.set_footer(text="💡 Utilise le ticket pour contacter le staff en privé !")
+        await ctx.send(embed=embed)
+
+    elif categorie.lower() in ["modo", "moderation", "modération"]:
+        embed = discord.Embed(title="🛡️ Commandes Modération", color=0x95a5a6)
+        embed.add_field(name="`.ban @joueur [raison]`", value="Bannit définitivement un membre du serveur\nEx: `.ban @spam Publicité non autorisée`", inline=False)
+        embed.add_field(name="`.kick @joueur [raison]`", value="Expulse un membre du serveur (il peut revenir)\nEx: `.kick @joueur Comportement inapproprié`", inline=False)
+        embed.add_field(name="`.mute @joueur [minutes]`", value="Rend un membre muet pendant X minutes (10 par défaut)\nEx: `.mute @joueur 30`", inline=False)
+        embed.add_field(name="`.unmute @joueur`", value="Retire le mute d'un membre avant la fin du timer", inline=False)
+        embed.add_field(name="`.clear [nombre]`", value="Supprime X messages dans le salon (5 par défaut)\nEx: `.clear 10`", inline=False)
+        embed.set_footer(text="⚠️ Réservé aux membres avec les permissions appropriées")
+        await ctx.send(embed=embed)
+
+    elif categorie.lower() == "ia":
+        embed = discord.Embed(title="🤖 Commandes IA", color=0x9b59b6)
+        embed.add_field(name="`.ask <question>`", value=(
+            "Pose une question à l'IA du QG !\n"
+            "L'IA connaît les Kdramas, animés et jeux vidéo 🎬\n\n"
+            "**Exemples :**\n"
+            "• `.ask Quel Kdrama regarder si j'aime les romances ?`\n"
+            "• `.ask C'est quoi Attack on Titan ?`\n"
+            "• `.ask Donne moi des astuces pour Genshin Impact`"
+        ), inline=False)
+        embed.set_footer(text="⚠️ Nécessite une clé OpenAI configurée par l'admin")
+        await ctx.send(embed=embed)
+
+    elif categorie.lower() == "fun":
+        embed = discord.Embed(title="😄 Commandes Fun", color=0xff6b9d)
+        embed.add_field(name="`.roast [@joueur]`", value="Se fait rôtir par le bot avec une vanne Kdrama/Gaming\nEx: `.roast` ou `.roast @ami`", inline=False)
+        embed.add_field(name="`.compliment [@joueur]`", value="Reçois un compliment stylé façon Kdrama !\nEx: `.compliment` ou `.compliment @ami`", inline=False)
+        embed.add_field(name="`.8ball <question>`", value="Pose une question à la boule magique du QG !\nEx: `.8ball Est-ce que je vais finir Goblin ce soir ?`", inline=False)
+        embed.add_field(name="`.meme`", value="Affiche un meme aléatoire 😂", inline=False)
+        embed.add_field(name="`.quiz`", value="Lance une question sur les Kdramas, animés ou jeux\n✅ Bonne réponse = pièces + XP bonus !", inline=False)
+        await ctx.send(embed=embed)
+
+    else:
+        await ctx.send(f"❌ Catégorie `{categorie}` inconnue ! Tape `.help` pour voir toutes les catégories.")
 
 # ============================================================
 #  KDRAMA COMMANDS
@@ -233,12 +396,12 @@ async def drama(ctx):
         description=f"**Genre :** {d['genre']}\n**Note :** {d['note']}",
         color=0xff6b9d
     )
-    embed.set_footer(text="💡 Tape .dramarec pour une recommandation personnalisée !")
+    embed.set_image(url=d['image'])
+    embed.set_footer(text="💡 Tape .dramarec [genre] pour une recommandation personnalisée !")
     await ctx.send(embed=embed)
 
 @bot.command()
 async def dramarec(ctx, *, genre: str = None):
-    """Recommande un drama selon le genre (romance, thriller, fantasy...)"""
     if genre:
         filtered = [d for d in KDRAMAS if genre.lower() in d['genre'].lower()]
         if not filtered:
@@ -251,22 +414,17 @@ async def dramarec(ctx, *, genre: str = None):
         description=f"**{d['emoji']} {d['title']}**\nGenre : {d['genre']} | {d['note']}",
         color=0xff6b9d
     )
+    embed.set_image(url=d['image'])
     embed.set_footer(text="Good luck pour les feels 😭")
     await ctx.send(embed=embed)
 
 @bot.command()
 async def quote(ctx):
-    """Quote Kdrama inspirante"""
-    embed = discord.Embed(
-        title="💬 Quote Kdrama",
-        description=random.choice(KDRAMA_QUOTES),
-        color=0xc39bd3
-    )
+    embed = discord.Embed(title="💬 Quote Kdrama", description=random.choice(KDRAMA_QUOTES), color=0xc39bd3)
     await ctx.send(embed=embed)
 
 @bot.command()
 async def oppachallenge(ctx):
-    """Un challenge drama fun"""
     challenges = [
         "Regarde un épisode de drama sans pleurer 😭 (impossible)",
         "Nomme 5 acteurs coréens en moins de 10 secondes !",
@@ -294,7 +452,8 @@ async def anime(ctx):
         description=f"**Genre :** {a['genre']}\n**Note :** {a['note']}",
         color=0x5865F2
     )
-    embed.set_footer(text="✨ Tape .animerec pour une recommandation !")
+    embed.set_image(url=a['image'])
+    embed.set_footer(text="✨ Tape .animerec [genre] pour une recommandation !")
     await ctx.send(embed=embed)
 
 @bot.command()
@@ -355,22 +514,44 @@ async def lfg(ctx, *, game: str = None):
     await msg.add_reaction("🎮")
 
 # ============================================================
-#  QUIZ QG (Kdrama + Animé + Gaming)
+#  QUIZ QG — Par catégorie + Mode Duel 1v1 + Multijoueur
 # ============================================================
 active_quiz = {}
+quiz_duels = {}  # {channel_id: {players, scores, theme, round, total_rounds}}
+
+QUIZ_THEMES = {
+    "kdrama": QUIZ_KDRAMA,
+    "anime": QUIZ_ANIME,
+    "gaming": QUIZ_GAMING,
+    "culture": QUIZ_CULTURE,
+    "mix": QUIZ_KDRAMA + QUIZ_ANIME + QUIZ_GAMING + QUIZ_CULTURE,
+}
+
+THEME_LABELS = {
+    "kdrama": "🎬 Kdrama",
+    "anime": "✨ Animé",
+    "gaming": "🎮 Gaming",
+    "culture": "🌍 Culture Générale",
+    "mix": "🎲 Mix",
+}
 
 @bot.command()
-async def quiz(ctx):
-    if ctx.channel.id in active_quiz:
+async def quiz(ctx, theme: str = "mix"):
+    """Quiz solo — .quiz [kdrama/anime/gaming/culture/mix]"""
+    theme = theme.lower()
+    if theme not in QUIZ_THEMES:
+        return await ctx.send(f"❌ Thème invalide ! Choisis parmi : `kdrama`, `anime`, `gaming`, `culture`, `mix`")
+    if ctx.channel.id in active_quiz or ctx.channel.id in quiz_duels:
         return await ctx.send("❓ Un quiz est déjà en cours ici !")
-    q = random.choice(QUIZ_QG)
-    active_quiz[ctx.channel.id] = q["a"]
+
+    q = random.choice(QUIZ_THEMES[theme])
+    active_quiz[ctx.channel.id] = {"answer": q["a"], "theme": theme}
     embed = discord.Embed(
-        title="🎯 Quiz QG Kdrama !",
+        title=f"🎯 Quiz {THEME_LABELS[theme]}",
         description=f"**{q['q']}**",
         color=0xf1c40f
     )
-    embed.set_footer(text="⏳ 30 secondes pour répondre !")
+    embed.set_footer(text="⏳ 30 secondes • Premier à répondre gagne !")
     await ctx.send(embed=embed)
 
     def check(m):
@@ -378,7 +559,10 @@ async def quiz(ctx):
 
     try:
         msg = await bot.wait_for("message", check=check, timeout=30)
-        correct = active_quiz.pop(ctx.channel.id, None)
+        data = active_quiz.pop(ctx.channel.id, None)
+        if not data:
+            return
+        correct = data["answer"]
         if msg.content.lower().strip() == correct:
             prize = random.randint(50, 150)
             economy_data[str(msg.author.id)]["coins"] += prize
@@ -388,14 +572,152 @@ async def quiz(ctx):
                 color=0x2ecc71
             ))
         else:
-            active_quiz.pop(ctx.channel.id, None)
             await ctx.send(embed=discord.Embed(
-                description=f"❌ Perdu ! La bonne réponse était : **{correct}**",
+                description=f"❌ Mauvaise réponse ! La bonne réponse était : **{correct}**",
                 color=0xe74c3c
             ))
     except asyncio.TimeoutError:
         active_quiz.pop(ctx.channel.id, None)
         await ctx.send("⏰ Temps écoulé ! Personne n'a trouvé.")
+
+@bot.command(name="quizduel")
+async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
+    """Duel quiz — .quizduel [theme] @joueur1 @joueur2 ...
+    Ex: .quizduel kdrama @ami
+    Ex: .quizduel anime @ami1 @ami2 @ami3"""
+    theme = theme.lower()
+    if theme not in QUIZ_THEMES:
+        # Peut-être que c'est une mention pas un thème
+        return await ctx.send(
+            "❌ Utilise : `.quizduel <thème> @joueur1 @joueur2 ...`\n"
+            "Thèmes : `kdrama` `anime` `gaming` `culture` `mix`\n"
+            "Exemple : `.quizduel kdrama @ami`"
+        )
+    if not opponents:
+        return await ctx.send("❌ Mentionne au moins un adversaire !\nEx: `.quizduel anime @ami`")
+    if ctx.channel.id in active_quiz or ctx.channel.id in quiz_duels:
+        return await ctx.send("❓ Un quiz est déjà en cours ici !")
+
+    # Liste des joueurs : auteur + adversaires
+    all_players = [ctx.author] + list(opponents)
+    # Filtrer les bots
+    all_players = [p for p in all_players if not p.bot]
+    if len(all_players) < 2:
+        return await ctx.send("❌ Il faut au moins 2 joueurs humains !")
+
+    TOTAL_ROUNDS = 5
+    quiz_duels[ctx.channel.id] = {
+        "players": {p.id: {"name": p.display_name, "score": 0} for p in all_players},
+        "theme": theme,
+        "round": 0,
+        "total": TOTAL_ROUNDS,
+        "questions_used": [],
+    }
+
+    players_str = " vs ".join([f"**{p.display_name}**" for p in all_players])
+    embed = discord.Embed(
+        title=f"⚔️ Quiz Duel — {THEME_LABELS[theme]}",
+        description=(
+            f"{players_str}\n\n"
+            f"**{TOTAL_ROUNDS} questions • Premier à répondre marque un point !**\n\n"
+            "La partie commence dans 3 secondes... 🎯"
+        ),
+        color=0xff6b9d
+    )
+    await ctx.send(embed=embed)
+    await asyncio.sleep(3)
+
+    # Boucle des rounds
+    player_ids = set(p.id for p in all_players)
+
+    for round_num in range(1, TOTAL_ROUNDS + 1):
+        if ctx.channel.id not in quiz_duels:
+            break
+
+        # Choisir une question pas encore posée
+        available = [q for q in QUIZ_THEMES[theme] if q["a"] not in quiz_duels[ctx.channel.id]["questions_used"]]
+        if not available:
+            available = QUIZ_THEMES[theme]
+        q = random.choice(available)
+        quiz_duels[ctx.channel.id]["questions_used"].append(q["a"])
+
+        embed = discord.Embed(
+            title=f"🎯 Round {round_num}/{TOTAL_ROUNDS} — {THEME_LABELS[theme]}",
+            description=f"**{q['q']}**",
+            color=0xf1c40f
+        )
+        # Afficher le score actuel
+        scores = quiz_duels[ctx.channel.id]["players"]
+        score_str = " | ".join([f"{data['name']}: {data['score']}" for data in scores.values()])
+        embed.set_footer(text=f"⏳ 20 secondes • Scores: {score_str}")
+        await ctx.send(embed=embed)
+
+        def check_duel(m):
+            return m.channel == ctx.channel and m.author.id in player_ids and not m.author.bot
+
+        answered = False
+        try:
+            msg = await bot.wait_for("message", check=check_duel, timeout=20)
+            if ctx.channel.id not in quiz_duels:
+                break
+            if msg.content.lower().strip() == q["a"]:
+                quiz_duels[ctx.channel.id]["players"][msg.author.id]["score"] += 1
+                score = quiz_duels[ctx.channel.id]["players"][msg.author.id]["score"]
+                await ctx.send(embed=discord.Embed(
+                    description=f"✅ **{msg.author.display_name}** a trouvé ! ({score} pt{'s' if score > 1 else ''})",
+                    color=0x2ecc71
+                ))
+                answered = True
+            else:
+                await ctx.send(embed=discord.Embed(
+                    description=f"❌ **{msg.author.display_name}** — Mauvaise réponse ! La réponse était : **{q['a']}**",
+                    color=0xe74c3c
+                ))
+        except asyncio.TimeoutError:
+            await ctx.send(embed=discord.Embed(
+                description=f"⏰ Temps écoulé ! La réponse était : **{q['a']}**",
+                color=0x95a5a6
+            ))
+
+        await asyncio.sleep(2)
+
+    # Fin du duel
+    if ctx.channel.id not in quiz_duels:
+        return
+
+    final_scores = quiz_duels.pop(ctx.channel.id)["players"]
+    sorted_scores = sorted(final_scores.values(), key=lambda x: x["score"], reverse=True)
+
+    # Trouver le gagnant
+    top_score = sorted_scores[0]["score"]
+    winners = [p for p in sorted_scores if p["score"] == top_score]
+
+    if len(winners) > 1:
+        result = f"🤝 **Égalité !** {' et '.join([w['name'] for w in winners])} avec {top_score} point{'s' if top_score > 1 else ''} !"
+        prize = 50
+        for p in all_players:
+            if final_scores[p.id]["score"] == top_score:
+                economy_data[str(p.id)]["coins"] += prize
+    else:
+        winner = winners[0]
+        result = f"🏆 **{winner['name']}** remporte le duel avec **{winner['score']} point{'s' if winner['score'] > 1 else ''}** !"
+        # Donner des pièces au gagnant
+        winner_id = next(pid for pid, data in final_scores.items() if data["name"] == winner["name"])
+        prize = random.randint(100, 300)
+        economy_data[str(winner_id)]["coins"] += prize
+        xp_data[str(winner_id)]["xp"] += 50
+        result += f"\n💰 +{prize} pièces & +50 XP !"
+
+    embed = discord.Embed(
+        title="🏆 Résultats du Quiz Duel !",
+        description=result,
+        color=0xf1c40f
+    )
+    scores_final = "\n".join([f"{'🥇' if i==0 else '🥈' if i==1 else '🥉' if i==2 else '▪️'} **{p['name']}** — {p['score']} pt{'s' if p['score'] > 1 else ''}" for i, p in enumerate(sorted_scores)])
+    embed.add_field(name="📊 Classement final", value=scores_final, inline=False)
+    await ctx.send(embed=embed)
+
+
 
 # ============================================================
 #  NIVEAUX / XP
@@ -1406,4 +1728,3 @@ async def lg_stop(ctx):
 
 # ============================================================
 bot.run(TOKEN)
-
