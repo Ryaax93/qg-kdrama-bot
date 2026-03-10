@@ -1,0 +1,11 @@
+# Dépendances principales
+discord.py==2.3.2
+PyNaCl==1.5.0
+
+# Musique (YouTube + Spotify)
+yt-dlp
+spotipy
+ffmpeg-python
+
+# IA (optionnel)
+openai
