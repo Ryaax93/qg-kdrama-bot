@@ -3120,7 +3120,7 @@ async def bracket_cmd(ctx, theme: str = None):
     await bracket_lancer_match(ctx, gid, 0)
 
 async def bracket_lancer_match(ctx, gid, match_idx):
-    """Lance un match du bracket avec vote"""
+    """Lance un match du bracket avec vote — deux affiches séparées"""
     if gid not in active_brackets:
         return
     game = active_brackets[gid]
@@ -3131,20 +3131,36 @@ async def bracket_lancer_match(ctx, gid, match_idx):
 
     a, b = matchs[match_idx]
     channel = ctx.guild.get_channel(game["channel"])
+    theme_label = "Kdrama" if game["theme"] == "kdrama" else "Animé"
 
-    embed = discord.Embed(
+    # Affiche A
+    embed_a = discord.Embed(
         title=f"⚔️ DUEL — Tour {game['tour']} • Match {match_idx+1}/{len(matchs)}",
-        description=(
-            f"## 🅰️ {a['nom']}\nvs\n## 🅱️ {b['nom']}\n\n"
-            f"**Vote 🅰️ ou 🅱️ ci-dessous !**\n⏳ Résultat dans **24h** (ou quand l'hôte tape `.bracketskip`)"
-        ),
+        description=f"## 🅰️ {a['nom']}",
+        color=0x3498db
+    )
+    embed_a.set_image(url=a["image"])
+    await channel.send(embed=embed_a)
+
+    # Affiche B
+    embed_b = discord.Embed(
+        description=f"## 🅱️ {b['nom']}",
         color=0xe74c3c
     )
-    embed.set_thumbnail(url=a["image"])
-    embed.set_image(url=b["image"])
-    embed.set_footer(text=f"🏆 Tournoi {'Kdrama' if game['theme'] == 'kdrama' else 'Animé'} — QG Kdrama")
+    embed_b.set_image(url=b["image"])
+    await channel.send(embed=embed_b)
 
-    msg = await channel.send(embed=embed)
+    # Message de vote
+    embed_vote = discord.Embed(
+        description=(
+            f"**🅰️ {a['nom']}** vs **🅱️ {b['nom']}**\n\n"
+            f"👆 Vote avec 🅰️ ou 🅱️ sur ce message !\n"
+            f"⏳ Résultat dans **24h** (ou `.bracketskip` pour passer)"
+        ),
+        color=0xf1c40f
+    )
+    embed_vote.set_footer(text=f"🏆 Tournoi {theme_label} — QG Kdrama")
+    msg = await channel.send(embed=embed_vote)
     await msg.add_reaction("🅰️")
     await msg.add_reaction("🅱️")
 
