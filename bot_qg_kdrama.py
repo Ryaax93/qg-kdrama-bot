@@ -281,18 +281,19 @@ async def help_cmd(ctx, categorie: str = None):
 
     elif categorie.lower() in ["loupgarou", "lg", "loup"]:
         embed = discord.Embed(title="🐺 Commandes Loup Garou", color=0x2c3e50)
+        embed.add_field(name="🎙️ Narration vocale automatique !", value="Le bot rejoint le salon vocal et narre les phases avec une vraie voix française ! 🎭\n*(Rejoins un vocal avant de lancer la partie)*", inline=False)
         embed.add_field(name="`.lg`", value="Affiche l'aide complète du Loup Garou", inline=False)
         embed.add_field(name="`.lgroles`", value="Affiche tous les rôles disponibles et leurs pouvoirs", inline=False)
         embed.add_field(name="`.lgcreate`", value="Crée une nouvelle partie (tu deviens l'hôte)", inline=False)
         embed.add_field(name="`.lgjoin`", value="Rejoins la partie en attente", inline=False)
-        embed.add_field(name="`.lgstart`", value="Lance la partie — envoie les rôles en DM (hôte uniquement)", inline=False)
+        embed.add_field(name="`.lgstart`", value="Lance la partie — envoie les rôles en DM + narration vocale de début 🎙️", inline=False)
         embed.add_field(name="`.lgvote @joueur`", value="Vote pour éliminer un suspect pendant le jour", inline=False)
         embed.add_field(name="`.lgnuit @joueur`", value="⚠️ En MP avec le bot — Action de nuit selon ton rôle\n• Loup : désigne ta victime\n• Voyante : découvre un rôle\n• Cupidon : lie deux amoureux", inline=False)
         embed.add_field(name="`.lgsorciere vie/mort @joueur`", value="⚠️ En MP — Utilise une potion\n• `vie` : sauve la victime de la nuit\n• `mort @joueur` : empoisonne quelqu'un", inline=False)
-        embed.add_field(name="`.lgnextday`", value="Passe à la phase de jour et révèle les morts (hôte uniquement)", inline=False)
+        embed.add_field(name="`.lgnextday`", value="Passe à la phase de jour — révèle les morts + narration vocale 🎙️ (hôte uniquement)", inline=False)
         embed.add_field(name="`.lgstatus`", value="Affiche les joueurs encore en vie et les éliminés", inline=False)
         embed.add_field(name="`.lgstop`", value="Annule la partie en cours (hôte ou admin)", inline=False)
-        embed.set_footer(text="🐺 5 à 12 joueurs • Rôles envoyés en DM automatiquement !")
+        embed.set_footer(text="🐺 5 à 12 joueurs • Rôles en DM • Narration vocale automatique !")
         await ctx.send(embed=embed)
 
     elif categorie.lower() == "support":
@@ -323,10 +324,30 @@ async def help_cmd(ctx, categorie: str = None):
 
     elif categorie.lower() == "blindtest":
         embed = discord.Embed(title="🎵 Commandes Blind Test", color=0x9b59b6)
-        embed.add_field(name="`.blindtest`", value="Lance un blind test OST solo\nTout le monde peut répondre, le plus rapide gagne !", inline=False)
-        embed.add_field(name="`.blindduel @joueur`", value="Duel blind test 1v1 ou multi (jusqu'à 4 adversaires)\nEx: `.blindduel @ami` ou `.blindduel @ami1 @ami2`\n5 OSTs • Premier à trouver marque un point !", inline=False)
-        embed.add_field(name="💡 Comment ça marche ?", value="Le bot affiche le titre avec 1 lettre sur 2 cachée\nEx: `G_bl_n O_T` → tape le nom de l'animé/drama !", inline=False)
-        embed.set_footer(text="🎵 OSTs de Kdramas, animés et dessins animés !")
+        embed.add_field(name="`.blindtest [thème]`", value=(
+            "Lance un blind test OST **en vocal** — le bot rejoint ton salon et joue la vraie musique !\n"
+            "Tout le monde peut répondre, le plus rapide gagne !\n"
+            "Ex: `.blindtest anime` | `.blindtest kdrama` | `.blindtest dessinanime` | `.blindtest mix`"
+        ), inline=False)
+        embed.add_field(name="`.blindduel [thème] @joueur`", value=(
+            "Duel blind test 1v1 ou multi avec musique en vocal !\n"
+            "Ex: `.blindduel anime @ami` | `.blindduel kdrama @ami1 @ami2`\n"
+            "5 OSTs • Premier à trouver marque un point !"
+        ), inline=False)
+        embed.add_field(name="🎵 Thèmes disponibles", value=(
+            "`anime` — OSTs d'animés (AOT, Naruto, One Piece...)\n"
+            "`kdrama` — OSTs de Kdramas (Goblin, Squid Game, Signal...)\n"
+            "`dessinanime` — Génériques FR (Pokémon, Code Lyoko, Miraculous...)\n"
+            "`mix` — Tout mélangé ! (défaut)"
+        ), inline=False)
+        embed.add_field(name="💡 Comment ça marche ?", value=(
+            "1. Rejoins un salon vocal\n"
+            "2. Lance `.blindtest` ou `.blindduel`\n"
+            "3. Le bot rejoint le vocal et joue l'OST\n"
+            "4. Tape le nom de l'animé/drama pour gagner !\n"
+            "Un indice texte est aussi affiché : `G_bl_n` → Goblin"
+        ), inline=False)
+        embed.set_footer(text="🎵 Tu dois être dans un salon vocal pour jouer !")
         await ctx.send(embed=embed)
 
     elif categorie.lower() in ["minijeux", "mini-jeux", "jeux"]:
@@ -1293,58 +1314,64 @@ async def lg_narrer_vocal(ctx, cle: str):
         return
     texte = random.choice(textes)
 
-    # Envoyer aussi en texte
+    # Toujours envoyer en texte (fallback garanti)
     embed = discord.Embed(description=f"*{texte}*", color=0x2c2f33)
     embed.set_footer(text="🐺 Loup Garou — QG Kdrama")
     await ctx.send(embed=embed)
 
     # Chercher un salon vocal avec des membres
-    vc = None
     voice_channel = None
     for ch in ctx.guild.voice_channels:
         if len(ch.members) > 0:
             voice_channel = ch
             break
     if not voice_channel:
-        return  # Personne en vocal, on skip
+        return  # Personne en vocal, on skip narration audio
 
+    vc = None
     try:
         from gtts import gTTS
         import io
+
+        # Générer le TTS
         tts = gTTS(text=texte, lang='fr', slow=False)
-        fp = io.BytesIO()
-        tts.write_to_fp(fp)
-        fp.seek(0)
-
-        # Sauvegarder temporairement
         tmp_path = f"/tmp/lg_narr_{ctx.guild.id}.mp3"
-        with open(tmp_path, 'wb') as f:
-            f.write(fp.read())
+        tts.save(tmp_path)  # save() plus fiable que write_to_fp()
 
-        if ctx.voice_client:
+        # Rejoindre le vocal
+        if ctx.voice_client and ctx.voice_client.is_connected():
             await ctx.voice_client.move_to(voice_channel)
             vc = ctx.voice_client
         else:
             vc = await voice_channel.connect()
 
-        if vc.is_playing():
-            vc.stop()
+        # Attendre que le précédent son soit fini
+        while vc.is_playing():
+            await asyncio.sleep(0.3)
 
+        # Jouer le TTS
         vc.play(discord.FFmpegPCMAudio(tmp_path))
-        # Attendre la fin de la narration
+
+        # Attendre la fin avant de déconnecter
         while vc.is_playing():
             await asyncio.sleep(0.5)
-        await asyncio.sleep(1)
-        await vc.disconnect()
-    except Exception:
-        # Si gTTS échoue, la narration texte a déjà été envoyée
-        if vc:
+        await asyncio.sleep(0.5)
+
+        # Ne déconnecter que si plus rien ne joue
+        if vc.is_connected() and not vc.is_playing():
+            await vc.disconnect()
+
+    except Exception as e:
+        # La narration texte a déjà été envoyée, on continue sans crash
+        print(f"[LG Narration erreur] {e}")
+        if vc and vc.is_connected():
             try:
                 await vc.disconnect()
             except:
                 pass
 
 
+@bot.command(name="lgstart")
 async def lg_start(ctx):
     gid = ctx.guild.id
     if gid not in lg_games:
@@ -2240,41 +2267,41 @@ async def sorties_cmd(ctx):
 #  BLIND TEST OST
 # ============================================================
 BLIND_TEST_ANIME = [
-    {"titre": "Attack on Titan — Guren no Yumiya", "reponses": ["attack on titan", "shingeki no kyojin"], "hint": "Des titans mangent des humains derrière des murs 🗡️", "youtube": "https://youtu.be/CID-sYQNCew"},
-    {"titre": "Demon Slayer — Gurenge", "reponses": ["demon slayer", "kimetsu no yaiba"], "hint": "Un chasseur de démons avec un souffle de l'eau 🗡️", "youtube": "https://youtu.be/CwkzK-F0Y4s"},
-    {"titre": "Your Lie in April — Kirameki", "reponses": ["your lie in april", "shigatsu wa kimi no uso"], "hint": "Un pianiste qui ne s'entend plus jouer 🎹", "youtube": "https://youtu.be/XcMBnLYCaD0"},
-    {"titre": "One Piece — We Are!", "reponses": ["one piece"], "hint": "Des pirates à la recherche du légendaire trésor 🏴‍☠️", "youtube": "https://youtu.be/MHPqPMxmsBo"},
-    {"titre": "Naruto — Blue Bird", "reponses": ["naruto", "naruto shippuden"], "hint": "Un ninja qui court les bras en arrière 🍥", "youtube": "https://youtu.be/Cuzg1GFTU5c"},
-    {"titre": "Death Note — Light's Theme", "reponses": ["death note"], "hint": "Un carnet qui tue ceux dont on écrit le nom 📓", "youtube": "https://youtu.be/6D-izBCilPg"},
-    {"titre": "Haikyuu — Fly High", "reponses": ["haikyuu", "haikyu"], "hint": "Une équipe de volleyball qui vise les sommets 🏐", "youtube": "https://youtu.be/7s_nRsGLZAc"},
-    {"titre": "FMA Brotherhood — Again", "reponses": ["fullmetal alchemist", "fullmetal alchemist brotherhood", "fma"], "hint": "Deux frères alchimistes cherchent la pierre philosophale ⚗️", "youtube": "https://youtu.be/A8leRVJcMCY"},
-    {"titre": "Jujutsu Kaisen — Kaikai Kitan", "reponses": ["jujutsu kaisen"], "hint": "Un lycéen avale un doigt maudit 💥", "youtube": "https://youtu.be/iX4pNVXBWKE"},
-    {"titre": "Vinland Saga — Mukanjyo", "reponses": ["vinland saga"], "hint": "Des vikings médiévaux assoiffés de vengeance 🪓", "youtube": "https://youtu.be/uc3Q1YlMSEA"},
-    {"titre": "Dragon Ball Z — Cha-La Head-Cha-La", "reponses": ["dragon ball z", "dragon ball"], "hint": "Des guerriers surpuissants combattent des extraterrestres 🐉", "youtube": "https://youtu.be/ztGQilyQPac"},
-    {"titre": "Naruto — Sadness and Sorrow", "reponses": ["naruto", "naruto shippuden"], "hint": "Un ninja orphelin qui veut devenir Hokage 🍥", "youtube": "https://youtu.be/5AnLMfSqGJ0"},
+    {"titre": "Attack on Titan — Guren no Yumiya", "reponses": ["attack on titan", "shingeki no kyojin"], "hint": "Des titans mangent des humains derrière des murs 🗡️"},
+    {"titre": "Demon Slayer — Gurenge", "reponses": ["demon slayer", "kimetsu no yaiba"], "hint": "Un chasseur de démons avec un souffle de l'eau 🗡️"},
+    {"titre": "Your Lie in April — Kirameki", "reponses": ["your lie in april", "shigatsu wa kimi no uso"], "hint": "Un pianiste qui ne s'entend plus jouer 🎹"},
+    {"titre": "One Piece — We Are!", "reponses": ["one piece"], "hint": "Des pirates à la recherche du légendaire trésor 🏴‍☠️"},
+    {"titre": "Naruto — Blue Bird", "reponses": ["naruto", "naruto shippuden"], "hint": "Un ninja qui court les bras en arrière 🍥"},
+    {"titre": "Death Note — Light's Theme", "reponses": ["death note"], "hint": "Un carnet qui tue ceux dont on écrit le nom 📓"},
+    {"titre": "Haikyuu — Fly High", "reponses": ["haikyuu", "haikyu"], "hint": "Une équipe de volleyball qui vise les sommets 🏐"},
+    {"titre": "FMA Brotherhood — Again", "reponses": ["fullmetal alchemist", "fullmetal alchemist brotherhood", "fma"], "hint": "Deux frères alchimistes cherchent la pierre philosophale ⚗️"},
+    {"titre": "Jujutsu Kaisen — Kaikai Kitan", "reponses": ["jujutsu kaisen"], "hint": "Un lycéen avale un doigt maudit 💥"},
+    {"titre": "Vinland Saga — Mukanjyo", "reponses": ["vinland saga"], "hint": "Des vikings médiévaux assoiffés de vengeance 🪓"},
+    {"titre": "Dragon Ball Z — Cha-La Head-Cha-La", "reponses": ["dragon ball z", "dragon ball"], "hint": "Des guerriers surpuissants combattent des extraterrestres 🐉"},
+    {"titre": "Naruto — Sadness and Sorrow", "reponses": ["naruto", "naruto shippuden"], "hint": "Un ninja orphelin qui veut devenir Hokage 🍥"},
 ]
 
 BLIND_TEST_KDRAMA = [
-    {"titre": "Goblin — Stay With Me", "reponses": ["goblin", "goblin kdrama"], "hint": "Un goblin immortel cherche sa fiancée pour mourir 🕯️", "youtube": "https://youtu.be/B2dBkgBOGAc"},
-    {"titre": "Crash Landing on You — Flower", "reponses": ["crash landing on you", "cloy"], "hint": "Romance Nord/Sud Corée 🪂", "youtube": "https://youtu.be/QOBBzMbPSUo"},
-    {"titre": "Itaewon Class — Stone Cold", "reponses": ["itaewon class"], "hint": "Un bar dans Itaewon, une revanche 🍺", "youtube": "https://youtu.be/i2OqABHFdhs"},
-    {"titre": "Signal — Theme", "reponses": ["signal"], "hint": "Une radio qui traverse le temps 📻", "youtube": "https://youtu.be/2g4cNBVUCvg"},
-    {"titre": "Vincenzo — Theme", "reponses": ["vincenzo"], "hint": "Un avocat de la mafia italienne en costume 🦅", "youtube": "https://youtu.be/7A0_LmCYsBM"},
-    {"titre": "Reply 1988 — Hyehwadong", "reponses": ["reply 1988", "reponse 1988"], "hint": "La vie d'amis dans un quartier de Séoul en 1988 📼", "youtube": "https://youtu.be/Nk6wMHJVFiU"},
-    {"titre": "Squid Game — Pink Soldiers", "reponses": ["squid game", "squid games"], "hint": "Des jeux d'enfants qui peuvent vous tuer 🦑", "youtube": "https://youtu.be/oVFRrPbgWwg"},
+    {"titre": "Goblin — Stay With Me", "reponses": ["goblin", "goblin kdrama"], "hint": "Un goblin immortel cherche sa fiancée pour mourir 🕯️"},
+    {"titre": "Crash Landing on You — Flower", "reponses": ["crash landing on you", "cloy"], "hint": "Romance Nord/Sud Corée 🪂"},
+    {"titre": "Itaewon Class — Stone Cold", "reponses": ["itaewon class"], "hint": "Un bar dans Itaewon, une revanche 🍺"},
+    {"titre": "Signal — Theme", "reponses": ["signal"], "hint": "Une radio qui traverse le temps 📻"},
+    {"titre": "Vincenzo — Theme", "reponses": ["vincenzo"], "hint": "Un avocat de la mafia italienne en costume 🦅"},
+    {"titre": "Reply 1988 — Hyehwadong", "reponses": ["reply 1988", "reponse 1988"], "hint": "La vie d'amis dans un quartier de Séoul en 1988 📼"},
+    {"titre": "Squid Game — Pink Soldiers", "reponses": ["squid game", "squid games"], "hint": "Des jeux d'enfants qui peuvent vous tuer 🦑"},
 ]
 
 BLIND_TEST_DESSIN_ANIME = [
-    {"titre": "Pokémon — Générique FR", "reponses": ["pokemon", "pokémon"], "hint": "Attrape-les tous ! ⚡", "youtube": "https://youtu.be/6qBQFBFdKsI"},
-    {"titre": "Shuriken School — Générique", "reponses": ["shuriken school"], "hint": "Une école de ninjas pour jeunes 🥷", "youtube": "https://youtu.be/9aMqJjMQvkk"},
-    {"titre": "Foot 2 Rue — Générique", "reponses": ["foot 2 rue", "foot2rue"], "hint": "Du football de rue en France ⚽", "youtube": "https://youtu.be/zUJMEXkIGbU"},
-    {"titre": "Dragon Ball Z — Générique FR", "reponses": ["dragon ball z", "dragon ball"], "hint": "Le guerrier Saiyan le plus puissant 🐉", "youtube": "https://youtu.be/SoMBaxtnZBg"},
-    {"titre": "Naruto — Générique FR", "reponses": ["naruto"], "hint": "Le ninja aux cheveux blonds du village de Konoha 🍥", "youtube": "https://youtu.be/qX5sXpgpBQg"},
-    {"titre": "One Piece — Générique FR", "reponses": ["one piece"], "hint": "Le pirate au chapeau de paille 🏴‍☠️", "youtube": "https://youtu.be/8sOVGsxYGHg"},
-    {"titre": "Totally Spies — Générique FR", "reponses": ["totally spies"], "hint": "Trois lycéennes espionnes stylées 💅", "youtube": "https://youtu.be/oHQd-GhB7pE"},
-    {"titre": "Code Lyoko — Générique", "reponses": ["code lyoko"], "hint": "Des ados combattent une IA maléfique dans un monde virtuel 💻", "youtube": "https://youtu.be/2V6dTFZlBBo"},
-    {"titre": "W.I.T.C.H. — Générique FR", "reponses": ["witch", "w.i.t.c.h."], "hint": "Cinq gardiennes avec des pouvoirs élémentaires 🌊", "youtube": "https://youtu.be/Jz5RNLlSHMI"},
-    {"titre": "Miraculous — Générique", "reponses": ["miraculous", "miraculous ladybug"], "hint": "Une lycéenne parisienne en costume de coccinelle 🐞", "youtube": "https://youtu.be/HG7DuqZS-kI"},
+    {"titre": "Pokémon — Générique FR", "reponses": ["pokemon", "pokémon"], "hint": "Attrape-les tous ! ⚡"},
+    {"titre": "Shuriken School — Générique", "reponses": ["shuriken school"], "hint": "Une école de ninjas pour jeunes 🥷"},
+    {"titre": "Foot 2 Rue — Générique", "reponses": ["foot 2 rue", "foot2rue"], "hint": "Du football de rue en France ⚽"},
+    {"titre": "Dragon Ball Z — Générique FR", "reponses": ["dragon ball z", "dragon ball"], "hint": "Le guerrier Saiyan le plus puissant 🐉"},
+    {"titre": "Naruto — Générique FR", "reponses": ["naruto"], "hint": "Le ninja aux cheveux blonds du village de Konoha 🍥"},
+    {"titre": "One Piece — Générique FR", "reponses": ["one piece"], "hint": "Le pirate au chapeau de paille 🏴‍☠️"},
+    {"titre": "Totally Spies — Générique FR", "reponses": ["totally spies"], "hint": "Trois lycéennes espionnes stylées 💅"},
+    {"titre": "Code Lyoko — Générique", "reponses": ["code lyoko"], "hint": "Des ados combattent une IA maléfique dans un monde virtuel 💻"},
+    {"titre": "W.I.T.C.H. — Générique FR", "reponses": ["witch", "w.i.t.c.h."], "hint": "Cinq gardiennes avec des pouvoirs élémentaires 🌊"},
+    {"titre": "Miraculous — Générique", "reponses": ["miraculous", "miraculous ladybug"], "hint": "Une lycéenne parisienne en costume de coccinelle 🐞"},
 ]
 
 BLIND_TEST_THEMES = {
@@ -2298,8 +2325,8 @@ def mask_title(titre):
             result += c
     return result
 
-async def play_ost_vocal(ctx, youtube_url):
-    """Rejoint le vocal et joue l'OST via yt-dlp"""
+async def play_ost_vocal(ctx, titre_recherche):
+    """Rejoint le vocal et joue l'OST via yt-dlp (recherche automatique)"""
     if not ctx.author.voice:
         return None, "❌ Tu dois être dans un salon vocal pour lancer le blind test !"
     voice_channel = ctx.author.voice.channel
@@ -2310,18 +2337,39 @@ async def play_ost_vocal(ctx, youtube_url):
         else:
             vc = await voice_channel.connect()
 
+        import yt_dlp
         ydl_opts = {
             'format': 'bestaudio/best',
             'quiet': True,
             'noplaylist': True,
+            'default_search': 'ytsearch1',
+            'extract_flat': False,
         }
-        import yt_dlp
+        query = f"ytsearch1:{titre_recherche} official audio"
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(youtube_url, download=False)
-            url2 = info['url']
+            info = ydl.extract_info(query, download=False)
+            # ytsearch renvoie une playlist avec 1 entrée
+            if 'entries' in info:
+                info = info['entries'][0]
+            # Chercher la bonne URL audio
+            url2 = None
+            if 'url' in info:
+                url2 = info['url']
+            elif 'formats' in info:
+                for f in reversed(info['formats']):
+                    if f.get('acodec') != 'none' and f.get('url'):
+                        url2 = f['url']
+                        break
+            if not url2:
+                return None, "❌ Impossible de trouver l'audio de cette OST."
 
-        ffmpeg_opts = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
+        ffmpeg_opts = {
+            'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+            'options': '-vn -filter:a "volume=0.5"'
+        }
         source = discord.FFmpegPCMAudio(url2, **ffmpeg_opts)
+        if vc.is_playing():
+            vc.stop()
         vc.play(source)
         return vc, None
     except Exception as e:
@@ -2345,7 +2393,7 @@ async def blindtest_cmd(ctx, theme: str = "mix"):
     active_blindtest[ctx.channel.id] = q["reponses"]
 
     # Rejoindre le vocal et jouer
-    vc, err = await play_ost_vocal(ctx, q["youtube"])
+    vc, err = await play_ost_vocal(ctx, q["titre"])
     if err:
         active_blindtest.pop(ctx.channel.id, None)
         return await ctx.send(err)
@@ -2443,7 +2491,7 @@ async def blindtest_duel_cmd(ctx, theme: str = "mix", *opponents: discord.Member
         game["answered"] = False
 
         # Jouer l'OST
-        vc, err = await play_ost_vocal(ctx, q["youtube"])
+        vc, err = await play_ost_vocal(ctx, q["titre"])
         if err:
             await ctx.send(err)
             break
