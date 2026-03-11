@@ -218,26 +218,21 @@ async def help_cmd(ctx, categorie: str = None):
             ),
             color=0xff6b9d
         )
-        embed.add_field(name="🎬 `.help kdrama`", value="Dramas coréens, recommandations, citations", inline=True)
+        embed.add_field(name="🎬 `.help kdrama`", value="Dramas, recommandations, notes, watchlist", inline=True)
         embed.add_field(name="✨ `.help anime`", value="Animés, recommandations, citations", inline=True)
         embed.add_field(name="🎮 `.help gaming`", value="Jeux, LFG, mini-jeux", inline=True)
+        embed.add_field(name="🎵 `.help blindtest`", value="Blind test OST solo et duel", inline=True)
+        embed.add_field(name="🎯 `.help quiz`", value="Quiz solo et duel par thème", inline=True)
+        embed.add_field(name="🎭 `.help minijeux`", value="Pendu, Devine le personnage", inline=True)
         embed.add_field(name="📊 `.help niveaux`", value="XP, rang, classement", inline=True)
-        embed.add_field(name="💰 `.help economie`", value="Pièces, boutique, transferts", inline=True)
+        embed.add_field(name="💰 `.help economie`", value="Pièces, boutique, banque, vol", inline=True)
         embed.add_field(name="⚔️ `.help duels`", value="Défis entre membres", inline=True)
+        embed.add_field(name="💍 `.help social`", value="Mariage, anniversaires, sondages", inline=True)
         embed.add_field(name="🐺 `.help loupgarou`", value="Jeu de rôle complet", inline=True)
         embed.add_field(name="🎫 `.help support`", value="Tickets d'aide", inline=True)
         embed.add_field(name="🛡️ `.help modo`", value="Outils de modération", inline=True)
         embed.add_field(name="😄 `.help fun`", value="Commandes fun et délire", inline=True)
         embed.set_footer(text="QG Kdrama 🎬 • Préfixe : .  •  Bon drama et bonnes parties !")
-        await ctx.send(embed=embed)
-
-    elif categorie.lower() == "kdrama":
-        embed = discord.Embed(title="🎬 Commandes Kdrama", color=0xff6b9d)
-        embed.add_field(name="`.drama`", value="Affiche un drama coréen aléatoire avec sa note et son genre", inline=False)
-        embed.add_field(name="`.dramarec [genre]`", value="Recommande un drama selon le genre\nEx: `.dramarec romance` ou `.dramarec thriller`", inline=False)
-        embed.add_field(name="`.quote`", value="Affiche une citation inspirante tirée d'un Kdrama", inline=False)
-        embed.add_field(name="`.oppachallenge`", value="Lance un défi fun lié aux Kdramas pour toi ou le serveur !", inline=False)
-        embed.set_footer(text="💡 Genres dispo : romance, thriller, fantasy, historique, médical...")
         await ctx.send(embed=embed)
 
     elif categorie.lower() == "anime":
@@ -268,19 +263,6 @@ async def help_cmd(ctx, categorie: str = None):
             "Niv.15 → ✨ Otaku Confirmé\n"
             "Niv.20 → 👑 Légende du QG\n"
             "Niv.30 → 💫 Dieu du QG Kdrama"
-        ), inline=False)
-        await ctx.send(embed=embed)
-
-    elif categorie.lower() == "economie":
-        embed = discord.Embed(title="💰 Commandes Économie", color=0xf39c12)
-        embed.add_field(name="`.daily`", value="Récupère tes pièces journalières (100 à 500 pièces)\n⏳ Disponible une fois toutes les 24h", inline=False)
-        embed.add_field(name="`.balance [@joueur]`", value="Affiche ton solde de pièces\nEx: `.balance` ou `.balance @ami`", inline=False)
-        embed.add_field(name="`.pay @joueur <montant>`", value="Envoie des pièces à un autre membre\nEx: `.pay @ami 100`", inline=False)
-        embed.add_field(name="💡 Comment gagner des pièces ?", value=(
-            "• `.daily` — Pièces journalières\n"
-            "• `.quiz` — Bonne réponse = 50-150 pièces\n"
-            "• `.rps` — Victoire = 20 pièces\n"
-            "• `.duel` — Victoire = 50-200 pièces"
         ), inline=False)
         await ctx.send(embed=embed)
 
@@ -339,8 +321,64 @@ async def help_cmd(ctx, categorie: str = None):
         embed.add_field(name="`.quiz`", value="Lance une question sur les Kdramas, animés ou jeux\n✅ Bonne réponse = pièces + XP bonus !", inline=False)
         await ctx.send(embed=embed)
 
-    else:
-        await ctx.send(f"❌ Catégorie `{categorie}` inconnue ! Tape `.help` pour voir toutes les catégories.")
+    elif categorie.lower() == "blindtest":
+        embed = discord.Embed(title="🎵 Commandes Blind Test", color=0x9b59b6)
+        embed.add_field(name="`.blindtest`", value="Lance un blind test OST solo\nTout le monde peut répondre, le plus rapide gagne !", inline=False)
+        embed.add_field(name="`.blindduel @joueur`", value="Duel blind test 1v1 ou multi (jusqu'à 4 adversaires)\nEx: `.blindduel @ami` ou `.blindduel @ami1 @ami2`\n5 OSTs • Premier à trouver marque un point !", inline=False)
+        embed.add_field(name="💡 Comment ça marche ?", value="Le bot affiche le titre avec 1 lettre sur 2 cachée\nEx: `G_bl_n O_T` → tape le nom de l'animé/drama !", inline=False)
+        embed.set_footer(text="🎵 OSTs de Kdramas, animés et dessins animés !")
+        await ctx.send(embed=embed)
+
+    elif categorie.lower() in ["minijeux", "mini-jeux", "jeux"]:
+        embed = discord.Embed(title="🎭 Mini-Jeux", color=0x9b59b6)
+        embed.add_field(name="`.devine`", value="Devine le personnage d'un animé ou drama !\nIndices progressifs, tape 'indice' pour en avoir plus\n✅ Moins tu utilises d'indices = plus tu gagnes de pièces !", inline=False)
+        embed.add_field(name="`.pendu`", value="Pendu avec des titres d'animés et de dramas !\nTape une lettre à la fois pour deviner le titre\n✅ Victoire = +100 pièces", inline=False)
+        await ctx.send(embed=embed)
+
+    elif categorie.lower() == "social":
+        embed = discord.Embed(title="💍 Commandes Sociales", color=0xff6b9d)
+        embed.add_field(name="`.marier @joueur`", value="Demande quelqu'un en mariage 💍\nL'autre personne doit accepter avec `.accepter`", inline=False)
+        embed.add_field(name="`.accepter`", value="Accepte une demande en mariage 💜", inline=False)
+        embed.add_field(name="`.refuser`", value="Refuse une demande en mariage 💔", inline=False)
+        embed.add_field(name="`.divorcer`", value="Divorce de ton partenaire 😢", inline=False)
+        embed.add_field(name="`.anniversaire JJ/MM`", value="Enregistre ton anniversaire\nEx: `.anniversaire 25/03`\nLe bot te souhaitera automatiquement !", inline=False)
+        embed.add_field(name="`.anniversaire`", value="Voir tous les anniversaires du serveur 🎂", inline=False)
+        embed.add_field(name="`.sondage \"Question?\" choix1 choix2`", value="Lance un sondage avec réactions\nEx: `.sondage \"Ce soir?\" Goblin Vincenzo Signal`", inline=False)
+        embed.add_field(name="`.giveaway <durée> <prix>`", value="Lance un giveaway (admin uniquement)\nEx: `.giveaway 24h Rôle VIP` ou `.giveaway 1h 500 pièces`", inline=False)
+        embed.add_field(name="`.stats`", value="Voir les statistiques du serveur 📊", inline=False)
+        await ctx.send(embed=embed)
+
+    elif categorie.lower() in ["economie", "économie"]:
+        embed = discord.Embed(title="💰 Commandes Économie", color=0xf39c12)
+        embed.add_field(name="`.daily`", value="Récupère tes pièces journalières (100-500 pièces)\n⏳ Disponible une fois toutes les 24h", inline=False)
+        embed.add_field(name="`.balance [@joueur]`", value="Affiche ton solde de pièces", inline=False)
+        embed.add_field(name="`.pay @joueur <montant>`", value="Envoie des pièces à quelqu'un\nEx: `.pay @ami 100`", inline=False)
+        embed.add_field(name="`.steal @joueur`", value="Tente de voler des pièces ! (45% de réussite)\n⏳ Cooldown : 1h • Échec = tu paies une amende 😂", inline=False)
+        embed.add_field(name="`.shop`", value="Voir la boutique du QG 🛒\nRôles exclusifs, Double XP et plus !", inline=False)
+        embed.add_field(name="`.acheter <id>`", value="Acheter un item de la boutique\nIDs: `vip` `drama_king` `otaku` `gamer_pro` `double_xp`", inline=False)
+        embed.add_field(name="`.banque depot <montant>`", value="Déposer des pièces à la banque\n📈 Intérêts : +5% toutes les 24h !", inline=False)
+        embed.add_field(name="`.banque retrait`", value="Retirer tes pièces + intérêts accumulés", inline=False)
+        embed.add_field(name="`.banque solde`", value="Voir ton solde bancaire et tes intérêts", inline=False)
+        embed.add_field(name="💡 Comment gagner des pièces ?", value="`.daily` `.quiz` `.blindtest` `.rps` `.duel` `.pendu` `.devine`", inline=False)
+        await ctx.send(embed=embed)
+
+    elif categorie.lower() == "kdrama":
+        embed = discord.Embed(title="🎬 Commandes Kdrama", color=0xff6b9d)
+        embed.add_field(name="`.drama`", value="Affiche un drama coréen aléatoire avec note et genre", inline=False)
+        embed.add_field(name="`.dramarec [genre]`", value="Recommandation par genre\nEx: `.dramarec romance` ou `.dramarec thriller`", inline=False)
+        embed.add_field(name="`.quote`", value="Citation inspirante d'un Kdrama", inline=False)
+        embed.add_field(name="`.oppachallenge`", value="Défi fun lié aux Kdramas !", inline=False)
+        embed.add_field(name="`.noter 9 Goblin`", value="Donne une note /10 à un drama\nLa moyenne du serveur est calculée automatiquement !", inline=False)
+        embed.add_field(name="`.avis Goblin`", value="Voir la moyenne et les votes du serveur pour un drama", inline=False)
+        embed.add_field(name="`.sorties`", value="Calendrier des prochaines sorties dramas/animés 📅", inline=False)
+        embed.add_field(name="`.watch ajouter Goblin`", value="Ajouter un titre à ta watchlist perso 📋", inline=False)
+        embed.add_field(name="`.watch liste`", value="Voir ta watchlist complète", inline=False)
+        embed.add_field(name="`.watch vu Goblin`", value="Marquer un titre comme vu ✅", inline=False)
+        embed.add_field(name="`.watch supprimer Goblin`", value="Supprimer un titre de ta watchlist", inline=False)
+        embed.set_footer(text="💡 Genres dispo : romance, thriller, fantasy, historique, médical...")
+        await ctx.send(embed=embed)
+
+
 
 # ============================================================
 #  KDRAMA COMMANDS
