@@ -221,7 +221,6 @@ async def help_cmd(ctx, categorie: str = None):
         embed.add_field(name="🎬 `.help kdrama`", value="Dramas, recommandations, notes, watchlist", inline=True)
         embed.add_field(name="✨ `.help anime`", value="Animés, recommandations, citations", inline=True)
         embed.add_field(name="🎮 `.help gaming`", value="Jeux, LFG, mini-jeux", inline=True)
-        embed.add_field(name="🃏 `.help gacha`", value="Cartes personnages à collectionner", inline=True)
         embed.add_field(name="🎬 `.help bracket`", value="Tournoi Kdrama & Animé", inline=True)
         embed.add_field(name="🎰 `.help casino`", value="Slot machine & jeux d'argent", inline=True)
         embed.add_field(name="🐉 `.help boss`", value="Boss de serveur & Arène PvP", inline=True)
@@ -314,15 +313,6 @@ async def help_cmd(ctx, categorie: str = None):
         embed.add_field(name="`.unmute @joueur`", value="Retire le mute d'un membre avant la fin du timer", inline=False)
         embed.add_field(name="`.clear [nombre]`", value="Supprime X messages dans le salon (5 par défaut)\nEx: `.clear 10`", inline=False)
         embed.set_footer(text="⚠️ Réservé aux membres avec les permissions appropriées")
-        await ctx.send(embed=embed)
-
-    elif categorie.lower() == "gacha":
-        embed = discord.Embed(title="🃏 Commandes Gacha", color=0xf1c40f)
-        embed.add_field(name="`.gacha`", value="Tire une carte personnage aléatoire !\n💰 Coût : 50 pièces\nRaretés : 🔵 Commun | ⭐ Rare | 💎 Épique | 🌈 Légendaire", inline=False)
-        embed.add_field(name="`.gacha10`", value="10 tirages d'un coup !\n💰 Coût : 400 pièces (économise 100 pièces !)", inline=False)
-        embed.add_field(name="`.collection [@joueur]`", value="Voir ta collection de cartes complète\nEx: `.collection` ou `.collection @ami`", inline=False)
-        embed.add_field(name="`.carte <nom>`", value="Voir une carte en détail avec son image\nEx: `.carte Naruto` ou `.carte Gojo`", inline=False)
-        embed.set_footer(text="🌈 Légendaire = 3% | 💎 Épique = 15% | ⭐ Rare = 35% | 🔵 Commun = 47%")
         await ctx.send(embed=embed)
 
     elif categorie.lower() == "bracket":
@@ -2900,174 +2890,111 @@ async def divorcer_cmd(ctx):
 
 
 # ============================================================
-#  🃏 GACHA PERSONNAGES
-# ============================================================
-GACHA_PERSONNAGES = [
-    # LÉGENDAIRES
-    {"nom": "Naruto Uzumaki", "anime": "Naruto", "rarete": "Légendaire", "emoji": "🌈", "force": 95, "image": "https://upload.wikimedia.org/wikipedia/en/9/9a/NarutoUzumaki.png"},
-    {"nom": "Son Goku", "anime": "Dragon Ball Z", "rarete": "Légendaire", "emoji": "🌈", "force": 98, "image": "https://upload.wikimedia.org/wikipedia/en/a/a7/Gokugteenaf.jpg"},
-    {"nom": "Monkey D. Luffy", "anime": "One Piece", "rarete": "Légendaire", "emoji": "🌈", "force": 94, "image": "https://upload.wikimedia.org/wikipedia/en/e/e9/Monkey_D_Luffy.png"},
-    {"nom": "Levi Ackerman", "anime": "Attack on Titan", "rarete": "Légendaire", "emoji": "🌈", "force": 97, "image": "https://upload.wikimedia.org/wikipedia/en/6/60/Levi_Ackerman_anime.png"},
-    {"nom": "Itachi Uchiha", "anime": "Naruto", "rarete": "Légendaire", "emoji": "🌈", "force": 96, "image": "https://upload.wikimedia.org/wikipedia/en/thumb/2/27/Itachi_Uchiha.PNG/220px-Itachi_Uchiha.PNG"},
-    # ÉPIQUES
-    {"nom": "Tanjiro Kamado", "anime": "Demon Slayer", "rarete": "Épique", "emoji": "💎", "force": 82, "image": "https://upload.wikimedia.org/wikipedia/en/3/3c/Tanjiro_Kamado.png"},
-    {"nom": "Satoru Gojo", "anime": "Jujutsu Kaisen", "rarete": "Épique", "emoji": "💎", "force": 90, "image": "https://upload.wikimedia.org/wikipedia/en/6/6a/Gojo_Satoru_anime.png"},
-    {"nom": "Edward Elric", "anime": "FMA Brotherhood", "rarete": "Épique", "emoji": "💎", "force": 80, "image": "https://upload.wikimedia.org/wikipedia/en/thumb/6/6b/Edward_Elric.png/220px-Edward_Elric.png"},
-    {"nom": "Light Yagami", "anime": "Death Note", "rarete": "Épique", "emoji": "💎", "force": 78, "image": "https://upload.wikimedia.org/wikipedia/en/thumb/7/7a/Light_yagami.jpg/220px-Light_yagami.jpg"},
-    {"nom": "Eren Yeager", "anime": "Attack on Titan", "rarete": "Épique", "emoji": "💎", "force": 85, "image": "https://upload.wikimedia.org/wikipedia/en/thumb/e/e0/Eren_Yeager.PNG/220px-Eren_Yeager.PNG"},
-    {"nom": "Hinata Shoyo", "anime": "Haikyuu", "rarete": "Épique", "emoji": "💎", "force": 75, "image": "https://upload.wikimedia.org/wikipedia/en/thumb/0/0e/Shoyo_Hinata.png/220px-Shoyo_Hinata.png"},
-    # RARES
-    {"nom": "Zenitsu Agatsuma", "anime": "Demon Slayer", "rarete": "Rare", "emoji": "⭐", "force": 65, "image": "https://upload.wikimedia.org/wikipedia/en/thumb/b/b9/Zenitsu_Agatsuma.png/220px-Zenitsu_Agatsuma.png"},
-    {"nom": "Roronoa Zoro", "anime": "One Piece", "rarete": "Rare", "emoji": "⭐", "force": 70, "image": "https://upload.wikimedia.org/wikipedia/en/thumb/1/15/RoronoaZoro.png/220px-RoronoaZoro.png"},
-    {"nom": "Vegeta", "anime": "Dragon Ball Z", "rarete": "Rare", "emoji": "⭐", "force": 72, "image": "https://upload.wikimedia.org/wikipedia/en/thumb/7/77/Vegeta.jpg/220px-Vegeta.jpg"},
-    {"nom": "Sasuke Uchiha", "anime": "Naruto", "rarete": "Rare", "emoji": "⭐", "force": 68, "image": "https://upload.wikimedia.org/wikipedia/en/thumb/b/b7/Sasuke_Uchiha.png/220px-Sasuke_Uchiha.png"},
-    {"nom": "Inosuke Hashibira", "anime": "Demon Slayer", "rarete": "Rare", "emoji": "⭐", "force": 63, "image": "https://upload.wikimedia.org/wikipedia/en/thumb/b/b3/Inosuke_Hashibira.png/220px-Inosuke_Hashibira.png"},
-    # COMMUNS
-    {"nom": "Krillin", "anime": "Dragon Ball Z", "rarete": "Commun", "emoji": "🔵", "force": 35, "image": "https://upload.wikimedia.org/wikipedia/en/thumb/9/9b/Krillin.jpg/220px-Krillin.jpg"},
-    {"nom": "Rock Lee", "anime": "Naruto", "rarete": "Commun", "emoji": "🔵", "force": 42, "image": "https://upload.wikimedia.org/wikipedia/en/thumb/5/5d/Rock_Lee.png/220px-Rock_Lee.png"},
-    {"nom": "Usopp", "anime": "One Piece", "rarete": "Commun", "emoji": "🔵", "force": 38, "image": "https://upload.wikimedia.org/wikipedia/en/thumb/e/e5/Usopp.png/220px-Usopp.png"},
-    {"nom": "Mineta", "anime": "My Hero Academia", "rarete": "Commun", "emoji": "🔵", "force": 20, "image": "https://upload.wikimedia.org/wikipedia/en/thumb/d/d7/Minoru_Mineta.png/220px-Minoru_Mineta.png"},
-]
-
-GACHA_RARETE_POIDS = {
-    "Légendaire": 3,
-    "Épique": 15,
-    "Rare": 35,
-    "Commun": 47,
-}
-
-GACHA_COULEURS = {
-    "Légendaire": 0xf1c40f,
-    "Épique": 0x9b59b6,
-    "Rare": 0x3498db,
-    "Commun": 0x95a5a6,
-}
-
-gacha_collections = defaultdict(list)  # {user_id: [nom_perso, ...]}
-gacha_cooldowns = {}
-
-def gacha_tirer():
-    pool = []
-    for p in GACHA_PERSONNAGES:
-        pool.extend([p] * GACHA_RARETE_POIDS[p["rarete"]])
-    return random.choice(pool)
-
-@bot.command(name="gacha")
-async def gacha_cmd(ctx):
-    """Tire une carte personnage ! — .gacha (coûte 50 pièces)"""
-    uid = str(ctx.author.id)
-    cout = 50
-    if economy_data[uid]["coins"] < cout:
-        return await ctx.send(f"❌ Il te faut **{cout} pièces** pour faire un tirage ! Tu en as {economy_data[uid]['coins']}.")
-
-    economy_data[uid]["coins"] -= cout
-    perso = gacha_tirer()
-    gacha_collections[uid].append(perso["nom"])
-
-    couleur = GACHA_COULEURS[perso["rarete"]]
-    embed = discord.Embed(
-        title=f"{perso['emoji']} {perso['rarete'].upper()} !",
-        description=f"**{ctx.author.mention}** a obtenu :\n\n# {perso['nom']}\n🎌 *{perso['anime']}*\n⚔️ Force : **{perso['force']}/100**",
-        color=couleur
-    )
-    embed.set_image(url=perso["image"])
-    embed.set_footer(text=f"💰 -{cout} pièces | Total cartes : {len(gacha_collections[uid])} | .collection pour voir toutes tes cartes")
-    await ctx.send(embed=embed)
-
-@bot.command(name="gacha10")
-async def gacha10_cmd(ctx):
-    """Tire 10 cartes d'un coup ! — .gacha10 (coûte 400 pièces)"""
-    uid = str(ctx.author.id)
-    cout = 400
-    if economy_data[uid]["coins"] < cout:
-        return await ctx.send(f"❌ Il te faut **{cout} pièces** pour 10 tirages !")
-
-    economy_data[uid]["coins"] -= cout
-    tirages = [gacha_tirer() for _ in range(10)]
-    for p in tirages:
-        gacha_collections[uid].append(p["nom"])
-
-    # Afficher le résumé
-    embed = discord.Embed(
-        title=f"🎰 10 Tirages Gacha — {ctx.author.display_name}",
-        color=0xf1c40f
-    )
-    lines = ""
-    meilleur = max(tirages, key=lambda x: x["force"])
-    for p in tirages:
-        lines += f"{p['emoji']} **{p['nom']}** — {p['rarete']} ({p['anime']})\n"
-    embed.description = lines
-    embed.set_image(url=meilleur["image"])
-    embed.set_footer(text=f"⭐ Meilleur tirage : {meilleur['nom']} | 💰 -{cout} pièces")
-    await ctx.send(embed=embed)
-
-@bot.command(name="collection")
-async def collection_cmd(ctx, member: discord.Member = None):
-    """Voir ta collection de cartes — .collection [@joueur]"""
-    target = member or ctx.author
-    uid = str(target.id)
-    cartes = gacha_collections[uid]
-    if not cartes:
-        return await ctx.send(f"📭 **{target.display_name}** n'a aucune carte ! Fais `.gacha` pour commencer !")
-
-    # Compter par rareté
-    compteur = defaultdict(list)
-    for nom in cartes:
-        perso = next((p for p in GACHA_PERSONNAGES if p["nom"] == nom), None)
-        if perso:
-            compteur[perso["rarete"]].append(nom)
-
-    embed = discord.Embed(
-        title=f"📚 Collection de {target.display_name}",
-        description=f"**{len(cartes)} cartes** au total",
-        color=0xf1c40f
-    )
-    for rarete in ["Légendaire", "Épique", "Rare", "Commun"]:
-        if compteur[rarete]:
-            emoji = {"Légendaire": "🌈", "Épique": "💎", "Rare": "⭐", "Commun": "🔵"}[rarete]
-            noms = ", ".join(set(compteur[rarete]))
-            embed.add_field(name=f"{emoji} {rarete} ({len(compteur[rarete])})", value=noms, inline=False)
-    await ctx.send(embed=embed)
-
-@bot.command(name="carte")
-async def carte_cmd(ctx, *, nom: str = None):
-    """Voir une carte en détail — .carte Naruto"""
-    if not nom:
-        return await ctx.send("❌ Précise un nom ! Ex: `.carte Naruto`")
-    perso = next((p for p in GACHA_PERSONNAGES if nom.lower() in p["nom"].lower()), None)
-    if not perso:
-        return await ctx.send(f"❌ Personnage `{nom}` introuvable !")
-    embed = discord.Embed(
-        title=f"{perso['emoji']} {perso['nom']}",
-        description=f"🎌 **{perso['anime']}**\n⭐ Rareté : **{perso['rarete']}**\n⚔️ Force : **{perso['force']}/100**",
-        color=GACHA_COULEURS[perso["rarete"]]
-    )
-    embed.set_image(url=perso["image"])
-    await ctx.send(embed=embed)
-
-# ============================================================
 #  🎬 BRACKET TOURNOI
 # ============================================================
 BRACKET_KDRAMA = [
-    {"nom": "Goblin", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/6/63/Goblin_poster.jpg/220px-Goblin_poster.jpg"},
-    {"nom": "Vincenzo", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/5/57/Vincenzo_poster.jpg/220px-Vincenzo_poster.jpg"},
-    {"nom": "Squid Game", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/3/39/Squid_Game_poster.jpg/220px-Squid_Game_poster.jpg"},
-    {"nom": "Crash Landing on You", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/5/5e/Crash_Landing_on_You.jpg/220px-Crash_Landing_on_You.jpg"},
-    {"nom": "Itaewon Class", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/0/09/Itaewon_Class.jpg/220px-Itaewon_Class.jpg"},
-    {"nom": "Signal", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/7/79/Signal_2016_TV_series.jpg/220px-Signal_2016_TV_series.jpg"},
-    {"nom": "Reply 1988", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/8/82/Reply_1988.jpg/220px-Reply_1988.jpg"},
-    {"nom": "Kingdom", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/1/16/Kingdom_Netflix.jpg/220px-Kingdom_Netflix.jpg"},
+    {"nom": "Crash Landing on You"},
+    {"nom": "Goblin"},
+    {"nom": "Descendants of the Sun"},
+    {"nom": "Vincenzo"},
+    {"nom": "Itaewon Class"},
+    {"nom": "True Beauty"},
+    {"nom": "Business Proposal"},
+    {"nom": "All of Us Are Dead"},
+    {"nom": "Sweet Home"},
+    {"nom": "The Glory"},
+    {"nom": "Twenty-Five Twenty-One"},
+    {"nom": "My Name"},
+    {"nom": "Bloodhounds"},
+    {"nom": "Squid Game"},
+    {"nom": "Extraordinary Attorney Woo"},
+    {"nom": "Start-Up"},
+    {"nom": "Hotel Del Luna"},
+    {"nom": "The King: Eternal Monarch"},
+    {"nom": "Healer"},
+    {"nom": "W: Two Worlds"},
+    {"nom": "What's Wrong with Secretary Kim"},
+    {"nom": "Kill Me, Heal Me"},
+    {"nom": "Weightlifting Fairy Kim Bok-Joo"},
+    {"nom": "My ID Is Gangnam Beauty"},
+    {"nom": "Hometown Cha-Cha-Cha"},
+    {"nom": "Penthouse"},
+    {"nom": "Moon Lovers: Scarlet Heart Ryeo"},
+    {"nom": "Uncanny Counter"},
+    {"nom": "Nevertheless"},
+    {"nom": "Because This Is My First Life"},
+    {"nom": "The Red Sleeve"},
+    {"nom": "Alchemy of Souls"},
+    {"nom": "See You in My 19th Life"},
+    {"nom": "D.P."},
+    {"nom": "Signal"},
+    {"nom": "Prison Playbook"},
+    {"nom": "Hospital Playlist"},
+    {"nom": "Romance Is a Bonus Book"},
+    {"nom": "Legend of the Blue Sea"},
+    {"nom": "Flower of Evil"},
+    {"nom": "My Love From the Star"},
+    {"nom": "Strong Woman Do Bong-Soon"},
+    {"nom": "It's Okay to Not Be Okay"},
+    {"nom": "Love Alarm"},
+    {"nom": "Kingdom"},
+    {"nom": "While You Were Sleeping"},
+    {"nom": "The K2"},
+    {"nom": "Abyss"},
+    {"nom": "Celebrity"},
+    {"nom": "Reply 1988"},
 ]
 
 BRACKET_ANIME = [
-    {"nom": "Naruto", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/9/94/NarutoCoverTankobon1.jpg/220px-NarutoCoverTankobon1.jpg"},
-    {"nom": "One Piece", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/9/90/One_Piece%2C_Volume_61_Cover_%28Japanese%29.jpg/220px-One_Piece%2C_Volume_61_Cover_%28Japanese%29.jpg"},
-    {"nom": "Attack on Titan", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/d/d1/Shingeki_no_Kyojin_manga_volume_1.jpg/220px-Shingeki_no_Kyojin_manga_volume_1.jpg"},
-    {"nom": "Demon Slayer", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/9/9b/Kimetsu_no_Yaiba_-_Volume_1_Cover.png/220px-Kimetsu_no_Yaiba_-_Volume_1_Cover.png"},
-    {"nom": "Death Note", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/2/22/Death_Note_manga_volume_1.jpg/220px-Death_Note_manga_volume_1.jpg"},
-    {"nom": "Jujutsu Kaisen", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/7/7a/Jujutsu_Kaisen_manga_cover_volume_1.jpg/220px-Jujutsu_Kaisen_manga_cover_volume_1.jpg"},
-    {"nom": "Dragon Ball Z", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/f/f2/Dragon_Ball_Z_volume_1.jpg/220px-Dragon_Ball_Z_volume_1.jpg"},
-    {"nom": "Fullmetal Alchemist", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/0/0f/Fullmetal_Alchemist_manga_volume_1.png/220px-Fullmetal_Alchemist_manga_volume_1.png"},
+    {"nom": "One Piece"},
+    {"nom": "Naruto"},
+    {"nom": "Bleach"},
+    {"nom": "Dragon Ball Z"},
+    {"nom": "Attack on Titan"},
+    {"nom": "Demon Slayer"},
+    {"nom": "Jujutsu Kaisen"},
+    {"nom": "My Hero Academia"},
+    {"nom": "Tokyo Ghoul"},
+    {"nom": "Hunter x Hunter"},
+    {"nom": "Death Note"},
+    {"nom": "Fullmetal Alchemist: Brotherhood"},
+    {"nom": "Chainsaw Man"},
+    {"nom": "Fairy Tail"},
+    {"nom": "Sword Art Online"},
+    {"nom": "Solo Leveling"},
+    {"nom": "Blue Lock"},
+    {"nom": "Haikyuu!!"},
+    {"nom": "Black Clover"},
+    {"nom": "The Seven Deadly Sins"},
+    {"nom": "Mob Psycho 100"},
+    {"nom": "One Punch Man"},
+    {"nom": "Fire Force"},
+    {"nom": "Vinland Saga"},
+    {"nom": "The Rising of the Shield Hero"},
+    {"nom": "Code Geass"},
+    {"nom": "Steins;Gate"},
+    {"nom": "Toradora!"},
+    {"nom": "Your Lie in April"},
+    {"nom": "Re:Zero"},
+    {"nom": "Darling in the Franxx"},
+    {"nom": "The Promised Neverland"},
+    {"nom": "Erased"},
+    {"nom": "Parasyte -the maxim-"},
+    {"nom": "Dr. Stone"},
+    {"nom": "Kill la Kill"},
+    {"nom": "Assassination Classroom"},
+    {"nom": "Overlord"},
+    {"nom": "Psycho-Pass"},
+    {"nom": "Kuroko's Basketball"},
+    {"nom": "Baki"},
+    {"nom": "Record of Ragnarok"},
+    {"nom": "Soul Eater"},
+    {"nom": "Gurren Lagann"},
+    {"nom": "Fate/Zero"},
+    {"nom": "Trigun Stampede"},
+    {"nom": "Noragami"},
+    {"nom": "Jobless Reincarnation"},
+    {"nom": "Tokyo Revengers"},
 ]
 
 active_brackets = {}  # {guild_id: {theme, matchs, tour, votes, message_ids}}
@@ -3120,7 +3047,7 @@ async def bracket_cmd(ctx, theme: str = None):
     await bracket_lancer_match(ctx, gid, 0)
 
 async def bracket_lancer_match(ctx, gid, match_idx):
-    """Lance un match du bracket avec vote — deux affiches séparées"""
+    """Lance un match du bracket avec vote"""
     if gid not in active_brackets:
         return
     game = active_brackets[gid]
@@ -3132,35 +3059,22 @@ async def bracket_lancer_match(ctx, gid, match_idx):
     a, b = matchs[match_idx]
     channel = ctx.guild.get_channel(game["channel"])
     theme_label = "Kdrama" if game["theme"] == "kdrama" else "Animé"
+    emoji_theme = "🎬" if game["theme"] == "kdrama" else "✨"
 
-    # Affiche A
-    embed_a = discord.Embed(
+    embed = discord.Embed(
         title=f"⚔️ DUEL — Tour {game['tour']} • Match {match_idx+1}/{len(matchs)}",
-        description=f"## 🅰️ {a['nom']}",
-        color=0x3498db
-    )
-    embed_a.set_image(url=a["image"])
-    await channel.send(embed=embed_a)
-
-    # Affiche B
-    embed_b = discord.Embed(
-        description=f"## 🅱️ {b['nom']}",
+        description=(
+            f"## 🅰️ {a['nom']}\n"
+            f"**VS**\n"
+            f"## 🅱️ {b['nom']}\n\n"
+            f"👆 **Vote 🅰️ ou 🅱️ sur ce message !**\n"
+            f"⏳ Résultat dans **24h** — ou `.bracketskip` pour passer (admin)"
+        ),
         color=0xe74c3c
     )
-    embed_b.set_image(url=b["image"])
-    await channel.send(embed=embed_b)
+    embed.set_footer(text=f"{emoji_theme} Tournoi {theme_label} — QG Kdrama | 8 participants tirés au sort parmi {len(BRACKET_KDRAMA if game['theme'] == 'kdrama' else BRACKET_ANIME)}")
 
-    # Message de vote
-    embed_vote = discord.Embed(
-        description=(
-            f"**🅰️ {a['nom']}** vs **🅱️ {b['nom']}**\n\n"
-            f"👆 Vote avec 🅰️ ou 🅱️ sur ce message !\n"
-            f"⏳ Résultat dans **24h** (ou `.bracketskip` pour passer)"
-        ),
-        color=0xf1c40f
-    )
-    embed_vote.set_footer(text=f"🏆 Tournoi {theme_label} — QG Kdrama")
-    msg = await channel.send(embed=embed_vote)
+    msg = await channel.send(embed=embed)
     await msg.add_reaction("🅰️")
     await msg.add_reaction("🅱️")
 
