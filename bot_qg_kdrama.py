@@ -33,7 +33,7 @@ TIERS = [
     (10, "🎮 Gamer Kdrama"),
     (15, "✨ Otaku Confirmé"),
     (20, "👑 Légende du QG"),
-    (30, "💫 Goat du QG Kdrama"),
+    (30, "💫 Dieu du QG Kdrama"),
 ]
 
 def get_tier(level):
@@ -330,7 +330,7 @@ async def help_cmd(ctx, categorie: str = None):
         embed.set_footer(text="⚠️ Réservé aux membres avec les permissions appropriées")
         await ctx.send(embed=embed)
 
- categorie.lower() == "fun":
+    elif categorie.lower() == "fun":
         embed = discord.Embed(title="😄 Commandes Fun", color=0xff6b9d)
         embed.add_field(name="`.roast [@joueur]`", value="Se fait rôtir par le bot avec une vanne Kdrama/Gaming\nEx: `.roast` ou `.roast @ami`", inline=False)
         embed.add_field(name="`.compliment [@joueur]`", value="Reçois un compliment stylé façon Kdrama !\nEx: `.compliment` ou `.compliment @ami`", inline=False)
@@ -2892,7 +2892,7 @@ async def divorcer_cmd(ctx):
     mariages.pop(uid, None)
     mariages.pop(partner_id, None)
     await ctx.send(embed=discord.Embed(
-        description=f"💔 **{ctx.author.mention}** a divorcé de **{partner.mention if partner else 'quelqu\\'un'}**... C\\'est triste 😢",
+        description=f"💔 **{ctx.author.mention}** a divorcé... C'est triste 😢",
         color=0xe74c3c
     ))
 
