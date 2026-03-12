@@ -3489,6 +3489,410 @@ ANIME_CARDS_DB = {
             {"nom": "Atlas Comet", "degats": 55, "emoji": "💫", "desc": "Tir de sniper légendaire !"},
         ]
     },
+
+    # ═══ BLEACH ═══
+    "ichigo": {
+        "nom": "Ichigo Kurosaki", "serie": "Bleach", "emoji": "🌙",
+        "pv": 130, "attaque": 93, "defense": 78,
+        "rarete": "Légendaire", "faiblesse": "⚡", "resistance": "🌙",
+        "attaques": [
+            {"nom": "Getsuga Tensho", "degats": 60, "emoji": "🌙", "desc": "Vague de lune tranchante"},
+            {"nom": "Bankai — Tensa Zangetsu", "degats": 80, "emoji": "⚫", "desc": "Vitesse et puissance décuplées"},
+            {"nom": "Forme Hollow", "degats": 100, "emoji": "💀", "desc": "Puissance instinctive du Hollow !"},
+        ]
+    },
+
+    # ═══ ATTACK ON TITAN ═══
+    "mikasa": {
+        "nom": "Mikasa Ackerman", "serie": "Attack on Titan", "emoji": "🔴",
+        "pv": 100, "attaque": 92, "defense": 80,
+        "rarete": "Épique", "faiblesse": "🔥", "resistance": "⚡",
+        "attaques": [
+            {"nom": "ODM Précision", "degats": 55, "emoji": "🗡️", "desc": "Frappe chirurgicale ultrarapide"},
+            {"nom": "Instinct Ackerman", "degats": 70, "emoji": "🔴", "desc": "Éveil du pouvoir ancestral"},
+            {"nom": "Lame Finale", "degats": 90, "emoji": "⚔️", "desc": "Détermination absolue — aucune pitié !"},
+        ]
+    },
+
+    # ═══ ONE PUNCH MAN ═══
+    "saitama": {
+        "nom": "Saitama", "serie": "One Punch Man", "emoji": "👊",
+        "pv": 999, "attaque": 100, "defense": 100,
+        "rarete": "Légendaire", "faiblesse": "😴", "resistance": "💥",
+        "attaques": [
+            {"nom": "Coup Normal", "degats": 50, "emoji": "👊", "desc": "Un simple coup... ou pas ?"},
+            {"nom": "Coup Sérieux", "degats": 85, "emoji": "💥", "desc": "Il se donne vraiment cette fois"},
+            {"nom": "Punch Consécutif", "degats": 110, "emoji": "⚡", "desc": "Série infinie de coups devastateurs !"},
+        ]
+    },
+
+    # ═══ DEATH NOTE ═══
+    "l": {
+        "nom": "L Lawliet", "serie": "Death Note", "emoji": "🍬",
+        "pv": 75, "attaque": 65, "defense": 50,
+        "rarete": "Épique", "faiblesse": "🌙", "resistance": "🧠",
+        "attaques": [
+            {"nom": "Déduction Logique", "degats": 30, "emoji": "🧠", "desc": "Réduit l'attaque adverse de 25%"},
+            {"nom": "Piège Mental", "degats": 50, "emoji": "🍬", "desc": "Stratégie imparable à 99%"},
+            {"nom": "Kira Identifié", "degats": 75, "emoji": "🔍", "desc": "Le plus grand détective du monde frappe !"},
+        ]
+    },
+
+    # ═══ DEMON SLAYER ═══
+    "nezuko": {
+        "nom": "Nezuko Kamado", "serie": "Demon Slayer", "emoji": "🎋",
+        "pv": 110, "attaque": 78, "defense": 72,
+        "rarete": "Épique", "faiblesse": "☀️", "resistance": "🔥",
+        "attaques": [
+            {"nom": "Sang Explosif", "degats": 55, "emoji": "🔥", "desc": "Flammes de sang démoniaques"},
+            {"nom": "Coup de Pied Démon", "degats": 65, "emoji": "🎋", "desc": "Force démoniaque décuplée"},
+            {"nom": "Forme Démon Adulte", "degats": 85, "emoji": "💥", "desc": "Puissance de démon à son maximum !"},
+        ]
+    },
+
+    # ═══ NARUTO ═══
+    "sakura": {
+        "nom": "Sakura Haruno", "serie": "Naruto", "emoji": "🌸",
+        "pv": 105, "attaque": 75, "defense": 85,
+        "rarete": "Rare", "faiblesse": "⚡", "resistance": "💪",
+        "attaques": [
+            {"nom": "Poing Chakra", "degats": 55, "emoji": "👊", "desc": "Frappe au chakra concentré"},
+            {"nom": "Soin Médical", "degats": -30, "emoji": "💚", "desc": "Soigne 30 HP — technique médicale ninja"},
+            {"nom": "Cent Frappe", "degats": 85, "emoji": "💥", "desc": "Stockage de chakra ultime — frappe titanesque !"},
+        ]
+    },
+    "kakashi": {
+        "nom": "Kakashi Hatake", "serie": "Naruto", "emoji": "📖",
+        "pv": 105, "attaque": 88, "defense": 78,
+        "rarete": "Légendaire", "faiblesse": "🌊", "resistance": "⚡",
+        "attaques": [
+            {"nom": "Chidori", "degats": 55, "emoji": "⚡", "desc": "Mille oiseaux — foudre dans la main"},
+            {"nom": "Sharingan Copié", "degats": 65, "emoji": "👁️", "desc": "Copie parfaite de l'attaque adverse"},
+            {"nom": "Kamui", "degats": 90, "emoji": "🌀", "desc": "Téléportation dimensionnelle dévastatrice !"},
+        ]
+    },
+
+    # ═══ HUNTER X HUNTER ═══
+    "killua": {
+        "nom": "Killua Zoldyck", "serie": "Hunter x Hunter", "emoji": "⚡",
+        "pv": 100, "attaque": 90, "defense": 75,
+        "rarete": "Légendaire", "faiblesse": "🔥", "resistance": "⚡",
+        "attaques": [
+            {"nom": "Narukami", "degats": 55, "emoji": "⚡", "desc": "Foudre Nen ultrarapide"},
+            {"nom": "Godspeed", "degats": 75, "emoji": "💨", "desc": "Vitesse divine — invisible à l'œil nu"},
+            {"nom": "Lightning Palm", "degats": 90, "emoji": "🌩️", "desc": "Décharge électrique maximale !"},
+        ]
+    },
+    "gon": {
+        "nom": "Gon Freecss", "serie": "Hunter x Hunter", "emoji": "🌿",
+        "pv": 115, "attaque": 82, "defense": 70,
+        "rarete": "Épique", "faiblesse": "⚡", "resistance": "🌿",
+        "attaques": [
+            {"nom": "Jajanken — Rock", "degats": 50, "emoji": "✊", "desc": "Poing Nen concentré"},
+            {"nom": "Jajanken — Paper", "degats": 60, "emoji": "✋", "desc": "Rayon de Nen à longue portée"},
+            {"nom": "Forme Adulte Gon", "degats": 105, "emoji": "💥", "desc": "Tout sacrifier pour une puissance absolue !"},
+        ]
+    },
+    "kurapika": {
+        "nom": "Kurapika", "serie": "Hunter x Hunter", "emoji": "🔴",
+        "pv": 95, "attaque": 85, "defense": 68,
+        "rarete": "Épique", "faiblesse": "💨", "resistance": "🔴",
+        "attaques": [
+            {"nom": "Chaînes Nen", "degats": 50, "emoji": "⛓️", "desc": "Chaînes de Nen impénétrables"},
+            {"nom": "Jugement Éternel", "degats": 70, "emoji": "🔴", "desc": "Loi absolue — la mort au moindre mensonge"},
+            {"nom": "Œil Écarlate", "degats": 90, "emoji": "👁️", "desc": "Puissance maximale contre les Genei Ryodan !"},
+        ]
+    },
+    "hisoka": {
+        "nom": "Hisoka", "serie": "Hunter x Hunter", "emoji": "🃏",
+        "pv": 120, "attaque": 92, "defense": 80,
+        "rarete": "Légendaire", "faiblesse": "🌊", "resistance": "🃏",
+        "attaques": [
+            {"nom": "Bungee Gum", "degats": 55, "emoji": "🎈", "desc": "Élasticité et adhérence combinées"},
+            {"nom": "Texture Surprise", "degats": 40, "emoji": "🃏", "desc": "Illusion parfaite — réduit la défense adverse"},
+            {"nom": "Frappe du Magicien", "degats": 88, "emoji": "✨", "desc": "Puissance dévastatrice du magicien !"},
+        ]
+    },
+
+    # ═══ FMA ═══
+    "alphonse": {
+        "nom": "Alphonse Elric", "serie": "FMA Brotherhood", "emoji": "🛡️",
+        "pv": 130, "attaque": 72, "defense": 95,
+        "rarete": "Épique", "faiblesse": "⚡", "resistance": "🛡️",
+        "attaques": [
+            {"nom": "Armure de Métal", "degats": 35, "emoji": "🛡️", "desc": "Frappe avec son armure gigantesque"},
+            {"nom": "Transmutation Défensive", "degats": 50, "emoji": "⚗️", "desc": "Transforme le sol en piège"},
+            {"nom": "Frappe d'Armure", "degats": 70, "emoji": "💥", "desc": "Toute la force d'une armure vivante !"},
+        ]
+    },
+    "roy": {
+        "nom": "Roy Mustang", "serie": "FMA Brotherhood", "emoji": "🔥",
+        "pv": 95, "attaque": 88, "defense": 65,
+        "rarete": "Épique", "faiblesse": "🌊", "resistance": "🔥",
+        "attaques": [
+            {"nom": "Claquement de Doigts", "degats": 45, "emoji": "🔥", "desc": "Étincelle alchimique instantanée"},
+            {"nom": "Mur de Flammes", "degats": 65, "emoji": "🔥", "desc": "Barrière enflammée dévastratrice"},
+            {"nom": "Soleil Ardent", "degats": 90, "emoji": "☀️", "desc": "Tout incinérer — l'Alchimiste de Flamme !"},
+        ]
+    },
+
+    # ═══ FAIRY TAIL ═══
+    "natsu": {
+        "nom": "Natsu Dragneel", "serie": "Fairy Tail", "emoji": "🔥",
+        "pv": 120, "attaque": 85, "defense": 70,
+        "rarete": "Épique", "faiblesse": "🌊", "resistance": "🔥",
+        "attaques": [
+            {"nom": "Rugissement du Dragon Ardent", "degats": 50, "emoji": "🔥", "desc": "Souffle de feu dévastateur"},
+            {"nom": "Poing de Flamme", "degats": 65, "emoji": "👊", "desc": "Frappe enflammée explosive"},
+            {"nom": "Mode Dragon Force", "degats": 95, "emoji": "🐲", "desc": "Transformation ultime du tueur de dragon !"},
+        ]
+    },
+    "erza": {
+        "nom": "Erza Scarlet", "serie": "Fairy Tail", "emoji": "⚔️",
+        "pv": 115, "attaque": 90, "defense": 88,
+        "rarete": "Légendaire", "faiblesse": "⚡", "resistance": "⚔️",
+        "attaques": [
+            {"nom": "Armure du Paradis", "degats": 55, "emoji": "🛡️", "desc": "Armure la plus puissante de Fairy Tail"},
+            {"nom": "Cent Épées", "degats": 75, "emoji": "⚔️", "desc": "Pluie de lames simultanées"},
+            {"nom": "Robe de la Déesse", "degats": 95, "emoji": "✨", "desc": "Armure divine — puissance absolue !"},
+        ]
+    },
+    "lucy": {
+        "nom": "Lucy Heartfilia", "serie": "Fairy Tail", "emoji": "⭐",
+        "pv": 90, "attaque": 70, "defense": 60,
+        "rarete": "Rare", "faiblesse": "💨", "resistance": "⭐",
+        "attaques": [
+            {"nom": "Invocation — Taurus", "degats": 45, "emoji": "🐂", "desc": "L'Esprit du Taureau"},
+            {"nom": "Invocation — Scorpio", "degats": 55, "emoji": "🦂", "desc": "Tempête de sable dévastratrice"},
+            {"nom": "Porte des Étoiles", "degats": 80, "emoji": "⭐", "desc": "Tous les esprits en même temps !"},
+        ]
+    },
+
+    # ═══ JUJUTSU KAISEN ═══
+    "megumi": {
+        "nom": "Megumi Fushiguro", "serie": "Jujutsu Kaisen", "emoji": "🐺",
+        "pv": 100, "attaque": 80, "defense": 75,
+        "rarete": "Épique", "faiblesse": "🔥", "resistance": "🌙",
+        "attaques": [
+            {"nom": "Chien de Divine", "degats": 45, "emoji": "🐺", "desc": "Invocation du chien maléfique"},
+            {"nom": "Serpent Ailé", "degats": 60, "emoji": "🐍", "desc": "Invocation du serpent divin"},
+            {"nom": "Terrain de Jeu de Mahamudra", "degats": 85, "emoji": "♟️", "desc": "Domaine expansif — pièces infernales !"},
+        ]
+    },
+    "nobara": {
+        "nom": "Nobara Kugisaki", "serie": "Jujutsu Kaisen", "emoji": "🔨",
+        "pv": 95, "attaque": 78, "defense": 65,
+        "rarete": "Rare", "faiblesse": "💨", "resistance": "🔨",
+        "attaques": [
+            {"nom": "Marteau et Clou", "degats": 45, "emoji": "🔨", "desc": "Technique de base — dégâts directs"},
+            {"nom": "Résonance", "degats": 65, "emoji": "💥", "desc": "Dégâts sur le corps et l'âme"},
+            {"nom": "Barrage de Clous", "degats": 80, "emoji": "⚡", "desc": "Pluie de clous ensorcelés !"},
+        ]
+    },
+
+    # ═══ BLACK CLOVER ═══
+    "asta": {
+        "nom": "Asta", "serie": "Black Clover", "emoji": "⚔️",
+        "pv": 120, "attaque": 82, "defense": 80,
+        "rarete": "Épique", "faiblesse": "🌊", "resistance": "✨",
+        "attaques": [
+            {"nom": "Anti-Magie", "degats": 50, "emoji": "⚔️", "desc": "Annule toute magie adverse"},
+            {"nom": "Lame Noire", "degats": 65, "emoji": "⚫", "desc": "Épée imprégnée d'anti-magie"},
+            {"nom": "Forme Démon", "degats": 95, "emoji": "😈", "desc": "Fusion avec Liebe — puissance sans limites !"},
+        ]
+    },
+    "yuno": {
+        "nom": "Yuno", "serie": "Black Clover", "emoji": "💨",
+        "pv": 110, "attaque": 87, "defense": 72,
+        "rarete": "Épique", "faiblesse": "🔥", "resistance": "💨",
+        "attaques": [
+            {"nom": "Esprit du Vent", "degats": 50, "emoji": "💨", "desc": "Sylphe — esprit du vent"},
+            {"nom": "Flèche de Tempête", "degats": 65, "emoji": "🌪️", "desc": "Tornade concentrée en flèche"},
+            {"nom": "Dieu du Vent", "degats": 90, "emoji": "⭐", "desc": "Forme divine — magie des étoiles !"},
+        ]
+    },
+    "noelle": {
+        "nom": "Noelle Silva", "serie": "Black Clover", "emoji": "🌊",
+        "pv": 105, "attaque": 80, "defense": 78,
+        "rarete": "Rare", "faiblesse": "⚡", "resistance": "🌊",
+        "attaques": [
+            {"nom": "Bouclier d'Eau", "degats": 30, "emoji": "🛡️", "desc": "Barrière d'eau — réduit dégâts reçus"},
+            {"nom": "Canon de Mer", "degats": 60, "emoji": "🌊", "desc": "Jet d'eau dévastateur"},
+            {"nom": "Valkyrie Dress", "degats": 88, "emoji": "💎", "desc": "Armure d'eau divine — puissance royale !"},
+        ]
+    },
+
+    # ═══ TENSURA ═══
+    "rimuru": {
+        "nom": "Rimuru Tempest", "serie": "Tensura", "emoji": "💧",
+        "pv": 135, "attaque": 92, "defense": 90,
+        "rarete": "Légendaire", "faiblesse": "🌙", "resistance": "💧",
+        "attaques": [
+            {"nom": "Prédateur", "degats": 55, "emoji": "💧", "desc": "Absorbe et copie les capacités"},
+            {"nom": "Tempête Noire", "degats": 75, "emoji": "🌪️", "desc": "Magie ultime multiples éléments"},
+            {"nom": "Rimuru Divin", "degats": 100, "emoji": "✨", "desc": "Forme de Dieu — au-delà des limites !"},
+        ]
+    },
+
+    # ═══ SWORD ART ONLINE ═══
+    "kirito": {
+        "nom": "Kirito", "serie": "Sword Art Online", "emoji": "⚫",
+        "pv": 110, "attaque": 85, "defense": 75,
+        "rarete": "Épique", "faiblesse": "🌊", "resistance": "⚫",
+        "attaques": [
+            {"nom": "Vorpal Strike", "degats": 50, "emoji": "⚫", "desc": "Coup d'épée ultrarapide"},
+            {"nom": "Double Style", "degats": 65, "emoji": "⚔️", "desc": "Deux épées simultanées"},
+            {"nom": "Starburst Stream", "degats": 90, "emoji": "⭐", "desc": "16 coups consécutifs dévastateurs !"},
+        ]
+    },
+    "asuna": {
+        "nom": "Asuna Yuuki", "serie": "Sword Art Online", "emoji": "⚡",
+        "pv": 105, "attaque": 88, "defense": 70,
+        "rarete": "Épique", "faiblesse": "🔥", "resistance": "⚡",
+        "attaques": [
+            {"nom": "Linear", "degats": 50, "emoji": "⚡", "desc": "Estoc rectiligne à vitesse éclair"},
+            {"nom": "Quadruple Pain", "degats": 70, "emoji": "⚔️", "desc": "4 coups simultanés en une fraction de seconde"},
+            {"nom": "Flashing Penetrator", "degats": 90, "emoji": "💫", "desc": "La Fée de l'Éclair à pleine puissance !"},
+        ]
+    },
+
+    # ═══ SOLO LEVELING ═══
+    "jinwoo": {
+        "nom": "Sung Jinwoo", "serie": "Solo Leveling", "emoji": "🗡️",
+        "pv": 145, "attaque": 97, "defense": 92,
+        "rarete": "Légendaire", "faiblesse": "☀️", "resistance": "🌙",
+        "attaques": [
+            {"nom": "Dague de l'Ombre", "degats": 60, "emoji": "🗡️", "desc": "Vitesse et précision absolues"},
+            {"nom": "Armée des Ombres", "degats": 80, "emoji": "👥", "desc": "Invocation de soldats de l'ombre"},
+            {"nom": "Monarque des Ombres", "degats": 105, "emoji": "👑", "desc": "Pouvoir divin du Monarque !"},
+        ]
+    },
+
+    # ═══ STEINS;GATE ═══
+    "okabe": {
+        "nom": "Rintarou Okabe", "serie": "Steins;Gate", "emoji": "🧪",
+        "pv": 75, "attaque": 55, "defense": 50,
+        "rarete": "Rare", "faiblesse": "🌊", "resistance": "🧪",
+        "attaques": [
+            {"nom": "Reading Steiner", "degats": 35, "emoji": "🧠", "desc": "Mémoire des lignes temporelles"},
+            {"nom": "D-Mail", "degats": 45, "emoji": "📱", "desc": "Modifie la réalité via un SMS"},
+            {"nom": "El Psy Kongroo", "degats": 60, "emoji": "🧪", "desc": "Paradoxe temporel dévastateur !"},
+        ]
+    },
+    "kurisu": {
+        "nom": "Kurisu Makise", "serie": "Steins;Gate", "emoji": "🔬",
+        "pv": 70, "attaque": 60, "defense": 48,
+        "rarete": "Rare", "faiblesse": "💨", "resistance": "🔬",
+        "attaques": [
+            {"nom": "Génie Scientifique", "degats": 30, "emoji": "🔬", "desc": "Analyse et réduit la défense adverse"},
+            {"nom": "Théorie du Tout", "degats": 50, "emoji": "⚛️", "desc": "Attaque basée sur la physique quantique"},
+            {"nom": "Time Leap", "degats": 70, "emoji": "⏰", "desc": "Voyage temporel — esquive et contre-attaque !"},
+        ]
+    },
+
+    # ═══ RUROUNI KENSHIN ═══
+    "kenshin": {
+        "nom": "Kenshin Himura", "serie": "Rurouni Kenshin", "emoji": "🌸",
+        "pv": 100, "attaque": 90, "defense": 78,
+        "rarete": "Légendaire", "faiblesse": "💥", "resistance": "🌸",
+        "attaques": [
+            {"nom": "Ryūtsui-sen", "degats": 50, "emoji": "🌊", "desc": "Frappe descendante en arc de cercle"},
+            {"nom": "Dō-ryūsen", "degats": 65, "emoji": "💨", "desc": "Onde de choc au sol"},
+            {"nom": "Amakakeru Ryū no Hirameki", "degats": 95, "emoji": "⚡", "desc": "Technique ultime — dégaine céleste !"},
+        ]
+    },
+
+    # ═══ COWBOY BEBOP ═══
+    "spike": {
+        "nom": "Spike Spiegel", "serie": "Cowboy Bebop", "emoji": "🚬",
+        "pv": 95, "attaque": 80, "defense": 65,
+        "rarete": "Rare", "faiblesse": "🔥", "resistance": "💨",
+        "attaques": [
+            {"nom": "Jeet Kune Do", "degats": 45, "emoji": "👊", "desc": "Art martial fluide et imprévisible"},
+            {"nom": "Tir de Précision", "degats": 55, "emoji": "🔫", "desc": "Vise entre les yeux"},
+            {"nom": "Je verrai au paradis", "degats": 80, "emoji": "⭐", "desc": "Tout donner pour le dernier combat !"},
+        ]
+    },
+    "faye": {
+        "nom": "Faye Valentine", "serie": "Cowboy Bebop", "emoji": "💄",
+        "pv": 85, "attaque": 72, "defense": 60,
+        "rarete": "Rare", "faiblesse": "⚡", "resistance": "💄",
+        "attaques": [
+            {"nom": "Tir Rapide", "degats": 40, "emoji": "🔫", "desc": "Rafale de coups de feu"},
+            {"nom": "Manipulation", "degats": 35, "emoji": "💄", "desc": "Baisse l'attaque adverse de 20%"},
+            {"nom": "Red Tail — Attaque", "degats": 70, "emoji": "🚀", "desc": "Vaisseau personnel en mode combat !"},
+        ]
+    },
+
+    # ═══ GHOST IN THE SHELL ═══
+    "motoko": {
+        "nom": "Motoko Kusanagi", "serie": "Ghost in the Shell", "emoji": "🤖",
+        "pv": 105, "attaque": 88, "defense": 85,
+        "rarete": "Épique", "faiblesse": "⚡", "resistance": "🤖",
+        "attaques": [
+            {"nom": "Camouflage Optique", "degats": 40, "emoji": "👁️", "desc": "Invisibilité totale — esquive garantie"},
+            {"nom": "Hacking Neural", "degats": 60, "emoji": "💻", "desc": "Prend le contrôle de l'ennemi"},
+            {"nom": "Cyborg Full Power", "degats": 85, "emoji": "🤖", "desc": "Force cybernétique maximale !"},
+        ]
+    },
+
+    # ═══ DARLING IN THE FRANXX ═══
+    "zerotwo": {
+        "nom": "Zero Two", "serie": "Darling in the Franxx", "emoji": "🌸",
+        "pv": 120, "attaque": 87, "defense": 75,
+        "rarete": "Épique", "faiblesse": "🌊", "resistance": "🔥",
+        "attaques": [
+            {"nom": "Instinct de Klaxosaure", "degats": 55, "emoji": "🌸", "desc": "Puissance instinctive mi-humaine"},
+            {"nom": "Strelizia — Mode Pistil", "degats": 70, "emoji": "🌺", "desc": "Fusion parfaite avec Franxx"},
+            {"nom": "Strelizia True Apus", "degats": 95, "emoji": "💫", "desc": "Forme cosmique ultime — amour infini !"},
+        ]
+    },
+
+    # ═══ VIOLET EVERGARDEN ═══
+    "violet": {
+        "nom": "Violet Evergarden", "serie": "Violet Evergarden", "emoji": "📝",
+        "pv": 90, "attaque": 75, "defense": 70,
+        "rarete": "Rare", "faiblesse": "💔", "resistance": "⚔️",
+        "attaques": [
+            {"nom": "Bras Mécaniques", "degats": 45, "emoji": "🤖", "desc": "Prothèses de combat ultraprécises"},
+            {"nom": "Soldat d'Élite", "degats": 60, "emoji": "⚔️", "desc": "Entraînement militaire surhumain"},
+            {"nom": "Pour protéger", "degats": 80, "emoji": "💙", "desc": "La volonté de protéger — puissance absolue !"},
+        ]
+    },
+
+    # ═══ SPY X FAMILY ═══
+    "anya": {
+        "nom": "Anya Forger", "serie": "Spy x Family", "emoji": "💭",
+        "pv": 65, "attaque": 40, "defense": 45,
+        "rarete": "Commun", "faiblesse": "🔥", "resistance": "💭",
+        "attaques": [
+            {"nom": "Télépathie", "degats": 20, "emoji": "💭", "desc": "Lit les pensées et prédit l'attaque"},
+            {"nom": "Coup de Poing Inattendu", "degats": 30, "emoji": "👊", "desc": "Tellement imprévisible que ça fait mal"},
+            {"nom": "Heh !", "degats": 45, "emoji": "😆", "desc": "L'expression la plus puissante de l'histoire !"},
+        ]
+    },
+    "yor": {
+        "nom": "Yor Forger", "serie": "Spy x Family", "emoji": "🌹",
+        "pv": 115, "attaque": 92, "defense": 80,
+        "rarete": "Épique", "faiblesse": "💭", "resistance": "🌹",
+        "attaques": [
+            {"nom": "Épine de Rose", "degats": 55, "emoji": "🌹", "desc": "Lancer de l'épée avec précision mortelle"},
+            {"nom": "Rotation Mortelle", "degats": 70, "emoji": "🔄", "desc": "Tourbillon de l'assassin"},
+            {"nom": "Princesse Jardin", "degats": 90, "emoji": "💀", "desc": "L'assassin la plus redoutable du monde !"},
+        ]
+    },
+
+    # ═══ VINLAND SAGA ═══
+    "thorfinn": {
+        "nom": "Thorfinn", "serie": "Vinland Saga", "emoji": "🪓",
+        "pv": 110, "attaque": 88, "defense": 72,
+        "rarete": "Épique", "faiblesse": "🔥", "resistance": "❄️",
+        "attaques": [
+            {"nom": "Dague Viking", "degats": 50, "emoji": "🗡️", "desc": "Rapidité et précision nordique"},
+            {"nom": "Frappe de Guerrier", "degats": 65, "emoji": "🪓", "desc": "Force brute des Vikings"},
+            {"nom": "Voie du Pacifiste", "degats": 85, "emoji": "🕊️", "desc": "Combattre sans tuer — maîtrise absolue !"},
+        ]
+    },
 }
 
 RARETE_COULEURS = {
