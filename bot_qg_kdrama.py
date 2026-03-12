@@ -203,329 +203,88 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # ============================================================
-#  HELP
+#  HELP — Redesigné par grandes catégories
 # ============================================================
 @bot.command(name="help")
 async def help_cmd(ctx, categorie: str = None):
     if categorie is None:
-        # Menu principal
         embed = discord.Embed(
-            title="📖 Aide — Bot QG Kdrama",
-            description=(
-                "Bienvenue ! Voici toutes les catégories de commandes.\n"
-                "Tape `.help <catégorie>` pour voir les détails !\n\n"
-                "**Exemple :** `.help kdrama` ou `.help loupgarou`"
-            ),
+            title="📖 Menu — Bot Akari • QG Kdrama",
+            description="Tape `.help <catégorie>` pour voir les commandes détaillées !\n**Préfixe : `.`**",
             color=0xff6b9d
         )
-        embed.add_field(name="🎬 `.help kdrama`", value="Dramas, recommandations, notes, watchlist", inline=True)
-        embed.add_field(name="✨ `.help anime`", value="Animés, recommandations, citations", inline=True)
-        embed.add_field(name="🎮 `.help gaming`", value="Jeux, LFG, mini-jeux", inline=True)
-        embed.add_field(name="🎬 `.help bracket`", value="Tournoi Kdrama & Animé", inline=True)
-        embed.add_field(name="🎰 `.help casino`", value="Slot machine & jeux d'argent", inline=True)
-        embed.add_field(name="🐉 `.help boss`", value="Boss de serveur & Arène PvP", inline=True)
-        embed.add_field(name="🎯 `.help quiz`", value="Quiz solo et duel par thème", inline=True)
-        embed.add_field(name="🎭 `.help minijeux`", value="Pendu, Devine le personnage", inline=True)
-        embed.add_field(name="📊 `.help niveaux`", value="XP, rang, classement", inline=True)
-        embed.add_field(name="💰 `.help economie`", value="Pièces, boutique, banque, vol", inline=True)
-        embed.add_field(name="⚔️ `.help duels`", value="Défis entre membres", inline=True)
-        embed.add_field(name="💍 `.help social`", value="Mariage, anniversaires, sondages", inline=True)
-        embed.add_field(name="🐺 `.help loupgarou`", value="Jeu de rôle complet", inline=True)
-        embed.add_field(name="🎫 `.help support`", value="Tickets d'aide", inline=True)
-        embed.add_field(name="🛡️ `.help modo`", value="Outils de modération", inline=True)
-        embed.add_field(name="😄 `.help fun`", value="Commandes fun et délire", inline=True)
-        embed.set_footer(text="QG Kdrama 🎬 • Préfixe : .  •  Bon drama et bonnes parties !")
+        embed.add_field(name="🎬 Contenu — `.help contenu`", value="Dramas, animés, recommandations, notes, watchlist, sorties", inline=False)
+        embed.add_field(name="🎮 Jeux & Divertissement — `.help jeux`", value="Quiz, Loup Garou, Pendu, Devine, Arène PvP, Boss, Bracket Tournoi, Combat Cartes Animé", inline=False)
+        embed.add_field(name="💰 Économie & Récompenses — `.help economie`", value="Pièces, daily, boutique, banque, vol, slot machine", inline=False)
+        embed.add_field(name="📊 Progression — `.help progression`", value="XP, niveaux, rang, leaderboard, titres", inline=False)
+        embed.add_field(name="💬 Social & Communauté — `.help social`", value="Mariage, anniversaires, sondages, giveaway, stats serveur", inline=False)
+        embed.add_field(name="😄 Fun & Délire — `.help fun`", value="Roast, compliment, 8ball, meme, rps, dés, tickets support", inline=False)
+        embed.add_field(name="🛡️ Modération — `.help modo`", value="Ban, kick, mute, clear — réservé aux admins", inline=False)
+        embed.set_footer(text="Akari 🌸 • QG Kdrama • Bon drama et bonnes parties !")
         await ctx.send(embed=embed)
 
-    elif categorie.lower() == "anime":
-        embed = discord.Embed(title="✨ Commandes Animé", color=0x5865F2)
-        embed.add_field(name="`.anime`", value="Affiche un animé aléatoire avec sa note et son genre", inline=False)
-        embed.add_field(name="`.animerec [genre]`", value="Recommande un animé selon le genre\nEx: `.animerec action` ou `.animerec romance`", inline=False)
-        embed.add_field(name="`.animequote`", value="Affiche une citation culte d'un animé", inline=False)
-        embed.set_footer(text="💡 Genres dispo : action, romance, sport, psychologique, fantasy...")
+    elif categorie.lower() in ["contenu", "drama", "kdrama", "anime", "animé"]:
+        embed = discord.Embed(title="🎬 Contenu — Dramas & Animés", description="Tout pour explorer, noter et gérer tes dramas et animés !", color=0xff6b9d)
+        embed.add_field(name="🎬 Dramas", value="`.drama` — Drama aléatoire\n`.dramarec [genre]` — Reco par genre\n`.quote` — Citation Kdrama\n`.oppachallenge` — Défi fun", inline=False)
+        embed.add_field(name="✨ Animés", value="`.anime` — Animé aléatoire\n`.animerec [genre]` — Reco par genre\n`.animequote` — Citation animé", inline=False)
+        embed.add_field(name="🎮 Jeux vidéo", value="`.gamerec [genre]` — Reco de jeu\n`.lfg [jeu]` — Cherche des coéquipiers", inline=False)
+        embed.add_field(name="⭐ Notes & Avis", value="`.noter 9 Goblin` — Note un drama/animé /10\n`.avis Goblin` — Voir la moyenne du serveur", inline=False)
+        embed.add_field(name="📋 Watchlist", value="`.watch ajouter <titre>` — Ajouter\n`.watch liste` — Voir ta liste\n`.watch vu <titre>` — Marquer comme vu ✅\n`.watch supprimer <titre>` — Retirer", inline=False)
+        embed.add_field(name="📅 Sorties", value="`.sorties` — Calendrier des prochaines sorties", inline=False)
         await ctx.send(embed=embed)
 
-    elif categorie.lower() == "gaming":
-        embed = discord.Embed(title="🎮 Commandes Gaming", color=0x2ecc71)
-        embed.add_field(name="`.gamerec [genre]`", value="Recommande un jeu vidéo selon le genre\nEx: `.gamerec rpg` ou `.gamerec fps`", inline=False)
-        embed.add_field(name="`.lfg [jeu]`", value="Cherche des coéquipiers pour jouer ensemble\nEx: `.lfg Valorant` — les intéressés réagissent avec 🎮", inline=False)
-        embed.add_field(name="`.rps <choix>`", value="Pierre Feuille Ciseaux contre le bot !\nEx: `.rps pierre` / `.rps feuille` / `.rps ciseaux`\n✅ Victoire = +20 pièces", inline=False)
-        embed.add_field(name="`.dice [faces]`", value="Lance un dé ! Par défaut 6 faces\nEx: `.dice` ou `.dice 20` pour un dé à 20 faces", inline=False)
-        await ctx.send(embed=embed)
-
-    elif categorie.lower() == "niveaux":
-        embed = discord.Embed(title="📊 Commandes Niveaux & XP", color=0xf1c40f)
-        embed.add_field(name="`.rank [@joueur]`", value="Affiche ton niveau, XP et titre actuel\nEx: `.rank` ou `.rank @ami`", inline=False)
-        embed.add_field(name="`.leaderboard`", value="Affiche le top 10 des membres les plus actifs du serveur", inline=False)
-        embed.add_field(name="📈 Comment gagner de l'XP ?", value="Tu gagnes de l'XP automatiquement en **chattant** dans le serveur !\nChaque message = 3 à 8 XP aléatoires", inline=False)
-        embed.add_field(name="🏆 Titres disponibles", value=(
-            "Niv.1 → 🎬 Spectateur Débutant\n"
-            "Niv.5 → 📺 Fan de Kdrama\n"
-            "Niv.10 → 🎮 Gamer Kdrama\n"
-            "Niv.15 → ✨ Otaku Confirmé\n"
-            "Niv.20 → 👑 Légende du QG\n"
-            "Niv.30 → 💫 Dieu du QG Kdrama"
+    elif categorie.lower() in ["jeux", "jeu", "quiz", "minijeux", "mini-jeux", "divertissement"]:
+        embed = discord.Embed(title="🎮 Jeux & Divertissement", description="Quiz, combats, tournois et jeux de société !", color=0x9b59b6)
+        embed.add_field(name="🎯 Quiz", value="`.quiz [thème]` — Quiz solo qui s\'enchaîne auto !\n`.quizduel [thème] @joueur` — Duel 5 questions\n`.quizstop` — Arrêter\n*Thèmes : kdrama • anime • gaming • culture • mix*", inline=False)
+        embed.add_field(name="🎬 Bracket Tournoi", value="`.bracket kdrama` — Tournoi Kdramas (50 titres !)\n`.bracket anime` — Tournoi Animés (49 titres !)\n`.bracketskip` — Passer (admin) • `.bracketstop` — Annuler (admin)", inline=False)
+        embed.add_field(name="🐺 Loup Garou", value="`.lgcreate` `.lgjoin` `.lgstart` `.lgstop`\n`.lg` — Aide complète • `.lgroles` — Voir les rôles", inline=False)
+        embed.add_field(name="⚔️ Combat & Boss", value="`.arene @joueur` — PvP tour par tour\n`.duel @joueur` — Défi simple\n`.boss` — Faire apparaître un boss (admin)\n`.attaque` — Frapper le boss !", inline=False)
+        embed.add_field(name="🃏 Combat Cartes Animé", value=(
+            "`.pokepersos` — Voir tous les persos dispo\n"
+            "`.enregistrer <perso> <image>` — Ajouter une carte\n"
+            "`.pokecollection` — Voir ta collection\n"
+            "`.pokebattle @joueur` — Combat 3v3 style Pokémon !"
         ), inline=False)
+        embed.add_field(name="🎭 Mini-Jeux", value="`.devine` — Devine le personnage\n`.pendu` — Pendu animé/drama\n`.rps <choix>` — Pierre Feuille Ciseaux\n`.dice [faces]` — Lancer un dé", inline=False)
         await ctx.send(embed=embed)
 
-    elif categorie.lower() == "duels":
-        embed = discord.Embed(title="⚔️ Commandes Duels", color=0xe74c3c)
-        embed.add_field(name="`.duel @joueur`", value="Lance un défi à un membre du serveur\nEx: `.duel @ami`", inline=False)
-        embed.add_field(name="`.accept`", value="Accepte un défi qui t'a été lancé", inline=False)
-        embed.add_field(name="`.decline`", value="Refuse un défi qui t'a été lancé", inline=False)
-        embed.add_field(name="⚡ Comment ça marche ?", value=(
-            "1. Tu lances `.duel @joueur`\n"
-            "2. L'adversaire tape `.accept`\n"
-            "3. Le bot tire au sort le gagnant\n"
-            "4. Le gagnant remporte **50-200 pièces** au perdant !"
-        ), inline=False)
+    elif categorie.lower() in ["economie", "économie", "eco", "argent"]:
+        embed = discord.Embed(title="💰 Économie & Récompenses", description="Gagne des pièces, dépense-les, enrichis-toi !", color=0xf39c12)
+        embed.add_field(name="💵 Pièces", value="`.daily` — Pièces journalières (100-500) ⏳ 24h\n`.balance [@joueur]` — Voir ton solde\n`.pay @joueur <montant>` — Envoyer des pièces\n`.steal @joueur` — Vol (45% réussite, cooldown 1h)", inline=False)
+        embed.add_field(name="🏦 Banque", value="`.banque depot <montant>` — Déposer\n`.banque retrait` — Retirer + intérêts\n`.banque solde` — Voir le solde\n📈 Intérêts : +5% toutes les 24h !", inline=False)
+        embed.add_field(name="🛒 Boutique & Casino", value="`.shop` — Voir les items\n`.acheter <id>` — Acheter (vip • drama_king • otaku • gamer_pro • double_xp)\n`.slot [mise]` — Slot machine (min 10 / max 500 pièces)", inline=False)
+        embed.add_field(name="💡 Comment gagner des pièces ?", value="`.daily` `.quiz` `.arene` `.duel` `.pendu` `.devine` `.slot` `.attaque boss`", inline=False)
         await ctx.send(embed=embed)
 
-    elif categorie.lower() in ["loupgarou", "lg", "loup"]:
-        embed = discord.Embed(title="🐺 Commandes Loup Garou", color=0x2c3e50)
-        embed.add_field(name="🎙️ Narration vocale automatique !", value="Le bot rejoint le salon vocal et narre les phases avec une vraie voix française ! 🎭\n*(Rejoins un vocal avant de lancer la partie)*", inline=False)
-        embed.add_field(name="`.lg`", value="Affiche l'aide complète du Loup Garou", inline=False)
-        embed.add_field(name="`.lgroles`", value="Affiche tous les rôles disponibles et leurs pouvoirs", inline=False)
-        embed.add_field(name="`.lgcreate`", value="Crée une nouvelle partie (tu deviens l'hôte)", inline=False)
-        embed.add_field(name="`.lgjoin`", value="Rejoins la partie en attente", inline=False)
-        embed.add_field(name="`.lgstart`", value="Lance la partie — envoie les rôles en DM + narration vocale de début 🎙️", inline=False)
-        embed.add_field(name="`.lgvote @joueur`", value="Vote pour éliminer un suspect pendant le jour", inline=False)
-        embed.add_field(name="`.lgnuit @joueur`", value="⚠️ En MP avec le bot — Action de nuit selon ton rôle\n• Loup : désigne ta victime\n• Voyante : découvre un rôle\n• Cupidon : lie deux amoureux", inline=False)
-        embed.add_field(name="`.lgsorciere vie/mort @joueur`", value="⚠️ En MP — Utilise une potion\n• `vie` : sauve la victime de la nuit\n• `mort @joueur` : empoisonne quelqu'un", inline=False)
-        embed.add_field(name="`.lgnextday`", value="Passe à la phase de jour — révèle les morts + narration vocale 🎙️ (hôte uniquement)", inline=False)
-        embed.add_field(name="`.lgstatus`", value="Affiche les joueurs encore en vie et les éliminés", inline=False)
-        embed.add_field(name="`.lgstop`", value="Annule la partie en cours (hôte ou admin)", inline=False)
-        embed.set_footer(text="🐺 5 à 12 joueurs • Rôles en DM • Narration vocale automatique !")
+    elif categorie.lower() in ["progression", "xp", "niveaux", "niveau", "rang"]:
+        embed = discord.Embed(title="📊 Progression — XP & Niveaux", color=0xf1c40f)
+        embed.add_field(name="Commandes", value="`.rank [@joueur]` — Ton niveau, XP et titre\n`.leaderboard` — Top 10 membres les plus actifs", inline=False)
+        embed.add_field(name="📈 Comment gagner de l\'XP ?", value="• Chatter → 3-8 XP/message\n• Gagner un quiz → +30 XP\n• Gagner une arène → +40 XP\n• Tuer un boss → +50 XP", inline=False)
+        embed.add_field(name="🏆 Titres", value="Niv.1 → 🎬 Spectateur Débutant\nNiv.5 → 📺 Fan de Kdrama\nNiv.10 → 🎮 Gamer Kdrama\nNiv.15 → ✨ Otaku Confirmé\nNiv.20 → 👑 Légende du QG\nNiv.30 → 💫 Dieu du QG Kdrama", inline=False)
         await ctx.send(embed=embed)
 
-    elif categorie.lower() == "support":
-        embed = discord.Embed(title="🎫 Commandes Support", color=0x5865F2)
-        embed.add_field(name="`.ticket`", value="Ouvre un ticket de support privé\nUn salon secret est créé, visible uniquement par toi et le staff", inline=False)
-        embed.add_field(name="`.close`", value="Ferme et supprime le ticket (dans le salon ticket uniquement)", inline=False)
-        embed.set_footer(text="💡 Utilise le ticket pour contacter le staff en privé !")
+    elif categorie.lower() in ["social", "communauté", "communaute"]:
+        embed = discord.Embed(title="💬 Social & Communauté", color=0xff6b9d)
+        embed.add_field(name="💍 Mariage", value="`.marier @joueur` — Demande en mariage\n`.accepter` / `.refuser` — Répondre\n`.divorcer` — Divorce 💔", inline=False)
+        embed.add_field(name="🎂 Anniversaires", value="`.anniversaire JJ/MM` — Enregistrer ton anniv\n`.anniversaire` — Voir tous les anniversaires du serveur", inline=False)
+        embed.add_field(name="📊 Sondages & Events", value="`.sondage \"Question?\" choix1 choix2` — Sondage\n`.giveaway <durée> <prix>` — Giveaway (admin)\n`.stats` — Statistiques du serveur", inline=False)
         await ctx.send(embed=embed)
 
-    elif categorie.lower() in ["modo", "moderation", "modération"]:
-        embed = discord.Embed(title="🛡️ Commandes Modération", color=0x95a5a6)
-        embed.add_field(name="`.ban @joueur [raison]`", value="Bannit définitivement un membre du serveur\nEx: `.ban @spam Publicité non autorisée`", inline=False)
-        embed.add_field(name="`.kick @joueur [raison]`", value="Expulse un membre du serveur (il peut revenir)\nEx: `.kick @joueur Comportement inapproprié`", inline=False)
-        embed.add_field(name="`.mute @joueur [minutes]`", value="Rend un membre muet pendant X minutes (10 par défaut)\nEx: `.mute @joueur 30`", inline=False)
-        embed.add_field(name="`.unmute @joueur`", value="Retire le mute d'un membre avant la fin du timer", inline=False)
-        embed.add_field(name="`.clear [nombre]`", value="Supprime X messages dans le salon (5 par défaut)\nEx: `.clear 10`", inline=False)
-        embed.set_footer(text="⚠️ Réservé aux membres avec les permissions appropriées")
+    elif categorie.lower() in ["fun", "délire", "delire"]:
+        embed = discord.Embed(title="😄 Fun & Délire", color=0xff6b9d)
+        embed.add_field(name="Commandes fun", value="`.roast [@joueur]` — Vanne façon Kdrama\n`.compliment [@joueur]` — Compliment stylé\n`.8ball <question>` — Boule magique !\n`.meme` — Meme aléatoire 😂\n`.rps <choix>` — Pierre Feuille Ciseaux\n`.dice [faces]` — Lancer un dé", inline=False)
+        embed.add_field(name="🎫 Support", value="`.ticket` — Ouvrir un ticket d\'aide\n`.close` — Fermer un ticket (staff)", inline=False)
         await ctx.send(embed=embed)
 
-    elif categorie.lower() == "bracket":
-        embed = discord.Embed(title="🎬 Commandes Bracket Tournoi", color=0xe74c3c)
-        embed.add_field(name="`.bracket kdrama`", value="Lance le tournoi des meilleurs Kdramas !\n8 dramas s'affrontent en mode éliminatoire", inline=False)
-        embed.add_field(name="`.bracket anime`", value="Lance le tournoi des meilleurs Animés !\n8 animés s'affrontent avec leurs affiches officielles", inline=False)
-        embed.add_field(name="`.bracketskip`", value="Clôture le vote en cours immédiatement (admin)", inline=False)
-        embed.add_field(name="`.bracketstop`", value="Annule le tournoi en cours (admin)", inline=False)
-        embed.add_field(name="💡 Comment ça marche ?", value="1. Lance `.bracket kdrama` ou `.bracket anime`\n2. Vote 🅰️ ou 🅱️ sur chaque match\n3. Le bot gère les tours automatiquement\n4. Le champion est couronné à la fin ! 👑", inline=False)
+    elif categorie.lower() in ["modo", "moderation", "modération", "admin"]:
+        embed = discord.Embed(title="🛡️ Modération", description="⚠️ Réservé aux membres avec les permissions appropriées", color=0x95a5a6)
+        embed.add_field(name="Sanctions", value="`.ban @joueur [raison]` — Bannir\n`.kick @joueur [raison]` — Expulser\n`.mute @joueur [minutes]` — Muet (10 min défaut)\n`.unmute @joueur` — Retirer le mute", inline=False)
+        embed.add_field(name="Gestion", value="`.clear [nombre]` — Supprimer X messages\n`.rolecreate` — Créer un rôle par réaction\n`.rolelist` — Voir les rôles\n`.roledelete` — Supprimer un rôle", inline=False)
         await ctx.send(embed=embed)
 
-    elif categorie.lower() == "casino":
-        embed = discord.Embed(title="🎰 Commandes Casino", color=0xf39c12)
-        embed.add_field(name="`.slot [mise]`", value="Slot machine ! Tente ta chance !\nMise min: 10 pièces | max: 500 pièces\nEx: `.slot 100`", inline=False)
-        embed.add_field(name="🎰 Symboles & Gains", value="3 identiques = JACKPOT 💰\n2 identiques = Paire (x2)\n👑 = x30 | 💎 = x75 | 🐉 = x50\n⚡ = x40 | 🦊 = x15 | 🗡️ = x10", inline=False)
-        await ctx.send(embed=embed)
-
-    elif categorie.lower() == "boss":
-        embed = discord.Embed(title="🐉 Boss & Arène PvP", color=0xe74c3c)
-        embed.add_field(name="`.boss`", value="Fait apparaître un boss de serveur ! (admin)\nTout le monde peut l'attaquer ensemble 🐉", inline=False)
-        embed.add_field(name="`.attaque`", value="Attaque le boss en cours !\nCooldown : 30 secondes entre chaque attaque\n🏆 Récompenses pour tous les participants à la mort du boss !", inline=False)
-        embed.add_field(name="`.arene @joueur`", value="Lance un combat PvP au tour par tour !\nChoisis parmi 6 attaques spéciales (Rasengan, Kamehameha...)\n🏆 Victoire = pièces + XP", inline=False)
-        embed.set_footer(text="⚔️ Plus ton niveau est élevé, plus tes dégâts sont puissants !")
-        await ctx.send(embed=embed)
-
-    elif categorie.lower() == "fun":
-        embed = discord.Embed(title="😄 Commandes Fun", color=0xff6b9d)
-        embed.add_field(name="`.roast [@joueur]`", value="Se fait rôtir par le bot avec une vanne Kdrama/Gaming\nEx: `.roast` ou `.roast @ami`", inline=False)
-        embed.add_field(name="`.compliment [@joueur]`", value="Reçois un compliment stylé façon Kdrama !\nEx: `.compliment` ou `.compliment @ami`", inline=False)
-        embed.add_field(name="`.8ball <question>`", value="Pose une question à la boule magique du QG !\nEx: `.8ball Est-ce que je vais finir Goblin ce soir ?`", inline=False)
-        embed.add_field(name="`.meme`", value="Affiche un meme aléatoire 😂", inline=False)
-        embed.add_field(name="`.quiz`", value="Lance une question sur les Kdramas, animés ou jeux\n✅ Bonne réponse = pièces + XP bonus !", inline=False)
-        await ctx.send(embed=embed)
-
-    elif categorie.lower() in ["minijeux", "mini-jeux", "jeux"]:
-        embed = discord.Embed(title="🎭 Mini-Jeux", color=0x9b59b6)
-        embed.add_field(name="`.devine`", value="Devine le personnage d'un animé ou drama !\nIndices progressifs, tape 'indice' pour en avoir plus\n✅ Moins tu utilises d'indices = plus tu gagnes de pièces !", inline=False)
-        embed.add_field(name="`.pendu`", value="Pendu avec des titres d'animés et de dramas !\nTape une lettre à la fois pour deviner le titre\n✅ Victoire = +100 pièces", inline=False)
-        await ctx.send(embed=embed)
-
-    elif categorie.lower() == "social":
-        embed = discord.Embed(title="💍 Commandes Sociales", color=0xff6b9d)
-        embed.add_field(name="`.marier @joueur`", value="Demande quelqu'un en mariage 💍\nL'autre personne doit accepter avec `.accepter`", inline=False)
-        embed.add_field(name="`.accepter`", value="Accepte une demande en mariage 💜", inline=False)
-        embed.add_field(name="`.refuser`", value="Refuse une demande en mariage 💔", inline=False)
-        embed.add_field(name="`.divorcer`", value="Divorce de ton partenaire 😢", inline=False)
-        embed.add_field(name="`.anniversaire JJ/MM`", value="Enregistre ton anniversaire\nEx: `.anniversaire 25/03`\nLe bot te souhaitera automatiquement !", inline=False)
-        embed.add_field(name="`.anniversaire`", value="Voir tous les anniversaires du serveur 🎂", inline=False)
-        embed.add_field(name="`.sondage \"Question?\" choix1 choix2`", value="Lance un sondage avec réactions\nEx: `.sondage \"Ce soir?\" Goblin Vincenzo Signal`", inline=False)
-        embed.add_field(name="`.giveaway <durée> <prix>`", value="Lance un giveaway (admin uniquement)\nEx: `.giveaway 24h Rôle VIP` ou `.giveaway 1h 500 pièces`", inline=False)
-        embed.add_field(name="`.stats`", value="Voir les statistiques du serveur 📊", inline=False)
-        await ctx.send(embed=embed)
-
-    elif categorie.lower() in ["economie", "économie"]:
-        embed = discord.Embed(title="💰 Commandes Économie", color=0xf39c12)
-        embed.add_field(name="`.daily`", value="Récupère tes pièces journalières (100-500 pièces)\n⏳ Disponible une fois toutes les 24h", inline=False)
-        embed.add_field(name="`.balance [@joueur]`", value="Affiche ton solde de pièces", inline=False)
-        embed.add_field(name="`.pay @joueur <montant>`", value="Envoie des pièces à quelqu'un\nEx: `.pay @ami 100`", inline=False)
-        embed.add_field(name="`.steal @joueur`", value="Tente de voler des pièces ! (45% de réussite)\n⏳ Cooldown : 1h • Échec = tu paies une amende 😂", inline=False)
-        embed.add_field(name="`.shop`", value="Voir la boutique du QG 🛒\nRôles exclusifs, Double XP et plus !", inline=False)
-        embed.add_field(name="`.acheter <id>`", value="Acheter un item de la boutique\nIDs: `vip` `drama_king` `otaku` `gamer_pro` `double_xp`", inline=False)
-        embed.add_field(name="`.banque depot <montant>`", value="Déposer des pièces à la banque\n📈 Intérêts : +5% toutes les 24h !", inline=False)
-        embed.add_field(name="`.banque retrait`", value="Retirer tes pièces + intérêts accumulés", inline=False)
-        embed.add_field(name="`.banque solde`", value="Voir ton solde bancaire et tes intérêts", inline=False)
-        embed.add_field(name="💡 Comment gagner des pièces ?", value="`.daily` `.quiz` `.rps` `.duel` `.pendu` `.devine`", inline=False)
-        await ctx.send(embed=embed)
-
-    elif categorie.lower() == "kdrama":
-        embed = discord.Embed(title="🎬 Commandes Kdrama", color=0xff6b9d)
-        embed.add_field(name="`.drama`", value="Affiche un drama coréen aléatoire avec note et genre", inline=False)
-        embed.add_field(name="`.dramarec [genre]`", value="Recommandation par genre\nEx: `.dramarec romance` ou `.dramarec thriller`", inline=False)
-        embed.add_field(name="`.quote`", value="Citation inspirante d'un Kdrama", inline=False)
-        embed.add_field(name="`.oppachallenge`", value="Défi fun lié aux Kdramas !", inline=False)
-        embed.add_field(name="`.noter 9 Goblin`", value="Donne une note /10 à un drama\nLa moyenne du serveur est calculée automatiquement !", inline=False)
-        embed.add_field(name="`.avis Goblin`", value="Voir la moyenne et les votes du serveur pour un drama", inline=False)
-        embed.add_field(name="`.sorties`", value="Calendrier des prochaines sorties dramas/animés 📅", inline=False)
-        embed.add_field(name="`.watch ajouter Goblin`", value="Ajouter un titre à ta watchlist perso 📋", inline=False)
-        embed.add_field(name="`.watch liste`", value="Voir ta watchlist complète", inline=False)
-        embed.add_field(name="`.watch vu Goblin`", value="Marquer un titre comme vu ✅", inline=False)
-        embed.add_field(name="`.watch supprimer Goblin`", value="Supprimer un titre de ta watchlist", inline=False)
-        embed.set_footer(text="💡 Genres dispo : romance, thriller, fantasy, historique, médical...")
-        await ctx.send(embed=embed)
-
-
-
-# ============================================================
-#  KDRAMA COMMANDS
-# ============================================================
-@bot.command()
-async def drama(ctx):
-    """Affiche un drama aléatoire du top"""
-    d = random.choice(KDRAMAS)
-    embed = discord.Embed(
-        title=f"{d['emoji']} {d['title']}",
-        description=f"**Genre :** {d['genre']}\n**Note :** {d['note']}",
-        color=0xff6b9d
-    )
-    embed.set_image(url=d['image'])
-    embed.set_footer(text="💡 Tape .dramarec [genre] pour une recommandation personnalisée !")
-    await ctx.send(embed=embed)
-
-@bot.command()
-async def dramarec(ctx, *, genre: str = None):
-    if genre:
-        filtered = [d for d in KDRAMAS if genre.lower() in d['genre'].lower()]
-        if not filtered:
-            filtered = KDRAMAS
     else:
-        filtered = KDRAMAS
-    d = random.choice(filtered)
-    embed = discord.Embed(
-        title=f"🎬 Recommandation Kdrama",
-        description=f"**{d['emoji']} {d['title']}**\nGenre : {d['genre']} | {d['note']}",
-        color=0xff6b9d
-    )
-    embed.set_image(url=d['image'])
-    embed.set_footer(text="Good luck pour les feels 😭")
-    await ctx.send(embed=embed)
+        await ctx.send("❌ Catégorie inconnue ! Tape `.help` pour voir toutes les catégories.")
 
-@bot.command()
-async def quote(ctx):
-    embed = discord.Embed(title="💬 Quote Kdrama", description=random.choice(KDRAMA_QUOTES), color=0xc39bd3)
-    await ctx.send(embed=embed)
-
-@bot.command()
-async def oppachallenge(ctx):
-    challenges = [
-        "Regarde un épisode de drama sans pleurer 😭 (impossible)",
-        "Nomme 5 acteurs coréens en moins de 10 secondes !",
-        "Décris un Kdrama en seulement 3 emojis dans ce chat !",
-        "Ping quelqu'un qui doit absolument regarder Goblin !",
-        "Dis nous : quel drama t'a le plus brisé le cœur ? 💔",
-        "Recommande un drama à quelqu'un qui n'en a jamais vu !",
-        "Qui est ton oppa/unnie de drama préféré(e) ? Justifie !",
-    ]
-    embed = discord.Embed(
-        title="🎭 Oppa Challenge !",
-        description=f"**{ctx.author.mention}, ton défi :**\n\n{random.choice(challenges)}",
-        color=0xff6b9d
-    )
-    await ctx.send(embed=embed)
-
-# ============================================================
-#  ANIMÉ COMMANDS
-# ============================================================
-@bot.command()
-async def anime(ctx):
-    a = random.choice(ANIMES)
-    embed = discord.Embed(
-        title=f"{a['emoji']} {a['title']}",
-        description=f"**Genre :** {a['genre']}\n**Note :** {a['note']}",
-        color=0x5865F2
-    )
-    embed.set_image(url=a['image'])
-    embed.set_footer(text="✨ Tape .animerec [genre] pour une recommandation !")
-    await ctx.send(embed=embed)
-
-@bot.command()
-async def animerec(ctx, *, genre: str = None):
-    if genre:
-        filtered = [a for a in ANIMES if genre.lower() in a['genre'].lower()]
-        if not filtered:
-            filtered = ANIMES
-    else:
-        filtered = ANIMES
-    a = random.choice(filtered)
-    embed = discord.Embed(
-        title="✨ Recommandation Animé",
-        description=f"**{a['emoji']} {a['title']}**\nGenre : {a['genre']} | {a['note']}",
-        color=0x5865F2
-    )
-    await ctx.send(embed=embed)
-
-@bot.command()
-async def animequote(ctx):
-    embed = discord.Embed(
-        title="💬 Quote Animé",
-        description=random.choice(ANIME_QUOTES),
-        color=0x5865F2
-    )
-    await ctx.send(embed=embed)
-
-# ============================================================
-#  GAMING COMMANDS
-# ============================================================
-@bot.command()
-async def gamerec(ctx, *, genre: str = None):
-    """Recommande un jeu"""
-    if genre:
-        filtered = [g for g in GAMES if genre.lower() in g['genre'].lower()]
-        if not filtered:
-            filtered = GAMES
-    else:
-        filtered = GAMES
-    g = random.choice(filtered)
-    embed = discord.Embed(
-        title=f"🎮 Recommandation Gaming",
-        description=f"**{g['emoji']} {g['title']}**\nGenre : {g['genre']}",
-        color=0x2ecc71
-    )
-    await ctx.send(embed=embed)
-
-@bot.command()
-async def lfg(ctx, *, game: str = None):
-    """LFG — Looking For Group"""
-    game_name = game or "un jeu"
-    embed = discord.Embed(
-        title="🎮 LFG — Cherche des joueurs !",
-        description=f"{ctx.author.mention} cherche des joueurs pour **{game_name}** !\nRéagis avec 🎮 si tu veux rejoindre !",
-        color=0x2ecc71
-    )
-    msg = await ctx.send(embed=embed)
-    await msg.add_reaction("🎮")
 
 # ============================================================
 #  QUIZ QG — Par catégorie + Mode Duel 1v1 + Multijoueur
@@ -549,50 +308,98 @@ THEME_LABELS = {
     "mix": "🎲 Mix",
 }
 
+
 @bot.command()
 async def quiz(ctx, theme: str = "mix"):
-    """Quiz solo — .quiz [kdrama/anime/gaming/culture/mix]"""
+    """Quiz solo en continu — .quiz [kdrama/anime/gaming/culture/mix]"""
     theme = theme.lower()
     if theme not in QUIZ_THEMES:
-        return await ctx.send(f"❌ Thème invalide ! Choisis parmi : `kdrama`, `anime`, `gaming`, `culture`, `mix`")
+        return await ctx.send(f"❌ Thème invalide ! Choisis : `kdrama` `anime` `gaming` `culture` `mix`")
     if ctx.channel.id in active_quiz or ctx.channel.id in quiz_duels:
-        return await ctx.send("❓ Un quiz est déjà en cours ici !")
+        return await ctx.send("❓ Un quiz est déjà en cours ici ! Tape `.quizstop` pour l'arrêter.")
 
-    q = random.choice(QUIZ_THEMES[theme])
-    active_quiz[ctx.channel.id] = {"answer": q["a"], "theme": theme}
-    embed = discord.Embed(
-        title=f"🎯 Quiz {THEME_LABELS[theme]}",
-        description=f"**{q['q']}**",
+    active_quiz[ctx.channel.id] = {"theme": theme, "running": True}
+    questions_posees = []
+
+    await ctx.send(embed=discord.Embed(
+        description=f"🎯 Quiz **{THEME_LABELS[theme]}** lancé ! Tape `.quizstop` pour arrêter.\n⏳ 30 secondes par question — les questions s'enchaînent automatiquement !",
         color=0xf1c40f
-    )
-    embed.set_footer(text="⏳ 30 secondes • Premier à répondre gagne !")
-    await ctx.send(embed=embed)
+    ))
 
     def check(m):
         return m.channel == ctx.channel and not m.author.bot
 
-    try:
-        msg = await bot.wait_for("message", check=check, timeout=30)
-        data = active_quiz.pop(ctx.channel.id, None)
-        if not data:
-            return
-        correct = data["answer"]
-        if msg.content.lower().strip() == correct:
-            prize = random.randint(50, 150)
-            economy_data[str(msg.author.id)]["coins"] += prize
-            xp_data[str(msg.author.id)]["xp"] += 30
+    while ctx.channel.id in active_quiz and active_quiz[ctx.channel.id].get("running"):
+        # Piocher une question pas encore posée
+        disponibles = [q for q in QUIZ_THEMES[theme] if q["q"] not in questions_posees]
+        if not disponibles:
+            questions_posees = []
+            disponibles = QUIZ_THEMES[theme]
+
+        q = random.choice(disponibles)
+        questions_posees.append(q["q"])
+        active_quiz[ctx.channel.id]["answer"] = q["a"]
+
+        embed = discord.Embed(
+            title=f"🎯 Quiz {THEME_LABELS[theme]}",
+            description=f"**{q['q']}**",
+            color=0xf1c40f
+        )
+        embed.set_footer(text="⏳ 30 secondes • Tape `.quizstop` pour arrêter")
+        await ctx.send(embed=embed)
+
+        try:
+            while True:
+                msg = await bot.wait_for("message", check=check, timeout=30)
+
+                # Vérifier si le quiz a été stoppé pendant l'attente
+                if ctx.channel.id not in active_quiz:
+                    return
+
+                correct = active_quiz[ctx.channel.id].get("answer", "")
+
+                if msg.content.lower().strip() == correct:
+                    prize = random.randint(50, 150)
+                    economy_data[str(msg.author.id)]["coins"] += prize
+                    xp_data[str(msg.author.id)]["xp"] += 30
+                    await ctx.send(embed=discord.Embed(
+                        description=f"✅ **{msg.author.display_name}** a trouvé ! **+{prize} pièces & +30 XP** 🎉\n*Prochaine question dans 3 secondes...*",
+                        color=0x2ecc71
+                    ))
+                    break
+                # Mauvaise réponse → on continue d'attendre
+                await msg.add_reaction("❌")
+
+        except asyncio.TimeoutError:
+            if ctx.channel.id not in active_quiz:
+                return
+            correct = active_quiz[ctx.channel.id].get("answer", "")
             await ctx.send(embed=discord.Embed(
-                description=f"✅ **{msg.author.display_name}** a trouvé ! +{prize} pièces & +30 XP 🎉",
-                color=0x2ecc71
-            ))
-        else:
-            await ctx.send(embed=discord.Embed(
-                description=f"❌ Mauvaise réponse ! La bonne réponse était : **{correct}**",
+                description=f"⏰ Temps écoulé ! La réponse était : **{correct}**\n*Prochaine question dans 3 secondes...*",
                 color=0xe74c3c
             ))
-    except asyncio.TimeoutError:
+
+        await asyncio.sleep(3)
+
+@bot.command(name="quizstop")
+async def quiz_stop(ctx):
+    """Arrête le quiz en cours — .quizstop"""
+    if ctx.channel.id in active_quiz:
         active_quiz.pop(ctx.channel.id, None)
-        await ctx.send("⏰ Temps écoulé ! Personne n'a trouvé.")
+        await ctx.send(embed=discord.Embed(
+            description="🛑 Quiz arrêté !",
+            color=0xe74c3c
+        ))
+    elif ctx.channel.id in quiz_duels:
+        quiz_duels.pop(ctx.channel.id, None)
+        await ctx.send(embed=discord.Embed(
+            description="🛑 Quiz duel arrêté !",
+            color=0xe74c3c
+        ))
+    else:
+        await ctx.send("❌ Aucun quiz en cours ici !")
+
+
 
 @bot.command(name="quizduel")
 async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
@@ -3486,8 +3293,639 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
             await ctx.send(f"⏰ **{current['membre'].mention}** n'a pas répondu — combat annulé !")
             return
 
+
 # ============================================================
-bot.run(TOKEN)
+#  🃏 CARTES ANIMÉ — Système type Pokémon
+# ============================================================
+
+# Base de données des personnages avec stats + attaques uniques
+ANIME_CARDS_DB = {
+    # ═══ NARUTO ═══
+    "naruto": {
+        "nom": "Naruto Uzumaki", "serie": "Naruto", "emoji": "🍥",
+        "pv": 120, "attaque": 80, "defense": 60,
+        "rarete": "Légendaire", "faiblesse": "⚡", "resistance": "🌊",
+        "attaques": [
+            {"nom": "Rasengan", "degats": 40, "emoji": "🌀", "desc": "Sphère de chakra concentrée"},
+            {"nom": "Mode Ermite", "degats": 65, "emoji": "🐸", "desc": "Puissance de la nature"},
+            {"nom": "Kurama — Mode Chakra", "degats": 90, "emoji": "🦊", "desc": "Fusion avec le Renard à 9 queues !"},
+        ]
+    },
+    "sasuke": {
+        "nom": "Sasuke Uchiha", "serie": "Naruto", "emoji": "⚡",
+        "pv": 110, "attaque": 85, "defense": 65,
+        "rarete": "Légendaire", "faiblesse": "🌊", "resistance": "🔥",
+        "attaques": [
+            {"nom": "Chidori", "degats": 50, "emoji": "⚡", "desc": "Foudre concentrée dans la main"},
+            {"nom": "Sharingan", "degats": 35, "emoji": "👁️", "desc": "Copie l'attaque suivante de l'ennemi"},
+            {"nom": "Amaterasu", "degats": 80, "emoji": "🔥", "desc": "Flammes noires inextinguibles !"},
+        ]
+    },
+    "itachi": {
+        "nom": "Itachi Uchiha", "serie": "Naruto", "emoji": "🌙",
+        "pv": 100, "attaque": 90, "defense": 70,
+        "rarete": "Légendaire", "faiblesse": "💨", "resistance": "🔥",
+        "attaques": [
+            {"nom": "Tsukuyomi", "degats": 55, "emoji": "🌙", "desc": "Genjutsu dévastateur"},
+            {"nom": "Susanoo", "degats": 75, "emoji": "🗡️", "desc": "Armure de chakra gigantesque"},
+            {"nom": "Izanami", "degats": 85, "emoji": "👁️", "desc": "Boucle sensorielle infinie !"},
+        ]
+    },
+    # ═══ DEMON SLAYER ═══
+    "tanjiro": {
+        "nom": "Tanjiro Kamado", "serie": "Demon Slayer", "emoji": "💧",
+        "pv": 105, "attaque": 75, "defense": 70,
+        "rarete": "Épique", "faiblesse": "⚡", "resistance": "💧",
+        "attaques": [
+            {"nom": "Respiration de l'Eau", "degats": 40, "emoji": "🌊", "desc": "Flux constant et puissant"},
+            {"nom": "Danse des Flammes", "degats": 60, "emoji": "🔥", "desc": "Forme du soleil hinokami"},
+            {"nom": "Kagura Hinokami", "degats": 85, "emoji": "☀️", "desc": "Technique ancestrale ultime !"},
+        ]
+    },
+    "zenitsu": {
+        "nom": "Zenitsu Agatsuma", "serie": "Demon Slayer", "emoji": "⚡",
+        "pv": 90, "attaque": 88, "defense": 45,
+        "rarete": "Rare", "faiblesse": "🌊", "resistance": "⚡",
+        "attaques": [
+            {"nom": "Tonnerre — 1ère Forme", "degats": 70, "emoji": "⚡", "desc": "Vitesse de l'éclair endormi"},
+            {"nom": "Dieu du Tonnerre", "degats": 55, "emoji": "🌩️", "desc": "Frappe multiple ultrarapide"},
+            {"nom": "Tonnerre Godspeed", "degats": 95, "emoji": "💫", "desc": "Vitesse absolue, forme ultime !"},
+        ]
+    },
+    "inosuke": {
+        "nom": "Inosuke Hashibira", "serie": "Demon Slayer", "emoji": "🐗",
+        "pv": 115, "attaque": 78, "defense": 80,
+        "rarete": "Rare", "faiblesse": "🔥", "resistance": "💨",
+        "attaques": [
+            {"nom": "Respiration de la Bête", "degats": 45, "emoji": "🐗", "desc": "Attaque sauvage et imprévisible"},
+            {"nom": "Griffe du Sanglier", "degats": 60, "emoji": "⚔️", "desc": "Double lame déchirante"},
+            {"nom": "Tempête du Sanglier", "degats": 80, "emoji": "🌪️", "desc": "Tourbillon de lames dévastateur !"},
+        ]
+    },
+    # ═══ ATTACK ON TITAN ═══
+    "levi": {
+        "nom": "Levi Ackerman", "serie": "Attack on Titan", "emoji": "⚔️",
+        "pv": 95, "attaque": 97, "defense": 75,
+        "rarete": "Légendaire", "faiblesse": "🔥", "resistance": "⚡",
+        "attaques": [
+            {"nom": "ODM — Frappe Éclair", "degats": 55, "emoji": "🗡️", "desc": "Vitesse surhumaine avec les câbles"},
+            {"nom": "Tornade Levi", "degats": 75, "emoji": "🌀", "desc": "Rotation à 360° dévastateur"},
+            {"nom": "Frappe du Capitaine", "degats": 95, "emoji": "⚔️", "desc": "L'humain le plus fort de l'humanité !"},
+        ]
+    },
+    "eren": {
+        "nom": "Eren Yeager", "serie": "Attack on Titan", "emoji": "👹",
+        "pv": 130, "attaque": 82, "defense": 85,
+        "rarete": "Légendaire", "faiblesse": "⚡", "resistance": "🌊",
+        "attaques": [
+            {"nom": "Transformation Titan", "degats": 60, "emoji": "💥", "desc": "Explosion de vapeur au contact"},
+            {"nom": "Titan Assaillant", "degats": 75, "emoji": "👊", "desc": "Frappe de titan dévastatrice"},
+            {"nom": "Rugissement de la Terre", "degats": 100, "emoji": "🌍", "desc": "Le Grondement — titans infinis !"},
+        ]
+    },
+    # ═══ JUJUTSU KAISEN ═══
+    "gojo": {
+        "nom": "Satoru Gojo", "serie": "Jujutsu Kaisen", "emoji": "♾️",
+        "pv": 140, "attaque": 99, "defense": 99,
+        "rarete": "Légendaire", "faiblesse": "🌙", "resistance": "♾️",
+        "attaques": [
+            {"nom": "Infini", "degats": 0, "emoji": "🛡️", "desc": "Réduit les dégâts reçus de 50% ce tour"},
+            {"nom": "Blue — Attraction", "degats": 65, "emoji": "💙", "desc": "Technique de l'infini inversé"},
+            {"nom": "Hollow Purple", "degats": 110, "emoji": "💜", "desc": "Fusion Red + Blue — attaque ultime !"},
+        ]
+    },
+    "yuji": {
+        "nom": "Yuji Itadori", "serie": "Jujutsu Kaisen", "emoji": "💪",
+        "pv": 125, "attaque": 83, "defense": 78,
+        "rarete": "Épique", "faiblesse": "💨", "resistance": "💪",
+        "attaques": [
+            {"nom": "Divergent Fist", "degats": 50, "emoji": "👊", "desc": "Double impact de malédiction"},
+            {"nom": "Black Flash", "degats": 70, "emoji": "⚡", "desc": "Distorsion de l'espace-temps"},
+            {"nom": "Sukuna — Malédiction", "degats": 90, "emoji": "👹", "desc": "Pouvoir du roi des malédictions !"},
+        ]
+    },
+    # ═══ ONE PIECE ═══
+    "luffy": {
+        "nom": "Monkey D. Luffy", "serie": "One Piece", "emoji": "🏴‍☠️",
+        "pv": 130, "attaque": 88, "defense": 72,
+        "rarete": "Légendaire", "faiblesse": "⚡", "resistance": "💧",
+        "attaques": [
+            {"nom": "Gomu Gomu no Pistol", "degats": 40, "emoji": "👊", "desc": "Poing élastique propulsé"},
+            {"nom": "Gear Third — Giant", "degats": 70, "emoji": "💥", "desc": "Membre gonflé à l'os"},
+            {"nom": "Gear Fifth — Nika", "degats": 100, "emoji": "☀️", "desc": "Forme du Dieu du Soleil !"},
+        ]
+    },
+    "zoro": {
+        "nom": "Roronoa Zoro", "serie": "One Piece", "emoji": "⚔️",
+        "pv": 115, "attaque": 92, "defense": 80,
+        "rarete": "Épique", "faiblesse": "🔥", "resistance": "⚡",
+        "attaques": [
+            {"nom": "Oni Giri", "degats": 45, "emoji": "⚔️", "desc": "Slash triple simultané"},
+            {"nom": "108 Pound Cannon", "degats": 65, "emoji": "💨", "desc": "Vague de tranchant comprimée"},
+            {"nom": "Ashura — 9 Lames", "degats": 90, "emoji": "👹", "desc": "Forme démon à neuf sabres !"},
+        ]
+    },
+    # ═══ DRAGON BALL ═══
+    "goku": {
+        "nom": "Son Goku", "serie": "Dragon Ball Z", "emoji": "🐉",
+        "pv": 140, "attaque": 98, "defense": 85,
+        "rarete": "Légendaire", "faiblesse": "🌙", "resistance": "⚡",
+        "attaques": [
+            {"nom": "Kamehameha", "degats": 60, "emoji": "💙", "desc": "Vague d'énergie légendaire"},
+            {"nom": "Super Saiyan", "degats": 75, "emoji": "⚡", "desc": "Transformation dorée surpuissante"},
+            {"nom": "Ultra Instinct", "degats": 105, "emoji": "🌟", "desc": "Mouvement sans pensée — forme divine !"},
+        ]
+    },
+    "vegeta": {
+        "nom": "Vegeta", "serie": "Dragon Ball Z", "emoji": "👑",
+        "pv": 130, "attaque": 94, "defense": 80,
+        "rarete": "Légendaire", "faiblesse": "🌙", "resistance": "🔥",
+        "attaques": [
+            {"nom": "Big Bang Attack", "degats": 55, "emoji": "💥", "desc": "Sphère d'énergie explosive"},
+            {"nom": "Final Flash", "degats": 80, "emoji": "⚡", "desc": "Tout son Ki concentré en un tir"},
+            {"nom": "Super Saiyan Blue", "degats": 100, "emoji": "💙", "desc": "Fusion Ki divin + Saiyan !"},
+        ]
+    },
+    # ═══ FMA ═══
+    "edward": {
+        "nom": "Edward Elric", "serie": "FMA Brotherhood", "emoji": "⚗️",
+        "pv": 100, "attaque": 80, "defense": 68,
+        "rarete": "Épique", "faiblesse": "💧", "resistance": "⚗️",
+        "attaques": [
+            {"nom": "Lance Alchimique", "degats": 40, "emoji": "⚗️", "desc": "Transmutation express en lance"},
+            {"nom": "Armure de Métal", "degats": 30, "emoji": "🛡️", "desc": "Bouclier + contre-attaque"},
+            {"nom": "Transmutation Ultime", "degats": 85, "emoji": "✨", "desc": "Alchimie sans cercle — pouvoir des portes !"},
+        ]
+    },
+    # ═══ DEATH NOTE ═══
+    "light": {
+        "nom": "Light Yagami", "serie": "Death Note", "emoji": "📓",
+        "pv": 80, "attaque": 70, "defense": 55,
+        "rarete": "Épique", "faiblesse": "💡", "resistance": "🌙",
+        "attaques": [
+            {"nom": "Manipulation Mentale", "degats": 35, "emoji": "🧠", "desc": "Réduit l'attaque adverse de 20%"},
+            {"nom": "Death Note", "degats": 60, "emoji": "📓", "desc": "Inscription du nom — dégâts directs"},
+            {"nom": "Plan Kira", "degats": 80, "emoji": "👑", "desc": "Stratégie parfaite, aucune issue !"},
+        ]
+    },
+    # ═══ COMMUNS ═══
+    "krillin": {
+        "nom": "Krillin", "serie": "Dragon Ball Z", "emoji": "🥚",
+        "pv": 70, "attaque": 45, "defense": 40,
+        "rarete": "Commun", "faiblesse": "⚡", "resistance": "💧",
+        "attaques": [
+            {"nom": "Kienzan", "degats": 35, "emoji": "💿", "desc": "Disque tranchant en énergie"},
+            {"nom": "Kamehameha", "degats": 25, "emoji": "💙", "desc": "Version mini du maître"},
+            {"nom": "Destructo Disc", "degats": 45, "emoji": "⚡", "desc": "Lancer de disque ultime !"},
+        ]
+    },
+    "usopp": {
+        "nom": "Usopp", "serie": "One Piece", "emoji": "🎯",
+        "pv": 75, "attaque": 50, "defense": 35,
+        "rarete": "Commun", "faiblesse": "🔥", "resistance": "💨",
+        "attaques": [
+            {"nom": "Tir de Fronde", "degats": 30, "emoji": "🎯", "desc": "Précision de tireur d'élite"},
+            {"nom": "Feu de Pop-Green", "degats": 40, "emoji": "🌿", "desc": "Plante explosive"},
+            {"nom": "Atlas Comet", "degats": 55, "emoji": "💫", "desc": "Tir de sniper légendaire !"},
+        ]
+    },
+}
+
+RARETE_COULEURS = {
+    "Légendaire": 0xf1c40f,
+    "Épique": 0x9b59b6,
+    "Rare": 0x3498db,
+    "Commun": 0x95a5a6,
+}
+
+RARETE_EMOJI = {
+    "Légendaire": "🌈",
+    "Épique": "💎",
+    "Rare": "⭐",
+    "Commun": "🔵",
+}
+
+# Stockage collections et combats
+cartes_collections = defaultdict(dict)  # {user_id: {slot: {card_key, image_url}}}
+active_pokebattles = {}  # {channel_id: game_data}
+
+def build_card_embed(card_key, image_url=None, owner_name=None):
+    """Construit l'embed carte style Pokémon"""
+    if card_key not in ANIME_CARDS_DB:
+        return None
+    c = ANIME_CARDS_DB[card_key]
+    rarete_emoji = RARETE_EMOJI[c["rarete"]]
+    couleur = RARETE_COULEURS[c["rarete"]]
+
+    embed = discord.Embed(
+        title=f"{c['emoji']} {c['nom']}  —  ❤️ {c['pv']} PV",
+        description=f"*{c['serie']}* {rarete_emoji} **{c['rarete']}**",
+        color=couleur
+    )
+    if image_url:
+        embed.set_image(url=image_url)
+
+    attaques_str = "\n".join([
+        f"{a['emoji']} **{a['nom']}** — `{a['degats']} dégâts`\n*{a['desc']}*"
+        for a in c["attaques"]
+    ])
+    embed.add_field(name="⚔️ Attaques", value=attaques_str, inline=False)
+    embed.add_field(
+        name="📊 Stats",
+        value=f"⚔️ Attaque : **{c['attaque']}** | 🛡️ Défense : **{c['defense']}**\n❌ Faiblesse : {c['faiblesse']} | ✅ Résistance : {c['resistance']}",
+        inline=False
+    )
+    if owner_name:
+        embed.set_footer(text=f"Carte de {owner_name} • .pokecollection pour voir ta collection")
+    return embed
+
+@bot.command(name="enregistrer")
+async def enregistrer_carte(ctx, perso: str = None, image_url: str = None):
+    """Enregistre une carte dans ta collection — .enregistrer naruto https://i.imgur.com/xxx.jpg"""
+    if not perso:
+        dispo = ", ".join([f"`{k}`" for k in ANIME_CARDS_DB.keys()])
+        return await ctx.send(f"❌ Précise un personnage !\nEx: `.enregistrer naruto https://i.imgur.com/xxx.jpg`\n\n**Personnages disponibles :**\n{dispo}")
+
+    key = perso.lower().strip()
+    if key not in ANIME_CARDS_DB:
+        dispo = ", ".join([f"`{k}`" for k in ANIME_CARDS_DB.keys()])
+        return await ctx.send(f"❌ Personnage `{perso}` introuvable !\n**Disponibles :** {dispo}")
+
+    uid = str(ctx.author.id)
+    collection = cartes_collections[uid]
+
+    # Vérifier si déjà dans la collection
+    for slot, data in collection.items():
+        if data["key"] == key:
+            # Update image si fournie
+            if image_url:
+                cartes_collections[uid][slot]["image"] = image_url
+                await ctx.send(f"✅ Image de **{ANIME_CARDS_DB[key]['nom']}** mise à jour !")
+            else:
+                await ctx.send(f"⚠️ **{ANIME_CARDS_DB[key]['nom']}** est déjà dans ta collection !")
+            return
+
+    if len(collection) >= 6:
+        return await ctx.send(f"❌ Ta collection est pleine ! (6/6)\nTape `.pokesupprimer <perso>` pour faire de la place.")
+
+    slot = len(collection) + 1
+    cartes_collections[uid][slot] = {"key": key, "image": image_url}
+
+    embed = build_card_embed(key, image_url, ctx.author.display_name)
+    await ctx.send(f"✅ **{ANIME_CARDS_DB[key]['nom']}** ajouté à ta collection ! ({slot}/6)", embed=embed)
+
+@bot.command(name="pokesupprimer")
+async def pokesupprimer(ctx, perso: str = None):
+    """Retire une carte de ta collection — .pokesupprimer naruto"""
+    if not perso:
+        return await ctx.send("❌ Précise un personnage ! Ex: `.pokesupprimer naruto`")
+    uid = str(ctx.author.id)
+    key = perso.lower()
+    collection = cartes_collections[uid]
+    slot_found = None
+    for slot, data in collection.items():
+        if data["key"] == key:
+            slot_found = slot
+            break
+    if not slot_found:
+        return await ctx.send(f"❌ `{perso}` n'est pas dans ta collection !")
+    nom = ANIME_CARDS_DB[key]["nom"]
+    del cartes_collections[uid][slot_found]
+    # Réindexer les slots
+    new_col = {}
+    for i, (s, d) in enumerate(cartes_collections[uid].items(), 1):
+        new_col[i] = d
+    cartes_collections[uid] = new_col
+    await ctx.send(f"🗑️ **{nom}** retiré de ta collection.")
+
+@bot.command(name="pokecollection")
+async def pokecollection(ctx, member: discord.Member = None):
+    """Voir ta collection de cartes — .pokecollection [@joueur]"""
+    target = member or ctx.author
+    uid = str(target.id)
+    collection = cartes_collections[uid]
+    if not collection:
+        msg = "Ta collection est vide !" if not member else f"La collection de **{target.display_name}** est vide !"
+        return await ctx.send(f"📭 {msg}\nTape `.enregistrer <perso> <image_url>` pour ajouter une carte !\nPersos dispo : `{', '.join(ANIME_CARDS_DB.keys())}`")
+
+    embed = discord.Embed(
+        title=f"📚 Collection de {target.display_name} ({len(collection)}/6)",
+        color=0xf1c40f
+    )
+    for slot, data in collection.items():
+        c = ANIME_CARDS_DB[data["key"]]
+        rarete_emoji = RARETE_EMOJI[c["rarete"]]
+        has_img = "🖼️" if data["image"] else "❌ Pas d'image"
+        embed.add_field(
+            name=f"Slot {slot} — {c['emoji']} {c['nom']} {rarete_emoji}",
+            value=f"❤️ {c['pv']} PV | ⚔️ {c['attaque']} ATK | 🛡️ {c['defense']} DEF\n{has_img}",
+            inline=False
+        )
+    embed.set_footer(text=".pokecarte <perso> pour voir une carte en détail • .pokebattle @joueur pour combattre !")
+    await ctx.send(embed=embed)
+
+@bot.command(name="pokecarte")
+async def pokecarte(ctx, perso: str = None):
+    """Voir une carte en détail — .pokecarte naruto"""
+    if not perso:
+        return await ctx.send("❌ Précise un personnage ! Ex: `.pokecarte gojo`")
+    key = perso.lower()
+    uid = str(ctx.author.id)
+    # Chercher l'image dans la collection du joueur
+    image_url = None
+    for data in cartes_collections[uid].values():
+        if data["key"] == key:
+            image_url = data["image"]
+            break
+    if key not in ANIME_CARDS_DB:
+        return await ctx.send(f"❌ Personnage `{perso}` introuvable !")
+    embed = build_card_embed(key, image_url, ctx.author.display_name)
+    await ctx.send(embed=embed)
+
+@bot.command(name="pokepersos")
+async def pokepersos(ctx):
+    """Liste tous les personnages disponibles — .pokepersos"""
+    embed = discord.Embed(title="📖 Personnages disponibles", color=0xf1c40f)
+    par_rarete = defaultdict(list)
+    for key, c in ANIME_CARDS_DB.items():
+        par_rarete[c["rarete"]].append(f"`{key}` — {c['emoji']} {c['nom']}")
+    for rarete in ["Légendaire", "Épique", "Rare", "Commun"]:
+        if par_rarete[rarete]:
+            embed.add_field(
+                name=f"{RARETE_EMOJI[rarete]} {rarete}",
+                value="\n".join(par_rarete[rarete]),
+                inline=False
+            )
+    embed.set_footer(text=".enregistrer <clé> <image_imgur> pour ajouter à ta collection !")
+    await ctx.send(embed=embed)
+
+# ═══ COMBAT POKÉMON 3v3 ═══
+
+@bot.command(name="pokebattle")
+async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
+    """Lance un combat 3v3 style Pokémon ! — .pokebattle @joueur"""
+    if not adversaire or adversaire.bot or adversaire.id == ctx.author.id:
+        return await ctx.send("❌ Mentionne un adversaire valide ! Ex: `.pokebattle @ami`")
+    if ctx.channel.id in active_pokebattles:
+        return await ctx.send("⚔️ Un combat est déjà en cours ici !")
+
+    uid1 = str(ctx.author.id)
+    uid2 = str(adversaire.id)
+    col1 = cartes_collections[uid1]
+    col2 = cartes_collections[uid2]
+
+    if len(col1) < 3:
+        return await ctx.send(f"❌ **{ctx.author.display_name}** n'a pas assez de cartes ! (minimum 3)\nTape `.enregistrer <perso> <image>` pour ajouter des cartes.")
+    if len(col2) < 3:
+        return await ctx.send(f"❌ **{adversaire.display_name}** n'a pas assez de cartes ! (minimum 3)")
+
+    # Demander à chaque joueur de choisir ses 3 cartes
+    async def choisir_equipe(joueur, collection):
+        uid = str(joueur.id)
+        col = cartes_collections[uid]
+        liste = "\n".join([
+            f"`{slot}` — {ANIME_CARDS_DB[d['key']]['emoji']} **{ANIME_CARDS_DB[d['key']]['nom']}** ({ANIME_CARDS_DB[d['key']]['rarete']}) ❤️{ANIME_CARDS_DB[d['key']]['pv']} PV"
+            for slot, d in col.items()
+        ])
+        embed = discord.Embed(
+            title=f"📚 {joueur.display_name} — Choisis tes 3 combattants !",
+            description=f"{liste}\n\n**Réponds avec 3 numéros séparés par des espaces**\nEx: `1 3 5`",
+            color=0x9b59b6
+        )
+        await ctx.send(embed=embed)
+
+        def check(m):
+            return m.author.id == joueur.id and m.channel == ctx.channel
+
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=60)
+            choix = msg.content.strip().split()[:3]
+            equipe = []
+            for c in choix:
+                if c.isdigit() and int(c) in col:
+                    slot = int(c)
+                    d = col[slot]
+                    card = ANIME_CARDS_DB[d["key"]].copy()
+                    card["key"] = d["key"]
+                    card["image"] = d["image"]
+                    card["hp_actuel"] = card["pv"]
+                    card["ko"] = False
+                    equipe.append(card)
+            if len(equipe) < 3:
+                return None
+            return equipe
+        except asyncio.TimeoutError:
+            return None
+
+    await ctx.send(embed=discord.Embed(
+        description=f"⚔️ **{ctx.author.mention}** vs **{adversaire.mention}** — Combat 3v3 !\n\nChacun choisit son équipe de 3 cartes dans 5 secondes...",
+        color=0xe74c3c
+    ))
+    await asyncio.sleep(3)
+
+    equipe1 = await choisir_equipe(ctx.author, col1)
+    if not equipe1:
+        return await ctx.send(f"❌ **{ctx.author.display_name}** n'a pas choisi son équipe à temps !")
+
+    equipe2 = await choisir_equipe(adversaire, col2)
+    if not equipe2:
+        return await ctx.send(f"❌ **{adversaire.display_name}** n'a pas choisi son équipe à temps !")
+
+    active_pokebattles[ctx.channel.id] = {
+        "j1": {"membre": ctx.author, "equipe": equipe1, "actif": 0},
+        "j2": {"membre": adversaire, "equipe": equipe2, "actif": 0},
+        "tour": ctx.author.id,
+    }
+
+    game = active_pokebattles[ctx.channel.id]
+
+    # Afficher les équipes
+    def equipe_str(j):
+        return " | ".join([
+            f"{'💀' if c['ko'] else c['emoji']} {c['nom']} ❤️{c['hp_actuel']}"
+            for c in j["equipe"]
+        ])
+
+    def carte_active(j):
+        return j["equipe"][j["actif"]]
+
+    async def afficher_carte_combat(j, adversaire_j):
+        carte = carte_active(j)
+        adverse = carte_active(adversaire_j)
+        embed = discord.Embed(
+            title=f"⚔️ {j['membre'].display_name} — {carte['emoji']} {carte['nom']}",
+            description=(
+                f"❤️ HP : **{carte['hp_actuel']}/{carte['pv']}**\n\n"
+                f"**Équipe adverse :** {equipe_str(adversaire_j)}"
+            ),
+            color=RARETE_COULEURS[carte["rarete"]]
+        )
+        if carte.get("image"):
+            embed.set_thumbnail(url=carte["image"])
+        attaques_str = "\n".join([
+            f"`{i+1}` {a['emoji']} **{a['nom']}** — `{a['degats']} dégâts` • *{a['desc']}*"
+            for i, a in enumerate(carte["attaques"])
+        ])
+        embed.add_field(name="🗡️ Choisis ton attaque :", value=attaques_str, inline=False)
+        embed.set_footer(text=f"Ton équipe : {equipe_str(j)}")
+        return embed
+
+    # Boucle de combat
+    while ctx.channel.id in active_pokebattles:
+        game = active_pokebattles[ctx.channel.id]
+        j1, j2 = game["j1"], game["j2"]
+
+        # Vérifier victoire
+        if all(c["ko"] for c in j1["equipe"]):
+            del active_pokebattles[ctx.channel.id]
+            prize = 300
+            economy_data[str(j2["membre"].id)]["coins"] += prize
+            xp_data[str(j2["membre"].id)]["xp"] += 60
+            await ctx.send(embed=discord.Embed(
+                title="🏆 FIN DU COMBAT !",
+                description=f"🎉 **{j2['membre'].mention}** remporte le combat 3v3 !\n**+{prize} pièces & +60 XP** 💰",
+                color=0xf1c40f
+            ))
+            return
+        if all(c["ko"] for c in j2["equipe"]):
+            del active_pokebattles[ctx.channel.id]
+            prize = 300
+            economy_data[str(j1["membre"].id)]["coins"] += prize
+            xp_data[str(j1["membre"].id)]["xp"] += 60
+            await ctx.send(embed=discord.Embed(
+                title="🏆 FIN DU COMBAT !",
+                description=f"🎉 **{j1['membre'].mention}** remporte le combat 3v3 !\n**+{prize} pièces & +60 XP** 💰",
+                color=0xf1c40f
+            ))
+            return
+
+        current = j1 if game["tour"] == j1["membre"].id else j2
+        other = j2 if game["tour"] == j1["membre"].id else j1
+
+        # Passer à la prochaine carte si KO
+        while carte_active(current)["ko"]:
+            current["actif"] = (current["actif"] + 1) % 3
+
+        embed = await afficher_carte_combat(current, other)
+        await ctx.send(embed=embed)
+
+        def check(m):
+            return m.channel == ctx.channel and m.author.id == current["membre"].id and m.content in ["1", "2", "3", "changer"]
+
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=45)
+
+            if msg.content == "changer":
+                # Changer de carte
+                dispo = [
+                    f"`{i+1}` {c['emoji']} {c['nom']} ❤️{c['hp_actuel']}"
+                    for i, c in enumerate(current["equipe"])
+                    if not c["ko"] and i != current["actif"]
+                ]
+                if not dispo:
+                    await ctx.send("❌ Pas d'autre carte disponible !")
+                    continue
+                await ctx.send(embed=discord.Embed(
+                    description=f"**Choisis ta nouvelle carte :**\n" + "\n".join(dispo) + "\n\nRéponds avec le numéro (1-3)",
+                    color=0x9b59b6
+                ))
+                def check2(m):
+                    return m.channel == ctx.channel and m.author.id == current["membre"].id and m.content in ["1","2","3"]
+                try:
+                    msg2 = await bot.wait_for("message", check=check2, timeout=20)
+                    new_slot = int(msg2.content) - 1
+                    if 0 <= new_slot < 3 and not current["equipe"][new_slot]["ko"]:
+                        current["actif"] = new_slot
+                        new_carte = carte_active(current)
+                        await ctx.send(embed=discord.Embed(
+                            description=f"🔄 **{current['membre'].display_name}** envoie **{new_carte['emoji']} {new_carte['nom']}** !",
+                            color=0x3498db
+                        ))
+                    game["tour"] = other["membre"].id
+                    continue
+                except asyncio.TimeoutError:
+                    pass
+                continue
+
+            # Attaque
+            choix = int(msg.content) - 1
+            attaque = carte_active(current)["attaques"][choix]
+            carte_adv = carte_active(other)
+
+            # Calcul dégâts avec stats
+            base = attaque["degats"]
+            if base == 0:
+                # Défense / soin
+                await ctx.send(embed=discord.Embed(
+                    description=f"🛡️ **{carte_active(current)['nom']}** utilise **{attaque['emoji']} {attaque['nom']}** — *{attaque['desc']}*\nDégâts réduits de 50% ce tour !",
+                    color=0x3498db
+                ))
+                game["tour"] = other["membre"].id
+                continue
+
+            # Faiblesse/résistance
+            multiplicateur = 1.0
+            if attaque["emoji"] == carte_adv["faiblesse"]:
+                multiplicateur = 1.5
+            elif attaque["emoji"] == carte_adv["resistance"]:
+                multiplicateur = 0.5
+
+            # Stats influence dégâts
+            ratio = carte_active(current)["attaque"] / max(carte_adv["defense"], 1)
+            degats_finaux = int(base * multiplicateur * min(ratio, 2.0))
+            degats_finaux = max(5, degats_finaux)
+
+            carte_adv["hp_actuel"] = max(0, carte_adv["hp_actuel"] - degats_finaux)
+
+            bonus_text = ""
+            if multiplicateur == 1.5:
+                bonus_text = " ⚡ **C'est super efficace !**"
+            elif multiplicateur == 0.5:
+                bonus_text = " 😶 *Peu efficace...*"
+
+            embed_atk = discord.Embed(
+                title=f"{attaque['emoji']} {carte_active(current)['nom']} → {attaque['nom']} !",
+                description=(
+                    f"💥 **{degats_finaux} dégâts** infligés à **{carte_adv['nom']}** !{bonus_text}\n"
+                    f"❤️ {carte_adv['nom']} : **{carte_adv['hp_actuel']}/{carte_adv['pv']} HP**"
+                ),
+                color=RARETE_COULEURS[carte_active(current)["rarete"]]
+            )
+            await ctx.send(embed=embed_atk)
+
+            # KO ?
+            if carte_adv["hp_actuel"] <= 0:
+                carte_adv["ko"] = True
+                await ctx.send(embed=discord.Embed(
+                    description=f"💀 **{carte_adv['emoji']} {carte_adv['nom']}** est KO !",
+                    color=0xe74c3c
+                ))
+                # Trouver prochaine carte dispo
+                next_idx = next((i for i, c in enumerate(other["equipe"]) if not c["ko"]), None)
+                if next_idx is not None:
+                    other["actif"] = next_idx
+                    await ctx.send(embed=discord.Embed(
+                        description=f"🔄 **{other['membre'].display_name}** envoie **{other['equipe'][next_idx]['emoji']} {other['equipe'][next_idx]['nom']}** !",
+                        color=0x9b59b6
+                    ))
+
+            game["tour"] = other["membre"].id
+
+        except asyncio.TimeoutError:
+            del active_pokebattles[ctx.channel.id]
+            await ctx.send(f"⏰ **{current['membre'].mention}** n'a pas répondu — combat annulé !")
+            return
+
+@bot.command(name="pokestop")
+async def pokestop(ctx):
+    """Annule le combat en cours — .pokestop"""
+    if ctx.channel.id in active_pokebattles:
+        del active_pokebattles[ctx.channel.id]
+        await ctx.send("🛑 Combat annulé !")
+    else:
+        await ctx.send("❌ Aucun combat en cours !")
+
+
 
 
 
