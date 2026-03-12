@@ -319,7 +319,7 @@ async def help_cmd(ctx, categorie: str = None):
         embed = discord.Embed(title="🎬 Commandes Bracket Tournoi", color=0xe74c3c)
         embed.add_field(name="`.bracket kdrama`", value="Lance le tournoi des meilleurs Kdramas !\n8 dramas s'affrontent en mode éliminatoire", inline=False)
         embed.add_field(name="`.bracket anime`", value="Lance le tournoi des meilleurs Animés !\n8 animés s'affrontent avec leurs affiches officielles", inline=False)
-        embed.add_field(name="`.bracketskip`", value="Résout le match en cours immédiatement (admin)\nUtile si tu veux pas attendre 24h", inline=False)
+        embed.add_field(name="`.bracketskip`", value="Clôture le vote en cours immédiatement (admin)", inline=False)
         embed.add_field(name="`.bracketstop`", value="Annule le tournoi en cours (admin)", inline=False)
         embed.add_field(name="💡 Comment ça marche ?", value="1. Lance `.bracket kdrama` ou `.bracket anime`\n2. Vote 🅰️ ou 🅱️ sur chaque match\n3. Le bot gère les tours automatiquement\n4. Le champion est couronné à la fin ! 👑", inline=False)
         await ctx.send(embed=embed)
@@ -3047,7 +3047,7 @@ async def bracket_cmd(ctx, theme: str = None):
     await bracket_lancer_match(ctx, gid, 0)
 
 async def bracket_lancer_match(ctx, gid, match_idx):
-    """Lance un match du bracket avec vote"""
+    """Lance un match du bracket avec vote — se résout dès que tout le monde a voté"""
     if gid not in active_brackets:
         return
     game = active_brackets[gid]
@@ -3068,7 +3068,7 @@ async def bracket_lancer_match(ctx, gid, match_idx):
             f"**VS**\n"
             f"## 🅱️ {b['nom']}\n\n"
             f"👆 **Vote 🅰️ ou 🅱️ sur ce message !**\n"
-            f"⏳ Résultat dans **24h** — ou `.bracketskip` pour passer (admin)"
+            f"⏳ Le match se clôture après **5 minutes** — ou `.bracketskip` pour passer maintenant !"
         ),
         color=0xe74c3c
     )
@@ -3084,8 +3084,8 @@ async def bracket_lancer_match(ctx, gid, match_idx):
         "b": b,
     }
 
-    # Timer 24h → résoudre automatiquement
-    await asyncio.sleep(86400)
+    # Attendre 5 minutes puis résoudre
+    await asyncio.sleep(300)
     if gid in active_brackets and match_idx in active_brackets[gid]["votes_en_cours"]:
         await bracket_resoudre_match(ctx.guild, gid, match_idx)
 
