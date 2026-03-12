@@ -4332,3 +4332,6 @@ async def pokestop(ctx):
 
 
 
+# ============================================================
+print("🚀 Démarrage du bot...")
+bot.run(TOKEN)
