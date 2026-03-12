@@ -240,10 +240,13 @@ async def help_cmd(ctx, categorie: str = None):
         embed.add_field(name="🐺 Loup Garou", value="`.lgcreate` `.lgjoin` `.lgstart` `.lgstop`\n`.lg` — Aide complète • `.lgroles` — Voir les rôles", inline=False)
         embed.add_field(name="⚔️ Combat & Boss", value="`.arene @joueur` — PvP tour par tour\n`.duel @joueur` — Défi simple\n`.boss` — Faire apparaître un boss (admin)\n`.attaque` — Frapper le boss !", inline=False)
         embed.add_field(name="🃏 Combat Cartes Animé", value=(
-            "`.pokepersos` — Voir tous les persos dispo\n"
-            "`.enregistrer <perso> <image>` — Ajouter une carte\n"
-            "`.pokecollection` — Voir ta collection\n"
-            "`.pokebattle @joueur` — Combat 3v3 style Pokémon !"
+            "`.pokepersos` — Voir les 54 persos disponibles\n"
+            "`.enregistrer <perso> <image>` — Ajouter une carte (jpg/gif cdn Discord)\n"
+            "`.pokecollection [@joueur]` — Voir ta collection avec ◀️ ▶️\n"
+            "`.pokecarte <perso>` — Voir une carte en détail\n"
+            "`.pokesupprimer <perso>` — Retirer une carte\n"
+            "`.pokebattle @joueur` — Combat 3v3 style Pokémon !\n"
+            "`.pokestop` — Annuler un combat en cours"
         ), inline=False)
         embed.add_field(name="🎭 Mini-Jeux", value="`.devine` — Devine le personnage\n`.pendu` — Pendu animé/drama\n`.rps <choix>` — Pierre Feuille Ciseaux\n`.dice [faces]` — Lancer un dé", inline=False)
         await ctx.send(embed=embed)
@@ -4004,29 +4007,78 @@ async def pokesupprimer(ctx, perso: str = None):
 
 @bot.command(name="pokecollection")
 async def pokecollection(ctx, member: discord.Member = None):
-    """Voir ta collection de cartes — .pokecollection [@joueur]"""
+    """Voir ta collection de cartes avec navigation — .pokecollection [@joueur]"""
     target = member or ctx.author
     uid = str(target.id)
     collection = cartes_collections[uid]
     if not collection:
         msg = "Ta collection est vide !" if not member else f"La collection de **{target.display_name}** est vide !"
-        return await ctx.send(f"📭 {msg}\nTape `.enregistrer <perso> <image_url>` pour ajouter une carte !\nPersos dispo : `{', '.join(ANIME_CARDS_DB.keys())}`")
+        return await ctx.send(f"📭 {msg}\nTape `.enregistrer <perso> <image_url>` pour ajouter une carte !\nPersos dispo : `.pokepersos`")
 
-    embed = discord.Embed(
-        title=f"📚 Collection de {target.display_name} ({len(collection)}/6)",
-        color=0xf1c40f
-    )
-    for slot, data in collection.items():
+    slots = list(collection.keys())
+    index = [0]  # Mutable pour modification dans la closure
+
+    def build_embed(i):
+        slot = slots[i]
+        data = collection[slot]
         c = ANIME_CARDS_DB[data["key"]]
         rarete_emoji = RARETE_EMOJI[c["rarete"]]
-        has_img = "🖼️" if data["image"] else "❌ Pas d'image"
+        couleur = RARETE_COULEURS[c["rarete"]]
+
+        embed = discord.Embed(
+            title=f"{c['emoji']} {c['nom']}  —  ❤️ {c['pv']} PV",
+            description=f"*{c['serie']}* {rarete_emoji} **{c['rarete']}**",
+            color=couleur
+        )
+        if data["image"]:
+            embed.set_image(url=data["image"])
+
+        attaques_str = "\n".join([
+            f"{a['emoji']} **{a['nom']}** — `{a['degats']} dégâts`\n*{a['desc']}*"
+            for a in c["attaques"]
+        ])
+        embed.add_field(name="⚔️ Attaques", value=attaques_str, inline=False)
         embed.add_field(
-            name=f"Slot {slot} — {c['emoji']} {c['nom']} {rarete_emoji}",
-            value=f"❤️ {c['pv']} PV | ⚔️ {c['attaque']} ATK | 🛡️ {c['defense']} DEF\n{has_img}",
+            name="📊 Stats",
+            value=f"⚔️ Attaque : **{c['attaque']}** | 🛡️ Défense : **{c['defense']}**\n❌ Faiblesse : {c['faiblesse']} | ✅ Résistance : {c['resistance']}",
             inline=False
         )
-    embed.set_footer(text=".pokecarte <perso> pour voir une carte en détail • .pokebattle @joueur pour combattre !")
-    await ctx.send(embed=embed)
+        embed.set_footer(text=f"Carte {i+1}/{len(slots)} • Collection de {target.display_name} • .pokebattle @joueur pour combattre !")
+        return embed
+
+    msg = await ctx.send(embed=build_embed(0))
+
+    # Ajouter les réactions de navigation seulement si plus d'une carte
+    if len(slots) > 1:
+        await msg.add_reaction("◀️")
+        await msg.add_reaction("▶️")
+
+        def check(reaction, user):
+            return (
+                user == ctx.author
+                and str(reaction.emoji) in ["◀️", "▶️"]
+                and reaction.message.id == msg.id
+            )
+
+        while True:
+            try:
+                reaction, user = await bot.wait_for("reaction_add", check=check, timeout=60)
+                if str(reaction.emoji) == "▶️":
+                    index[0] = (index[0] + 1) % len(slots)
+                elif str(reaction.emoji) == "◀️":
+                    index[0] = (index[0] - 1) % len(slots)
+
+                await msg.edit(embed=build_embed(index[0]))
+                try:
+                    await msg.remove_reaction(reaction.emoji, user)
+                except:
+                    pass
+            except asyncio.TimeoutError:
+                try:
+                    await msg.clear_reactions()
+                except:
+                    pass
+                break
 
 @bot.command(name="pokecarte")
 async def pokecarte(ctx, perso: str = None):
