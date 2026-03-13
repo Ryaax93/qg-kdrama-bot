@@ -4640,15 +4640,6 @@ async def pokestop(ctx):
     else:
         await ctx.send("❌ Aucun combat en cours !")
 
-@bot.command(name="pokestop", aliases=["stopcombat"])
-async def pokestop(ctx):
-    """Annule le combat en cours — .pokestop"""
-    if ctx.channel.id in active_pokebattles:
-        del active_pokebattles[ctx.channel.id]
-        await ctx.send("🛑 Combat annulé !")
-    else:
-        await ctx.send("❌ Aucun combat en cours !")
-
 
 
 
@@ -5984,4 +5975,4 @@ while True:
         print(f"❌ CRASH BOT: {e}")
         traceback.print_exc()
         print("🔄 Redémarrage dans 5 secondes...")
-        time.sleep(5) 
+        time.sleep(5)
