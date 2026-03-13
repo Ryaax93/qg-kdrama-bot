@@ -239,6 +239,12 @@ async def help_cmd(ctx, categorie: str = None):
         embed.add_field(name="🎬 Bracket Tournoi", value="`.bracket kdrama` — Tournoi Kdramas (50 titres !)\n`.bracket anime` — Tournoi Animés (49 titres !)\n`.bracketskip` — Passer (admin) • `.bracketstop` — Annuler (admin)", inline=False)
         embed.add_field(name="🐺 Loup Garou", value="`.lgcreate` `.lgjoin` `.lgstart` `.lgstop`\n`.lg` — Aide complète • `.lgroles` — Voir les rôles", inline=False)
         embed.add_field(name="⚔️ Combat & Boss", value="`.arene @joueur` — PvP tour par tour\n`.duel @joueur` — Défi simple\n`.boss` — Faire apparaître un boss (admin)\n`.attaque` — Frapper le boss !", inline=False)
+        embed.add_field(name="🎰 Gacha & Fusion", value=(
+            "`.gacha` — Tire une carte aléatoire (100 pièces)\n"
+            "`.gachax10` — 10 tirages d'un coup (900 pièces)\n"
+            "`.gachastock [@joueur]` — Voir ta collection gacha\n"
+            "`.fusionner <perso>` — Fusionne 3 cartes identiques pour un boost ⭐"
+        ), inline=False)
         embed.add_field(name="🃏 Combat Cartes Animé", value=(
             "`.pokepersos` — Voir les 54 persos disponibles\n"
             "`.enregistrer <perso> <image>` — Ajouter une carte (jpg/gif cdn Discord)\n"
@@ -3307,7 +3313,8 @@ ANIME_CARDS_DB = {
     "naruto": {
         "nom": "Naruto Uzumaki", "serie": "Naruto", "emoji": "🍥",
         "pv": 120, "attaque": 80, "defense": 60,
-        "rarete": "Légendaire", "faiblesse": "⚡", "resistance": "🌊",
+        "rarete": "Légendaire",
+        "image": "https://i.imgur.com/2S8HWaq.jpg", "faiblesse": "⚡", "resistance": "🌊",
         "attaques": [
             {"nom": "Rasengan", "degats": 40, "emoji": "🌀", "desc": "Sphère de chakra concentrée"},
             {"nom": "Mode Ermite", "degats": 65, "emoji": "🐸", "desc": "Puissance de la nature"},
@@ -3317,7 +3324,8 @@ ANIME_CARDS_DB = {
     "sasuke": {
         "nom": "Sasuke Uchiha", "serie": "Naruto", "emoji": "⚡",
         "pv": 110, "attaque": 85, "defense": 65,
-        "rarete": "Légendaire", "faiblesse": "🌊", "resistance": "🔥",
+        "rarete": "Légendaire",
+        "image": "https://i.imgur.com/AN6W4g6.jpg", "faiblesse": "🌊", "resistance": "🔥",
         "attaques": [
             {"nom": "Chidori", "degats": 50, "emoji": "⚡", "desc": "Foudre concentrée dans la main"},
             {"nom": "Sharingan", "degats": 35, "emoji": "👁️", "desc": "Copie l'attaque suivante de l'ennemi"},
@@ -3338,7 +3346,8 @@ ANIME_CARDS_DB = {
     "tanjiro": {
         "nom": "Tanjiro Kamado", "serie": "Demon Slayer", "emoji": "💧",
         "pv": 105, "attaque": 75, "defense": 70,
-        "rarete": "Épique", "faiblesse": "⚡", "resistance": "💧",
+        "rarete": "Épique",
+        "image": "https://i.imgur.com/RmLMZaP.jpg", "faiblesse": "⚡", "resistance": "💧",
         "attaques": [
             {"nom": "Respiration de l'Eau", "degats": 40, "emoji": "🌊", "desc": "Flux constant et puissant"},
             {"nom": "Danse des Flammes", "degats": 60, "emoji": "🔥", "desc": "Forme du soleil hinokami"},
@@ -3348,7 +3357,8 @@ ANIME_CARDS_DB = {
     "zenitsu": {
         "nom": "Zenitsu Agatsuma", "serie": "Demon Slayer", "emoji": "⚡",
         "pv": 90, "attaque": 88, "defense": 45,
-        "rarete": "Rare", "faiblesse": "🌊", "resistance": "⚡",
+        "rarete": "Rare",
+        "image": "https://i.imgur.com/xBnRNSv.jpg", "faiblesse": "🌊", "resistance": "⚡",
         "attaques": [
             {"nom": "Tonnerre — 1ère Forme", "degats": 70, "emoji": "⚡", "desc": "Vitesse de l'éclair endormi"},
             {"nom": "Dieu du Tonnerre", "degats": 55, "emoji": "🌩️", "desc": "Frappe multiple ultrarapide"},
@@ -3369,7 +3379,8 @@ ANIME_CARDS_DB = {
     "levi": {
         "nom": "Levi Ackerman", "serie": "Attack on Titan", "emoji": "⚔️",
         "pv": 95, "attaque": 97, "defense": 75,
-        "rarete": "Légendaire", "faiblesse": "🔥", "resistance": "⚡",
+        "rarete": "Légendaire",
+        "image": "https://i.imgur.com/cvXCIWl.jpg", "faiblesse": "🔥", "resistance": "⚡",
         "attaques": [
             {"nom": "ODM — Frappe Éclair", "degats": 55, "emoji": "🗡️", "desc": "Vitesse surhumaine avec les câbles"},
             {"nom": "Tornade Levi", "degats": 75, "emoji": "🌀", "desc": "Rotation à 360° dévastateur"},
@@ -3379,7 +3390,8 @@ ANIME_CARDS_DB = {
     "eren": {
         "nom": "Eren Yeager", "serie": "Attack on Titan", "emoji": "👹",
         "pv": 130, "attaque": 82, "defense": 85,
-        "rarete": "Légendaire", "faiblesse": "⚡", "resistance": "🌊",
+        "rarete": "Légendaire",
+        "image": "https://i.imgur.com/BE73Bud.jpg", "faiblesse": "⚡", "resistance": "🌊",
         "attaques": [
             {"nom": "Transformation Titan", "degats": 60, "emoji": "💥", "desc": "Explosion de vapeur au contact"},
             {"nom": "Titan Assaillant", "degats": 75, "emoji": "👊", "desc": "Frappe de titan dévastatrice"},
@@ -3390,7 +3402,8 @@ ANIME_CARDS_DB = {
     "gojo": {
         "nom": "Satoru Gojo", "serie": "Jujutsu Kaisen", "emoji": "♾️",
         "pv": 140, "attaque": 99, "defense": 99,
-        "rarete": "Légendaire", "faiblesse": "🌙", "resistance": "♾️",
+        "rarete": "Légendaire",
+        "image": "https://i.imgur.com/7n8Gmn3.jpg", "faiblesse": "🌙", "resistance": "♾️",
         "attaques": [
             {"nom": "Infini", "degats": 0, "emoji": "🛡️", "desc": "Réduit les dégâts reçus de 50% ce tour"},
             {"nom": "Blue — Attraction", "degats": 65, "emoji": "💙", "desc": "Technique de l'infini inversé"},
@@ -3400,7 +3413,8 @@ ANIME_CARDS_DB = {
     "yuji": {
         "nom": "Yuji Itadori", "serie": "Jujutsu Kaisen", "emoji": "💪",
         "pv": 125, "attaque": 83, "defense": 78,
-        "rarete": "Épique", "faiblesse": "💨", "resistance": "💪",
+        "rarete": "Épique",
+        "image": "https://i.imgur.com/wxIT2y4.jpg", "faiblesse": "💨", "resistance": "💪",
         "attaques": [
             {"nom": "Divergent Fist", "degats": 50, "emoji": "👊", "desc": "Double impact de malédiction"},
             {"nom": "Black Flash", "degats": 70, "emoji": "⚡", "desc": "Distorsion de l'espace-temps"},
@@ -3411,7 +3425,8 @@ ANIME_CARDS_DB = {
     "luffy": {
         "nom": "Monkey D. Luffy", "serie": "One Piece", "emoji": "🏴‍☠️",
         "pv": 130, "attaque": 88, "defense": 72,
-        "rarete": "Légendaire", "faiblesse": "⚡", "resistance": "💧",
+        "rarete": "Légendaire",
+        "image": "https://i.imgur.com/WaXKIPM.jpg", "faiblesse": "⚡", "resistance": "💧",
         "attaques": [
             {"nom": "Gomu Gomu no Pistol", "degats": 40, "emoji": "👊", "desc": "Poing élastique propulsé"},
             {"nom": "Gear Third — Giant", "degats": 70, "emoji": "💥", "desc": "Membre gonflé à l'os"},
@@ -3421,7 +3436,8 @@ ANIME_CARDS_DB = {
     "zoro": {
         "nom": "Roronoa Zoro", "serie": "One Piece", "emoji": "⚔️",
         "pv": 115, "attaque": 92, "defense": 80,
-        "rarete": "Épique", "faiblesse": "🔥", "resistance": "⚡",
+        "rarete": "Épique",
+        "image": "https://i.imgur.com/Nr66sRV.jpg", "faiblesse": "🔥", "resistance": "⚡",
         "attaques": [
             {"nom": "Oni Giri", "degats": 45, "emoji": "⚔️", "desc": "Slash triple simultané"},
             {"nom": "108 Pound Cannon", "degats": 65, "emoji": "💨", "desc": "Vague de tranchant comprimée"},
@@ -3432,7 +3448,8 @@ ANIME_CARDS_DB = {
     "goku": {
         "nom": "Son Goku", "serie": "Dragon Ball Z", "emoji": "🐉",
         "pv": 140, "attaque": 98, "defense": 85,
-        "rarete": "Légendaire", "faiblesse": "🌙", "resistance": "⚡",
+        "rarete": "Légendaire",
+        "image": "https://i.imgur.com/YbSpxzS.jpg", "faiblesse": "🌙", "resistance": "⚡",
         "attaques": [
             {"nom": "Kamehameha", "degats": 60, "emoji": "💙", "desc": "Vague d'énergie légendaire"},
             {"nom": "Super Saiyan", "degats": 75, "emoji": "⚡", "desc": "Transformation dorée surpuissante"},
@@ -3442,7 +3459,8 @@ ANIME_CARDS_DB = {
     "vegeta": {
         "nom": "Vegeta", "serie": "Dragon Ball Z", "emoji": "👑",
         "pv": 130, "attaque": 94, "defense": 80,
-        "rarete": "Légendaire", "faiblesse": "🌙", "resistance": "🔥",
+        "rarete": "Légendaire",
+        "image": "https://i.imgur.com/ld1LPss.jpg", "faiblesse": "🌙", "resistance": "🔥",
         "attaques": [
             {"nom": "Big Bang Attack", "degats": 55, "emoji": "💥", "desc": "Sphère d'énergie explosive"},
             {"nom": "Final Flash", "degats": 80, "emoji": "⚡", "desc": "Tout son Ki concentré en un tir"},
@@ -3497,7 +3515,8 @@ ANIME_CARDS_DB = {
     "ichigo": {
         "nom": "Ichigo Kurosaki", "serie": "Bleach", "emoji": "🌙",
         "pv": 130, "attaque": 93, "defense": 78,
-        "rarete": "Légendaire", "faiblesse": "⚡", "resistance": "🌙",
+        "rarete": "Légendaire",
+        "image": "https://i.imgur.com/tGmGlBB.jpg", "faiblesse": "⚡", "resistance": "🌙",
         "attaques": [
             {"nom": "Getsuga Tensho", "degats": 60, "emoji": "🌙", "desc": "Vague de lune tranchante"},
             {"nom": "Bankai — Tensa Zangetsu", "degats": 80, "emoji": "⚫", "desc": "Vitesse et puissance décuplées"},
@@ -3509,7 +3528,8 @@ ANIME_CARDS_DB = {
     "mikasa": {
         "nom": "Mikasa Ackerman", "serie": "Attack on Titan", "emoji": "🔴",
         "pv": 100, "attaque": 92, "defense": 80,
-        "rarete": "Épique", "faiblesse": "🔥", "resistance": "⚡",
+        "rarete": "Épique",
+        "image": "https://i.imgur.com/vwLKjUw.jpg", "faiblesse": "🔥", "resistance": "⚡",
         "attaques": [
             {"nom": "ODM Précision", "degats": 55, "emoji": "🗡️", "desc": "Frappe chirurgicale ultrarapide"},
             {"nom": "Instinct Ackerman", "degats": 70, "emoji": "🔴", "desc": "Éveil du pouvoir ancestral"},
@@ -3545,7 +3565,8 @@ ANIME_CARDS_DB = {
     "nezuko": {
         "nom": "Nezuko Kamado", "serie": "Demon Slayer", "emoji": "🎋",
         "pv": 110, "attaque": 78, "defense": 72,
-        "rarete": "Épique", "faiblesse": "☀️", "resistance": "🔥",
+        "rarete": "Épique",
+        "image": "https://i.imgur.com/n9kTXuX.jpg", "faiblesse": "☀️", "resistance": "🔥",
         "attaques": [
             {"nom": "Sang Explosif", "degats": 55, "emoji": "🔥", "desc": "Flammes de sang démoniaques"},
             {"nom": "Coup de Pied Démon", "degats": 65, "emoji": "🎋", "desc": "Force démoniaque décuplée"},
@@ -3579,7 +3600,8 @@ ANIME_CARDS_DB = {
     "killua": {
         "nom": "Killua Zoldyck", "serie": "Hunter x Hunter", "emoji": "⚡",
         "pv": 100, "attaque": 90, "defense": 75,
-        "rarete": "Légendaire", "faiblesse": "🔥", "resistance": "⚡",
+        "rarete": "Légendaire",
+        "image": "https://i.imgur.com/T0BJceE.jpg", "faiblesse": "🔥", "resistance": "⚡",
         "attaques": [
             {"nom": "Narukami", "degats": 55, "emoji": "⚡", "desc": "Foudre Nen ultrarapide"},
             {"nom": "Godspeed", "degats": 75, "emoji": "💨", "desc": "Vitesse divine — invisible à l'œil nu"},
@@ -3589,7 +3611,8 @@ ANIME_CARDS_DB = {
     "gon": {
         "nom": "Gon Freecss", "serie": "Hunter x Hunter", "emoji": "🌿",
         "pv": 115, "attaque": 82, "defense": 70,
-        "rarete": "Épique", "faiblesse": "⚡", "resistance": "🌿",
+        "rarete": "Épique",
+        "image": "https://i.imgur.com/JEAkcm9.jpg", "faiblesse": "⚡", "resistance": "🌿",
         "attaques": [
             {"nom": "Jajanken — Rock", "degats": 50, "emoji": "✊", "desc": "Poing Nen concentré"},
             {"nom": "Jajanken — Paper", "degats": 60, "emoji": "✋", "desc": "Rayon de Nen à longue portée"},
@@ -3609,7 +3632,8 @@ ANIME_CARDS_DB = {
     "hisoka": {
         "nom": "Hisoka", "serie": "Hunter x Hunter", "emoji": "🃏",
         "pv": 120, "attaque": 92, "defense": 80,
-        "rarete": "Légendaire", "faiblesse": "🌊", "resistance": "🃏",
+        "rarete": "Légendaire",
+        "image": "https://i.imgur.com/AdQSiCd.jpg", "faiblesse": "🌊", "resistance": "🃏",
         "attaques": [
             {"nom": "Bungee Gum", "degats": 55, "emoji": "🎈", "desc": "Élasticité et adhérence combinées"},
             {"nom": "Texture Surprise", "degats": 40, "emoji": "🃏", "desc": "Illusion parfaite — réduit la défense adverse"},
@@ -3675,7 +3699,8 @@ ANIME_CARDS_DB = {
     "megumi": {
         "nom": "Megumi Fushiguro", "serie": "Jujutsu Kaisen", "emoji": "🐺",
         "pv": 100, "attaque": 80, "defense": 75,
-        "rarete": "Épique", "faiblesse": "🔥", "resistance": "🌙",
+        "rarete": "Épique",
+        "image": "https://i.imgur.com/1HX2ImD.jpg", "faiblesse": "🔥", "resistance": "🌙",
         "attaques": [
             {"nom": "Chien de Divine", "degats": 45, "emoji": "🐺", "desc": "Invocation du chien maléfique"},
             {"nom": "Serpent Ailé", "degats": 60, "emoji": "🐍", "desc": "Invocation du serpent divin"},
@@ -3697,7 +3722,8 @@ ANIME_CARDS_DB = {
     "asta": {
         "nom": "Asta", "serie": "Black Clover", "emoji": "⚔️",
         "pv": 120, "attaque": 82, "defense": 80,
-        "rarete": "Épique", "faiblesse": "🌊", "resistance": "✨",
+        "rarete": "Épique",
+        "image": "https://i.imgur.com/zxT2yys.jpg", "faiblesse": "🌊", "resistance": "✨",
         "attaques": [
             {"nom": "Anti-Magie", "degats": 50, "emoji": "⚔️", "desc": "Annule toute magie adverse"},
             {"nom": "Lame Noire", "degats": 65, "emoji": "⚫", "desc": "Épée imprégnée d'anti-magie"},
@@ -3707,7 +3733,8 @@ ANIME_CARDS_DB = {
     "yuno": {
         "nom": "Yuno", "serie": "Black Clover", "emoji": "💨",
         "pv": 110, "attaque": 87, "defense": 72,
-        "rarete": "Épique", "faiblesse": "🔥", "resistance": "💨",
+        "rarete": "Épique",
+        "image": "https://i.imgur.com/R9lnjWa.jpg", "faiblesse": "🔥", "resistance": "💨",
         "attaques": [
             {"nom": "Esprit du Vent", "degats": 50, "emoji": "💨", "desc": "Sylphe — esprit du vent"},
             {"nom": "Flèche de Tempête", "degats": 65, "emoji": "🌪️", "desc": "Tornade concentrée en flèche"},
@@ -3763,7 +3790,8 @@ ANIME_CARDS_DB = {
     "jinwoo": {
         "nom": "Sung Jinwoo", "serie": "Solo Leveling", "emoji": "🗡️",
         "pv": 145, "attaque": 97, "defense": 92,
-        "rarete": "Légendaire", "faiblesse": "☀️", "resistance": "🌙",
+        "rarete": "Légendaire",
+        "image": "https://i.imgur.com/cytYnaz.jpg", "faiblesse": "☀️", "resistance": "🌙",
         "attaques": [
             {"nom": "Dague de l'Ombre", "degats": 60, "emoji": "🗡️", "desc": "Vitesse et précision absolues"},
             {"nom": "Armée des Ombres", "degats": 80, "emoji": "👥", "desc": "Invocation de soldats de l'ombre"},
@@ -3896,7 +3924,327 @@ ANIME_CARDS_DB = {
             {"nom": "Voie du Pacifiste", "degats": 85, "emoji": "🕊️", "desc": "Combattre sans tuer — maîtrise absolue !"},
         ]
     },
+
+    # ═══ ATTACK ON TITAN (nouveaux) ═══
+    "erwin": {
+        "nom": "Erwin Smith", "serie": "Attack on Titan", "emoji": "🎖️",
+        "pv": 95, "attaque": 78, "defense": 80,
+        "rarete": "Épique", "faiblesse": "🔥", "resistance": "⚔️",
+        "image": "https://i.imgur.com/jV3h5SB.jpg",
+        "attaques": [
+            {"nom": "Charge Suicidaire", "degats": 55, "emoji": "🎖️", "desc": "Mène ses hommes à la mort pour la victoire"},
+            {"nom": "Stratégie du Commandant", "degats": 40, "emoji": "🧠", "desc": "Réduit l'attaque adverse de 25%"},
+            {"nom": "Dernier Ordre", "degats": 85, "emoji": "⚔️", "desc": "Sacrifice ultime pour l'humanité !"},
+        ]
+    },
+
+    # ═══ DEMON SLAYER (nouveaux) ═══
+    "tengen": {
+        "nom": "Tengen Uzui", "serie": "Demon Slayer", "emoji": "💥",
+        "pv": 110, "attaque": 85, "defense": 75,
+        "rarete": "Épique", "faiblesse": "🌊", "resistance": "💥",
+        "image": "https://i.imgur.com/Mv099qN.jpg",
+        "attaques": [
+            {"nom": "Respiration du Son", "degats": 50, "emoji": "🎵", "desc": "Attaque en rythme explosif"},
+            {"nom": "Partition Explosive", "degats": 68, "emoji": "💥", "desc": "Double lame en rythme dévastateur"},
+            {"nom": "Forme Flamboyante", "degats": 90, "emoji": "✨", "desc": "Le Dieu du Divertissement à pleine puissance !"},
+        ]
+    },
+    "muichiro": {
+        "nom": "Muichiro Tokito", "serie": "Demon Slayer", "emoji": "🌫️",
+        "pv": 100, "attaque": 88, "defense": 70,
+        "rarete": "Épique", "faiblesse": "🔥", "resistance": "💨",
+        "image": "https://i.imgur.com/C9Q0GcG.jpg",
+        "attaques": [
+            {"nom": "Respiration de la Brume", "degats": 48, "emoji": "🌫️", "desc": "Attaque imprévisible comme la brume"},
+            {"nom": "Tourbillon de Brume", "degats": 65, "emoji": "🌀", "desc": "Rotation de lame en brume dense"},
+            {"nom": "Mode Pillier", "degats": 88, "emoji": "⚡", "desc": "Éveil du Pillier de la Brume !"},
+        ]
+    },
+    "giyu": {
+        "nom": "Giyu Tomioka", "serie": "Demon Slayer", "emoji": "🌊",
+        "pv": 108, "attaque": 86, "defense": 78,
+        "rarete": "Épique", "faiblesse": "⚡", "resistance": "🌊",
+        "image": "https://i.imgur.com/oWIcMrV.jpg",
+        "attaques": [
+            {"nom": "Respiration de l'Eau", "degats": 45, "emoji": "🌊", "desc": "Flux d'eau constant et précis"},
+            {"nom": "Calme Plat", "degats": 60, "emoji": "💧", "desc": "Technique exclusive — immobilise l'ennemi"},
+            {"nom": "11ème Forme", "degats": 90, "emoji": "🌊", "desc": "Forme créée par Giyu lui-même !"},
+        ]
+    },
+    "rengoku": {
+        "nom": "Kyōjurō Rengoku", "serie": "Demon Slayer", "emoji": "🔥",
+        "pv": 115, "attaque": 92, "defense": 72,
+        "rarete": "Légendaire", "faiblesse": "🌊", "resistance": "🔥",
+        "image": "https://i.imgur.com/utlCuQn.jpg",
+        "attaques": [
+            {"nom": "Respiration des Flammes", "degats": 55, "emoji": "🔥", "desc": "Flammes dévastatrices du Pillier"},
+            {"nom": "Quintuple Explosion", "degats": 72, "emoji": "💥", "desc": "5 coups enflammés simultanés"},
+            {"nom": "9ème Forme — Purgatorio", "degats": 95, "emoji": "☀️", "desc": "Flammes divines du Pillier de Feu !"},
+        ]
+    },
+    "sanemi": {
+        "nom": "Sanemi Shinazugawa", "serie": "Demon Slayer", "emoji": "💨",
+        "pv": 112, "attaque": 89, "defense": 76,
+        "rarete": "Épique", "faiblesse": "🔥", "resistance": "💨",
+        "image": "https://i.imgur.com/fHuqIaF.jpg",
+        "attaques": [
+            {"nom": "Respiration du Vent", "degats": 50, "emoji": "💨", "desc": "Rafales tranchantes du Pillier du Vent"},
+            {"nom": "Cyclone Dévastateur", "degats": 68, "emoji": "🌪️", "desc": "Tourbillon de lames multiples"},
+            {"nom": "Sang Marqué", "degats": 88, "emoji": "🩸", "desc": "Sang rare qui enivrait les démons !"},
+        ]
+    },
+    "akaza": {
+        "nom": "Akaza", "serie": "Demon Slayer", "emoji": "🩸",
+        "pv": 125, "attaque": 93, "defense": 85,
+        "rarete": "Légendaire", "faiblesse": "☀️", "resistance": "🔥",
+        "image": "https://i.imgur.com/s3SbBSM.jpg",
+        "attaques": [
+            {"nom": "Destruction Totale", "degats": 58, "emoji": "💥", "desc": "Arts martiaux démoniaques"},
+            {"nom": "Canon Solaire", "degats": 75, "emoji": "🩸", "desc": "Frappe concentrée dévastatrice"},
+            {"nom": "Lune Supérieure 3", "degats": 98, "emoji": "🌙", "desc": "Puissance de Lune Supérieure au maximum !"},
+        ]
+    },
+
+    # ═══ TOKYO GHOUL ═══
+    "kaneki": {
+        "nom": "Ken Kaneki", "serie": "Tokyo Ghoul", "emoji": "🕷️",
+        "pv": 120, "attaque": 88, "defense": 80,
+        "rarete": "Légendaire", "faiblesse": "💡", "resistance": "🕷️",
+        "image": "https://i.imgur.com/PSZyDlw.jpg",
+        "attaques": [
+            {"nom": "Tentacule Kagune", "degats": 52, "emoji": "🕷️", "desc": "Tentacule de ghoul tranchant"},
+            {"nom": "Régénération", "degats": -25, "emoji": "💚", "desc": "Récupère 25 HP"},
+            {"nom": "Roi Noir", "degats": 95, "emoji": "⚫", "desc": "Forme de Roi — puissance de ghoul absolue !"},
+        ]
+    },
+    "rize": {
+        "nom": "Rize Kamishiro", "serie": "Tokyo Ghoul", "emoji": "🦋",
+        "pv": 105, "attaque": 85, "defense": 72,
+        "rarete": "Épique", "faiblesse": "💡", "resistance": "🦋",
+        "image": "https://i.imgur.com/qAhrKOO.jpg",
+        "attaques": [
+            {"nom": "Kagune Multiple", "degats": 55, "emoji": "🦋", "desc": "Plusieurs tentacules simultanés"},
+            {"nom": "Prédateur Né", "degats": 68, "emoji": "🩸", "desc": "Instinct de chasse naturel"},
+            {"nom": "Binge Eater", "degats": 88, "emoji": "💀", "desc": "La Ghoul la plus vorace de Tokyo !"},
+        ]
+    },
+    "arima": {
+        "nom": "Kishou Arima", "serie": "Tokyo Ghoul", "emoji": "👓",
+        "pv": 110, "attaque": 95, "defense": 88,
+        "rarete": "Légendaire", "faiblesse": "🕷️", "resistance": "👓",
+        "image": "https://i.imgur.com/GEsZ3uD.jpg",
+        "attaques": [
+            {"nom": "IXA", "degats": 60, "emoji": "⚡", "desc": "Quinque lance-projectiles ultrarapide"},
+            {"nom": "Narukami", "degats": 78, "emoji": "⚡", "desc": "Quinque électrique dévastateur"},
+            {"nom": "Le Faucheteur", "degats": 98, "emoji": "👓", "desc": "Le Chasseur Invaincu — zéro défaite !"},
+        ]
+    },
+
+    # ═══ DRAGON BALL (nouveaux) ═══
+    "frieza": {
+        "nom": "Frieza", "serie": "Dragon Ball Z", "emoji": "👾",
+        "pv": 130, "attaque": 92, "defense": 82,
+        "rarete": "Légendaire", "faiblesse": "🐉", "resistance": "👾",
+        "image": "https://i.imgur.com/qIelqUS.jpg",
+        "attaques": [
+            {"nom": "Death Beam", "degats": 55, "emoji": "💜", "desc": "Rayon mortel ultraprécis"},
+            {"nom": "Death Ball", "degats": 75, "emoji": "🔮", "desc": "Sphère d'énergie planétaire"},
+            {"nom": "Golden Frieza", "degats": 100, "emoji": "👑", "desc": "Forme dorée — puissance divine !"},
+        ]
+    },
+    "beerus": {
+        "nom": "Beerus", "serie": "Dragon Ball Super", "emoji": "😺",
+        "pv": 145, "attaque": 99, "defense": 95,
+        "rarete": "Légendaire", "faiblesse": "🌟", "resistance": "😺",
+        "image": "https://i.imgur.com/qlJdPS6.jpg",
+        "attaques": [
+            {"nom": "Hakai", "degats": 70, "emoji": "💥", "desc": "Destruction pure et simple"},
+            {"nom": "Sphere of Destruction", "degats": 85, "emoji": "🔮", "desc": "Énergie de destruction concentrée"},
+            {"nom": "Dieu de la Destruction", "degats": 110, "emoji": "😺", "desc": "Puissance divine illimitée !"},
+        ]
+    },
+
+    # ═══ ONE PIECE (nouveaux) ═══
+    "mihawk": {
+        "nom": "Dracule Mihawk", "serie": "One Piece", "emoji": "🗡️",
+        "pv": 120, "attaque": 97, "defense": 85,
+        "rarete": "Légendaire", "faiblesse": "🌊", "resistance": "🗡️",
+        "image": "https://i.imgur.com/pB4lYTn.jpg",
+        "attaques": [
+            {"nom": "Slash Noir", "degats": 60, "emoji": "⚫", "desc": "Coup d'épée qui tranche tout"},
+            {"nom": "Croix de Feu", "degats": 75, "emoji": "✝️", "desc": "Vague tranchante en croix"},
+            {"nom": "Yoru — Pleine Puissance", "degats": 100, "emoji": "🗡️", "desc": "La plus grande lame du monde !"},
+        ]
+    },
+    "kaido": {
+        "nom": "Kaido", "serie": "One Piece", "emoji": "🐉",
+        "pv": 160, "attaque": 96, "defense": 98,
+        "rarete": "Légendaire", "faiblesse": "⚡", "resistance": "🐉",
+        "image": "https://i.imgur.com/Q76UJEX.jpg",
+        "attaques": [
+            {"nom": "Ragnaraku", "degats": 65, "emoji": "⚡", "desc": "Massue géante dévastatrice"},
+            {"nom": "Blast Breath", "degats": 80, "emoji": "🔥", "desc": "Souffle de dragon incandescent"},
+            {"nom": "Forme Dragon", "degats": 105, "emoji": "🐉", "desc": "La créature la plus forte du monde !"},
+        ]
+    },
+    "shanks": {
+        "nom": "Shanks", "serie": "One Piece", "emoji": "⚓",
+        "pv": 135, "attaque": 98, "defense": 90,
+        "rarete": "Légendaire", "faiblesse": "💨", "resistance": "⚓",
+        "image": "https://i.imgur.com/BkCK51H.jpg",
+        "attaques": [
+            {"nom": "Haki des Rois", "degats": 60, "emoji": "👑", "desc": "Haki Conquerant qui terrasse les faibles"},
+            {"nom": "Slash de Sabre", "degats": 75, "emoji": "⚔️", "desc": "Coup d'épée d'un Yonko"},
+            {"nom": "Ambition Divine", "degats": 98, "emoji": "⚓", "desc": "Puissance d'un des 4 Empereurs !"},
+        ]
+    },
+
+    # ═══ MAGIC EMPEROR ═══
+    "zhuofan": {
+        "nom": "Zhuo Fan", "serie": "Magic Emperor", "emoji": "🌑",
+        "pv": 125, "attaque": 90, "defense": 85,
+        "rarete": "Légendaire", "faiblesse": "☀️", "resistance": "🌑",
+        "image": "https://i.imgur.com/gqEyuY0.jpg",
+        "attaques": [
+            {"nom": "Art Démoniaque", "degats": 58, "emoji": "🌑", "desc": "Magie noire de l'Empereur Démoniaque"},
+            {"nom": "Sceau du Démon", "degats": 75, "emoji": "🔮", "desc": "Scelle les capacités adverses"},
+            {"nom": "Domination Absolue", "degats": 95, "emoji": "👑", "desc": "L'Empereur Démoniaque frappe !"},
+        ]
+    },
+    "yelin": {
+        "nom": "Ye Lin", "serie": "Magic Emperor", "emoji": "🌸",
+        "pv": 105, "attaque": 80, "defense": 75,
+        "rarete": "Épique", "faiblesse": "🌑", "resistance": "🌸",
+        "image": "https://i.imgur.com/Ml8v5UX.jpg",
+        "attaques": [
+            {"nom": "Art de Soin", "degats": -30, "emoji": "💚", "desc": "Récupère 30 HP"},
+            {"nom": "Fleur de Combat", "degats": 55, "emoji": "🌸", "desc": "Frappe délicate mais précise"},
+            {"nom": "Magie Florale", "degats": 80, "emoji": "✨", "desc": "Explosion de magie florale !"},
+        ]
+    },
+
+    # ═══ MY HERO ACADEMIA ═══
+    "allmight": {
+        "nom": "All Might", "serie": "My Hero Academia", "emoji": "💪",
+        "pv": 140, "attaque": 97, "defense": 88,
+        "rarete": "Légendaire", "faiblesse": "🩸", "resistance": "💪",
+        "image": "https://i.imgur.com/5YVOpkT.jpg",
+        "attaques": [
+            {"nom": "Detroit Smash", "degats": 65, "emoji": "👊", "desc": "Poing droit dévastateur"},
+            {"nom": "United States Smash", "degats": 80, "emoji": "💥", "desc": "Force de One For All déchaînée"},
+            {"nom": "United States of Smash", "degats": 105, "emoji": "💪", "desc": "Dernier coup du Symbole de la Paix !"},
+        ]
+    },
+    "deku": {
+        "nom": "Izuku Midoriya", "serie": "My Hero Academia", "emoji": "🥦",
+        "pv": 115, "attaque": 85, "defense": 72,
+        "rarete": "Épique", "faiblesse": "⚡", "resistance": "💪",
+        "image": "https://i.imgur.com/aKjpPQs.jpg",
+        "attaques": [
+            {"nom": "Delaware Smash", "degats": 50, "emoji": "🥦", "desc": "One For All concentré dans un doigt"},
+            {"nom": "Shoot Style", "degats": 65, "emoji": "🦵", "desc": "Coups de pied en style personnel"},
+            {"nom": "Full Cowl 100%", "degats": 90, "emoji": "⚡", "desc": "One For All à pleine puissance !"},
+        ]
+    },
+    "bakugo": {
+        "nom": "Katsuki Bakugo", "serie": "My Hero Academia", "emoji": "💣",
+        "pv": 110, "attaque": 90, "defense": 70,
+        "rarete": "Épique", "faiblesse": "🌊", "resistance": "💣",
+        "image": "https://i.imgur.com/jlLDh3h.jpg",
+        "attaques": [
+            {"nom": "Explosion", "degats": 55, "emoji": "💣", "desc": "Nitroglycérine explosive dans les paumes"},
+            {"nom": "Stun Grenade", "degats": 45, "emoji": "💥", "desc": "Flash aveuglant + explosion"},
+            {"nom": "AP Shot: Auto-Cannon", "degats": 88, "emoji": "🔥", "desc": "Rafale d'explosions ultrarapides !"},
+        ]
+    },
+    "shigaraki": {
+        "nom": "Shigaraki Tomura", "serie": "My Hero Academia", "emoji": "💀",
+        "pv": 130, "attaque": 92, "defense": 78,
+        "rarete": "Légendaire", "faiblesse": "💪", "resistance": "💀",
+        "image": "https://i.imgur.com/464ERG7.jpg",
+        "attaques": [
+            {"nom": "Désintégration", "degats": 60, "emoji": "💀", "desc": "5 doigts = tout se désintègre"},
+            {"nom": "Propagation", "degats": 78, "emoji": "🕸️", "desc": "Désintégration en chaîne au sol"},
+            {"nom": "All For One", "degats": 100, "emoji": "👁️", "desc": "Successeur d'All For One — destruction totale !"},
+        ]
+    },
+
+    # ═══ CODE GEASS ═══
+    "lelouch": {
+        "nom": "Lelouch vi Britannia", "serie": "Code Geass", "emoji": "♟️",
+        "pv": 80, "attaque": 72, "defense": 60,
+        "rarete": "Légendaire", "faiblesse": "💔", "resistance": "🧠",
+        "image": "https://i.imgur.com/T0AqdVz.jpg",
+        "attaques": [
+            {"nom": "Géass", "degats": 45, "emoji": "👁️", "desc": "Ordre absolu — l'ennemi obéit"},
+            {"nom": "Stratégie de Zéro", "degats": 60, "emoji": "♟️", "desc": "Plan parfait — réduit DEF adverse de 30%"},
+            {"nom": "Requiem de Zéro", "degats": 85, "emoji": "♟️", "desc": "Le plan ultime du Roi des Ombres !"},
+        ]
+    },
+    "suzaku": {
+        "nom": "Suzaku Kururugi", "serie": "Code Geass", "emoji": "⚔️",
+        "pv": 105, "attaque": 85, "defense": 80,
+        "rarete": "Épique", "faiblesse": "🧠", "resistance": "⚔️",
+        "image": "https://i.imgur.com/b5cVGjx.jpg",
+        "attaques": [
+            {"nom": "Spinning Kick", "degats": 50, "emoji": "🦵", "desc": "Coup de pied rotatif surhumain"},
+            {"nom": "FLEIJA", "degats": 70, "emoji": "💥", "desc": "Arme de destruction massive"},
+            {"nom": "Lancelot Full Power", "degats": 90, "emoji": "⚔️", "desc": "Knightmare Frame à puissance maximale !"},
+        ]
+    },
+
+    # ═══ JUJUTSU KAISEN (nouveaux) ═══
+    "sukuna": {
+        "nom": "Ryomen Sukuna", "serie": "Jujutsu Kaisen", "emoji": "☠️",
+        "pv": 150, "attaque": 100, "defense": 95,
+        "rarete": "Légendaire", "faiblesse": "♾️", "resistance": "☠️",
+        "image": "https://i.imgur.com/UbB1tmt.jpg",
+        "attaques": [
+            {"nom": "Dismantle", "degats": 65, "emoji": "🗡️", "desc": "Slash invisible qui tranche tout"},
+            {"nom": "Cleave", "degats": 80, "emoji": "☠️", "desc": "Adapte la puissance à l'ennemi"},
+            {"nom": "Malveillance Brûlante", "degats": 110, "emoji": "🔥", "desc": "Le Roi des Malédictions à son apogée !"},
+        ]
+    },
+
+    # ═══ NARUTO (nouveaux) ═══
+    "madara": {
+        "nom": "Madara Uchiha", "serie": "Naruto", "emoji": "🌑",
+        "pv": 145, "attaque": 98, "defense": 92,
+        "rarete": "Légendaire", "faiblesse": "🌊", "resistance": "🔥",
+        "image": "https://i.imgur.com/FYEJwwH.jpg",
+        "attaques": [
+            {"nom": "Susanoo Parfait", "degats": 70, "emoji": "🌑", "desc": "Armure de chakra titanesque"},
+            {"nom": "Météorite", "degats": 85, "emoji": "☄️", "desc": "Fait tomber des météorites du ciel"},
+            {"nom": "Rinnegan Infini", "degats": 105, "emoji": "👁️", "desc": "Dieu du ninja — puissance absolue !"},
+        ]
+    },
+    "kaguya": {
+        "nom": "Kaguya Ootsutsuki", "serie": "Naruto", "emoji": "🌸",
+        "pv": 155, "attaque": 99, "defense": 96,
+        "rarete": "Légendaire", "faiblesse": "⚡", "resistance": "🌸",
+        "image": "https://i.imgur.com/6E9Q66v.jpg",
+        "attaques": [
+            {"nom": "Cendres Célestes", "degats": 68, "emoji": "🌸", "desc": "Cendres qui paralysent au contact"},
+            {"nom": "Dimension Glace", "degats": 82, "emoji": "❄️", "desc": "Téléporte dans une dimension gelée"},
+            {"nom": "Vérité de Toute Chose", "degats": 108, "emoji": "🌙", "desc": "La Mère du Chakra — puissance originelle !"},
+        ]
+    },
+
+    # ═══ BLACK CLOVER (nouveau) ═══
+    "yami": {
+        "nom": "Yami Sukehiro", "serie": "Black Clover", "emoji": "🌑",
+        "pv": 125, "attaque": 93, "defense": 82,
+        "rarete": "Légendaire", "faiblesse": "☀️", "resistance": "🌑",
+        "image": "https://i.imgur.com/H5UTEEg.jpg",
+        "attaques": [
+            {"nom": "Slash des Ténèbres", "degats": 58, "emoji": "🌑", "desc": "Lame de magie noire tranchante"},
+            {"nom": "Dimension Slash", "degats": 75, "emoji": "⚔️", "desc": "Coupe à travers les dimensions"},
+            {"nom": "Dark Cloaked Dimension Slash", "degats": 95, "emoji": "🌑", "desc": "Attaque ultime du Capitaine des Taureaux Noirs !"},
+        ]
+    },
 }
+
 
 RARETE_COULEURS = {
     "Légendaire": 0xf1c40f,
@@ -3906,7 +4254,7 @@ RARETE_COULEURS = {
 }
 
 RARETE_EMOJI = {
-    "Légendaire": "🌈",
+    "Légendaire": "👑",
     "Épique": "💎",
     "Rare": "⭐",
     "Commun": "🔵",
@@ -3972,8 +4320,7 @@ async def enregistrer_carte(ctx, perso: str = None, image_url: str = None):
                 await ctx.send(f"⚠️ **{ANIME_CARDS_DB[key]['nom']}** est déjà dans ta collection !")
             return
 
-    if len(collection) >= 6:
-        return await ctx.send(f"❌ Ta collection est pleine ! (6/6)\nTape `.pokesupprimer <perso>` pour faire de la place.")
+    # Collection illimitée
 
     slot = len(collection) + 1
     cartes_collections[uid][slot] = {"key": key, "image": image_url}
@@ -4383,6 +4730,264 @@ async def pokestop(ctx):
 
 
 
+
+
+
+# ============================================================
+#  🎰 GACHA — Tirage de cartes
+# ============================================================
+
+gacha_collections = defaultdict(lambda: defaultdict(int))  # {uid: {card_key: count}}
+fusion_levels = defaultdict(lambda: defaultdict(int))  # {uid: {card_key: level 0-3}}
+
+GACHA_PRIX = 100  # pièces par tirage
+GACHA_PRIX_X10 = 900  # 10 tirages = 9x le prix
+
+GACHA_RATES = {
+    "Légendaire": 3,
+    "Épique": 12,
+    "Rare": 25,
+    "Commun": 60,
+}
+
+def gacha_tirage():
+    """Tire une carte selon les probabilités"""
+    pool = []
+    for key, c in ANIME_CARDS_DB.items():
+        weight = GACHA_RATES[c["rarete"]]
+        pool.extend([key] * weight)
+    return random.choice(pool)
+
+def get_card_image(uid, key):
+    """Récupère l'image d'une carte — collection perso ou image par défaut"""
+    # Cherche d'abord dans la collection personnalisée
+    if key in cartes_collections[uid]:
+        for data in cartes_collections[uid].values():
+            if data["key"] == key and data["image"]:
+                return data["image"]
+    # Image par défaut dans la DB
+    return ANIME_CARDS_DB[key].get("image", None)
+
+def build_gacha_embed(uid, key, is_new=True):
+    """Construit l'embed de tirage gacha"""
+    c = ANIME_CARDS_DB[key]
+    level = fusion_levels[uid][key]
+    rarete_emoji = RARETE_EMOJI[c["rarete"]]
+    couleur = RARETE_COULEURS[c["rarete"]]
+    count = gacha_collections[uid][key]
+
+    stars = "⭐" * level if level > 0 else ""
+    boost_atk = level * 15
+    boost_def = level * 10
+    boost_pv = level * 20
+
+    embed = discord.Embed(
+        title=f"{'✨ NOUVEAU ! ' if is_new else ''}{c['emoji']} {c['nom']} {stars}",
+        description=f"*{c['serie']}* {rarete_emoji} **{c['rarete']}**",
+        color=couleur
+    )
+
+    image = get_card_image(uid, key)
+    if image:
+        embed.set_image(url=image)
+
+    atk_str = f"**{c['attaque'] + boost_atk}**" + (f" *(+{boost_atk})*" if boost_atk > 0 else "")
+    def_str = f"**{c['defense'] + boost_def}**" + (f" *(+{boost_def})*" if boost_def > 0 else "")
+    pv_str = f"**{c['pv'] + boost_pv}**" + (f" *(+{boost_pv})*" if boost_pv > 0 else "")
+
+    embed.add_field(
+        name="📊 Stats",
+        value=f"❤️ PV : {pv_str} | ⚔️ ATK : {atk_str} | 🛡️ DEF : {def_str}",
+        inline=False
+    )
+
+    attaques_str = "\n".join([
+        f"{a['emoji']} **{a['nom']}** — `{a['degats']} dégâts`"
+        for a in c["attaques"]
+    ])
+    embed.add_field(name="⚔️ Attaques", value=attaques_str, inline=False)
+
+    if count > 1:
+        needed_for_fusion = 3 ** (level + 1) if level < 3 else 999
+        embed.add_field(
+            name="🔮 Fusion",
+            value=f"Tu possèdes **{count}x** {c['nom']}\n"
+                  + (f"Il t'en faut **{3}** pour fusionner ! `.fusionner {key}`" if count >= 3 and level < 3 else
+                     f"*Niveau de fusion max !* 💫" if level >= 3 else
+                     f"Encore **{3 - count}** exemplaire(s) pour fusionner"),
+            inline=False
+        )
+
+    embed.set_footer(text=f"Collection : {count}x • Fusion niveau {level}/3 • .gacha pour tirer | .gachax10 pour x10")
+    return embed
+
+@bot.command(name="gacha")
+async def gacha_cmd(ctx):
+    """Tire une carte aléatoire — .gacha (100 pièces)"""
+    uid = str(ctx.author.id)
+    if economy_data[uid]["coins"] < GACHA_PRIX:
+        return await ctx.send(f"❌ Tu n'as pas assez de pièces ! Il faut **{GACHA_PRIX} pièces**.\nTon solde : **{economy_data[uid]['coins']} pièces**")
+
+    economy_data[uid]["coins"] -= GACHA_PRIX
+
+    # Animation
+    msg = await ctx.send(embed=discord.Embed(
+        description="🎰 Tirage en cours...",
+        color=0x9b59b6
+    ))
+    await asyncio.sleep(1)
+
+    key = gacha_tirage()
+    c = ANIME_CARDS_DB[key]
+    is_new = gacha_collections[uid][key] == 0
+    gacha_collections[uid][key] += 1
+
+    embed = build_gacha_embed(uid, key, is_new)
+    await msg.edit(embed=embed)
+
+@bot.command(name="gachax10")
+async def gacha_x10(ctx):
+    """10 tirages d'un coup — .gachax10 (900 pièces)"""
+    uid = str(ctx.author.id)
+    if economy_data[uid]["coins"] < GACHA_PRIX_X10:
+        return await ctx.send(f"❌ Il faut **{GACHA_PRIX_X10} pièces** pour x10 !\nTon solde : **{economy_data[uid]['coins']} pièces**")
+
+    economy_data[uid]["coins"] -= GACHA_PRIX_X10
+
+    msg = await ctx.send(embed=discord.Embed(description="🎰 Tirage x10 en cours...", color=0x9b59b6))
+    await asyncio.sleep(1)
+
+    resultats = []
+    legendaires = []
+    for _ in range(10):
+        key = gacha_tirage()
+        gacha_collections[uid][key] += 1
+        c = ANIME_CARDS_DB[key]
+        stars = "⭐" * fusion_levels[uid][key]
+        resultats.append(f"{RARETE_EMOJI[c['rarete']]} {c['emoji']} **{c['nom']}** {stars}")
+        if c["rarete"] == "Légendaire":
+            legendaires.append(key)
+
+    embed = discord.Embed(
+        title="🎰 Résultats x10 !",
+        description="\n".join(resultats),
+        color=0xf1c40f if legendaires else 0x9b59b6
+    )
+    if legendaires:
+        embed.set_footer(text=f"🌟 {len(legendaires)} Légendaire(s) obtenu(s) !")
+    else:
+        embed.set_footer(text="Pas de légendaire cette fois... Retente ta chance !")
+    await msg.edit(embed=embed)
+
+    # Afficher le légendaire en détail
+    if legendaires:
+        await asyncio.sleep(1)
+        key = legendaires[-1]
+        embed2 = build_gacha_embed(uid, key, False)
+        await ctx.send(embed=embed2)
+
+@bot.command(name="fusionner")
+async def fusionner(ctx, perso: str = None):
+    """Fusionne 3 cartes identiques pour un boost — .fusionner naruto"""
+    if not perso:
+        return await ctx.send("❌ Précise un personnage ! Ex: `.fusionner naruto`")
+
+    uid = str(ctx.author.id)
+    key = perso.lower()
+
+    if key not in ANIME_CARDS_DB:
+        return await ctx.send(f"❌ Personnage `{perso}` introuvable !")
+
+    count = gacha_collections[uid][key]
+    level = fusion_levels[uid][key]
+    c = ANIME_CARDS_DB[key]
+
+    if level >= 3:
+        return await ctx.send(f"⭐⭐⭐ **{c['nom']}** est déjà au niveau de fusion maximum !")
+
+    if count < 3:
+        return await ctx.send(
+            f"❌ Tu n'as que **{count}x {c['nom']}** — il en faut **3** pour fusionner !\n"
+            f"Fais `.gacha` pour en obtenir plus !"
+        )
+
+    # Fusion !
+    gacha_collections[uid][key] -= 3
+    fusion_levels[uid][key] += 1
+    new_level = fusion_levels[uid][key]
+
+    boost_atk = new_level * 15
+    boost_pv = new_level * 20
+    boost_def = new_level * 10
+    stars = "⭐" * new_level
+
+    embed = discord.Embed(
+        title=f"✨ FUSION RÉUSSIE ! {c['emoji']} {c['nom']} {stars}",
+        description=f"*{c['serie']}* {RARETE_EMOJI[c['rarete']]} **{c['rarete']}**\n\n"
+                    f"3x {c['nom']} fusionnés avec succès !",
+        color=RARETE_COULEURS[c["rarete"]]
+    )
+
+    image = get_card_image(uid, key)
+    if image:
+        embed.set_image(url=image)
+
+    embed.add_field(
+        name="📈 Nouveaux Stats",
+        value=f"❤️ PV : **{c['pv'] + boost_pv}** *(+{boost_pv})*\n"
+              f"⚔️ ATK : **{c['attaque'] + boost_atk}** *(+{boost_atk})*\n"
+              f"🛡️ DEF : **{c['defense'] + boost_def}** *(+{boost_def})*",
+        inline=False
+    )
+
+    remaining = gacha_collections[uid][key]
+    next_msg = f"Il te reste **{remaining}x** {c['nom']} après fusion."
+    if new_level < 3:
+        next_msg += f"\nEncore **3** exemplaires pour le niveau ⭐{'⭐' * new_level} !"
+    else:
+        next_msg += "\n🏆 **Niveau de fusion MAXIMUM atteint !**"
+
+    embed.add_field(name="ℹ️ Info", value=next_msg, inline=False)
+    embed.set_footer(text=f"Fusion niveau {new_level}/3 • .gachastock pour voir ta collection")
+    await ctx.send(embed=embed)
+
+@bot.command(name="gachastock")
+async def gachastock(ctx, member: discord.Member = None):
+    """Voir toutes tes cartes gacha — .gachastock [@joueur]"""
+    target = member or ctx.author
+    uid = str(target.id)
+    collection = gacha_collections[uid]
+
+    if not collection:
+        return await ctx.send(f"📭 {'Ta collection gacha est vide !' if not member else f'La collection de **{target.display_name}** est vide !'}\nTape `.gacha` pour commencer !")
+
+    par_rarete = {"Légendaire": [], "Épique": [], "Rare": [], "Commun": []}
+    for key, count in collection.items():
+        if count > 0 and key in ANIME_CARDS_DB:
+            c = ANIME_CARDS_DB[key]
+            level = fusion_levels[uid][key]
+            stars = "⭐" * level
+            par_rarete[c["rarete"]].append(
+                f"{c['emoji']} **{c['nom']}** {stars} x{count}"
+            )
+
+    embed = discord.Embed(
+        title=f"📚 Collection Gacha de {target.display_name}",
+        color=0xf1c40f
+    )
+    total = sum(v for v in collection.values())
+    embed.description = f"**{total}** cartes au total"
+
+    for rarete, cartes in par_rarete.items():
+        if cartes:
+            embed.add_field(
+                name=f"{RARETE_EMOJI[rarete]} {rarete}",
+                value="\n".join(cartes),
+                inline=False
+            )
+
+    embed.set_footer(text=".fusionner <perso> pour fusionner 3 cartes identiques • .gacha pour tirer !")
+    await ctx.send(embed=embed)
 
 # ============================================================
 print("🚀 Démarrage du bot...")
