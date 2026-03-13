@@ -2466,7 +2466,7 @@ SHOP_ITEMS = [
     {"id": "claim_15", "nom": "⚡ Claim 15 min", "prix": 1500, "description": "Réduit le claim reset à 15 min (permanent)"},
     {"id": "claim_10", "nom": "⚡ Claim 10 min", "prix": 3000, "description": "Réduit le claim reset à 10 min (permanent)"},
     # ═══ Items offensifs/défensifs (1x par jour) ═══
-    {"id": "freeze", "nom": "🧊 Sceau des Ombres", "prix": 500, "description": "Freeze les rolls d'un joueur 5 min (1x/jour)", "daily": True},
+    {"id": "freeze", "nom": "🧊 Sceau des Ombres", "prix": 500, "description": "Bloque le claim d'un joueur 10 secondes (1x/jour)", "daily": True},
     {"id": "curse", "nom": "⏳ Malédiction", "prix": 400, "description": "+5 min sur le claim d'un joueur (1x/jour)", "daily": True},
     {"id": "shield", "nom": "🛡️ Bouclier", "prix": 600, "description": "Protège du Sceau et Malédiction pendant 30 min"},
     {"id": "boost_rarete", "nom": "🎯 Boost Rareté", "prix": 1500, "description": "↑↑ chances Épique/Légendaire/Mythique pour 5 rolls (1x/jour)", "daily": True},
@@ -5044,7 +5044,7 @@ roll_data = defaultdict(lambda: {"rolls": ROLLS_MAX, "last_reset": 0.0, "daily_u
 CLAIM_COOLDOWN_MINUTES = 30  # Peut être réduit via shop
 claim_cooldown = defaultdict(float)   # {uid: last_claim_timestamp}
 claim_reduction = defaultdict(int)    # {uid: minutes de réduction achetés}
-roll_freeze = {}       # {uid: unfreeze_timestamp}
+claim_freeze = {}       # {uid: unfreeze_timestamp}
 claim_curse = {}       # {uid: curse_end_timestamp}
 shield_active = {}     # {uid: shield_end_timestamp}
 rarity_boost = {}      # {uid: rolls_restants_avec_boost}
@@ -5155,11 +5155,6 @@ async def ga_cmd(ctx):
     if now - data["last_reset"] >= ROLLS_RESET_HOURS * 3600:
         data["rolls"] = ROLLS_MAX
         data["last_reset"] = now
-
-    # Vérif freeze
-    if uid in roll_freeze and roll_freeze[uid] > now:
-        restant = int(roll_freeze[uid] - now)
-        return await ctx.send(f"🧊 Tes rolls sont gelés ! Tu pourras tirer dans **{restant}s** !", delete_after=8)
 
     if data["rolls"] <= 0:
         remaining = get_roll_cooldown_seconds(uid)
@@ -5639,7 +5634,7 @@ async def send_salon_embed(channel, t):
             "`boost_rarete` — 🎯 Boost Rareté 5 rolls *(1x/jour)* → **1500p**"
         ), inline=False)
         embed.add_field(name="⚔️ Items offensifs & défensifs", value=(
-            "`freeze` — 🧊 Sceau des Ombres — Freeze rolls 5 min *(1x/jour)* → **500p**\n"
+            "`freeze` — 🧊 Sceau des Ombres — Bloque le claim 10 sec *(1x/jour)* → **500p**\n"
             "`curse` — ⏳ Malédiction — +5 min claim adverse *(1x/jour)* → **400p**\n"
             "`shield` — 🛡️ Bouclier — Protège Sceau & Malédiction 30 min → **600p**\n"
             "`reset_claim` — 🔄 Reset ton claim immédiatement → **1200p**\n\n"
@@ -5787,10 +5782,10 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
         return await ctx.send(f"🛡️ **{cible.display_name}** est protégé par un bouclier ! (**{restant}s** restants)")
 
     if item_type.lower() == "freeze":
-        roll_freeze[uid_cible] = now_ts + 300  # 5 min
+        claim_freeze[uid_cible] = now_ts + 10   # 10 secondes
         embed = discord.Embed(
             title="🧊 Sceau des Ombres activé !",
-            description=f"**{cible.mention}** ne peut plus lancer de rolls pendant **5 minutes** ! 😈",
+            description=f"**{cible.mention}** ne peut plus claimer de cartes pendant **10 secondes** ! 😈",
             color=0x3498db
         )
         await ctx.send(embed=embed)
