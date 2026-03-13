@@ -2514,7 +2514,7 @@ async def on_member_join(member):
         raid_mode = False
         return
 
-    # Message de bienvenue — Style C (bandeau dégradé)
+    # Message de bienvenue — Style C proche du preview
     if not raid_mode:
         channel = None
         if SALON_BIENVENUE_ID:
@@ -2532,16 +2532,19 @@ async def on_member_join(member):
                 "Prépare-toi. L'aventure commence maintenant. 🔥",
             ]
             phrase = _random.choice(phrases)
-            # Couleur dégradé simulé — change selon le membre
-            couleurs = [0xe74c3c, 0xe67e22, 0x9b59b6, 0x2980b9, 0x27ae60, 0xc0392b, 0x8e44ad]
+            couleurs = [0xe67e22, 0xe74c3c, 0x9b59b6, 0x2980b9, 0x27ae60, 0xc0392b, 0x8e44ad]
             couleur  = couleurs[member_count % len(couleurs)]
-            embed = discord.Embed(color=couleur)
+            embed = discord.Embed(
+                title=f"Bienvenue {member.display_name} ! 👋",
+                description=f"{member.mention}\n*{phrase}*\n\n📖 Tape `.help` pour découvrir le bot",
+                color=couleur
+            )
+            # PP en thumbnail (droite) — comme le style C
+            embed.set_thumbnail(url=member.display_avatar.url)
             embed.set_author(
-                name=f"{member.display_name}  •  Membre n°{member_count}",
+                name=f"Membre n°{member_count} • Rejoint aujourd'hui",
                 icon_url=member.display_avatar.url
             )
-            embed.description = f"*{phrase}*\n\n📖 Tape `.help` pour découvrir le bot"
-            embed.set_thumbnail(url=member.display_avatar.url)
             embed.set_footer(
                 text="QG Kdrama",
                 icon_url=member.guild.icon.url if member.guild.icon else None
@@ -5998,4 +6001,4 @@ while True:
         print(f"❌ CRASH BOT: {e}")
         traceback.print_exc()
         print("🔄 Redémarrage dans 5 secondes...")
-        time.sleep(5)
+        time.sleep(5) 
