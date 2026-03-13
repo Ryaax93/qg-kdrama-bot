@@ -5044,6 +5044,7 @@ roll_data = defaultdict(lambda: {"rolls": ROLLS_MAX, "last_reset": 0.0, "daily_u
 CLAIM_COOLDOWN_MINUTES = 30  # Peut être réduit via shop
 claim_cooldown = defaultdict(float)   # {uid: last_claim_timestamp}
 claim_reduction = defaultdict(int)    # {uid: minutes de réduction achetés}
+gacha_wishlist = defaultdict(set)     # {uid: {card_key, ...}}
 claim_freeze = {}       # {uid: unfreeze_timestamp}
 claim_curse = {}       # {uid: curse_end_timestamp}
 shield_active = {}     # {uid: shield_end_timestamp}
@@ -5052,11 +5053,11 @@ daily_item_usage = defaultdict(lambda: defaultdict(float))  # {uid: {item_id: la
 
 # Probabilités gacha
 GACHA_RATES = {
-    "Mythique":   1,   # 0.5% (pondération relative)
-    "Légendaire": 7,   # 3.5%
-    "Épique":     22,  # 11%
-    "Rare":       50,  # 25%
-    "Commun":     120, # 60%
+    "Mythique":   1,     # ~0.01%
+    "Légendaire": 50,    # ~0.5%
+    "Épique":     300,   # ~3%
+    "Rare":       2000,  # ~20%
+    "Commun":     7649,  # ~76.49%
 }
 
 def gacha_tirage(boost=False):
@@ -5066,11 +5067,11 @@ def gacha_tirage(boost=False):
         return None
     rates = dict(GACHA_RATES)
     if boost:
-        rates["Commun"] = 30
-        rates["Rare"] = 35
-        rates["Épique"] = 20
-        rates["Légendaire"] = 12
-        rates["Mythique"] = 3
+        rates["Commun"] = 50
+        rates["Rare"] = 80
+        rates["Épique"] = 40
+        rates["Légendaire"] = 20
+        rates["Mythique"] = 5
     pool = []
     for key in available:
         c = ANIME_CARDS_DB[key]
@@ -5136,7 +5137,7 @@ def build_gacha_embed(uid, key, rolls_left):
     embed.set_footer(text=f"🎰 Rolls restants : {rolls_left} • ❤️ Claim en 30s • .rolls pour voir tes rolls")
     return embed
 
-@bot.command(name="ga")
+@bot.command(name="ga", aliases=["g", "roll", "r"])
 async def ga_cmd(ctx):
     """Tire une carte gacha — .ga"""
     import time
@@ -5193,6 +5194,20 @@ async def ga_cmd(ctx):
     msg = await ctx.send(embed=embed)
     await msg.add_reaction(react_emoji)
 
+    # Ping wishlist au drop
+    if react_emoji == "❤️":
+        wishers = []
+        for wuid, wlist in gacha_wishlist.items():
+            if key in wlist:
+                member = ctx.guild.get_member(int(wuid))
+                if member:
+                    wishers.append(member.mention)
+        if wishers:
+            await ctx.send(
+                f"🌟 {' '.join(wishers)} — **{c['nom']}** de ta wishlist vient de drop ! Vite ! ❤️",
+                delete_after=28
+            )
+
     if react_emoji == "❤️":
         def check(reaction, user):
             return (
@@ -5242,6 +5257,19 @@ async def ga_cmd(ctx):
             except:
                 pass
 
+            # Ping wishlist — notifier les joueurs qui voulaient cette carte
+            wishlist_pings = []
+            for wuid, wlist in gacha_wishlist.items():
+                if key in wlist and wuid != claimer_uid:
+                    member = msg.guild.get_member(int(wuid))
+                    if member:
+                        wishlist_pings.append(member.mention)
+            if wishlist_pings:
+                await msg.channel.send(
+                    f"💔 {' '.join(wishlist_pings)} — **{c['nom']}** de ta wishlist vient d'être claimé par **{claimer.display_name}** !",
+                    delete_after=15
+                )
+
         except asyncio.TimeoutError:
             # Personne n'a claimé
             try:
@@ -5257,7 +5285,7 @@ async def ga_cmd(ctx):
             except:
                 pass
 
-@bot.command(name="rolls")
+@bot.command(name="rolls", aliases=["ro"])
 async def rolls_cmd(ctx):
     """Voir tes rolls restants — .rolls"""
     import time
@@ -5320,7 +5348,7 @@ async def setrollreset(ctx, heures: int = None):
     ROLLS_RESET_HOURS = heures
     await ctx.send(f"✅ Rolls rechargés toutes les **{heures}h** maintenant !")
 
-@bot.command(name="gachastock")
+@bot.command(name="gachastock", aliases=["gs", "collection", "coll"])
 async def gachastock(ctx, membre_ou_perso: str = None):
     """Voir ta collection gacha style Mudae — .gachastock [@joueur] [perso]"""
     if SALON_GACHA_ID and ctx.channel.id != SALON_GACHA_ID:
@@ -5430,7 +5458,7 @@ async def gachastock(ctx, membre_ou_perso: str = None):
                     pass
                 break
 
-@bot.command(name="gacha")
+@bot.command(name="gacha", aliases=["gc"])
 async def gacha_cmd(ctx, sous_cmd: str = None, *args):
     """Commandes gacha — .gacha ordre naruto 1 luffy 2"""
     if SALON_GACHA_ID and ctx.channel.id != SALON_GACHA_ID:
@@ -5506,7 +5534,79 @@ async def gacha_cmd(ctx, sous_cmd: str = None, *args):
     else:
         await ctx.send("💡 Commandes gacha :\n`.ga` — Tirer une carte\n`.gacha ordre naruto 1 luffy 2` — Réorganiser ta collection\n`.gachastock` — Voir ta collection\n`.rolls` — Voir tes rolls")
 
-@bot.command(name="fusionner")
+@bot.command(name="wishlist", aliases=["wl", "wish"])
+async def wishlist_cmd(ctx, action: str = None, *, perso: str = None):
+    """Gère ta wishlist — .wishlist add naruto | .wishlist remove naruto | .wishlist"""
+    if SALON_GACHA_ID and ctx.channel.id != SALON_GACHA_ID:
+        salon = ctx.guild.get_channel(SALON_GACHA_ID)
+        mention = salon.mention if salon else "le salon gacha"
+        return await ctx.send(f"🎰 La wishlist c'est dans {mention} !", delete_after=5)
+
+    uid = str(ctx.author.id)
+    wlist = gacha_wishlist[uid]
+
+    # Afficher la wishlist
+    if not action or action.lower() in ["liste", "list", "voir"]:
+        if not wlist:
+            return await ctx.send(embed=discord.Embed(
+                description=f"📋 {ctx.author.mention} Ta wishlist est vide !\nAjoute des persos avec `.wishlist add <perso>`",
+                color=0x9b59b6
+            ))
+        embed = discord.Embed(
+            title=f"💫 Wishlist de {ctx.author.display_name}",
+            color=0x9b59b6
+        )
+        lines = []
+        for key in wlist:
+            if key in ANIME_CARDS_DB:
+                c = ANIME_CARDS_DB[key]
+                rarete_emoji = RARETE_EMOJI.get(c["rarete"], "🔵")
+                claimed = "✅ Claimée" if key in claimed_cards else "⏳ Disponible"
+                lines.append(f"{rarete_emoji} **{c['nom']}** — {claimed}")
+            else:
+                lines.append(f"❓ `{key}`")
+        embed.description = "\n".join(lines)
+        embed.set_footer(text=f"{len(wlist)} perso(s) dans ta wishlist • Tu seras pingé dès qu'ils dropent !")
+        return await ctx.send(embed=embed)
+
+    if not perso:
+        return await ctx.send("❌ Précise un personnage ! Ex: `.wishlist add naruto`")
+
+    key = perso.lower().strip()
+    if key not in ANIME_CARDS_DB:
+        # Cherche approximatif
+        matches = [k for k in ANIME_CARDS_DB if perso.lower() in ANIME_CARDS_DB[k]["nom"].lower()]
+        if matches:
+            key = matches[0]
+        else:
+            return await ctx.send(f"❌ Personnage `{perso}` introuvable ! Vérifie le nom avec `.gachastock`")
+
+    c = ANIME_CARDS_DB[key]
+    rarete_emoji = RARETE_EMOJI.get(c["rarete"], "🔵")
+
+    if action.lower() in ["add", "ajouter", "+"]:
+        if key in wlist:
+            return await ctx.send(f"⚠️ **{c['nom']}** est déjà dans ta wishlist !")
+        if len(wlist) >= 10:
+            return await ctx.send("❌ Wishlist pleine ! Maximum **10 persos**. Retire en avec `.wishlist remove <perso>`")
+        wlist.add(key)
+        await ctx.send(embed=discord.Embed(
+            description=f"💫 {rarete_emoji} **{c['nom']}** ajouté à ta wishlist ! Tu seras pingé dès qu'il drop 🔔",
+            color=RARETE_COULEURS.get(c["rarete"], 0x9b59b6)
+        ))
+
+    elif action.lower() in ["remove", "retirer", "supprimer", "-"]:
+        if key not in wlist:
+            return await ctx.send(f"⚠️ **{c['nom']}** n'est pas dans ta wishlist !")
+        wlist.discard(key)
+        await ctx.send(embed=discord.Embed(
+            description=f"🗑️ **{c['nom']}** retiré de ta wishlist.",
+            color=0x95a5a6
+        ))
+    else:
+        await ctx.send("❌ Action inconnue ! Utilise `add`, `remove` ou laisse vide pour voir ta liste")
+
+@bot.command(name="fusionner", aliases=["fus", "fusion"])
 async def fusionner(ctx, perso: str = None):
     """Fusionne 3 cartes identiques pour un boost — .fusionner naruto"""
     if SALON_GACHA_ID and ctx.channel.id != SALON_GACHA_ID:
@@ -5578,14 +5678,15 @@ async def send_salon_embed(channel, t):
             color=0x9b59b6
         )
         embed.add_field(name="🎮 Commandes", value=(
-            "`.ga` — Tire une carte aléatoire\n"
-            "`.rolls` — Voir tes rolls restants & cooldowns\n"
+            "`.ga` `.g` `.roll` `.r` — Tire une carte aléatoire\n"
+            "`.rolls` `.ro` — Voir tes rolls restants & cooldowns\n"
             "`.daily` — 150-300 pièces + 1 roll bonus (24h)\n"
-            "`.gachastock [@joueur]` — Ta collection avec ◀️ ▶️\n"
-            "`.gacha <perso>` — Voir qui possède une carte\n"
+            "`.gachastock` `.gs` `.coll` — Ta collection avec ◀️ ▶️\n"
+            "`.gacha <perso>` `.gc <perso>` — Voir qui possède une carte\n"
             "`.gacha recent` — Dernières cartes claimées\n"
             "`.gacha ordre naruto 1 luffy 2` — Réorganiser ta collection\n"
-            "`.fusionner <perso>` — Booster une carte avec des tokens ⭐"
+            "`.fusionner` `.fus` `.fusion` — Booster une carte avec des tokens ⭐\n"
+            "`.wishlist` `.wl` `.wish` — Gérer ta wishlist de persos 💫"
         ), inline=False)
         embed.add_field(name="📜 Règles", value=(
             "• **10 rolls** rechargés toutes les **6h**\n"
@@ -5602,11 +5703,11 @@ async def send_salon_embed(channel, t):
             "• ⭐+3 : +60PV +45ATK +30DEF *(max)*"
         ), inline=False)
         embed.add_field(name="💎 Raretés & Taux", value=(
-            "🔵 **Commun** — 60%\n"
-            "⭐ **Rare** — 25%\n"
-            "💜 **Épique** — 11%\n"
-            "👑 **Légendaire** — 3.5%\n"
-            "🔮 **Mythique** — 0.5%"
+            "🔵 **Commun** — 76.49%\n"
+            "⭐ **Rare** — 20%\n"
+            "💜 **Épique** — 3%\n"
+            "👑 **Légendaire** — 0.5%\n"
+            "🔮 **Mythique** — 0.01%"
         ), inline=False)
         embed.set_footer(text="Bonne chance pour les Mythiques... 🔮")
         await channel.send(embed=embed)
