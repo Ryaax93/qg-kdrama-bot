@@ -2435,14 +2435,31 @@ async def on_member_join(member):
             suffixes = {1: "er", 2: "ème"}
             suffix = suffixes.get(member_count, "ème")
 
+            citations_bienvenue = [
+                ("*« Le chemin vers le sommet n'a pas de raccourcis. »*", "— Rock Lee, Naruto"),
+                ("*« Je ne reculerai jamais et je ne regretterai rien. »*", "— Naruto Uzumaki"),
+                ("*« Peu importe combien tu es blessé, redresse-toi. »*", "— Izuku Midoriya, MHA"),
+                ("*« Si tu ne peux pas supporter d'être seul, tu ne seras jamais fort. »*", "— Levi Ackerman, AoT"),
+                ("*« Un seul coup suffit. »*", "— Saitama, One Punch Man"),
+                ("*« Je protègerai ceux que j'aime, quoi qu'il arrive. »*", "— Tanjiro, Demon Slayer"),
+                ("*« Ceux qui enfreignent les règles sont des ordures, mais ceux qui abandonnent leurs amis sont pire que des ordures. »*", "— Kakashi, Naruto"),
+                ("*« La douleur nous permet de grandir. »*", "— Pain, Naruto"),
+                ("*« Un héros naît parmi cent, un homme sage se trouve parmi mille, mais une âme accomplie ne peut être rencontrée qu'une fois dans un million d'années. »*", "— Goku, DBZ"),
+                ("*« Peu importe le monde, tu dois vivre ta propre vie. »*", "— Kirito, SAO"),
+            ]
+
+            import random as _random
+            citation, auteur = _random.choice(citations_bienvenue)
+
             embed = discord.Embed(
-                title="🎌 Un nouveau guerrier rejoint le QG !",
+                title="⚔️ Un nouveau guerrier rejoint le QG !",
                 description=(
                     f"## Bienvenue {member.mention} ! 👋\n\n"
                     f"🏯 Tu es le **{member_count}{suffix} membre** du QG Kdrama !\n\n"
-                    f"🎬 **Kdramas** • 🎮 **Gaming** • ✨ **Animés**\n\n"
-                    f"Tape `.help` pour découvrir toutes les commandes du bot !\n"
-                    f"*Bon visionnage et bonnes parties !* 🍿"
+                    f"🎬 **Kdramas** • 🎮 **Gaming** • 🗡️ **Animés**\n\n"
+                    f"{citation}\n"
+                    f"*{auteur}*\n\n"
+                    f"Tape `.help` pour découvrir toutes les commandes du bot ! 🍿"
                 ),
                 color=0xff6b9d
             )
@@ -2459,17 +2476,31 @@ async def on_member_remove(member):
     if not channel:
         return
     member_count = member.guild.member_count
+
+    citations_aurevoir = [
+        ("*« Même si tu pars, tu resteras à jamais dans nos cœurs. »*", "— Inspiré de Clannad"),
+        ("*« Les adieux sont toujours douloureux, peu importe les fois où on les vit. »*", "— Violet Evergarden"),
+        ("*« Partir ne signifie pas oublier. »*", "— Inspiré de Your Lie in April"),
+        ("*« On se retrouvera, même si ce n'est pas dans ce monde. »*", "— Inspiré de Angel Beats"),
+        ("*« Les liens qu'on tisse ne disparaissent pas, même après les adieux. »*", "— Inspiré de Naruto"),
+        ("*« Toutes les rencontres mènent à une séparation... c'est la loi de ce monde. »*", "— Inspiré de Bleach"),
+    ]
+
+    import random as _random
+    citation, auteur = _random.choice(citations_aurevoir)
+
     embed = discord.Embed(
         title="💔 Un membre a quitté le QG...",
         description=(
             f"**{member.display_name}** vient de quitter le serveur.\n\n"
-            f"*On espère te revoir bientôt parmi nous...* 🌸\n\n"
-            f"Il nous reste **{member_count} membres** dans le QG."
+            f"{citation}\n"
+            f"*{auteur}*\n\n"
+            f"Il nous reste **{member_count} membres** dans le QG. 🏯"
         ),
         color=0x555555
     )
     embed.set_thumbnail(url=member.display_avatar.url)
-    embed.set_footer(text="QG Kdrama", icon_url=member.guild.icon.url if member.guild.icon else None)
+    embed.set_footer(text="QG Kdrama — À bientôt... 👋", icon_url=member.guild.icon.url if member.guild.icon else None)
     await channel.send(embed=embed)
 
 @bot.event
@@ -6221,140 +6252,291 @@ async def fusionner(ctx, perso: str = None):
 async def send_salon_embed(channel, t):
     """Envoie l'embed d'information dans le salon configuré"""
     if t == "gacha":
-        embed = discord.Embed(
+        # Embed 1 — Présentation & Commandes
+        embed1 = discord.Embed(
             title="🎰 Bienvenue au Gacha — QG Kdrama",
-            description="Tire des cartes de personnages animé/manga et construis ta collection unique !",
+            description=(
+                "Tire des cartes de personnages animé/manga, construis ta collection unique et affronte les autres membres !\n\n"
+                "*Le système fonctionne comme **Mudae** — chaque carte est unique sur le serveur, une fois claimée elle appartient à quelqu'un.*"
+            ),
             color=0x9b59b6
         )
-        embed.add_field(name="🎮 Commandes", value=(
+        embed1.add_field(name="🎮 Commandes principales", value=(
             "`.ga` `.g` `.roll` `.r` — Tire une carte aléatoire\n"
-            "`.rolls` `.ro` — Voir tes rolls restants & cooldowns\n"
-            "`.daily` — 150-300 pièces + 1 roll bonus (24h)\n"
-            "`.gachastock` `.gs` `.coll` — Ta collection avec ◀️ ▶️\n"
-            "`.gacha <perso>` `.gc <perso>` — Voir qui possède une carte\n"
-            "`.gacha recent` — Dernières cartes claimées\n"
+            "`.rolls` `.ro` — Voir tes rolls restants & ton cooldown claim\n"
+            "`.daily` — 150-300 pièces + **1 roll bonus** (toutes les 24h)\n"
+            "`.gachastock` `.gs` `.coll` [@joueur] — Ta collection avec ◀️ ▶️\n"
+            "`.gacha <perso>` — Voir une carte & qui la possède\n"
+            "`.gacha recent` — Les dernières cartes claimées sur le serveur\n"
             "`.gacha ordre naruto 1 luffy 2` — Réorganiser ta collection\n"
-            "`.fusionner` `.fus` `.fusion` — Booster une carte avec des tokens ⭐\n"
-            "`.wishlist` `.wl` `.wish` — Gérer ta wishlist de persos 💫"
+            "`.fusionner <perso>` `.fus` — Booster une carte avec des tokens ⭐\n"
+            "`.wishlist add <perso>` `.wl add` — Ajouter un perso à ta wishlist\n"
+            "`.wishlist` `.wl` — Voir ta wishlist (max 10 persos)\n"
+            "`.setimage <perso> <url>` — Changer l'image de **ta** carte"
         ), inline=False)
-        embed.add_field(name="📜 Règles", value=(
-            "• **10 rolls** rechargés toutes les **6h**\n"
-            "• Carte affichée avec ❤️ → clique en **30 secondes** pour la claim !\n"
-            "• **1 claim toutes les 30 min** — pas de spam\n"
-            "• Cartes claimées **uniques** — elles ne repopent plus jamais\n"
-            "• Carte déjà claimée → ⚡ personne peut la prendre"
+        embed1.set_footer(text="📖 Lis les autres embeds pour les règles, raretés et items boutique !")
+        await channel.send(embed=embed1)
+
+        # Embed 2 — Règles du jeu
+        embed2 = discord.Embed(
+            title="📜 Règles du Gacha",
+            color=0x9b59b6
+        )
+        embed2.add_field(name="🎲 Rolls & Claim", value=(
+            "• Tu as **10 rolls** rechargés automatiquement toutes les **6h**\n"
+            "• Quand une carte apparaît avec ❤️ → tu as **30 secondes** pour la claim !\n"
+            "• Tu ne peux claimer qu'**une carte toutes les 30 min** — pas de spam\n"
+            "• Une carte claimée est **unique** — elle n'apparaîtra plus jamais en tirage\n"
+            "• Carte déjà claimée → affichée avec ⚡, personne d'autre ne peut la prendre"
         ), inline=False)
-        embed.add_field(name="⭐ Fusion", value=(
-            "• Claim une carte déjà possédée → **token de fusion**\n"
-            "• **2 tokens** → `.fusionner <perso>` pour booster ⭐\n"
-            "• ⭐+1 : +20PV +15ATK +10DEF\n"
-            "• ⭐+2 : +40PV +30ATK +20DEF\n"
-            "• ⭐+3 : +60PV +45ATK +30DEF *(max)*"
+        embed2.add_field(name="💫 Wishlist", value=(
+            "• Ajoute jusqu'à **10 persos** à ta wishlist avec `.wl add <perso>`\n"
+            "• Dès qu'un perso de ta wishlist **drop** → tu es **pingé instantanément** 🔔\n"
+            "• Si quelqu'un le claim avant toi → tu reçois un ping de consolation 💔\n"
+            "• Retire un perso avec `.wl remove <perso>`"
         ), inline=False)
-        embed.add_field(name="💎 Raretés & Taux", value=(
+        embed2.add_field(name="⭐ Système de Fusion", value=(
+            "• Si tu claims une carte que tu **possèdes déjà** → tu reçois un **token de fusion** 🪙\n"
+            "• Accumule **2 tokens** puis utilise `.fusionner <perso>` pour booster ta carte\n"
+            "• ⭐+1 : **+20 PV • +15 ATK • +10 DEF**\n"
+            "• ⭐+2 : **+40 PV • +30 ATK • +20 DEF**\n"
+            "• ⭐+3 : **+60 PV • +45 ATK • +30 DEF** *(niveau maximum)*\n"
+            "• Une carte boostée est **plus puissante en combat** `.pokebattle`"
+        ), inline=False)
+        embed2.set_footer(text="📖 Voir aussi les raretés & items boutique dans les embeds suivants !")
+        await channel.send(embed=embed2)
+
+        # Embed 3 — Raretés
+        embed3 = discord.Embed(
+            title="💎 Raretés & Taux de Drop",
+            description="Plus la rareté est haute, plus la carte est puissante en combat et rare à obtenir !",
+            color=0x9b59b6
+        )
+        embed3.add_field(name="Taux normaux", value=(
             "🔵 **Commun** — 76.49%\n"
             "⭐ **Rare** — 20%\n"
             "💜 **Épique** — 3%\n"
             "👑 **Légendaire** — 0.5%\n"
             "🔮 **Mythique** — 0.01%"
+        ), inline=True)
+        embed3.add_field(name="Avec 🎯 Boost Rareté", value=(
+            "🔵 **Commun** — 50%\n"
+            "⭐ **Rare** — 27%\n"
+            "💜 **Épique** — 14%\n"
+            "👑 **Légendaire** — 7.5%\n"
+            "🔮 **Mythique** — 1.5%"
+        ), inline=True)
+        embed3.add_field(name="⚔️ Stats par rareté", value=(
+            "🔵 Commun — stats faibles\n"
+            "⭐ Rare — stats correctes\n"
+            "💜 Épique — stats solides\n"
+            "👑 Légendaire — stats élevées\n"
+            "🔮 Mythique — stats maximales 👑"
         ), inline=False)
-        embed.set_footer(text="Bonne chance pour les Mythiques... 🔮")
-        await channel.send(embed=embed)
+        embed3.set_footer(text="🔮 Mythique = 1 chance sur 10 000... Bonne chance !")
+        await channel.send(embed=embed3)
 
-    elif t == "boutique":
-        embed = discord.Embed(
-            title="🛒 Boutique — QG Kdrama",
-            description="Dépense tes pièces pour des rôles exclusifs, des boosts et des items offensifs !",
+        # Embed 4 — Items boutique liés au gacha
+        embed4 = discord.Embed(
+            title="🛒 Items Boutique — Pouvoirs Gacha",
+            description="Ces items s'achètent avec `.acheter <id>` en boutique et impactent directement le gacha !",
             color=0xf39c12
         )
-        embed.add_field(name="👑 Rôles exclusifs", value=(
-            "`vip` — 💎 Rang S VIP → **1000p**\n"
-            "`drama_king` — 👑 Roi des Malédictions → **1500p**\n"
-            "`oeil_dieu` — 🌀 Oeil de Dieu → **1200p**\n"
-            "`chasseur` — ⚔️ Chasseur National → **800p**\n"
-            "`monarque` — 🌑 Monarque des Ombres → **3000p**\n"
-            "`pilier` — 🔥 Pillier du Soleil → **2000p**"
+        embed4.add_field(name="🚀 Boosts offensifs", value=(
+            "🎰 **+10 Rolls** `rolls_10` — **600p**\n"
+            "→ Ajoute instantanément 10 rolls à ton compteur\n\n"
+            "🎯 **Boost Rareté** `boost_rarete` — **1500p** *(1x/jour)*\n"
+            "→ Tes 5 prochains rolls ont des taux de rareté boostés !\n\n"
+            "🔄 **Reset Claim** `reset_claim` — **1200p**\n"
+            "→ Annule ton cooldown claim instantanément"
         ), inline=False)
-        embed.add_field(name="⚡ Boosts Gacha", value=(
-            "`double_xp` — ⚡ Double XP 1h → **300p**\n"
-            "`rolls_10` — 🎰 +10 Rolls → **600p**\n"
-            "`claim_20` — ⚡ Claim en 20 min *(permanent)* → **800p**\n"
-            "`claim_15` — ⚡ Claim en 15 min *(permanent)* → **1500p**\n"
-            "`claim_10` — ⚡ Claim en 10 min *(permanent)* → **3000p**\n"
-            "`boost_rarete` — 🎯 Boost Rareté 5 rolls *(1x/jour)* → **1500p**"
+        embed4.add_field(name="⚡ Réduction cooldown claim *(permanents)*", value=(
+            "⚡ **Claim en 20 min** `claim_20` — **800p**\n"
+            "⚡ **Claim en 15 min** `claim_15` — **1500p**\n"
+            "⚡ **Claim en 10 min** `claim_10` — **3000p**\n"
+            "→ Réduit définitivement ton temps d'attente entre chaque claim"
         ), inline=False)
-        embed.add_field(name="⚔️ Items offensifs & défensifs", value=(
-            "`freeze` — 🧊 Sceau des Ombres — Bloque le claim 10 sec *(1x/jour)* → **500p**\n"
-            "`curse` — ⏳ Malédiction — +5 min claim adverse *(1x/jour)* → **400p**\n"
-            "`shield` — 🛡️ Bouclier — Protège Sceau & Malédiction 30 min → **600p**\n"
-            "`reset_claim` — 🔄 Reset ton claim immédiatement → **1200p**\n\n"
-            "➡️ `.utiliser freeze @joueur` / `.utiliser curse @joueur`"
+        embed4.add_field(name="⚔️ Items PvP — Sabote tes adversaires !", value=(
+            "🧊 **Sceau des Ombres** `freeze` — **500p** *(1x/jour)*\n"
+            "→ `.utiliser freeze @joueur` — **bloque son claim pendant 10 secondes** après un tirage !\n\n"
+            "⏳ **Malédiction** `curse` — **400p** *(1x/jour)*\n"
+            "→ `.utiliser curse @joueur` — **ajoute 5 min** à son cooldown claim\n\n"
+            "🛡️ **Bouclier** `shield` — **600p**\n"
+            "→ Te protège du Sceau et de la Malédiction pendant **30 minutes**"
         ), inline=False)
-        embed.add_field(name="💡 Comment acheter ?", value=(
-            "`.shop` — Voir tous les items disponibles\n"
-            "`.acheter <id>` — Acheter *(ex: `.acheter vip`)*\n"
-            "`.balance` — Voir ton solde\n"
-            "`.daily` — Récupérer tes pièces journalières"
+        embed4.set_footer(text="💰 Gagne des pièces avec .daily • .quiz • .boss • .duel • .arene")
+        await channel.send(embed=embed4)
+
+    elif t == "levelup":
+        embed1 = discord.Embed(
+            title="📊 Progression — XP & Niveaux",
+            description=(
+                "Ce salon affiche les notifications de **level up** du serveur !\n"
+                "Chaque message, victoire et action te rapporte de l'XP 📈"
+            ),
+            color=0xf1c40f
+        )
+        embed1.add_field(name="📈 Comment gagner de l'XP ?", value=(
+            "💬 **Chatter** → 2-5 XP par message\n"
+            "🎯 **Gagner un quiz** → +30 XP\n"
+            "🃏 **Claimer une carte gacha** → +20 XP\n"
+            "🏟️ **Gagner une arène** → +40 XP\n"
+            "🐉 **Tuer un boss** → +50 XP\n"
+            "⚡ **Double XP** disponible en boutique → **300p**"
         ), inline=False)
-        embed.set_footer(text="Gagne des pièces avec .daily • .quiz • .boss • .duel 💰")
-        await channel.send(embed=embed)
+        embed1.add_field(name="🏆 Titres par niveau", value=(
+            "Niv.1 🌱 Académicien Débutant\n"
+            "Niv.5 ⚔️ Chasseur Rang E\n"
+            "Niv.10 🗡️ Chasseur Rang D\n"
+            "Niv.15 💥 Chasseur Rang C\n"
+            "Niv.20 🔥 Chasseur Rang B\n"
+            "Niv.25 ⚡ Chasseur Rang A\n"
+            "Niv.30 💎 Chasseur Rang S\n"
+            "Niv.40 👑 Pillier du QG\n"
+            "Niv.50 🌀 Maître des Arts Martiaux\n"
+            "Niv.60 ☠️ Lune Supérieure\n"
+            "Niv.75 🐉 Roi des Malédictions\n"
+            "Niv.99 🌟 Monarque des Ombres"
+        ), inline=False)
+        embed1.add_field(name="🎮 Commandes", value=(
+            "`.rank [@joueur]` — Voir ton niveau, XP et titre\n"
+            "`.leaderboard` — Top 10 membres les plus actifs du serveur"
+        ), inline=False)
+        embed1.set_footer(text="📊 Les notifications de level up apparaissent ici automatiquement !")
+        await channel.send(embed=embed1)
+
+    elif t == "boutique":
+        embed1 = discord.Embed(
+            title="🛒 Boutique — QG Kdrama",
+            description=(
+                "Dépense tes pièces pour des avantages exclusifs !\n"
+                "Rôles, boosts gacha, items offensifs... tout est là 💰"
+            ),
+            color=0xf39c12
+        )
+        embed1.add_field(name="💡 Comment acheter ?", value=(
+            "`.shop` — Voir tous les items & prix\n"
+            "`.acheter <id>` — Acheter un item *(ex: `.acheter vip`)*\n"
+            "`.balance` — Voir ton solde de pièces"
+        ), inline=False)
+        embed1.add_field(name="👑 Rôles exclusifs", value=(
+            "`vip` — 💎 **Rang S VIP** → **1000p**\n"
+            "`drama_king` — 👑 **Roi des Malédictions** → **1500p**\n"
+            "`oeil_dieu` — 🌀 **Oeil de Dieu** → **1200p**\n"
+            "`chasseur` — ⚔️ **Chasseur National** → **800p**\n"
+            "`monarque` — 🌑 **Monarque des Ombres** → **3000p**\n"
+            "`pilier` — 🔥 **Pillier du Soleil** → **2000p**\n\n"
+            "*Ces rôles sont visibles par tout le serveur — affiche ton statut !*"
+        ), inline=False)
+        embed1.add_field(name="🎰 Boosts Gacha", value=(
+            "`rolls_10` — 🎲 **+10 Rolls instantanés** → **600p**\n"
+            "→ Utilise immédiatement 10 rolls supplémentaires\n\n"
+            "`boost_rarete` — 🎯 **Boost Rareté** *(1x/jour)* → **1500p**\n"
+            "→ Tes 5 prochains rolls ont des taux boostés (Mythique passe à 1.5% !)\n\n"
+            "`reset_claim` — 🔄 **Reset Claim instantané** → **1200p**\n"
+            "→ Supprime ton cooldown de claim immédiatement"
+        ), inline=False)
+        embed1.add_field(name="⚡ Réduction cooldown claim *(permanents)*", value=(
+            "`claim_20` — **Claim en 20 min** → **800p**\n"
+            "`claim_15` — **Claim en 15 min** → **1500p**\n"
+            "`claim_10` — **Claim en 10 min** → **3000p**\n\n"
+            "*Une fois acheté, actif pour toujours sur ce serveur !*"
+        ), inline=False)
+        embed1.add_field(name="⚔️ Items PvP — Sabote tes adversaires !", value=(
+            "`freeze` — 🧊 **Sceau des Ombres** *(1x/jour)* → **500p**\n"
+            "→ `.utiliser freeze @joueur` — bloque son claim **10 secondes** après un drop\n\n"
+            "`curse` — ⏳ **Malédiction** *(1x/jour)* → **400p**\n"
+            "→ `.utiliser curse @joueur` — ajoute **+5 min** à son cooldown claim\n\n"
+            "`shield` — 🛡️ **Bouclier** → **600p**\n"
+            "→ Te protège du Sceau ET de la Malédiction pendant **30 minutes**"
+        ), inline=False)
+        embed1.add_field(name="🎯 XP", value=(
+            "`double_xp` — ⚡ **Double XP** pendant 1h → **300p**\n"
+            "→ Tous tes gains d'XP sont doublés pendant 1 heure !"
+        ), inline=False)
+        embed1.set_footer(text="💰 Gagne des pièces : .daily • .quiz • .boss • .duel • .arene • .slot")
+        await channel.send(embed=embed1)
 
     elif t == "casino":
-        embed = discord.Embed(
+        embed1 = discord.Embed(
             title="🎰 Casino — QG Kdrama",
-            description="Tente ta chance à la slot machine... mais la maison gagne toujours 😈",
+            description=(
+                "Bienvenue au Casino du QG ! Tente ta chance à la slot machine...\n"
+                "*La maison gagne toujours — mais parfois elle perd 😈*"
+            ),
             color=0xe74c3c
         )
-        embed.add_field(name="🎮 Commande", value=(
-            "`.slot [mise]` — Lancer la slot machine\n"
-            "Mise minimum : **10 pièces** • Mise maximum : **500 pièces**"
+        embed1.add_field(name="🎮 Comment jouer", value=(
+            "`.slot [mise]` — Lance la slot machine\n"
+            "• Mise **minimum : 10 pièces**\n"
+            "• Mise **maximum : 500 pièces**\n"
+            "• Cooldown **10 secondes** entre chaque spin\n\n"
+            "*Ex : `.slot 100` pour miser 100 pièces*"
         ), inline=False)
-        embed.add_field(name="💰 Gains possibles", value=(
-            "🐉🐉🐉 → **x10** ta mise\n"
-            "💎💎💎 → **x7** ta mise\n"
-            "👑👑👑 → **x5** ta mise\n"
-            "⚡⚡⚡ → **x4** ta mise\n"
-            "🔥🔥🔥 → **x3** ta mise\n"
-            "🎭🎭🎭 → **x2.5** ta mise\n"
-            "2 symboles identiques → **x1.5** ta mise\n"
-            "Aucune correspondance → ❌ mise perdue"
+        embed1.add_field(name="🏆 Tableau des gains", value=(
+            "🐉🐉🐉 — **x10** la mise *(JACKPOT !)*\n"
+            "💎💎💎 — **x7** la mise\n"
+            "👑👑👑 — **x5** la mise\n"
+            "⚡⚡⚡ — **x4** la mise\n"
+            "🔥🔥🔥 — **x3** la mise\n"
+            "🎭🎭🎭 — **x2.5** la mise\n"
+            "2 symboles identiques — **x1.5** la mise\n"
+            "Aucune correspondance — ❌ mise perdue"
         ), inline=False)
-        embed.add_field(name="⚠️ Règles", value=(
-            "• Ce salon est **réservé au casino** uniquement\n"
-            "• Cooldown **10 secondes** entre chaque spin\n"
-            "• Mise tes pièces intelligemment 🙏"
+        embed1.add_field(name="💡 Conseils", value=(
+            "• Commence petit pour tester ta chance\n"
+            "• Fais `.daily` chaque jour pour renflouer tes pièces\n"
+            "• Mets de côté à la banque avec `.banque depot` pour sécuriser tes gains\n"
+            "• Le casino est **réservé à ce salon** uniquement"
         ), inline=False)
-        embed.set_footer(text="Fais .daily avant de jouer pour avoir des pièces ! 💰")
-        await channel.send(embed=embed)
+        embed1.set_footer(text="💰 Gagne des pièces avec .daily • .quiz • .boss • .duel avant de jouer !")
+        await channel.send(embed=embed1)
 
     elif t == "combat":
-        embed = discord.Embed(
-            title="⚔️ Combat Cartes — QG Kdrama",
-            description="Affronte d'autres joueurs en combat 3v3 avec tes cartes gacha claimées !",
+        embed1 = discord.Embed(
+            title="🃏 Combat Cartes — QG Kdrama",
+            description=(
+                "Affronte d'autres joueurs en **combat 3v3** avec tes cartes gacha !\n"
+                "*Plus tes cartes sont rares et fusionnées, plus tu es puissant !*"
+            ),
             color=0xe74c3c
         )
-        embed.add_field(name="🎮 Commandes", value=(
-            "`.pokebattle @joueur` — Défier un joueur en 3v3\n"
+        embed1.add_field(name="🎮 Commandes", value=(
+            "`.pokebattle @joueur` — Défier un joueur en combat 3v3\n"
             "`.pokestop` — Annuler un combat en cours"
         ), inline=False)
-        embed.add_field(name="📜 Comment ça marche ?", value=(
-            "• Tu choisis **3 cartes** parmi ta collection gacha\n"
-            "• Chaque carte a ses propres **PV, ATK et DEF**\n"
-            "• Tu choisis une attaque parmi **3** à chaque tour\n"
-            "• Le combat continue jusqu'à élimination totale d'une équipe\n"
-            "• Les boosts de **fusion ⭐** sont pris en compte !"
+        embed1.add_field(name="📜 Déroulement du combat", value=(
+            "**1.** Le bot sélectionne automatiquement tes **3 meilleures cartes**\n"
+            "**2.** Chaque carte a ses propres stats : **PV • ATK • DEF**\n"
+            "**3.** À chaque tour, choisis parmi 3 actions :\n"
+            "   ⚔️ **Attaque normale** — dégâts stables\n"
+            "   💥 **Attaque spéciale** — dégâts élevés mais moins précis\n"
+            "   🛡️ **Défense** — réduit les dégâts reçus ce tour\n"
+            "**4.** La carte adverse riposte automatiquement\n"
+            "**5.** Quand une carte tombe à 0 PV → carte suivante !\n"
+            "**6.** L'équipe encore debout gagne 🏆"
         ), inline=False)
-        embed.add_field(name="🏆 Récompenses", value=(
+        embed1.add_field(name="⭐ Impact de la rareté & fusion", value=(
+            "🔵 Commun → stats faibles\n"
+            "⭐ Rare → stats correctes\n"
+            "💜 Épique → stats solides\n"
+            "👑 Légendaire → stats élevées\n"
+            "🔮 Mythique → stats maximales\n\n"
+            "• Chaque fusion ⭐ ajoute +20PV +15ATK +10DEF à ta carte\n"
+            "• Max ⭐+3 : +60PV +45ATK +30DEF de bonus !"
+        ), inline=False)
+        embed1.add_field(name="🏆 Récompenses", value=(
             "• Victoire → **+150 pièces & +60 XP**\n"
-            "• Plus ta carte est rare, plus elle est puissante !"
+            "• Défaite → pas de pièces mais de l'expérience !"
         ), inline=False)
-        embed.add_field(name="💡 Conseils", value=(
-            "• Claim des cartes Légendaires/Mythiques dans le salon gacha\n"
-            "• Fusionne tes cartes avec `.fusionner` pour les booster ⭐\n"
-            "• Compose une équipe équilibrée ATK/DEF !"
+        embed1.add_field(name="💡 Conseils stratégiques", value=(
+            "• Claim des cartes **Légendaires/Mythiques** en gacha pour dominer\n"
+            "• Fusionne tes cartes avec `.fusionner <perso>` pour les booster\n"
+            "• Utilise la défense face aux attaquants puissants\n"
+            "• Garde ta meilleure carte pour la fin !"
         ), inline=False)
-        embed.set_footer(text="Claim des cartes dans le salon gacha d'abord ! 🎰")
-        await channel.send(embed=embed)
+        embed1.set_footer(text="🎰 Commence par claimer des cartes en gacha !")
+        await channel.send(embed=embed1)
 
     elif t == "bienvenue":
         embed = discord.Embed(
@@ -6470,35 +6652,46 @@ async def send_salon_embed(channel, t):
         sauvegarder_salons()
 
     elif t == "duel":
-        embed = discord.Embed(
+        embed1 = discord.Embed(
             title="⚔️ Duels & PvP — QG Kdrama",
-            description="Défie les autres membres en duel rapide ou en arène PvP tour par tour !",
+            description=(
+                "Prouve que t'es le plus fort du QG ! Trois façons de te battre :\n"
+                "**Duel rapide**, **Arène PvP** et **Boss commun** 🔥"
+            ),
             color=0xe67e22
         )
-        embed.add_field(name="🎮 Commandes", value=(
-            "`.duel @joueur` — Défi rapide\n"
-            "`.arene @joueur` — Combat PvP tour par tour\n"
-            "`.accept` — Accepter un défi\n"
-            "`.decline` — Refuser un défi"
+        embed1.add_field(name="⚡ Duel Rapide", value=(
+            "`.duel @joueur` — Lance un défi\n"
+            "`.accept` — Accepter • `.decline` — Refuser\n\n"
+            "• Résultat **instantané**\n"
+            "• Le gagnant remporte **50-100 pièces** 💰\n"
+            "• Idéal pour régler ses comptes rapidement 😄"
         ), inline=False)
-        embed.add_field(name="⚡ Duel rapide", value=(
-            "• Résultat instantané\n"
-            "• Gagnant remporte **50-100 pièces** au perdant\n"
-            "• Simple et rapide !"
+        embed1.add_field(name="🏟️ Arène PvP — Combat tour par tour", value=(
+            "`.arene @joueur` — Lance un combat\n\n"
+            "• Combat **tour par tour** avec barre de PV\n"
+            "• Chaque joueur choisit son action à chaque tour :\n"
+            "  ⚔️ **Attaque normale** • 💥 **Attaque chargée** • 🛡️ **Défense**\n"
+            "• Victoire → **+150 pièces & +40 XP** 🏆\n"
+            "• Défaite → tu perds des pièces selon le résultat"
         ), inline=False)
-        embed.add_field(name="🏟️ Arène PvP", value=(
-            "• Combat tour par tour avec PV\n"
-            "• Chaque joueur choisit son action à chaque tour\n"
-            "• Victoire → **+150 pièces & +40 XP**"
+        embed1.add_field(name="🐉 Boss Commun — Tout le monde attaque !", value=(
+            "`.boss` — Invoque un boss *(admin only)*\n"
+            "`.attaque` — Frappe le boss ! *(cooldown 13s)*\n\n"
+            "• **Tout le monde** peut participer en même temps\n"
+            "• Cooldown de **13 secondes** entre chaque attaque\n"
+            "• Le boss a des milliers de PV — coordonnez-vous !\n"
+            "• **Coup fatal** (dernier coup) → **+250 pièces bonus** 🎯\n"
+            "• Récompenses partagées entre tous les participants"
         ), inline=False)
-        embed.add_field(name="🐉 Boss commun", value=(
-            "• `.boss` — Un admin invoque un boss *(admin only)*\n"
-            "• `.attaque` — Tout le monde frappe le boss !\n"
-            "• Cooldown **13 secondes** entre chaque attaque\n"
-            "• Récompenses partagées entre tous les participants 🏆"
+        embed1.add_field(name="🎯 Quiz Duel — Le plus cultivé gagne !", value=(
+            "`.quizduel [thème] @joueur` — Duel de quiz 5 questions\n\n"
+            "• **5 questions** sur le thème choisi\n"
+            "• *Thèmes : kdrama • anime • gaming • culture • mix*\n"
+            "• Victoire → **80-150 pièces** 💰"
         ), inline=False)
-        embed.set_footer(text="Que le meilleur gagne ! ⚔️")
-        await channel.send(embed=embed)
+        embed1.set_footer(text="Que le meilleur gagne ! ⚔️ • Duel réservé à ce salon")
+        await channel.send(embed=embed1)
 
 @bot.command(name="setsalon")
 @commands.has_permissions(administrator=True)
