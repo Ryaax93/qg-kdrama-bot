@@ -51,6 +51,15 @@ SALON_COMBAT_ID = None    # Met l'ID du salon pokebattle ici
 SALON_DUEL_ID = None      # Met l'ID du salon duel/pvp ici
 SALON_BIENVENUE_ID = None # Met l'ID du salon bienvenue ici
 SALON_AUREVOIR_ID = None  # Met l'ID du salon aurevoir ici
+SALON_BOOST_ID = None     # Met l'ID du salon boost ici
+SALON_HOF_ID = None       # Met l'ID du salon hall of fame ici
+SALON_REGLEMENT_ID = None # Met l'ID du salon règlement ici
+ROLE_MEMBRE_NAME = "Membre"  # Nom du rôle à donner après acceptation
+REGLEMENT_MSG_ID = None   # ID du message règlement (auto-rempli par setsalon)
+
+HOF_MESSAGES = set()      # IDs des messages déjà dans le Hall of Fame
+HOF_EMOJIS = {"😭", "🤣", "😂", "😹"}
+HOF_SEUIL = 4
 
 def get_tier(level):
     title = TIERS[0][1]
@@ -488,7 +497,9 @@ async def help_cmd(ctx, categorie: str = None):
             "`.setsalon casino` — 🎰 Salon casino\n"
             "`.setsalon combat` — ⚔️ Salon combat cartes\n"
             "`.setsalon duel` — ⚔️ Salon duels & PvP\n"
-            "`.setsalon levelup` — 📊 Salon notifications level up\n\n"
+            "`.setsalon levelup` — 📊 Salon notifications level up\n"
+            "`.setsalon boost` — 💎 Salon félicitations boosteurs\n"
+            "`.setsalon halloffame` — 🏆 Salon Hall of Fame messages drôles\n\n"
             "💡 *Tape la commande dans le salon à configurer — un embed d'info s'affiche automatiquement !*"
         ), inline=False)
         embed.add_field(name="🛡️ Anti-Raid", value=(
@@ -2165,6 +2176,129 @@ async def on_member_remove(member):
     embed.set_thumbnail(url=member.display_avatar.url)
     embed.set_footer(text="QG Kdrama", icon_url=member.guild.icon.url if member.guild.icon else None)
     await channel.send(embed=embed)
+
+@bot.event
+async def on_member_update(before, after):
+    """Détecte quand un membre boost le serveur"""
+    if before.premium_since is None and after.premium_since is not None:
+        # Nouveau boost !
+        channel = None
+        if SALON_BOOST_ID:
+            channel = after.guild.get_channel(SALON_BOOST_ID)
+        if not channel:
+            return
+        boosters = [m for m in after.guild.members if m.premium_since]
+        boost_count = len(boosters)
+        suffix = "er" if boost_count == 1 else "ème"
+        embed = discord.Embed(
+            title="💎 BOOST ACTIVÉ !",
+            description=(
+                f"### 🌟 {after.mention} vient de booster le QG Kdrama !\n\n"
+                f"✨ Tu es notre **{boost_count}{suffix} boosteur** du serveur !\n"
+                f"🔥 Le QG gagne en puissance grâce à toi !\n"
+                f"👑 Tu rejoins l'élite des soutiens du QG !\n\n"
+                f"*« Sans les boosteurs, le QG ne serait rien »* 🎌\n\n"
+                f"🎊 **Merci du fond du cœur !** 💜"
+            ),
+            color=0xff73fa
+        )
+        embed.set_thumbnail(url=after.display_avatar.url)
+        embed.set_image(url="https://i.imgur.com/placeholder_boost.gif") if False else None
+        embed.set_footer(
+            text=f"QG Kdrama — {after.guild.premium_subscription_count} boost(s) au total 🚀",
+            icon_url=after.guild.icon.url if after.guild.icon else None
+        )
+        await channel.send(embed=embed)
+
+@bot.event
+async def on_reaction_add(reaction, user):
+    """Hall of Fame — message avec 4+ réactions drôles"""
+    if user.bot:
+        return
+    if str(reaction.emoji) not in HOF_EMOJIS:
+        return
+    if not SALON_HOF_ID:
+        return
+    msg = reaction.message
+    if msg.id in HOF_MESSAGES:
+        return  # Déjà dans le Hall of Fame
+
+    # Compter toutes les réactions HOF sur ce message
+    total_hof = 0
+    for r in msg.reactions:
+        if str(r.emoji) in HOF_EMOJIS:
+            total_hof += r.count
+
+    if total_hof < HOF_SEUIL:
+        return
+
+    # Ajouter au Hall of Fame
+    HOF_MESSAGES.add(msg.id)
+    hof_channel = msg.guild.get_channel(SALON_HOF_ID)
+    if not hof_channel:
+        return
+
+    # Construire l'emoji dominant
+    top_emoji = str(reaction.emoji)
+    top_count = reaction.count
+    for r in msg.reactions:
+        if str(r.emoji) in HOF_EMOJIS and r.count > top_count:
+            top_emoji = str(r.emoji)
+            top_count = r.count
+
+    embed = discord.Embed(
+        description=f"**{msg.content}**" if msg.content else "*[Media ou embed]*",
+        color=0xf1c40f,
+        timestamp=msg.created_at
+    )
+    embed.set_author(
+        name=msg.author.display_name,
+        icon_url=msg.author.display_avatar.url
+    )
+    # Image si présente
+    if msg.attachments:
+        embed.set_image(url=msg.attachments[0].url)
+
+    embed.add_field(
+        name="📍 Source",
+        value=f"[Voir le message original]({msg.jump_url}) dans {msg.channel.mention}",
+        inline=False
+    )
+    embed.set_footer(text=f"{top_emoji} {total_hof} réactions • #{msg.channel.name}")
+
+    title_embed = discord.Embed(
+        description=f"{top_emoji} **{total_hof} personnes ont explosé de rire !**",
+        color=0xf1c40f
+    )
+    await hof_channel.send(embed=title_embed)
+    await hof_channel.send(embed=embed)
+
+@bot.event
+async def on_raw_reaction_add(payload):
+    """Donne le rôle Membre quand quelqu'un accepte le règlement"""
+    if payload.user_id == bot.user.id:
+        return
+    if REGLEMENT_MSG_ID and payload.message_id == REGLEMENT_MSG_ID and str(payload.emoji) == "✅":
+        guild = bot.get_guild(payload.guild_id)
+        if not guild:
+            return
+        member = guild.get_member(payload.user_id)
+        if not member:
+            return
+        role = discord.utils.get(guild.roles, name=ROLE_MEMBRE_NAME)
+        if role and role not in member.roles:
+            try:
+                await member.add_roles(role, reason="Règlement accepté ✅")
+                try:
+                    embed = discord.Embed(
+                        description=f"✅ Bienvenue **{member.display_name}** ! Tu as accepté le règlement et tu as accès au serveur. Amuse-toi bien ! 🎌",
+                        color=0x2ecc71
+                    )
+                    await member.send(embed=embed)
+                except:
+                    pass
+            except discord.Forbidden:
+                pass
 
 @bot.command(name="raidstop")
 @commands.has_permissions(administrator=True)
@@ -5898,6 +6032,87 @@ async def send_salon_embed(channel, t):
         embed.set_footer(text="Configuration — QG Kdrama 💔")
         await channel.send(embed=embed)
 
+    elif t == "boost":
+        embed = discord.Embed(
+            title="✅ Salon Boost configuré !",
+            description=(
+                "Ce salon affichera un embed stylé à chaque nouveau boost :\n\n"
+                "💎 Mention du boosteur\n"
+                "🏅 Son rang de boosteur *(1er, 2ème...)*\n"
+                "🖼️ Son avatar\n"
+                "📊 Compteur total de boosts\n\n"
+                "*L'embed s'affiche automatiquement à chaque boost.*"
+            ),
+            color=0xff73fa
+        )
+        embed.set_footer(text="Configuration — QG Kdrama 💎")
+        await channel.send(embed=embed)
+
+    elif t == "halloffame":
+        embed = discord.Embed(
+            title="✅ Salon Hall of Fame configuré !",
+            description=(
+                "Ce salon recevra automatiquement les messages les plus drôles du serveur !\n\n"
+                "**Emojis déclencheurs :** 😭 🤣 😂 😹\n"
+                "**Seuil :** 4 réactions sur un même message\n\n"
+                "Dès qu'un message atteint **4 réactions** → copié ici avec auteur + lien original.\n\n"
+                "*Un message ne peut apparaître qu'une seule fois — pas de doublon !*"
+            ),
+            color=0xf1c40f
+        )
+        embed.set_footer(text="Configuration — QG Kdrama 🏆")
+        await channel.send(embed=embed)
+
+    elif t == "reglement":
+        embed = discord.Embed(
+            title="⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯  ⌑  ＱＧ  ＫＤＲＡＭＡ ⌑  ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯",
+            description=(
+                "Bienvenue dans la **V2**. Un espace dédié à la passion des dramas, des animés et du gaming.\n"
+                "Merci de respecter ces directives pour le confort de tous.\n"
+            ),
+            color=0x2c2f33
+        )
+        embed.add_field(
+            name="Ⅰ.  ＣＯＮＤＵＩＴＥ  ＆  ＥＴＨＩＱＵＥ",
+            value=(
+                "**Respect Absolu** ⎯ Aucune insulte, propos haineux (racisme, sexisme, homophobie) ou harcèlement ne sera toléré.\n"
+                "**Maturité** ⎯ On débat, on donne son avis, mais on reste courtois même si on n'aime pas le même drama ou perso d'anime."
+            ),
+            inline=False
+        )
+        embed.add_field(
+            name="Ⅱ.  ＣＵＬＴＵＲＥ  ＮＯ-ＳＰＯＩＬ",
+            value=(
+                "**Spoiler Alert** ⎯ L'utilisation des balises `||` anti spoil est obligatoire pour tout élément clé d'une intrigue (fin de drama, mort de perso, etc.).\n"
+                "**Espaces Dédiés** ⎯ Merci de poster vos contenus dans les salons appropriés (#anime, #kdrama, #gaming)."
+            ),
+            inline=False
+        )
+        embed.add_field(
+            name="Ⅲ.  ＳＥＣＵＲＩＴＥ  ＆  ＣＯＮＴＥＮＵ",
+            value=(
+                "**Publicité** ⎯ Toute promotion non autorisée (serveur, réseaux sociaux) en public ou en DM est proscrite.\n"
+                "**Contenu** ⎯ Aucun contenu NSFW (choquant ou sexuel) n'est autorisé sur le serveur."
+            ),
+            inline=False
+        )
+        embed.add_field(
+            name="🛡️  ＭＯＤＥＲＡＴＩＯＮ",
+            value="Le staff veille au grain. Tout manquement répété entraînera un avertissement ou un bannissement définitif.",
+            inline=False
+        )
+        embed.add_field(
+            name="\u200b",
+            value="✅ **Réagis avec ✅ ci-dessous pour accepter le règlement et accéder au serveur.**",
+            inline=False
+        )
+        embed.set_footer(text="QG Kdrama — En acceptant, tu t'engages à respecter ces règles.")
+        msg = await channel.send(embed=embed)
+        await msg.add_reaction("✅")
+        # Sauvegarder l'ID du message règlement
+        global REGLEMENT_MSG_ID
+        REGLEMENT_MSG_ID = msg.id
+
     elif t == "duel":
         embed = discord.Embed(
             title="⚔️ Duels & PvP — QG Kdrama",
@@ -5931,31 +6146,46 @@ async def send_salon_embed(channel, t):
 
 @bot.command(name="setsalon")
 @commands.has_permissions(administrator=True)
-async def setsalon(ctx, type_salon: str = None):
-    """Configure les salons spéciaux — .setsalon levelup | casino | gacha | boutique | combat | duel"""
-    global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_COMBAT_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID
+async def setsalon(ctx, type_salon: str = None, role: discord.Role = None):
+    """Configure les salons spéciaux — .setsalon reglement @Role | .setsalon casino etc."""
+    global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_COMBAT_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID, SALON_BOOST_ID, SALON_HOF_ID, SALON_REGLEMENT_ID, ROLE_MEMBRE_NAME
     types = {
-        "levelup":  ("SALON_LEVELUP_ID",  "level up"),
-        "casino":   ("SALON_CASINO_ID",   "casino"),
-        "gacha":    ("SALON_GACHA_ID",    "gacha"),
-        "boutique": ("SALON_BOUTIQUE_ID", "boutique"),
+        "levelup":    ("SALON_LEVELUP_ID",    "level up"),
+        "casino":     ("SALON_CASINO_ID",     "casino"),
+        "gacha":      ("SALON_GACHA_ID",      "gacha"),
+        "boutique":   ("SALON_BOUTIQUE_ID",   "boutique"),
         "combat":     ("SALON_COMBAT_ID",     "combat cartes"),
         "duel":       ("SALON_DUEL_ID",       "duel & PvP"),
         "bienvenue":  ("SALON_BIENVENUE_ID",  "bienvenue"),
         "aurevoir":   ("SALON_AUREVOIR_ID",   "aurevoir"),
+        "boost":      ("SALON_BOOST_ID",      "boost"),
+        "halloffame": ("SALON_HOF_ID",        "hall of fame"),
+        "reglement":  ("SALON_REGLEMENT_ID",  "règlement"),
     }
     if not type_salon or type_salon.lower() not in types:
-        return await ctx.send("❌ Usage : `.setsalon levelup` | `casino` | `gacha` | `boutique` | `combat` | `duel` | `bienvenue` | `aurevoir`")
+        return await ctx.send("❌ Usage : `.setsalon levelup` | `casino` | `gacha` | `boutique` | `combat` | `duel` | `bienvenue` | `aurevoir` | `boost` | `halloffame` | `reglement @Role`")
+
+    # Règlement nécessite un rôle mentionné
+    if type_salon.lower() == "reglement":
+        if not role:
+            return await ctx.send("❌ Pour le règlement, mentionne le rôle à donner !\nEx: `.setsalon reglement @Membres`")
+        ROLE_MEMBRE_NAME = role.name
+        SALON_REGLEMENT_ID = ctx.channel.id
+        await ctx.send(f"✅ Salon **règlement** configuré sur {ctx.channel.mention} ! Rôle attribué : **{role.name}** 👥")
+        await send_salon_embed(ctx.channel, "reglement")
+        return
 
     var_name, label = types[type_salon.lower()]
-    if var_name == "SALON_LEVELUP_ID":  SALON_LEVELUP_ID  = ctx.channel.id
-    elif var_name == "SALON_CASINO_ID":   SALON_CASINO_ID   = ctx.channel.id
-    elif var_name == "SALON_GACHA_ID":    SALON_GACHA_ID    = ctx.channel.id
-    elif var_name == "SALON_BOUTIQUE_ID": SALON_BOUTIQUE_ID = ctx.channel.id
-    elif var_name == "SALON_COMBAT_ID":   SALON_COMBAT_ID   = ctx.channel.id
-    elif var_name == "SALON_DUEL_ID":       SALON_DUEL_ID       = ctx.channel.id
-    elif var_name == "SALON_BIENVENUE_ID":  SALON_BIENVENUE_ID  = ctx.channel.id
-    elif var_name == "SALON_AUREVOIR_ID":   SALON_AUREVOIR_ID   = ctx.channel.id
+    if var_name == "SALON_LEVELUP_ID":    SALON_LEVELUP_ID    = ctx.channel.id
+    elif var_name == "SALON_CASINO_ID":   SALON_CASINO_ID     = ctx.channel.id
+    elif var_name == "SALON_GACHA_ID":    SALON_GACHA_ID      = ctx.channel.id
+    elif var_name == "SALON_BOUTIQUE_ID": SALON_BOUTIQUE_ID   = ctx.channel.id
+    elif var_name == "SALON_COMBAT_ID":   SALON_COMBAT_ID     = ctx.channel.id
+    elif var_name == "SALON_DUEL_ID":     SALON_DUEL_ID       = ctx.channel.id
+    elif var_name == "SALON_BIENVENUE_ID":SALON_BIENVENUE_ID  = ctx.channel.id
+    elif var_name == "SALON_AUREVOIR_ID": SALON_AUREVOIR_ID   = ctx.channel.id
+    elif var_name == "SALON_BOOST_ID":    SALON_BOOST_ID      = ctx.channel.id
+    elif var_name == "SALON_HOF_ID":      SALON_HOF_ID        = ctx.channel.id
     await ctx.send(f"✅ Salon **{label}** configuré sur {ctx.channel.mention} !")
     await send_salon_embed(ctx.channel, type_salon.lower())
 
