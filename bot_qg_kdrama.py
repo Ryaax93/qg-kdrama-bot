@@ -64,6 +64,7 @@ SALON_BOOST_ID = None     # Met l'ID du salon boost ici
 SALON_HOF_ID = None       # Met l'ID du salon hall of fame ici
 SALON_REGLEMENT_ID = None # Met l'ID du salon règlement ici
 ROLE_MEMBRE_NAME = "Membre"  # Nom du rôle à donner après acceptation
+REGLEMENT_ROLE_ID = None      # ID du rôle règlement (plus fiable que le nom)
 REGLEMENT_MSG_ID = None   # ID du message règlement (auto-rempli par setsalon)
 
 CONFIG_FILE = "salons_config.json"
@@ -83,6 +84,7 @@ def sauvegarder_salons():
         "SALON_HOF_ID":       SALON_HOF_ID,
         "SALON_REGLEMENT_ID": SALON_REGLEMENT_ID,
         "ROLE_MEMBRE_NAME":   ROLE_MEMBRE_NAME,
+        "REGLEMENT_ROLE_ID":   REGLEMENT_ROLE_ID,
         "REGLEMENT_MSG_ID":   REGLEMENT_MSG_ID,
     }
     try:
@@ -95,7 +97,7 @@ def charger_salons():
     """Charge les IDs de salons depuis le fichier JSON au démarrage"""
     global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID
     global SALON_COMBAT_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID
-    global SALON_BOOST_ID, SALON_HOF_ID, SALON_REGLEMENT_ID, ROLE_MEMBRE_NAME, REGLEMENT_MSG_ID
+    global SALON_BOOST_ID, SALON_HOF_ID, SALON_REGLEMENT_ID, ROLE_MEMBRE_NAME, REGLEMENT_ROLE_ID, REGLEMENT_MSG_ID
     if not os.path.exists(CONFIG_FILE):
         return
     try:
@@ -113,6 +115,8 @@ def charger_salons():
         SALON_HOF_ID       = data.get("SALON_HOF_ID")
         SALON_REGLEMENT_ID = data.get("SALON_REGLEMENT_ID")
         ROLE_MEMBRE_NAME   = data.get("ROLE_MEMBRE_NAME", "Membre")
+        global REGLEMENT_ROLE_ID
+        REGLEMENT_ROLE_ID  = data.get("REGLEMENT_ROLE_ID")
         REGLEMENT_MSG_ID   = data.get("REGLEMENT_MSG_ID")
         print("[Config] Salons chargés depuis salons_config.json ✅")
     except Exception as e:
@@ -2330,20 +2334,18 @@ async def on_raw_reaction_add(payload):
 
     # ── Règlement : ✅ → donne le rôle Membre ───────────────
     if SALON_REGLEMENT_ID and payload.channel_id == SALON_REGLEMENT_ID and str(payload.emoji) == "✅":
-        role = discord.utils.get(guild.roles, name=ROLE_MEMBRE_NAME)
+        # Chercher le rôle par ID (fiable) puis par nom (fallback)
+        role = guild.get_role(REGLEMENT_ROLE_ID) if REGLEMENT_ROLE_ID else None
+        if not role:
+            role = discord.utils.get(guild.roles, name=ROLE_MEMBRE_NAME)
         if role and role not in member.roles:
             try:
                 await member.add_roles(role, reason="Règlement accepté ✅")
-                try:
-                    embed = discord.Embed(
-                        description=f"✅ Bienvenue **{member.display_name}** ! Tu as accepté le règlement et tu as accès au serveur. Amuse-toi bien ! 🎌",
-                        color=0x2ecc71
-                    )
-                    await member.send(embed=embed)
-                except:
-                    pass
             except discord.Forbidden:
                 pass
+        elif not role:
+            # Log si le rôle est introuvable
+            print(f"⚠️ Règlement: rôle introuvable (ID={REGLEMENT_ROLE_ID}, nom={ROLE_MEMBRE_NAME})")
 
     # ── Reaction roles classiques ────────────────────────────
     if payload.message_id in reaction_roles:
@@ -2512,7 +2514,7 @@ async def on_member_join(member):
         raid_mode = False
         return
 
-    # Message de bienvenue — Simple et stylé
+    # Message de bienvenue
     if not raid_mode:
         channel = None
         if SALON_BIENVENUE_ID:
@@ -2523,23 +2525,19 @@ async def on_member_join(member):
             import random as _random
             member_count = member.guild.member_count
             msgs = [
-                "Prépare-toi, l'aventure commence ici.",
-                "Un nouveau guerrier entre en scène.",
-                "Le QG s'agrandit. Bienvenue parmi nous.",
-                "Une nouvelle légende vient de rejoindre le QG.",
-                "Le destin t'a conduit jusqu'ici. Bienvenue.",
+                "Prépare-toi, l'aventure commence ici. 🎌",
+                "Un nouveau guerrier entre en scène. ⚔️",
+                "Le QG s'agrandit. Bienvenue ! 🏯",
+                "Une nouvelle légende rejoint le QG. 🌟",
+                "Le destin t'a conduit jusqu'ici. 🌀",
             ]
-            msg = _random.choice(msgs)
-            desc = (
-                f"## Bienvenue {member.mention} 👋\n"
-                f"{msg}\n\n"
-                f"🏯 Tu es notre **{member_count}ème membre**\n"
-                "📖 Tape `.help` pour découvrir le bot"
+            embed = discord.Embed(
+                description=f"{member.mention} vient de rejoindre le QG ! {_random.choice(msgs)}",
+                color=0xe74c3c
             )
-            embed = discord.Embed(description=desc, color=0xe74c3c)
-            embed.set_image(url=member.display_avatar.url)
+            embed.set_thumbnail(url=member.display_avatar.url)
             embed.set_footer(
-                text="QG Kdrama",
+                text=f"Membre n°{member_count} • QG Kdrama",
                 icon_url=member.guild.icon.url if member.guild.icon else None
             )
             await channel.send(embed=embed)
@@ -5836,7 +5834,7 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
     """Configure ou désactive un salon — .setsalon casino | .setsalon reglement @Role"""
     global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID
     global SALON_COMBAT_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID
-    global SALON_BOOST_ID, SALON_HOF_ID, SALON_REGLEMENT_ID, ROLE_MEMBRE_NAME
+    global SALON_BOOST_ID, SALON_HOF_ID, SALON_REGLEMENT_ID, ROLE_MEMBRE_NAME, REGLEMENT_ROLE_ID
 
     TYPES = {
         "levelup":    ("SALON_LEVELUP_ID",    "level up"),
@@ -5866,6 +5864,7 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
         if not role:
             return await ctx.send("❌ Pour le règlement, mentionne le rôle à donner !\nEx: `.setsalon reglement @Membres`")
         ROLE_MEMBRE_NAME = role.name
+        REGLEMENT_ROLE_ID = role.id
         SALON_REGLEMENT_ID = ctx.channel.id
         sauvegarder_salons()
         await ctx.send(f"✅ Salon **règlement** configuré sur {ctx.channel.mention} ! Rôle attribué : **{role.name}** 👥")
