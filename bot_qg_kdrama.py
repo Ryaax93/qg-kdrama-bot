@@ -5951,5 +5951,37 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
         await ctx.send("❌ Item inconnu ! Utilise `freeze` ou `curse`")
 
 # ============================================================
+#  GESTION GLOBALE DES ERREURS — anti-crash
+# ============================================================
+@bot.event
+async def on_error(event, *args, **kwargs):
+    import traceback
+    print(f"❌ Erreur dans l'événement '{event}':")
+    traceback.print_exc()
+
+@bot.event
+async def on_command_error(ctx, error):
+    import traceback
+    if isinstance(error, commands.CommandNotFound):
+        return
+    if isinstance(error, commands.MissingRequiredArgument):
+        return await ctx.send(f"❌ Argument manquant ! Tape `.help {ctx.command}` pour voir l'utilisation.")
+    if isinstance(error, commands.CommandOnCooldown):
+        return await ctx.send(f"⏳ Cooldown ! Réessaie dans **{error.retry_after:.1f}s**.")
+    if isinstance(error, commands.MissingPermissions):
+        return await ctx.send("❌ Tu n'as pas la permission !")
+    # Log toutes les autres erreurs sans faire crasher le bot
+    print(f"❌ Erreur commande '{ctx.command}': {type(error).__name__}: {error}")
+    traceback.print_exc()
+
+# ============================================================
 print("🚀 Démarrage du bot...")
-bot.run(TOKEN)
+import traceback, time
+while True:
+    try:
+        bot.run(TOKEN)
+    except Exception as e:
+        print(f"❌ CRASH BOT: {e}")
+        traceback.print_exc()
+        print("🔄 Redémarrage dans 5 secondes...")
+        time.sleep(5) 
