@@ -4120,16 +4120,17 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
 
     def get_stats(uid):
         s = arena_stats[uid]
-        hp_max  = 250 + s["pv_bonus"]  * 8
-        end_max = 100 + s["end_bonus"] * 5
-        atk_b   = s["atk_bonus"] * 3
-        def_b   = s["def_bonus"] * 3
-        return hp_max, end_max, atk_b, def_b
+        return (
+            250 + s["pv_bonus"]  * 8,
+            100 + s["end_bonus"] * 5,
+            s["atk_bonus"] * 3,
+            s["def_bonus"] * 3,
+        )
 
     hp1_max, end1_max, atk1_b, def1_b = get_stats(uid1)
     hp2_max, end2_max, atk2_b, def2_b = get_stats(uid2)
 
-    # Invitation
+    # ── Invitation ────────────────────────────────────────────
     class InviteView(ui.View):
         def __init__(self):
             super().__init__(timeout=30)
@@ -4139,15 +4140,13 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
         async def accept(self, interaction, button):
             if interaction.user.id != adversaire.id:
                 return await interaction.response.send_message("❌ Pas ton défi !", ephemeral=True)
-            self.accepted = True
-            self.done.set(); self.stop()
+            self.accepted = True; self.done.set(); self.stop()
             await interaction.response.defer()
         @ui.button(label="Refuser ❌", style=discord.ButtonStyle.danger)
         async def refuse(self, interaction, button):
             if interaction.user.id != adversaire.id:
                 return await interaction.response.send_message("❌ Pas ton défi !", ephemeral=True)
-            self.accepted = False
-            self.done.set(); self.stop()
+            self.accepted = False; self.done.set(); self.stop()
             await interaction.response.edit_message(content=f"❌ {adversaire.display_name} refuse.", view=None)
 
     invite_view = InviteView()
@@ -4163,50 +4162,108 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
     if not invite_view.accepted:
         return
 
+    # ── Setup ─────────────────────────────────────────────────
     joueurs = [
-        {"membre": ctx.author,   "hp": hp1_max, "hp_max": hp1_max, "end": end1_max, "end_max": end1_max,
+        {"membre": ctx.author,  "hp": hp1_max, "hp_max": hp1_max, "end": end1_max, "end_max": end1_max,
          "atk_b": atk1_b, "def_b": def1_b, "esquive": False, "defense": False, "couleur": "🔴"},
-        {"membre": adversaire,   "hp": hp2_max, "hp_max": hp2_max, "end": end2_max, "end_max": end2_max,
+        {"membre": adversaire,  "hp": hp2_max, "hp_max": hp2_max, "end": end2_max, "end_max": end2_max,
          "atk_b": atk2_b, "def_b": def2_b, "esquive": False, "defense": False, "couleur": "🔵"},
     ]
     active_arene[ctx.channel.id] = True
     tour_num  = 1
     tour_idx  = 0
-    COUT_END  = {0: 10, 1: 30, 2: 20, 3: 5, 4: 8, 5: 15}
     REGEN_END = 12
     historique = []
 
-    def barre(val, maxi, longueur=12):
+    ACTIONS_INFO = {
+        0: {"nom": "Attaque",          "emoji": "⚔️",  "cout": 10, "lo": 25, "hi": 40, "desc": "Frappe fiable"},
+        1: {"nom": "Frappe Chargée",   "emoji": "💥",  "cout": 30, "lo": 10, "hi": 65, "desc": "Risqué mais dévastateur"},
+        2: {"nom": "Att. Spéciale",    "emoji": "🌀",  "cout": 20, "lo": 30, "hi": 50, "desc": "Puissante et stable"},
+        3: {"nom": "Défense",          "emoji": "🛡️", "cout": 5,  "lo": 0,  "hi": 0,  "desc": "−50% dégâts reçus"},
+        4: {"nom": "Soin",             "emoji": "🌿",  "cout": 8,  "lo": 0,  "hi": 0,  "desc": "+15-30 HP"},
+        5: {"nom": "Esquive",          "emoji": "💨",  "cout": 15, "lo": 0,  "hi": 0,  "desc": "Esquive secrète"},
+    }
+
+    def barre(val, maxi, longueur=14):
         rempli = int((val / max(maxi, 1)) * longueur)
         return "█" * rempli + "░" * (longueur - rempli)
 
-    def build_embed():
+    def build_embed_combat():
         j1, j2 = joueurs[0], joueurs[1]
-        pct1 = j1["hp"] / j1["hp_max"]
-        pct2 = j2["hp"] / j2["hp_max"]
-        col1 = "🔴" if pct1 < 0.3 else ("🟡" if pct1 < 0.6 else "🟢")
-        col2 = "🔴" if pct2 < 0.3 else ("🟡" if pct2 < 0.6 else "🟢")
+        p1 = j1["hp"] / j1["hp_max"]; p2 = j2["hp"] / j2["hp_max"]
+        c1 = "🔴" if p1 < 0.3 else ("🟡" if p1 < 0.6 else "🟢")
+        c2 = "🔴" if p2 < 0.3 else ("🟡" if p2 < 0.6 else "🟢")
         embed = discord.Embed(
-            title=f"⚔️ {j1['membre'].display_name}  VS  {j2['membre'].display_name}",
+            title=f"⚔️  {j1['membre'].display_name}  ✦  VS  ✦  {j2['membre'].display_name}",
             color=0xe74c3c
         )
-        bloc1 = (
-            f"{j1['couleur']} **{j1['membre'].display_name}**\n"
-            f"{col1} {barre(j1['hp'], j1['hp_max'])} `{j1['hp']}/{j1['hp_max']}HP`\n"
-            f"⚡ {barre(j1['end'], j1['end_max'])} `{j1['end']}/{j1['end_max']}END`"
-        )
-        bloc2 = (
-            f"{j2['couleur']} **{j2['membre'].display_name}**\n"
-            f"{col2} {barre(j2['hp'], j2['hp_max'])} `{j2['hp']}/{j2['hp_max']}HP`\n"
-            f"⚡ {barre(j2['end'], j2['end_max'])} `{j2['end']}/{j2['end_max']}END`"
-        )
-        embed.add_field(name="\u200b", value=bloc1, inline=True)
-        embed.add_field(name="\u200b", value=bloc2, inline=True)
+        embed.add_field(name="\u200b", value=(
+            f"**{j1['couleur']} {j1['membre'].display_name}**\n"
+            f"{c1} `{barre(j1['hp'], j1['hp_max'])}` **{j1['hp']}/{j1['hp_max']} HP**\n"
+            f"⚡ `{barre(j1['end'], j1['end_max'])}` {j1['end']}/{j1['end_max']} END"
+        ), inline=True)
+        embed.add_field(name="\u200b", value=(
+            f"**{j2['couleur']} {j2['membre'].display_name}**\n"
+            f"{c2} `{barre(j2['hp'], j2['hp_max'])}` **{j2['hp']}/{j2['hp_max']} HP**\n"
+            f"⚡ `{barre(j2['end'], j2['end_max'])}` {j2['end']}/{j2['end_max']} END"
+        ), inline=True)
         if historique:
-            embed.add_field(name=f"⚡ Tour {tour_num}", value="\n".join(historique[-3:]), inline=False)
+            embed.add_field(
+                name=f"⚡ Tour {tour_num} — dernières actions",
+                value="\n".join(historique[-3:]),
+                inline=False
+            )
         embed.set_footer(text="Arène PvP — QG Kdrama")
         return embed
 
+    def build_view_actions(attaquant):
+        """Boutons avec puissance + coût END dans le label"""
+        v = ui.View(timeout=35)
+        j = attaquant
+        chosen = {"val": None}
+        done_ev = asyncio.Event()
+
+        for idx, a in ACTIONS_INFO.items():
+            end_ok = j["end"] >= a["cout"]
+            if a["lo"] > 0:
+                label = f"{a['emoji']} {a['nom']} ({a['lo']}-{a['hi']} dmg / {a['cout']}⚡)"
+            elif a["nom"] == "Soin":
+                label = f"{a['emoji']} {a['nom']} (+15-30 HP / {a['cout']}⚡)"
+            elif a["nom"] == "Défense":
+                label = f"{a['emoji']} {a['nom']} (−50% dmg / {a['cout']}⚡)"
+            else:
+                label = f"{a['emoji']} {a['nom']} (? / {a['cout']}⚡)"
+
+            style = discord.ButtonStyle.danger   if idx in (0,1) else \
+                    discord.ButtonStyle.primary  if idx == 2     else \
+                    discord.ButtonStyle.secondary if idx in (3,5) else \
+                    discord.ButtonStyle.success
+            btn = ui.Button(
+                label=label[:80],
+                style=style,
+                disabled=not end_ok,
+                row=idx // 3
+            )
+            async def cb(interaction, i=idx, ev=done_ev, ch=chosen):
+                if interaction.user.id != j["membre"].id:
+                    return await interaction.response.send_message("❌ C'est pas ton tour !", ephemeral=True)
+                ch["val"] = i
+                ev.set()
+                # Esquive : confirmation éphémère visible que par ce joueur
+                if i == 5:
+                    await interaction.response.send_message(
+                        "🤫 **Esquive activée !** Ton adversaire ne sait pas que tu vas esquiver.",
+                        ephemeral=True
+                    )
+                else:
+                    await interaction.response.defer()
+                v.stop()
+            btn.callback = cb
+            v.add_item(btn)
+
+        return v, chosen, done_ev
+
+    # Embed de début
     embed_debut = discord.Embed(
         title="⚔️ COMBAT COMMENCE ⚔️",
         description=(
@@ -4220,104 +4277,70 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
     )
     embed_debut.set_footer(text="Arène PvP — QG Kdrama")
     await ctx.send(embed=embed_debut)
-    combat_msg = await ctx.send(embed=build_embed())
+    combat_msg = await ctx.send(embed=build_embed_combat())
 
+    # ── Boucle principale ─────────────────────────────────────
     while ctx.channel.id in active_arene:
         attaquant = joueurs[tour_idx]
         defenseur = joueurs[1 - tour_idx]
         attaquant["end"] = min(attaquant["end_max"], attaquant["end"] + REGEN_END)
 
-        chosen_action = asyncio.Event()
-        action_result = {"choix": -1}
+        view, chosen, done_ev = build_view_actions(attaquant)
 
-        class ArenaButtons(ui.View):
-            def __init__(self):
-                super().__init__(timeout=35)
-            async def check_p(self, interaction):
-                if interaction.user.id != attaquant["membre"].id:
-                    await interaction.response.send_message("❌ C'est pas ton tour !", ephemeral=True)
-                    return False
-                return True
-            @ui.button(label="Attaque ⚔️", style=discord.ButtonStyle.danger, row=0)
-            async def btn_atk(self, i, b):
-                if not await self.check_p(i): return
-                action_result["choix"] = 0; chosen_action.set(); self.stop(); await i.response.defer()
-            @ui.button(label="Chargée 💥", style=discord.ButtonStyle.danger, row=0)
-            async def btn_charge(self, i, b):
-                if not await self.check_p(i): return
-                action_result["choix"] = 1; chosen_action.set(); self.stop(); await i.response.defer()
-            @ui.button(label="Spéciale 🌀", style=discord.ButtonStyle.primary, row=0)
-            async def btn_special(self, i, b):
-                if not await self.check_p(i): return
-                action_result["choix"] = 2; chosen_action.set(); self.stop(); await i.response.defer()
-            @ui.button(label="Défense 🛡️", style=discord.ButtonStyle.secondary, row=1)
-            async def btn_def(self, i, b):
-                if not await self.check_p(i): return
-                action_result["choix"] = 3; chosen_action.set(); self.stop(); await i.response.defer()
-            @ui.button(label="Soin 🌿", style=discord.ButtonStyle.success, row=1)
-            async def btn_heal(self, i, b):
-                if not await self.check_p(i): return
-                action_result["choix"] = 4; chosen_action.set(); self.stop(); await i.response.defer()
-            @ui.button(label="Esquive 💨", style=discord.ButtonStyle.secondary, row=1)
-            async def btn_dodge(self, i, b):
-                if not await self.check_p(i): return
-                action_result["choix"] = 5; chosen_action.set(); self.stop(); await i.response.defer()
-            async def on_timeout(self):
-                action_result["choix"] = 0; chosen_action.set()
-
-        view = ArenaButtons()
         await combat_msg.edit(
             content=f"🎮 {attaquant['membre'].mention} — **C'est ton tour !**",
-            embed=build_embed(), view=view
+            embed=build_embed_combat(),
+            view=view
         )
+
         try:
-            await asyncio.wait_for(chosen_action.wait(), timeout=36)
+            await asyncio.wait_for(done_ev.wait(), timeout=36)
         except asyncio.TimeoutError:
-            action_result["choix"] = 0
+            chosen["val"] = 0
+        view.stop()
 
-        choix = action_result["choix"]
-        cout  = COUT_END.get(choix, 10)
+        choix = chosen["val"] if chosen["val"] is not None else 0
+        action = ACTIONS_INFO[choix]
+        cout   = action["cout"]
+
         if attaquant["end"] < cout:
-            choix = 0; cout = COUT_END[0]
-        attaquant["end"] = max(0, attaquant["end"] - cout)
+            choix = 0; action = ACTIONS_INFO[0]; cout = action["cout"]
+            historique.append(f"⚡ {attaquant['membre'].display_name} manque d'END — attaque de base !")
 
+        attaquant["end"] = max(0, attaquant["end"] - cout)
         nom_a = attaquant["membre"].display_name
         nom_d = defenseur["membre"].display_name
 
-        if choix == 3:
+        if choix == 3:   # Défense
             attaquant["defense"] = True
-            historique.append(f"🛡️ {nom_a} se défend !")
-        elif choix == 4:
+            historique.append(f"🛡️ **{nom_a}** se défend ! *(dégâts −50% ce tour)*")
+
+        elif choix == 4: # Soin
             soin = random.randint(15, 30)
             attaquant["hp"] = min(attaquant["hp_max"], attaquant["hp"] + soin)
-            historique.append(f"🌿 {nom_a} se soigne — **+{soin} HP** !")
-        elif choix == 5:
+            historique.append(f"🌿 **{nom_a}** se soigne — **+{soin} HP** !")
+
+        elif choix == 5: # Esquive secrète
             attaquant["esquive"] = True
-            historique.append(f"🌀 {nom_a} se concentre...")
-            try:
-                await attaquant["membre"].send("🤫 **Esquive activée !** Ton adversaire ne le sait pas !")
-            except Exception:
-                pass
-        else:
-            ranges = {0: (25, 40), 1: (10, 65), 2: (30, 50)}
-            lo, hi = ranges.get(choix, (25, 40))
-            base = random.randint(lo, hi) + attaquant["atk_b"]
+            # Pas de message public — juste l'ephemeral déjà envoyé via interaction
+            historique.append(f"💨 **{nom_a}** se prépare... *(action secrète)*")
+
+        else:  # Attaques 0 1 2
+            base = random.randint(action["lo"], action["hi"]) + attaquant["atk_b"]
             base = max(1, base - defenseur["def_b"])
             critique = random.random() < 0.12
-            if critique:
-                base = int(base * 1.5)
-            noms = {0: "attaque", 1: "frappe chargée", 2: "attaque spéciale"}
-            nom_action = noms.get(choix, "attaque")
+            if critique: base = int(base * 1.5)
+
             if defenseur["esquive"]:
                 defenseur["esquive"] = False
-                historique.append(f"💨 {nom_a} attaque... mais {nom_d} esquive !")
+                historique.append(f"💨 **{nom_a}** attaque... **{nom_d}** esquive ! *0 dégâts*")
             else:
                 if defenseur["defense"]:
                     base //= 2
                     defenseur["defense"] = False
                 defenseur["hp"] = max(0, defenseur["hp"] - base)
-                crit_txt = " ★ **CRITIQUE !**" if critique else ""
-                historique.append(f"⚔️ {nom_a} {nom_action} — **−{base} HP** !{crit_txt}")
+                crit = " ✦ ***CRITIQUE !***" if critique else ""
+                historique.append(f"{action['emoji']} **{nom_a}** {action['nom'].lower()} — **−{base} HP** !{crit}")
 
         tour_num += 1
         tour_idx  = 1 - tour_idx
@@ -4332,17 +4355,17 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
             prize   = random.randint(100, 250)
             xp_gain = 40
             economy_data[str(winner["membre"].id)]["coins"] += prize
-            xp_data[str(winner["membre"].id)]["xp"] += xp_gain
-            await combat_msg.edit(content=None, embed=build_embed(), view=None)
-            wname = winner["membre"].display_name
-            lname = loser["membre"].display_name
-            wmention = winner["membre"].mention
-            whp   = winner["hp"]
-            whpmax = winner["hp_max"]
+            xp_data[str(winner["membre"].id)]["xp"]         += xp_gain
+
+            await combat_msg.edit(content=None, embed=build_embed_combat(), view=None)
+
+            wname  = winner["membre"].display_name
+            lname  = loser["membre"].display_name
+            whp    = winner["hp"]; whpmax = winner["hp_max"]
             embed_fin = discord.Embed(title="🏆 FIN DU COMBAT 🏆", color=0xf1c40f)
             embed_fin.description = (
                 f"**{wname} remporte l'arène !**\n\n"
-                f"{barre(whp, whpmax)} `{whp} / {whpmax} HP restants`\n\n"
+                f"`{barre(whp, whpmax)}` **{whp} / {whpmax} HP restants**\n\n"
                 f"💰 **+{prize} pièces** • ⭐ **+{xp_gain} XP**\n\n"
                 f"*{lname} s'effondre... ☠️*"
             )
@@ -4350,7 +4373,7 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
             await ctx.send(embed=embed_fin)
             return
 
-        await combat_msg.edit(content=None, embed=build_embed(), view=None)
+        await combat_msg.edit(content=None, embed=build_embed_combat(), view=None)
 
 @bot.command(name="pokebattle", aliases=["pb", "pokefight"])
 async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
