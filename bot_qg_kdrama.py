@@ -28,13 +28,25 @@ queues = defaultdict(list)
 
 # ---------- Titres selon niveau ----------
 TIERS = [
-    (1,  "🎬 Spectateur Débutant"),
-    (5,  "📺 Fan de Kdrama"),
-    (10, "🎮 Gamer Kdrama"),
-    (15, "✨ Otaku Confirmé"),
-    (20, "👑 Légende du QG"),
-    (30, "💫 Dieu du QG Kdrama"),
+    (1,   "🌱 Académicien Débutant"),
+    (5,   "⚔️ Chasseur de Rang E"),
+    (10,  "🗡️ Chasseur de Rang D"),
+    (15,  "💥 Chasseur de Rang C"),
+    (20,  "🔥 Chasseur de Rang B"),
+    (25,  "⚡ Chasseur de Rang A"),
+    (30,  "💎 Chasseur de Rang S"),
+    (40,  "👑 Pillier du QG"),
+    (50,  "🌀 Maître des Arts Martiaux"),
+    (60,  "☠️ Lune Supérieure"),
+    (75,  "🐉 Roi des Malédictions"),
+    (99,  "🌟 Monarque des Ombres"),
 ]
+
+# Salons configurables
+SALON_LEVELUP_ID = None   # Met l'ID du salon level up ici
+SALON_CASINO_ID = None    # Met l'ID du salon casino ici
+SALON_GACHA_ID = None     # Met l'ID du salon gacha ici
+SALON_BOUTIQUE_ID = None  # Met l'ID du salon boutique ici
 
 def get_tier(level):
     title = TIERS[0][1]
@@ -86,6 +98,47 @@ GAMES = [
 ]
 
 # Quiz par catégorie
+# Alias pour les noms d'anime/drama — accepte FR, EN, JP et abréviations
+ANIME_ALIASES = {
+    "attack on titan": ["attaque des titans", "shingeki no kyojin", "snk", "aot", "attack on titans"],
+    "demon slayer": ["kimetsu no yaiba", "kny", "demon slayers"],
+    "jujutsu kaisen": ["jjk", "jujutsu"],
+    "my hero academia": ["boku no hero academia", "bnha", "mha", "boku no hero", "hero academia"],
+    "fullmetal alchemist": ["fma", "full metal alchemist", "fullmetal alchemist brotherhood", "fmab"],
+    "hunter x hunter": ["hxh", "hunter hunter"],
+    "one piece": ["op"],
+    "death note": ["dn"],
+    "sword art online": ["sao"],
+    "no game no life": ["ngnl"],
+    "re zero": ["re:zero", "rezero", "re: zero starting life in another world"],
+    "vinland saga": ["vinland"],
+    "your lie in april": ["shigatsu wa kimi no uso", "shigatsu"],
+    "code geass": ["geass"],
+    "tokyo ghoul": ["tg"],
+    "black clover": ["bc"],
+    "solo leveling": ["only i level up", "na honjaman level up"],
+    "squid game": ["squid games"],
+    "boys over flowers": ["fleurs de garçons", "kkotboda namja"],
+    "goblin": ["guardian the lonely and great god", "dokkaebi"],
+    "crash landing on you": ["cloy", "atterrissage d'urgence pour vous"],
+    "itaewon class": ["itaewon"],
+    "vincenzo": [],
+    "kingdom": [],
+}
+
+def check_answer(reponse: str, correct: str) -> bool:
+    """Vérifie si la réponse est correcte — accepte alias FR/EN/JP"""
+    reponse = reponse.lower().strip()
+    correct = correct.lower().strip()
+    if reponse == correct:
+        return True
+    # Chercher dans les alias
+    for canonical, aliases in ANIME_ALIASES.items():
+        groupe = [canonical] + aliases
+        if correct in groupe and reponse in groupe:
+            return True
+    return False
+
 QUIZ_KDRAMA = [
     {"q": "Dans quel drama joue Lee Min-ho dans le rôle de Gu Jun-pyo ?", "a": "boys over flowers"},
     {"q": "Comment s'appelle le goblin dans le drama 'Goblin' ?", "a": "kim shin"},
@@ -97,19 +150,59 @@ QUIZ_KDRAMA = [
     {"q": "Dans Goblin, quelle est la profession de Ji Eun-tak ?", "a": "lycéenne"},
     {"q": "Combien d'épisodes compte la saison 1 de Squid Game ?", "a": "9"},
     {"q": "Dans Kingdom, quel est le nom du prince héritier ?", "a": "lee chang"},
+    {"q": "Quel drama met en scène un avocat qui devient un mafiosi en Italie ?", "a": "vincenzo"},
+    {"q": "Dans My Love from the Star, de quelle planète vient l'extraterrestre ?", "a": "kdm-2"},
+    {"q": "Quel drama raconte l'histoire d'une héritière tombant en Corée du Nord ?", "a": "crash landing on you"},
+    {"q": "Dans Descendants of the Sun, quel est le métier du personnage principal ?", "a": "soldat"},
+    {"q": "Dans Hospital Playlist, combien d'amis médecins forment le groupe principal ?", "a": "5"},
+    {"q": "Quel drama coréen met en scène des joueurs forcés à participer à des jeux mortels pour de l'argent ?", "a": "squid game"},
+    {"q": "Dans Signal, quel objet permet aux personnages de communiquer à travers le temps ?", "a": "talkie walkie"},
+    {"q": "Dans Weightlifting Fairy Kim Bok-joo, quel sport pratique l'héroïne ?", "a": "haltérophilie"},
+    {"q": "Quel acteur joue dans Crash Landing on You et Descendants of the Sun ?", "a": "hyun bin"},
+    {"q": "Dans 'It's Okay to Not Be Okay', quel est le métier de la protagoniste féminine ?", "a": "auteure"},
+    {"q": "Dans Goblin, qui est la fiancée du goblin ?", "a": "ji eun-tak"},
+    {"q": "Quel drama coréen historique parle d'une épidémie de zombies pendant la période Joseon ?", "a": "kingdom"},
+    {"q": "Dans Business Proposal, comment les deux personnages principaux se rencontrent-ils ?", "a": "blind date"},
+    {"q": "Dans Twenty-Five Twenty-One, quel sport pratique l'héroïne ?", "a": "escrime"},
+    {"q": "Dans Extraordinary Attorney Woo, de quelle condition est atteinte l'héroïne ?", "a": "autisme"},
 ]
 
 QUIZ_ANIME = [
     {"q": "Quel est le vrai nom de Light Yagami dans Death Note ?", "a": "light yagami"},
     {"q": "Dans Demon Slayer, quelle est la technique signature de Tanjiro ?", "a": "respiration de l'eau"},
-    {"q": "Combien de membres compte l'équipe de volleyball de Karasuno dans Haikyuu ?", "a": "12"},
-    {"q": "Dans FMA Brotherhood, quel est l'équivalent sacrifié par Ed pour ramener Alphonse ?", "a": "son bras"},
     {"q": "Quel animé se passe dans le monde des Titans derrière des murs ?", "a": "attack on titan"},
-    {"q": "Comment s'appelle le démon que Tanjiro affronte dans Demon Slayer ?", "a": "muzan"},
+    {"q": "Comment s'appelle le démon que Tanjiro affronte comme boss final dans Demon Slayer ?", "a": "muzan"},
     {"q": "Dans One Piece, quel est le fruit du diable de Luffy ?", "a": "gomu gomu"},
     {"q": "Quel est le prénom du personnage principal de Jujutsu Kaisen ?", "a": "yuji"},
     {"q": "Dans Your Lie in April, de quel instrument joue Kousei ?", "a": "piano"},
     {"q": "Combien de titans primordiaux existent dans Attack on Titan ?", "a": "9"},
+    {"q": "Dans FMA Brotherhood, quel est l'équivalent sacrifié par Ed pour ramener Alphonse ?", "a": "son bras"},
+    {"q": "Combien de membres compte l'équipe de volleyball de Karasuno dans Haikyuu ?", "a": "12"},
+    {"q": "Dans Naruto, quel est le nom du renard à 9 queues scellé en Naruto ?", "a": "kurama"},
+    {"q": "Dans One Piece, combien de membres compte l'équipage de Luffy au départ ?", "a": "3"},
+    {"q": "Dans Jujutsu Kaisen, quel est le rang de Gojo Satoru ?", "a": "spécial de classe 1"},
+    {"q": "Dans Attack on Titan, quel est le nom du titan de Eren au début ?", "a": "titan assaillant"},
+    {"q": "Dans Demon Slayer, quelle est la couleur des yeux de Nezuko ?", "a": "rose"},
+    {"q": "Dans Hunter x Hunter, quelle est la technique de Killua qui utilise l'électricité ?", "a": "godspeed"},
+    {"q": "Dans Dragon Ball Z, sur quelle planète Goku est-il né ?", "a": "vegeta"},
+    {"q": "Dans Sword Art Online, comment s'appelle le jeu de réalité virtuelle du début ?", "a": "sword art online"},
+    {"q": "Dans My Hero Academia, quel est le vrai nom du Quirk de Deku ?", "a": "one for all"},
+    {"q": "Dans Tokyo Ghoul, que devient Ken Kaneki après une opération ?", "a": "demi-ghoul"},
+    {"q": "Dans Black Clover, quelle magie possède Asta contrairement aux autres ?", "a": "aucune"},
+    {"q": "Dans Solo Leveling, quel est le rang initial de Sung Jin-Woo ?", "a": "e"},
+    {"q": "Dans Code Geass, quel pouvoir possède Lelouch ?", "a": "géass"},
+    {"q": "Dans Vinland Saga, quel est le nom du père de Thorfinn ?", "a": "thors"},
+    {"q": "Dans Re:Zero, comment s'appelle le pouvoir de Subaru ?", "a": "retour par la mort"},
+    {"q": "Dans Fullmetal Alchemist, quel est le principe fondamental de l'alchimie ?", "a": "échange équivalent"},
+    {"q": "Dans One Piece, quel est le surnom de Zoro ?", "a": "chasseur de pirates"},
+    {"q": "Dans Naruto, quelle est la technique ultime de Naruto ?", "a": "rasengan"},
+    {"q": "Dans Death Note, comment s'appelle le shinigami qui donne le Death Note à Light ?", "a": "ryuk"},
+    {"q": "Dans Haikyuu, quel est le poste de Hinata ?", "a": "attaquant"},
+    {"q": "Dans Demon Slayer, combien y a-t-il de Piliers ?", "a": "9"},
+    {"q": "Dans Jujutsu Kaisen, quelle malédiction est scellée dans Yuji ?", "a": "sukuna"},
+    {"q": "Dans Hunter x Hunter, que veut trouver Gon comme objectif principal ?", "a": "son père"},
+    {"q": "Dans My Hero Academia, quel est le vrai nom d'All Might ?", "a": "toshinori yagi"},
+    {"q": "Dans Attack on Titan, quel est le nom du Survey Corps en japonais ?", "a": "shingeki no kyojin"},
 ]
 
 QUIZ_GAMING = [
@@ -121,6 +214,18 @@ QUIZ_GAMING = [
     {"q": "Quel est le nom du dragon final dans Skyrim ?", "a": "alduin"},
     {"q": "Dans Genshin Impact, quel élément représente Zhongli ?", "a": "géo"},
     {"q": "Dans Hollow Knight, comment s'appelle le royaume des insectes ?", "a": "hallownest"},
+    {"q": "Dans Fortnite, combien de joueurs participent à une partie Battle Royale standard ?", "a": "100"},
+    {"q": "Dans GTA V, combien de personnages jouables y a-t-il ?", "a": "3"},
+    {"q": "Dans Among Us, comment s'appelle le lieu central du vaisseau ?", "a": "cafétéria"},
+    {"q": "Dans Pokémon, quelle est l'évolution finale de Salamèche ?", "a": "dracaufeu"},
+    {"q": "Dans Call of Duty Warzone, dans quelle ville se déroule la carte principale de départ ?", "a": "verdansk"},
+    {"q": "Dans FIFA, comment s'appelle le mode avec des cartes de joueurs à collectionner ?", "a": "ultimate team"},
+    {"q": "Dans Zelda Breath of the Wild, quel est le nom du château principal ?", "a": "hyrule"},
+    {"q": "Dans Dark Souls, comment s'appelle le boss final du premier jeu ?", "a": "gwyn"},
+    {"q": "Dans Overwatch, quel est le rôle principal de Mercy ?", "a": "support"},
+    {"q": "Dans Apex Legends, combien de joueurs composent une équipe standard ?", "a": "3"},
+    {"q": "Dans Red Dead Redemption 2, quel est le nom du gang principal ?", "a": "van der linde"},
+    {"q": "Dans Cyberpunk 2077, dans quelle ville futuriste se passe le jeu ?", "a": "night city"},
 ]
 
 QUIZ_CULTURE = [
@@ -134,7 +239,18 @@ QUIZ_CULTURE = [
     {"q": "Combien font 17 × 8 ?", "a": "136"},
     {"q": "Quelle est la langue la plus parlée au monde ?", "a": "mandarin"},
     {"q": "Qui a écrit Roméo et Juliette ?", "a": "shakespeare"},
+    {"q": "Quelle est la capitale du Japon ?", "a": "tokyo"},
+    {"q": "En quelle année l'homme a-t-il marché sur la Lune pour la première fois ?", "a": "1969"},
+    {"q": "Quel est le plus grand pays du monde par superficie ?", "a": "russie"},
+    {"q": "Combien de joueurs composent une équipe de football ?", "a": "11"},
+    {"q": "Quel est le symbole chimique de l'or ?", "a": "au"},
+    {"q": "Qui a inventé le téléphone ?", "a": "alexander graham bell"},
+    {"q": "Quelle est la montagne la plus haute du monde ?", "a": "everest"},
+    {"q": "Dans quel pays se trouve la Grande Muraille ?", "a": "chine"},
+    {"q": "Combien de continents y a-t-il sur Terre ?", "a": "7"},
+    {"q": "Qui a écrit Harry Potter ?", "a": "j.k. rowling"},
 ]
+
 
 QUIZ_QG = QUIZ_KDRAMA + QUIZ_ANIME + QUIZ_GAMING  # Pour compatibilité
 
@@ -174,7 +290,8 @@ async def on_message(message):
         return
     # XP passif
     uid = str(message.author.id)
-    xp_data[uid]["xp"] += random.randint(3, 8)
+    message_count[uid] += 1
+    xp_data[uid]["xp"] += random.randint(2, 5)
     needed = xp_data[uid]["level"] * 100
     if xp_data[uid]["xp"] >= needed:
         xp_data[uid]["level"] += 1
@@ -188,19 +305,28 @@ async def on_message(message):
             ),
             color=0xff6b9d
         )
-        await message.channel.send(embed=embed)
-
-    # Réponses automatiques contextuelles
-    content = message.content.lower()
-    if any(w in content for w in ["goblin", "kdrama", "drama coréen"]):
-        reactions = ["🕯️", "💜", "🎬", "😭"]
-        await message.add_reaction(random.choice(reactions))
-    elif any(w in content for w in ["anime", "animé", "manga"]):
-        await message.add_reaction(random.choice(["⚔️", "✨", "💥", "🎌"]))
-    elif any(w in content for w in ["gaming", "gamer", "jeux", "gg", "elden ring", "genshin"]):
-        await message.add_reaction(random.choice(["🎮", "🏆", "💀", "⚡"]))
+        # Envoyer dans le salon level up configuré ou dans le salon actuel
+        levelup_channel = None
+        if SALON_LEVELUP_ID:
+            levelup_channel = message.guild.get_channel(SALON_LEVELUP_ID)
+        await (levelup_channel or message.channel).send(embed=embed)
 
     await bot.process_commands(message)
+
+@bot.event
+async def on_voice_state_update(member, before, after):
+    """Track le temps en vocal"""
+    import time
+    uid = str(member.id)
+    if before.channel is None and after.channel is not None:
+        # Rejoint un vocal
+        voice_join_time[uid] = time.time()
+    elif before.channel is not None and after.channel is None:
+        # Quitte le vocal
+        if uid in voice_join_time:
+            minutes = int((time.time() - voice_join_time[uid]) / 60)
+            voice_time[uid] += minutes
+            del voice_join_time[uid]
 
 # ============================================================
 #  HELP — Redesigné par grandes catégories
@@ -259,7 +385,7 @@ async def help_cmd(ctx, categorie: str = None):
 
     elif categorie.lower() in ["economie", "économie", "eco", "argent"]:
         embed = discord.Embed(title="💰 Économie & Récompenses", description="Gagne des pièces, dépense-les, enrichis-toi !", color=0xf39c12)
-        embed.add_field(name="💵 Pièces", value="`.daily` — Pièces journalières (100-500) ⏳ 24h\n`.balance [@joueur]` — Voir ton solde\n`.pay @joueur <montant>` — Envoyer des pièces\n`.steal @joueur` — Vol (45% réussite, cooldown 1h)", inline=False)
+        embed.add_field(name="💵 Pièces", value="`.daily` — Pièces journalières (150-300) ⏳ 24h\n`.balance [@joueur]` — Voir ton solde\n`.pay @joueur <montant>` — Envoyer des pièces\n`.steal @joueur` — Vol (45% réussite, cooldown 1h)", inline=False)
         embed.add_field(name="🏦 Banque", value="`.banque depot <montant>` — Déposer\n`.banque retrait` — Retirer + intérêts\n`.banque solde` — Voir le solde\n📈 Intérêts : +5% toutes les 24h !", inline=False)
         embed.add_field(name="🛒 Boutique & Casino", value="`.shop` — Voir les items\n`.acheter <id>` — Acheter (vip • drama_king • otaku • gamer_pro • double_xp)\n`.slot [mise]` — Slot machine (min 10 / max 500 pièces)", inline=False)
         embed.add_field(name="💡 Comment gagner des pièces ?", value="`.daily` `.quiz` `.arene` `.duel` `.pendu` `.devine` `.slot` `.attaque boss`", inline=False)
@@ -269,7 +395,20 @@ async def help_cmd(ctx, categorie: str = None):
         embed = discord.Embed(title="📊 Progression — XP & Niveaux", color=0xf1c40f)
         embed.add_field(name="Commandes", value="`.rank [@joueur]` — Ton niveau, XP et titre\n`.leaderboard` — Top 10 membres les plus actifs", inline=False)
         embed.add_field(name="📈 Comment gagner de l\'XP ?", value="• Chatter → 3-8 XP/message\n• Gagner un quiz → +30 XP\n• Gagner une arène → +40 XP\n• Tuer un boss → +50 XP", inline=False)
-        embed.add_field(name="🏆 Titres", value="Niv.1 → 🎬 Spectateur Débutant\nNiv.5 → 📺 Fan de Kdrama\nNiv.10 → 🎮 Gamer Kdrama\nNiv.15 → ✨ Otaku Confirmé\nNiv.20 → 👑 Légende du QG\nNiv.30 → 💫 Dieu du QG Kdrama", inline=False)
+        embed.add_field(name="🏆 Titres", value=(
+            "Niv.1 → 🌱 Académicien Débutant\n"
+            "Niv.5 → ⚔️ Chasseur Rang E\n"
+            "Niv.10 → 🗡️ Chasseur Rang D\n"
+            "Niv.15 → 💥 Chasseur Rang C\n"
+            "Niv.20 → 🔥 Chasseur Rang B\n"
+            "Niv.25 → ⚡ Chasseur Rang A\n"
+            "Niv.30 → 💎 Chasseur Rang S\n"
+            "Niv.40 → 👑 Pillier du QG\n"
+            "Niv.50 → 🌀 Maître des Arts Martiaux\n"
+            "Niv.60 → ☠️ Lune Supérieure\n"
+            "Niv.75 → 🐉 Roi des Malédictions\n"
+            "Niv.99 → 🌟 Monarque des Ombres"
+        ), inline=False)
         await ctx.send(embed=embed)
 
     elif categorie.lower() in ["social", "communauté", "communaute"]:
@@ -367,8 +506,9 @@ async def quiz(ctx, theme: str = "mix"):
 
                 correct = active_quiz[ctx.channel.id].get("answer", "")
 
-                if msg.content.lower().strip() == correct:
-                    prize = random.randint(50, 150)
+                reponse = msg.content.lower().strip()
+                if check_answer(reponse, correct):
+                    prize = random.randint(30, 80)
                     economy_data[str(msg.author.id)]["coins"] += prize
                     xp_data[str(msg.author.id)]["xp"] += 30
                     await ctx.send(embed=discord.Embed(
@@ -376,8 +516,14 @@ async def quiz(ctx, theme: str = "mix"):
                         color=0x2ecc71
                     ))
                     break
-                # Mauvaise réponse → on continue d'attendre
-                await msg.add_reaction("❌")
+                else:
+                    # Mauvaise réponse → skip direct
+                    await msg.add_reaction("❌")
+                    await ctx.send(embed=discord.Embed(
+                        description=f"❌ Mauvaise réponse ! La bonne réponse était : **{correct}**\n*Prochaine question dans 3 secondes...*",
+                        color=0xe74c3c
+                    ))
+                    break
 
         except asyncio.TimeoutError:
             if ctx.channel.id not in active_quiz:
@@ -533,7 +679,7 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
         result = f"🏆 **{winner['name']}** remporte le duel avec **{winner['score']} point{'s' if winner['score'] > 1 else ''}** !"
         # Donner des pièces au gagnant
         winner_id = next(pid for pid, data in final_scores.items() if data["name"] == winner["name"])
-        prize = random.randint(100, 300)
+        prize = random.randint(80, 150)
         economy_data[str(winner_id)]["coins"] += prize
         xp_data[str(winner_id)]["xp"] += 50
         result += f"\n💰 +{prize} pièces & +50 XP !"
@@ -601,7 +747,7 @@ async def daily(ctx):
         reste = 86400 - (now - last).total_seconds()
         h, m = divmod(int(reste) // 60, 60)
         return await ctx.send(f"⏳ Reviens dans **{h}h {m}m** pour tes pièces journalières !")
-    gain = random.randint(100, 500)
+    gain = random.randint(150, 300)
     economy_data[uid]["coins"] += gain
     cooldowns[f"daily_{uid}"] = now
     await ctx.send(embed=discord.Embed(
@@ -654,7 +800,7 @@ async def accept(ctx):
     del duels[challenger_id]
     winner = random.choice([ctx.author, challenger])
     loser = challenger if winner == ctx.author else ctx.author
-    prize = random.randint(50, 200)
+    prize = random.randint(50, 100)
     economy_data[str(winner.id)]["coins"] += prize
     economy_data[str(loser.id)]["coins"] = max(0, economy_data[str(loser.id)]["coins"] - prize)
     await ctx.send(embed=discord.Embed(
@@ -1927,6 +2073,9 @@ async def spam_listener(message):
         return
     if is_staff(message.author):
         return
+    # Salon gacha exempté de l'antispam
+    if SALON_GACHA_ID and message.channel.id == SALON_GACHA_ID:
+        return
     await check_spam(message)
 
 # ============================================================
@@ -2244,19 +2393,40 @@ def _pendu_embed(game):
 #  BOUTIQUE
 # ============================================================
 SHOP_ITEMS = [
-    {"id": "vip", "nom": "🌟 Rôle VIP", "prix": 500, "description": "Rôle exclusif VIP du QG !"},
-    {"id": "drama_king", "nom": "👑 Drama King/Queen", "prix": 800, "description": "Le titre ultime des fans de Kdrama !"},
-    {"id": "otaku", "nom": "⚡ Otaku Elite", "prix": 800, "description": "Le titre des vrais fans d'animé !"},
-    {"id": "gamer_pro", "nom": "🎮 Gamer Pro", "prix": 600, "description": "Pour les meilleurs gamers du QG !"},
+    # ═══ Rôles exclusifs ═══
+    {"id": "vip", "nom": "💎 Rang S — VIP", "prix": 1000, "description": "Le rang des élus — accès exclusif aux salons VIP"},
+    {"id": "drama_king", "nom": "👑 Roi des Malédictions", "prix": 1500, "description": "Le titre ultime façon Jujutsu Kaisen"},
+    {"id": "otaku", "nom": "🌀 Oeil de Dieu", "prix": 1200, "description": "Rôle exclusif des vrais connaisseurs d'animé"},
+    {"id": "gamer_pro", "nom": "⚔️ Chasseur National", "prix": 800, "description": "Le rang des meilleurs gamers du QG"},
+    {"id": "shadow", "nom": "🌑 Monarque des Ombres", "prix": 3000, "description": "Le rôle le plus rare du serveur — prestige absolu"},
+    {"id": "pillier", "nom": "🔥 Pillier du Soleil", "prix": 2000, "description": "Rôle légendaire des membres les plus actifs"},
+    # ═══ Boosts ═══
     {"id": "double_xp", "nom": "⚡ Double XP (1h)", "prix": 300, "description": "Double ton XP pendant 1 heure !"},
+    {"id": "rolls_10", "nom": "🎰 +10 Rolls Gacha", "prix": 600, "description": "+10 rolls gacha instantanément !"},
+    {"id": "claim_20", "nom": "⚡ Claim 20 min", "prix": 800, "description": "Réduit le claim reset à 20 min (permanent)"},
+    {"id": "claim_15", "nom": "⚡ Claim 15 min", "prix": 1500, "description": "Réduit le claim reset à 15 min (permanent)"},
+    {"id": "claim_10", "nom": "⚡ Claim 10 min", "prix": 3000, "description": "Réduit le claim reset à 10 min (permanent)"},
+    # ═══ Items offensifs/défensifs (1x par jour) ═══
+    {"id": "freeze", "nom": "🧊 Sceau des Ombres", "prix": 500, "description": "Freeze les rolls d'un joueur 5 min (1x/jour)", "daily": True},
+    {"id": "curse", "nom": "⏳ Malédiction", "prix": 400, "description": "+5 min sur le claim d'un joueur (1x/jour)", "daily": True},
+    {"id": "shield", "nom": "🛡️ Bouclier", "prix": 600, "description": "Protège du Sceau et Malédiction pendant 30 min"},
+    {"id": "boost_rarete", "nom": "🎯 Boost Rareté", "prix": 1500, "description": "↑↑ chances Épique/Légendaire/Mythique pour 5 rolls (1x/jour)", "daily": True},
+    {"id": "reset_claim", "nom": "🔄 Reset Claim", "prix": 1200, "description": "Reset ton claim cooldown immédiatement"},
 ]
 
 shop_roles = {}  # {item_id: role_id}
 double_xp_users = {}  # {user_id: end_timestamp}
+message_count = defaultdict(int)  # {user_id: count}
+voice_time = defaultdict(int)  # {user_id: minutes}
+voice_join_time = {}  # {user_id: join_timestamp}
 
 @bot.command(name="shop")
 async def shop_cmd(ctx):
     """Affiche la boutique du QG"""
+    if SALON_BOUTIQUE_ID and ctx.channel.id != SALON_BOUTIQUE_ID:
+        salon = ctx.guild.get_channel(SALON_BOUTIQUE_ID)
+        mention = salon.mention if salon else "le salon boutique"
+        return await ctx.send(f"🛒 La boutique c'est dans {mention} !", delete_after=5)
     embed = discord.Embed(
         title="🛒 Boutique du QG Kdrama",
         description="Dépense tes pièces pour des rôles et bonus exclusifs !",
@@ -2276,6 +2446,10 @@ async def shop_cmd(ctx):
 
 @bot.command(name="acheter")
 async def acheter_cmd(ctx, item_id: str = None):
+    if SALON_BOUTIQUE_ID and ctx.channel.id != SALON_BOUTIQUE_ID:
+        salon = ctx.guild.get_channel(SALON_BOUTIQUE_ID)
+        mention = salon.mention if salon else "le salon boutique"
+        return await ctx.send(f"🛒 La boutique c'est dans {mention} !", delete_after=5)
     """Acheter un item de la boutique — .acheter <id>"""
     if not item_id:
         return await ctx.send("❌ Précise un item ! Consulte `.shop` pour la liste.")
@@ -2306,8 +2480,10 @@ async def acheter_cmd(ctx, item_id: str = None):
     role_names = {
         "vip": "⭐ VIP",
         "drama_king": "👑 Drama King",
-        "otaku": "⚡ Otaku Elite",
-        "gamer_pro": "🎮 Gamer Pro",
+        "otaku": "🌀 Oeil de Dieu",
+        "gamer_pro": "⚔️ Chasseur National",
+        "shadow": "🌑 Monarque des Ombres",
+        "pillier": "🔥 Pillier du Soleil",
     }
     role_name = role_names.get(item["id"])
     if role_name:
@@ -2615,9 +2791,33 @@ async def stats_cmd(ctx):
     top_cmds = sorted(command_stats.items(), key=lambda x: x[1], reverse=True)[:5]
     top_str = "\n".join([f"• `.{cmd}` — {count} fois" for cmd, count in top_cmds]) or "Aucune commande utilisée"
 
+    # Top 3 messages
+    members_ids = [str(m.id) for m in guild.members if not m.bot]
+    top_msg = sorted(
+        [(uid, message_count[uid]) for uid in members_ids if message_count[uid] > 0],
+        key=lambda x: x[1], reverse=True
+    )[:3]
+    medals = ["🥇", "🥈", "🥉"]
+    top_msg_str = "\n".join([
+        f"{medals[i]} <@{uid}> — **{count}** messages"
+        for i, (uid, count) in enumerate(top_msg)
+    ]) or "Pas encore de données"
+
+    # Top 3 vocal
+    top_vocal = sorted(
+        [(uid, voice_time[uid]) for uid in members_ids if voice_time[uid] > 0],
+        key=lambda x: x[1], reverse=True
+    )[:3]
+    top_vocal_str = "\n".join([
+        f"{medals[i]} <@{uid}> — **{mins}** minutes"
+        for i, (uid, mins) in enumerate(top_vocal)
+    ]) or "Pas encore de données"
+
     embed = discord.Embed(title=f"📊 Statistiques — {guild.name}", color=0x5865F2)
     embed.add_field(name="👥 Membres", value=f"Total: {total_members}\nHumains: {humains}\nBots: {bots}\nEn ligne: {online}", inline=True)
     embed.add_field(name="💬 Salons", value=f"Texte: {len(guild.text_channels)}\nVocal: {len(guild.voice_channels)}", inline=True)
+    embed.add_field(name="💬 Top 3 Messages", value=top_msg_str, inline=False)
+    embed.add_field(name="🎤 Top 3 Vocal", value=top_vocal_str, inline=False)
     embed.add_field(name="🏆 Top Commandes", value=top_str, inline=False)
     embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
     await ctx.send(embed=embed)
@@ -3027,6 +3227,10 @@ slot_cooldowns = {}
 
 @bot.command(name="slot")
 async def slot_cmd(ctx, mise: int = 50):
+    if SALON_CASINO_ID and ctx.channel.id != SALON_CASINO_ID:
+        salon = ctx.guild.get_channel(SALON_CASINO_ID)
+        mention = salon.mention if salon else f"le salon casino"
+        return await ctx.send(f"🎰 Le casino c'est dans {mention} seulement !", delete_after=5)
     """🎰 Slot machine ! — .slot [mise] (min 10, max 500)"""
     uid = str(ctx.author.id)
     mise = max(10, min(500, mise))
@@ -3085,7 +3289,7 @@ async def slot_cmd(ctx, mise: int = 50):
 #  🐉 BOSS DE SERVEUR
 # ============================================================
 BOSS_LIST = [
-    {"nom": "Le Titan Colossal", "anime": "Attack on Titan", "hp_max": 2000, "emoji": "👹", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/8/85/Colossal_Titan_AoT.png/220px-Colossal_Titan_AoT.png", "recompense": 300},
+    {"nom": "Le Titan Colossal", "anime": "Attack on Titan", "hp_max": 2000, "emoji": "👹", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/8/85/Colossal_Titan_AoT.png/220px-Colossal_Titan_AoT.png", "recompense": 37},
     {"nom": "Muzan Kibutsuji", "anime": "Demon Slayer", "hp_max": 1500, "emoji": "🧛", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/7/78/Muzan_Kibutsuji.png/220px-Muzan_Kibutsuji.png", "recompense": 250},
     {"nom": "Kaguya Otsutsuki", "anime": "Naruto", "hp_max": 1800, "emoji": "🌙", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/4/4e/Kaguya_Otsutsuki.png/220px-Kaguya_Otsutsuki.png", "recompense": 280},
     {"nom": "Ryuk (Death Note)", "anime": "Death Note", "hp_max": 1200, "emoji": "💀", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/1/13/Ryuk_Death_Note.png/220px-Ryuk_Death_Note.png", "recompense": 200},
@@ -3138,10 +3342,10 @@ async def attaque_cmd(ctx):
     uid = str(ctx.author.id)
     now = datetime.datetime.utcnow().timestamp()
 
-    # Cooldown 30sec par attaque
+    # Cooldown 13sec par attaque
     last = game["participants"].get(uid, {}).get("last_attack", 0)
-    if now - last < 30:
-        restant = int(30 - (now - last))
+    if now - last < 13:
+        restant = int(13 - (now - last))
         return await ctx.send(f"⏳ Tu dois attendre **{restant}s** avant d'attaquer à nouveau !", delete_after=5)
 
     # Calculer les dégâts selon le niveau du joueur
@@ -3166,13 +3370,14 @@ async def attaque_cmd(ctx):
         embed = discord.Embed(
             title=f"💀 {boss['nom']} est vaincu !",
             description=(
-                f"⚔️ **{ctx.author.mention}** a porté le coup fatal ! **-{degats} dégâts**\n\n"
+                f"⚔️ **{ctx.author.mention}** a porté le coup fatal ! **-{degats} dégâts** (+250 bonus 💀)\n\n"
                 f"🏆 Tous les participants reçoivent **{recompense} pièces** !\n\n"
                 + "\n".join([f"• **{d['membre']}** — {d['degats_total']} dégâts" for d in sorted(game["participants"].values(), key=lambda x: x["degats_total"], reverse=True)])
             ),
             color=0xf1c40f
         )
         embed.set_thumbnail(url=boss["image"])
+        economy_data[uid]["coins"] += 250  # Bonus coup fatal
         for pid, data in game["participants"].items():
             economy_data[pid]["coins"] += recompense
             xp_data[pid]["xp"] += 50
@@ -3402,7 +3607,7 @@ ANIME_CARDS_DB = {
     "gojo": {
         "nom": "Satoru Gojo", "serie": "Jujutsu Kaisen", "emoji": "♾️",
         "pv": 140, "attaque": 99, "defense": 99,
-        "rarete": "Légendaire",
+        "rarete": "Mythique",
         "image": "https://i.imgur.com/7n8Gmn3.jpg", "faiblesse": "🌙", "resistance": "♾️",
         "attaques": [
             {"nom": "Infini", "degats": 0, "emoji": "🛡️", "desc": "Réduit les dégâts reçus de 50% ce tour"},
@@ -3448,7 +3653,7 @@ ANIME_CARDS_DB = {
     "goku": {
         "nom": "Son Goku", "serie": "Dragon Ball Z", "emoji": "🐉",
         "pv": 140, "attaque": 98, "defense": 85,
-        "rarete": "Légendaire",
+        "rarete": "Mythique",
         "image": "https://i.imgur.com/YbSpxzS.jpg", "faiblesse": "🌙", "resistance": "⚡",
         "attaques": [
             {"nom": "Kamehameha", "degats": 60, "emoji": "💙", "desc": "Vague d'énergie légendaire"},
@@ -3541,7 +3746,7 @@ ANIME_CARDS_DB = {
     "saitama": {
         "nom": "Saitama", "serie": "One Punch Man", "emoji": "👊",
         "pv": 999, "attaque": 100, "defense": 100,
-        "rarete": "Légendaire", "faiblesse": "😴", "resistance": "💥",
+        "rarete": "Mythique", "faiblesse": "😴", "resistance": "💥",
         "attaques": [
             {"nom": "Coup Normal", "degats": 50, "emoji": "👊", "desc": "Un simple coup... ou pas ?"},
             {"nom": "Coup Sérieux", "degats": 85, "emoji": "💥", "desc": "Il se donne vraiment cette fois"},
@@ -3756,7 +3961,7 @@ ANIME_CARDS_DB = {
     "rimuru": {
         "nom": "Rimuru Tempest", "serie": "Tensura", "emoji": "💧",
         "pv": 135, "attaque": 92, "defense": 90,
-        "rarete": "Légendaire", "faiblesse": "🌙", "resistance": "💧",
+        "rarete": "Mythique", "faiblesse": "🌙", "resistance": "💧",
         "attaques": [
             {"nom": "Prédateur", "degats": 55, "emoji": "💧", "desc": "Absorbe et copie les capacités"},
             {"nom": "Tempête Noire", "degats": 75, "emoji": "🌪️", "desc": "Magie ultime multiples éléments"},
@@ -4032,7 +4237,7 @@ ANIME_CARDS_DB = {
     "arima": {
         "nom": "Kishou Arima", "serie": "Tokyo Ghoul", "emoji": "👓",
         "pv": 110, "attaque": 95, "defense": 88,
-        "rarete": "Légendaire", "faiblesse": "🕷️", "resistance": "👓",
+        "rarete": "Mythique", "faiblesse": "🕷️", "resistance": "👓",
         "image": "https://i.imgur.com/GEsZ3uD.jpg",
         "attaques": [
             {"nom": "IXA", "degats": 60, "emoji": "⚡", "desc": "Quinque lance-projectiles ultrarapide"},
@@ -4056,7 +4261,7 @@ ANIME_CARDS_DB = {
     "beerus": {
         "nom": "Beerus", "serie": "Dragon Ball Super", "emoji": "😺",
         "pv": 145, "attaque": 99, "defense": 95,
-        "rarete": "Légendaire", "faiblesse": "🌟", "resistance": "😺",
+        "rarete": "Mythique", "faiblesse": "🌟", "resistance": "😺",
         "image": "https://i.imgur.com/qlJdPS6.jpg",
         "attaques": [
             {"nom": "Hakai", "degats": 70, "emoji": "💥", "desc": "Destruction pure et simple"},
@@ -4080,7 +4285,7 @@ ANIME_CARDS_DB = {
     "kaido": {
         "nom": "Kaido", "serie": "One Piece", "emoji": "🐉",
         "pv": 160, "attaque": 96, "defense": 98,
-        "rarete": "Légendaire", "faiblesse": "⚡", "resistance": "🐉",
+        "rarete": "Mythique", "faiblesse": "⚡", "resistance": "🐉",
         "image": "https://i.imgur.com/Q76UJEX.jpg",
         "attaques": [
             {"nom": "Ragnaraku", "degats": 65, "emoji": "⚡", "desc": "Massue géante dévastatrice"},
@@ -4198,7 +4403,7 @@ ANIME_CARDS_DB = {
     "sukuna": {
         "nom": "Ryomen Sukuna", "serie": "Jujutsu Kaisen", "emoji": "☠️",
         "pv": 150, "attaque": 100, "defense": 95,
-        "rarete": "Légendaire", "faiblesse": "♾️", "resistance": "☠️",
+        "rarete": "Mythique", "faiblesse": "♾️", "resistance": "☠️",
         "image": "https://i.imgur.com/UbB1tmt.jpg",
         "attaques": [
             {"nom": "Dismantle", "degats": 65, "emoji": "🗡️", "desc": "Slash invisible qui tranche tout"},
@@ -4211,7 +4416,7 @@ ANIME_CARDS_DB = {
     "madara": {
         "nom": "Madara Uchiha", "serie": "Naruto", "emoji": "🌑",
         "pv": 145, "attaque": 98, "defense": 92,
-        "rarete": "Légendaire", "faiblesse": "🌊", "resistance": "🔥",
+        "rarete": "Mythique", "faiblesse": "🌊", "resistance": "🔥",
         "image": "https://i.imgur.com/FYEJwwH.jpg",
         "attaques": [
             {"nom": "Susanoo Parfait", "degats": 70, "emoji": "🌑", "desc": "Armure de chakra titanesque"},
@@ -4222,7 +4427,7 @@ ANIME_CARDS_DB = {
     "kaguya": {
         "nom": "Kaguya Ootsutsuki", "serie": "Naruto", "emoji": "🌸",
         "pv": 155, "attaque": 99, "defense": 96,
-        "rarete": "Légendaire", "faiblesse": "⚡", "resistance": "🌸",
+        "rarete": "Mythique", "faiblesse": "⚡", "resistance": "🌸",
         "image": "https://i.imgur.com/6E9Q66v.jpg",
         "attaques": [
             {"nom": "Cendres Célestes", "degats": 68, "emoji": "🌸", "desc": "Cendres qui paralysent au contact"},
@@ -4247,13 +4452,14 @@ ANIME_CARDS_DB = {
 
 
 RARETE_COULEURS = {
+    "Mythique": 0xff4500,
     "Légendaire": 0xf1c40f,
     "Épique": 0x9b59b6,
-    "Rare": 0x3498db,
     "Commun": 0x95a5a6,
 }
 
 RARETE_EMOJI = {
+    "Mythique": "🔮",
     "Légendaire": "👑",
     "Épique": "💎",
     "Rare": "⭐",
@@ -4466,7 +4672,7 @@ async def pokepersos(ctx):
 
 @bot.command(name="pokebattle")
 async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
-    """Lance un combat 3v3 style Pokémon ! — .pokebattle @joueur"""
+    """Lance un combat 3v3 avec tes cartes gacha ! — .pokebattle @joueur"""
     if not adversaire or adversaire.bot or adversaire.id == ctx.author.id:
         return await ctx.send("❌ Mentionne un adversaire valide ! Ex: `.pokebattle @ami`")
     if ctx.channel.id in active_pokebattles:
@@ -4474,25 +4680,36 @@ async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
 
     uid1 = str(ctx.author.id)
     uid2 = str(adversaire.id)
-    col1 = cartes_collections[uid1]
-    col2 = cartes_collections[uid2]
+    col1 = gacha_collections[uid1]
+    col2 = gacha_collections[uid2]
 
     if len(col1) < 3:
-        return await ctx.send(f"❌ **{ctx.author.display_name}** n'a pas assez de cartes ! (minimum 3)\nTape `.enregistrer <perso> <image>` pour ajouter des cartes.")
+        return await ctx.send(f"❌ **{ctx.author.display_name}** n'a pas assez de cartes ! (minimum 3)\nClaime des cartes avec `.ga` d'abord !")
     if len(col2) < 3:
-        return await ctx.send(f"❌ **{adversaire.display_name}** n'a pas assez de cartes ! (minimum 3)")
+        return await ctx.send(f"❌ **{adversaire.display_name}** n'a pas assez de cartes ! (minimum 3)\nIl faut claimer des cartes avec `.ga` d'abord !")
 
-    # Demander à chaque joueur de choisir ses 3 cartes
-    async def choisir_equipe(joueur, collection):
+    # Demander à chaque joueur de choisir ses 3 cartes parmi sa collection gacha
+    async def choisir_equipe(joueur):
         uid = str(joueur.id)
-        col = cartes_collections[uid]
-        liste = "\n".join([
-            f"`{slot}` — {ANIME_CARDS_DB[d['key']]['emoji']} **{ANIME_CARDS_DB[d['key']]['nom']}** ({ANIME_CARDS_DB[d['key']]['rarete']}) ❤️{ANIME_CARDS_DB[d['key']]['pv']} PV"
-            for slot, d in col.items()
-        ])
+        col = gacha_collections[uid]
+        order = collection_order.get(uid, [])
+        all_keys = [k for k in order if k in col] + [k for k in col if k not in order]
+
+        lines = []
+        for i, key in enumerate(all_keys):
+            if key in ANIME_CARDS_DB:
+                c = ANIME_CARDS_DB[key]
+                level = fusion_levels[uid][key]
+                stars = "⭐" * level
+                boost_pv = level * 20
+                boost_atk = level * 15
+                lines.append(
+                    f"`{i+1}` {c['emoji']} **{c['nom']}** {stars} — ❤️{c['pv']+boost_pv} | ⚔️{c['attaque']+boost_atk} | {RARETE_EMOJI.get(c['rarete'],'🔵')}"
+                )
+
         embed = discord.Embed(
-            title=f"📚 {joueur.display_name} — Choisis tes 3 combattants !",
-            description=f"{liste}\n\n**Réponds avec 3 numéros séparés par des espaces**\nEx: `1 3 5`",
+            title=f"⚔️ {joueur.display_name} — Choisis tes 3 combattants !",
+            description="\n".join(lines) + "\n\n**Tape 3 numéros séparés par des espaces**\nEx: `1 3 5`",
             color=0x9b59b6
         )
         await ctx.send(embed=embed)
@@ -4501,19 +4718,24 @@ async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
             return m.author.id == joueur.id and m.channel == ctx.channel
 
         try:
-            msg = await bot.wait_for("message", check=check, timeout=60)
-            choix = msg.content.strip().split()[:3]
+            rep = await bot.wait_for("message", check=check, timeout=60)
+            choix = rep.content.strip().split()[:3]
             equipe = []
-            for c in choix:
-                if c.isdigit() and int(c) in col:
-                    slot = int(c)
-                    d = col[slot]
-                    card = ANIME_CARDS_DB[d["key"]].copy()
-                    card["key"] = d["key"]
-                    card["image"] = d["image"]
-                    card["hp_actuel"] = card["pv"]
-                    card["ko"] = False
-                    equipe.append(card)
+            for c_str in choix:
+                if c_str.isdigit():
+                    idx = int(c_str) - 1
+                    if 0 <= idx < len(all_keys):
+                        key = all_keys[idx]
+                        if key in ANIME_CARDS_DB:
+                            level = fusion_levels[uid][key]
+                            card = ANIME_CARDS_DB[key].copy()
+                            card["key"] = key
+                            card["pv"] = card["pv"] + level * 20
+                            card["attaque"] = card["attaque"] + level * 15
+                            card["defense"] = card["defense"] + level * 10
+                            card["hp_actuel"] = card["pv"]
+                            card["ko"] = False
+                            equipe.append(card)
             if len(equipe) < 3:
                 return None
             return equipe
@@ -4526,11 +4748,11 @@ async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
     ))
     await asyncio.sleep(3)
 
-    equipe1 = await choisir_equipe(ctx.author, col1)
+    equipe1 = await choisir_equipe(ctx.author)
     if not equipe1:
         return await ctx.send(f"❌ **{ctx.author.display_name}** n'a pas choisi son équipe à temps !")
 
-    equipe2 = await choisir_equipe(adversaire, col2)
+    equipe2 = await choisir_equipe(adversaire)
     if not equipe2:
         return await ctx.send(f"❌ **{adversaire.display_name}** n'a pas choisi son équipe à temps !")
 
@@ -4734,70 +4956,105 @@ async def pokestop(ctx):
 
 
 # ============================================================
-#  🎰 GACHA — Tirage de cartes
+#  🎰 GACHA — Système style Mudae
 # ============================================================
 
-gacha_collections = defaultdict(lambda: defaultdict(int))  # {uid: {card_key: count}}
-fusion_levels = defaultdict(lambda: defaultdict(int))  # {uid: {card_key: level 0-3}}
+# Collections et fusions
+gacha_collections = defaultdict(dict)   # {uid: {card_key: {"fusion": 0}}}
+fusion_levels = defaultdict(lambda: defaultdict(int))  # {uid: {card_key: level}}
 
-GACHA_PRIX = 100  # pièces par tirage
-GACHA_PRIX_X10 = 900  # 10 tirages = 9x le prix
+# Cartes claimées sur le serveur — uniques
+claimed_cards = {}   # {card_key: user_id}
+collection_order = {}  # {uid: [card_key, ...]} — ordre perso de la collection
 
+# Rolls
+ROLLS_MAX = 10
+ROLLS_RESET_HOURS = 6        # Admin peut modifier via .setrollreset
+roll_data = defaultdict(lambda: {"rolls": ROLLS_MAX, "last_reset": 0.0, "daily_used": False, "daily_reset": 0.0})
+
+# Claim cooldown
+CLAIM_COOLDOWN_MINUTES = 30  # Peut être réduit via shop
+claim_cooldown = defaultdict(float)   # {uid: last_claim_timestamp}
+claim_reduction = defaultdict(int)    # {uid: minutes de réduction achetés}
+roll_freeze = {}       # {uid: unfreeze_timestamp}
+claim_curse = {}       # {uid: curse_end_timestamp}
+shield_active = {}     # {uid: shield_end_timestamp}
+rarity_boost = {}      # {uid: rolls_restants_avec_boost}
+daily_item_usage = defaultdict(lambda: defaultdict(float))  # {uid: {item_id: last_use_timestamp}}
+
+# Probabilités gacha
 GACHA_RATES = {
-    "Légendaire": 3,
-    "Épique": 12,
-    "Rare": 25,
-    "Commun": 60,
+    "Mythique":   3,
+    "Légendaire": 12,
+    "Épique":     30,
+    "Commun":     55,
 }
 
-def gacha_tirage():
-    """Tire une carte selon les probabilités"""
+def gacha_tirage(boost=False):
+    """Tire une carte dispo (non claimée) selon les probabilités"""
+    available = [k for k in ANIME_CARDS_DB if k not in claimed_cards]
+    if not available:
+        return None
+    rates = dict(GACHA_RATES)
+    if boost:
+        rates["Commun"] = 25
+        rates["Épique"] = 40
+        rates["Légendaire"] = 25
+        rates["Mythique"] = 10
     pool = []
-    for key, c in ANIME_CARDS_DB.items():
-        weight = GACHA_RATES[c["rarete"]]
-        pool.extend([key] * weight)
-    return random.choice(pool)
+    for key in available:
+        c = ANIME_CARDS_DB[key]
+        rarete = c["rarete"] if c["rarete"] in rates else "Commun"
+        pool.extend([key] * rates[rarete])
+    return random.choice(pool) if pool else None
 
-def get_card_image(uid, key):
-    """Récupère l'image d'une carte — collection perso ou image par défaut"""
-    # Cherche d'abord dans la collection personnalisée
-    if key in cartes_collections[uid]:
-        for data in cartes_collections[uid].values():
-            if data["key"] == key and data["image"]:
-                return data["image"]
-    # Image par défaut dans la DB
-    return ANIME_CARDS_DB[key].get("image", None)
+def get_roll_cooldown_seconds(uid):
+    """Retourne le temps restant avant reset des rolls en secondes"""
+    import time
+    data = roll_data[uid]
+    elapsed = time.time() - data["last_reset"]
+    total = ROLLS_RESET_HOURS * 3600
+    remaining = total - elapsed
+    return max(0, remaining)
 
-def build_gacha_embed(uid, key, is_new=True):
-    """Construit l'embed de tirage gacha"""
+def get_claim_cooldown_seconds(uid):
+    """Retourne le temps restant avant pouvoir claim"""
+    import time
+    now_t = time.time()
+    cooldown = max(0, CLAIM_COOLDOWN_MINUTES - claim_reduction[uid])
+    # Malédiction active ? +5 min
+    if uid in claim_curse and claim_curse[uid] > now_t:
+        cooldown += 5
+    elapsed = now_t - claim_cooldown[uid]
+    remaining = (cooldown * 60) - elapsed
+    return max(0, remaining)
+
+def build_gacha_embed(uid, key, rolls_left):
+    """Construit l'embed de tirage gacha style Mudae"""
+    import time
     c = ANIME_CARDS_DB[key]
     level = fusion_levels[uid][key]
-    rarete_emoji = RARETE_EMOJI[c["rarete"]]
-    couleur = RARETE_COULEURS[c["rarete"]]
-    count = gacha_collections[uid][key]
-
+    rarete_emoji = RARETE_EMOJI.get(c["rarete"], "🔵")
+    couleur = RARETE_COULEURS.get(c["rarete"], 0x95a5a6)
     stars = "⭐" * level if level > 0 else ""
+
     boost_atk = level * 15
     boost_def = level * 10
     boost_pv = level * 20
 
     embed = discord.Embed(
-        title=f"{'✨ NOUVEAU ! ' if is_new else ''}{c['emoji']} {c['nom']} {stars}",
+        title=f"{c['emoji']} {c['nom']} {stars}",
         description=f"*{c['serie']}* {rarete_emoji} **{c['rarete']}**",
         color=couleur
     )
 
-    image = get_card_image(uid, key)
+    image = c.get("image")
     if image:
         embed.set_image(url=image)
 
-    atk_str = f"**{c['attaque'] + boost_atk}**" + (f" *(+{boost_atk})*" if boost_atk > 0 else "")
-    def_str = f"**{c['defense'] + boost_def}**" + (f" *(+{boost_def})*" if boost_def > 0 else "")
-    pv_str = f"**{c['pv'] + boost_pv}**" + (f" *(+{boost_pv})*" if boost_pv > 0 else "")
-
     embed.add_field(
         name="📊 Stats",
-        value=f"❤️ PV : {pv_str} | ⚔️ ATK : {atk_str} | 🛡️ DEF : {def_str}",
+        value=f"❤️ **{c['pv'] + boost_pv}** PV | ⚔️ **{c['attaque'] + boost_atk}** ATK | 🛡️ **{c['defense'] + boost_def}** DEF",
         inline=False
     )
 
@@ -4806,91 +5063,423 @@ def build_gacha_embed(uid, key, is_new=True):
         for a in c["attaques"]
     ])
     embed.add_field(name="⚔️ Attaques", value=attaques_str, inline=False)
-
-    if count > 1:
-        needed_for_fusion = 3 ** (level + 1) if level < 3 else 999
-        embed.add_field(
-            name="🔮 Fusion",
-            value=f"Tu possèdes **{count}x** {c['nom']}\n"
-                  + (f"Il t'en faut **{3}** pour fusionner ! `.fusionner {key}`" if count >= 3 and level < 3 else
-                     f"*Niveau de fusion max !* 💫" if level >= 3 else
-                     f"Encore **{3 - count}** exemplaire(s) pour fusionner"),
-            inline=False
-        )
-
-    embed.set_footer(text=f"Collection : {count}x • Fusion niveau {level}/3 • .gacha pour tirer | .gachax10 pour x10")
+    embed.set_footer(text=f"🎰 Rolls restants : {rolls_left} • ❤️ Claim en 30s • .rolls pour voir tes rolls")
     return embed
 
-@bot.command(name="gacha")
-async def gacha_cmd(ctx):
-    """Tire une carte aléatoire — .gacha (100 pièces)"""
+@bot.command(name="ga")
+async def ga_cmd(ctx):
+    """Tire une carte gacha — .ga"""
+    import time
+
+    # Vérif salon
+    if SALON_GACHA_ID and ctx.channel.id != SALON_GACHA_ID:
+        salon = ctx.guild.get_channel(SALON_GACHA_ID)
+        mention = salon.mention if salon else "le salon gacha"
+        return await ctx.send(f"🎰 Le gacha c'est dans {mention} !", delete_after=5)
+
     uid = str(ctx.author.id)
-    if economy_data[uid]["coins"] < GACHA_PRIX:
-        return await ctx.send(f"❌ Tu n'as pas assez de pièces ! Il faut **{GACHA_PRIX} pièces**.\nTon solde : **{economy_data[uid]['coins']} pièces**")
+    now = time.time()
+    data = roll_data[uid]
 
-    economy_data[uid]["coins"] -= GACHA_PRIX
+    # Reset rolls si délai écoulé
+    if now - data["last_reset"] >= ROLLS_RESET_HOURS * 3600:
+        data["rolls"] = ROLLS_MAX
+        data["last_reset"] = now
 
-    # Animation
-    msg = await ctx.send(embed=discord.Embed(
-        description="🎰 Tirage en cours...",
-        color=0x9b59b6
-    ))
-    await asyncio.sleep(1)
+    # Vérif freeze
+    if uid in roll_freeze and roll_freeze[uid] > now:
+        restant = int(roll_freeze[uid] - now)
+        return await ctx.send(f"🧊 Tes rolls sont gelés ! Tu pourras tirer dans **{restant}s** !", delete_after=8)
 
-    key = gacha_tirage()
+    if data["rolls"] <= 0:
+        remaining = get_roll_cooldown_seconds(uid)
+        h = int(remaining // 3600)
+        m = int((remaining % 3600) // 60)
+        return await ctx.send(
+            f"❌ Plus de rolls ! Recharge dans **{h}h{m:02d}min**\n"
+            f"💡 Achète +10 rolls en boutique avec `.shop`",
+            delete_after=10
+        )
+
+    data["rolls"] -= 1
+    # Boost rareté actif ?
+    boost_actif = uid in rarity_boost and rarity_boost[uid] > 0
+    key = gacha_tirage(boost=boost_actif)
+    if boost_actif:
+        rarity_boost[uid] -= 1
+        if rarity_boost[uid] <= 0:
+            del rarity_boost[uid]
+
+    if not key:
+        return await ctx.send("😮 Toutes les cartes ont été claimées ! Les admins peuvent ajouter de nouveaux persos.")
+
     c = ANIME_CARDS_DB[key]
-    is_new = gacha_collections[uid][key] == 0
-    gacha_collections[uid][key] += 1
+    already_owned = uid in [v for v in claimed_cards.values()] and key in [k for k, v in claimed_cards.items() if v == uid]
+    already_claimed_by_other = key in claimed_cards and claimed_cards[key] != uid
 
-    embed = build_gacha_embed(uid, key, is_new)
-    await msg.edit(embed=embed)
+    embed = build_gacha_embed(uid, key, data["rolls"])
 
-@bot.command(name="gachax10")
-async def gacha_x10(ctx):
-    """10 tirages d'un coup — .gachax10 (900 pièces)"""
-    uid = str(ctx.author.id)
-    if economy_data[uid]["coins"] < GACHA_PRIX_X10:
-        return await ctx.send(f"❌ Il faut **{GACHA_PRIX_X10} pièces** pour x10 !\nTon solde : **{economy_data[uid]['coins']} pièces**")
-
-    economy_data[uid]["coins"] -= GACHA_PRIX_X10
-
-    msg = await ctx.send(embed=discord.Embed(description="🎰 Tirage x10 en cours...", color=0x9b59b6))
-    await asyncio.sleep(1)
-
-    resultats = []
-    legendaires = []
-    for _ in range(10):
-        key = gacha_tirage()
-        gacha_collections[uid][key] += 1
-        c = ANIME_CARDS_DB[key]
-        stars = "⭐" * fusion_levels[uid][key]
-        resultats.append(f"{RARETE_EMOJI[c['rarete']]} {c['emoji']} **{c['nom']}** {stars}")
-        if c["rarete"] == "Légendaire":
-            legendaires.append(key)
-
-    embed = discord.Embed(
-        title="🎰 Résultats x10 !",
-        description="\n".join(resultats),
-        color=0xf1c40f if legendaires else 0x9b59b6
-    )
-    if legendaires:
-        embed.set_footer(text=f"🌟 {len(legendaires)} Légendaire(s) obtenu(s) !")
+    # Emoji selon si déjà claimée
+    if already_claimed_by_other or already_owned:
+        react_emoji = "⚡"
     else:
-        embed.set_footer(text="Pas de légendaire cette fois... Retente ta chance !")
-    await msg.edit(embed=embed)
+        react_emoji = "❤️"
 
-    # Afficher le légendaire en détail
-    if legendaires:
-        await asyncio.sleep(1)
-        key = legendaires[-1]
-        embed2 = build_gacha_embed(uid, key, False)
-        await ctx.send(embed=embed2)
+    msg = await ctx.send(embed=embed)
+    await msg.add_reaction(react_emoji)
+
+    if react_emoji == "❤️":
+        def check(reaction, user):
+            return (
+                str(reaction.emoji) == "❤️"
+                and reaction.message.id == msg.id
+                and not user.bot
+            )
+
+        try:
+            reaction, claimer = await bot.wait_for("reaction_add", check=check, timeout=30)
+            claimer_uid = str(claimer.id)
+
+            # Vérif claim cooldown
+            claim_remaining = get_claim_cooldown_seconds(claimer_uid)
+            if claim_remaining > 0:
+                mins = int(claim_remaining // 60)
+                secs = int(claim_remaining % 60)
+                return await ctx.send(
+                    f"⏳ {claimer.mention} doit attendre encore **{mins}m{secs:02d}s** avant de claim !",
+                    delete_after=8
+                )
+
+            # Claim !
+            claimed_cards[key] = claimer_uid
+            claim_cooldown[claimer_uid] = time.time()
+
+            if key not in gacha_collections[claimer_uid]:
+                gacha_collections[claimer_uid][key] = {"fusion": 0}
+
+            # Mettre à jour l'embed
+            level = fusion_levels[claimer_uid][key]
+            stars = "⭐" * level if level > 0 else ""
+            rarete_emoji = RARETE_EMOJI.get(c["rarete"], "🔵")
+            couleur = RARETE_COULEURS.get(c["rarete"], 0x95a5a6)
+
+            claimed_embed = discord.Embed(
+                title=f"{c['emoji']} {c['nom']} {stars} — Claimé ! ✅",
+                description=f"*{c['serie']}* {rarete_emoji} **{c['rarete']}**\n\n💜 **{claimer.display_name}** a claimé cette carte !",
+                color=couleur
+            )
+            if c.get("image"):
+                claimed_embed.set_image(url=c["image"])
+            claimed_embed.set_footer(text=f"❤️ Claim reset dans {CLAIM_COOLDOWN_MINUTES - claim_reduction[claimer_uid]} min • .gachastock pour voir ta collection")
+            await msg.edit(embed=claimed_embed)
+            try:
+                await msg.clear_reactions()
+            except:
+                pass
+
+        except asyncio.TimeoutError:
+            # Personne n'a claimé
+            try:
+                await msg.clear_reactions()
+                expired_embed = discord.Embed(
+                    title=f"{c['emoji']} {c['nom']} — Expirée ⌛",
+                    description=f"*{c['serie']}* • Personne n'a claimé cette carte à temps !",
+                    color=0x555555
+                )
+                if c.get("image"):
+                    expired_embed.set_image(url=c["image"])
+                await msg.edit(embed=expired_embed)
+            except:
+                pass
+
+@bot.command(name="daily")
+async def daily_gacha(ctx):
+    """Claim ton roll quotidien bonus — .daily"""
+    import time
+
+    if SALON_GACHA_ID and ctx.channel.id != SALON_GACHA_ID:
+        salon = ctx.guild.get_channel(SALON_GACHA_ID)
+        mention = salon.mention if salon else "le salon gacha"
+        return await ctx.send(f"🎰 Le gacha c'est dans {mention} !", delete_after=5)
+
+    uid = str(ctx.author.id)
+    now = time.time()
+    data = roll_data[uid]
+
+    # Reset daily si 24h passées
+    if now - data["daily_reset"] >= 86400:
+        data["daily_used"] = False
+        data["daily_reset"] = now
+
+    if data["daily_used"]:
+        remaining = 86400 - (now - data["daily_reset"])
+        h = int(remaining // 3600)
+        m = int((remaining % 3600) // 60)
+        return await ctx.send(f"⏳ Daily déjà utilisé ! Reviens dans **{h}h{m:02d}min**", delete_after=8)
+
+    data["daily_used"] = True
+    data["rolls"] = min(data["rolls"] + 1, ROLLS_MAX + 1)
+    await ctx.send(f"🎁 {ctx.author.mention} a reçu **1 roll bonus** ! Tu as maintenant **{data['rolls']} rolls** 🎰")
+
+@bot.command(name="rolls")
+async def rolls_cmd(ctx):
+    """Voir tes rolls restants — .rolls"""
+    import time
+
+    if SALON_GACHA_ID and ctx.channel.id != SALON_GACHA_ID:
+        salon = ctx.guild.get_channel(SALON_GACHA_ID)
+        mention = salon.mention if salon else "le salon gacha"
+        return await ctx.send(f"🎰 Le gacha c'est dans {mention} !", delete_after=5)
+
+    uid = str(ctx.author.id)
+    now = time.time()
+    data = roll_data[uid]
+
+    # Reset rolls si délai écoulé
+    if now - data["last_reset"] >= ROLLS_RESET_HOURS * 3600:
+        data["rolls"] = ROLLS_MAX
+        data["last_reset"] = now
+
+    rolls_left = data["rolls"]
+    roll_remaining = get_roll_cooldown_seconds(uid)
+    rh = int(roll_remaining // 3600)
+    rm = int((roll_remaining % 3600) // 60)
+
+    claim_remaining = get_claim_cooldown_seconds(uid)
+    cm = int(claim_remaining // 60)
+    cs = int(claim_remaining % 60)
+
+    cooldown_claim = max(0, CLAIM_COOLDOWN_MINUTES - claim_reduction[uid])
+
+    embed = discord.Embed(title=f"🎰 Rolls de {ctx.author.display_name}", color=0x9b59b6)
+    embed.add_field(
+        name="🎲 Rolls",
+        value=f"**{rolls_left}/{ROLLS_MAX}** disponibles\n"
+              + (f"Recharge dans **{rh}h{rm:02d}min**" if rolls_left < ROLLS_MAX else "✅ Rechargé !"),
+        inline=True
+    )
+    embed.add_field(
+        name="❤️ Claim",
+        value=f"Cooldown : **{cooldown_claim} min**\n"
+              + (f"Dispo dans **{cm}m{cs:02d}s**" if claim_remaining > 0 else "✅ Prêt à claim !"),
+        inline=True
+    )
+    daily_remaining = 86400 - (now - data["daily_reset"])
+    dr = int(daily_remaining // 3600)
+    dm = int((daily_remaining % 3600) // 60)
+    embed.add_field(
+        name="🎁 Daily",
+        value="✅ Disponible !" if not data["daily_used"] else f"⏳ Dans **{dr}h{dm:02d}min**",
+        inline=True
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name="setrollreset")
+@commands.has_permissions(administrator=True)
+async def setrollreset(ctx, heures: int = None):
+    """Configure le temps de recharge des rolls — .setrollreset <heures>"""
+    global ROLLS_RESET_HOURS
+    if not heures or heures < 1 or heures > 24:
+        return await ctx.send("❌ Précise un nombre d'heures entre 1 et 24 ! Ex: `.setrollreset 6`")
+    ROLLS_RESET_HOURS = heures
+    await ctx.send(f"✅ Rolls rechargés toutes les **{heures}h** maintenant !")
+
+@bot.command(name="gachastock")
+async def gachastock(ctx, membre_ou_perso: str = None):
+    """Voir ta collection gacha style Mudae — .gachastock [@joueur] [perso]"""
+    if SALON_GACHA_ID and ctx.channel.id != SALON_GACHA_ID:
+        salon = ctx.guild.get_channel(SALON_GACHA_ID)
+        mention = salon.mention if salon else "le salon gacha"
+        return await ctx.send(f"🎰 Le gacha c'est dans {mention} !", delete_after=5)
+
+    # Déterminer si c'est un membre ou un nom de perso
+    target = ctx.author
+    start_key = None
+
+    if membre_ou_perso:
+        # Essayer de convertir en membre
+        try:
+            target = await commands.MemberConverter().convert(ctx, membre_ou_perso)
+        except:
+            # C'est un nom de perso — on commence par ce perso
+            start_key = membre_ou_perso.lower()
+
+    uid = str(target.id)
+    collection = gacha_collections[uid]
+
+    if not collection:
+        return await ctx.send(
+            f"📭 {'Ta collection est vide !' if target == ctx.author else f'La collection de **{target.display_name}** est vide !'}\n"
+            f"Tape `.ga` pour tirer !"
+        )
+
+    # Récupérer les clés dans l'ordre sauvegardé
+    order = collection_order.get(uid, [])
+    # Ajouter les cartes pas encore dans l'ordre
+    all_keys = [k for k in order if k in collection] + [k for k in collection if k not in order]
+
+    # Trouver l'index de départ
+    start_idx = 0
+    if start_key and start_key in all_keys:
+        start_idx = all_keys.index(start_key)
+
+    index = [start_idx]
+
+    def build_embed(i):
+        key = all_keys[i]
+        c = ANIME_CARDS_DB[key]
+        level = fusion_levels[uid][key]
+        stars = "⭐" * level
+        rarete_emoji = RARETE_EMOJI.get(c["rarete"], "🔵")
+        couleur = RARETE_COULEURS.get(c["rarete"], 0x95a5a6)
+        boost_atk = level * 15
+        boost_def = level * 10
+        boost_pv = level * 20
+
+        embed = discord.Embed(
+            title=f"{c['emoji']} {c['nom']} {stars}",
+            description=f"*{c['serie']}* {rarete_emoji} **{c['rarete']}**",
+            color=couleur
+        )
+        if c.get("image"):
+            embed.set_image(url=c["image"])
+
+        embed.add_field(
+            name="📊 Stats",
+            value=f"❤️ **{c['pv'] + boost_pv}** PV | ⚔️ **{c['attaque'] + boost_atk}** ATK | 🛡️ **{c['defense'] + boost_def}** DEF",
+            inline=False
+        )
+        attaques_str = "\n".join([
+            f"{a['emoji']} **{a['nom']}** — `{a['degats']} dégâts`"
+            for a in c["attaques"]
+        ])
+        embed.add_field(name="⚔️ Attaques", value=attaques_str, inline=False)
+
+        tokens = collection[key].get("fusion_tokens", 0) if isinstance(collection[key], dict) else 0
+        if tokens > 0:
+            embed.add_field(name="🔮 Fusion", value=f"**{tokens}/2** tokens • `.fusionner {key}`", inline=True)
+
+        embed.set_footer(text=f"Carte {i+1}/{len(all_keys)} • Collection de {target.display_name} • .gacha ordre pour réorganiser")
+        return embed
+
+    msg = await ctx.send(embed=build_embed(index[0]))
+
+    if len(all_keys) > 1:
+        await msg.add_reaction("◀️")
+        await msg.add_reaction("▶️")
+
+        def check(reaction, user):
+            return (
+                user == ctx.author
+                and str(reaction.emoji) in ["◀️", "▶️"]
+                and reaction.message.id == msg.id
+            )
+
+        while True:
+            try:
+                reaction, user = await bot.wait_for("reaction_add", check=check, timeout=60)
+                if str(reaction.emoji) == "▶️":
+                    index[0] = (index[0] + 1) % len(all_keys)
+                elif str(reaction.emoji) == "◀️":
+                    index[0] = (index[0] - 1) % len(all_keys)
+                await msg.edit(embed=build_embed(index[0]))
+                try:
+                    await msg.remove_reaction(reaction.emoji, user)
+                except:
+                    pass
+            except asyncio.TimeoutError:
+                try:
+                    await msg.clear_reactions()
+                except:
+                    pass
+                break
+
+@bot.command(name="gacha")
+async def gacha_cmd(ctx, sous_cmd: str = None, *args):
+    """Commandes gacha — .gacha ordre naruto 1 luffy 2"""
+    if SALON_GACHA_ID and ctx.channel.id != SALON_GACHA_ID:
+        salon = ctx.guild.get_channel(SALON_GACHA_ID)
+        mention = salon.mention if salon else "le salon gacha"
+        return await ctx.send(f"🎰 Le gacha c'est dans {mention} !", delete_after=5)
+
+    if sous_cmd and sous_cmd.lower() == "ordre":
+        uid = str(ctx.author.id)
+        collection = gacha_collections[uid]
+
+        if not collection:
+            return await ctx.send("❌ Ta collection est vide !")
+
+        if not args or len(args) % 2 != 0:
+            return await ctx.send("❌ Format : `.gacha ordre naruto 1 luffy 2 gojo 3`")
+
+        # Parser les paires perso/position
+        order = collection_order.get(uid, list(collection.keys()))
+        # S'assurer que toutes les cartes sont dans l'ordre
+        for key in collection:
+            if key not in order:
+                order.append(key)
+
+        pairs = list(args)
+        erreurs = []
+        changes = {}
+
+        for i in range(0, len(pairs), 2):
+            perso = pairs[i].lower()
+            try:
+                pos = int(pairs[i+1]) - 1  # 0-indexed
+            except:
+                erreurs.append(f"`{pairs[i+1]}` n'est pas un numéro valide")
+                continue
+
+            if perso not in collection:
+                erreurs.append(f"`{perso}` pas dans ta collection")
+                continue
+
+            if pos < 0 or pos >= len(order):
+                erreurs.append(f"Position `{pos+1}` invalide (max {len(order)})")
+                continue
+
+            changes[perso] = pos
+
+        if erreurs:
+            return await ctx.send("❌ Erreurs :\n" + "\n".join(erreurs))
+
+        # Appliquer les changements
+        new_order = [k for k in order if k not in changes]
+        for perso, pos in sorted(changes.items(), key=lambda x: x[1]):
+            pos = min(pos, len(new_order))
+            new_order.insert(pos, perso)
+
+        # S'assurer que toutes les cartes sont présentes
+        for key in collection:
+            if key not in new_order:
+                new_order.append(key)
+
+        collection_order[uid] = new_order
+
+        result = "\n".join([
+            f"`{i+1}` — {ANIME_CARDS_DB[k]['emoji']} **{ANIME_CARDS_DB[k]['nom']}**"
+            for i, k in enumerate(new_order) if k in ANIME_CARDS_DB
+        ])
+        embed = discord.Embed(
+            title="✅ Collection réorganisée !",
+            description=result,
+            color=0x2ecc71
+        )
+        await ctx.send(embed=embed)
+    else:
+        await ctx.send("💡 Commandes gacha :\n`.ga` — Tirer une carte\n`.gacha ordre naruto 1 luffy 2` — Réorganiser ta collection\n`.gachastock` — Voir ta collection\n`.rolls` — Voir tes rolls")
 
 @bot.command(name="fusionner")
 async def fusionner(ctx, perso: str = None):
     """Fusionne 3 cartes identiques pour un boost — .fusionner naruto"""
+    if SALON_GACHA_ID and ctx.channel.id != SALON_GACHA_ID:
+        salon = ctx.guild.get_channel(SALON_GACHA_ID)
+        mention = salon.mention if salon else "le salon gacha"
+        return await ctx.send(f"🎰 Le gacha c'est dans {mention} !", delete_after=5)
+
     if not perso:
-        return await ctx.send("❌ Précise un personnage ! Ex: `.fusionner naruto`")
+        return await ctx.send("❌ Ex: `.fusionner naruto`")
 
     uid = str(ctx.author.id)
     key = perso.lower()
@@ -4898,96 +5487,109 @@ async def fusionner(ctx, perso: str = None):
     if key not in ANIME_CARDS_DB:
         return await ctx.send(f"❌ Personnage `{perso}` introuvable !")
 
-    count = gacha_collections[uid][key]
+    if key not in gacha_collections[uid]:
+        return await ctx.send(f"❌ Tu ne possèdes pas **{ANIME_CARDS_DB[key]['nom']}** !")
+
     level = fusion_levels[uid][key]
-    c = ANIME_CARDS_DB[key]
-
     if level >= 3:
-        return await ctx.send(f"⭐⭐⭐ **{c['nom']}** est déjà au niveau de fusion maximum !")
+        return await ctx.send(f"⭐⭐⭐ **{ANIME_CARDS_DB[key]['nom']}** est déjà au niveau de fusion max !")
 
-    if count < 3:
+    # Compter les doublons — cartes claimées par l'utilisateur du même perso
+    # Pour la fusion on a besoin que la carte soit déjà claim + 2 autres exemplaires
+    # Dans ce système chaque perso est unique donc la fusion se fait avec des tickets de fusion
+    # qu'on gagne en claimant une carte déjà possédée (boost)
+    fusion_tokens = gacha_collections[uid][key].get("fusion_tokens", 0)
+    if fusion_tokens < 2:
         return await ctx.send(
-            f"❌ Tu n'as que **{count}x {c['nom']}** — il en faut **3** pour fusionner !\n"
-            f"Fais `.gacha` pour en obtenir plus !"
+            f"❌ Tu as besoin de **2 tokens de fusion** pour booster **{ANIME_CARDS_DB[key]['nom']}** !\n"
+            f"Tu en as **{fusion_tokens}/2**\n"
+            f"💡 Claim la même carte en mode boost pour obtenir des tokens !"
         )
 
-    # Fusion !
-    gacha_collections[uid][key] -= 3
+    gacha_collections[uid][key]["fusion_tokens"] -= 2
     fusion_levels[uid][key] += 1
     new_level = fusion_levels[uid][key]
-
-    boost_atk = new_level * 15
-    boost_pv = new_level * 20
-    boost_def = new_level * 10
+    c = ANIME_CARDS_DB[key]
     stars = "⭐" * new_level
 
     embed = discord.Embed(
-        title=f"✨ FUSION RÉUSSIE ! {c['emoji']} {c['nom']} {stars}",
-        description=f"*{c['serie']}* {RARETE_EMOJI[c['rarete']]} **{c['rarete']}**\n\n"
-                    f"3x {c['nom']} fusionnés avec succès !",
-        color=RARETE_COULEURS[c["rarete"]]
+        title=f"✨ FUSION ! {c['emoji']} {c['nom']} {stars}",
+        description=f"*{c['serie']}* {RARETE_EMOJI.get(c['rarete'], '🔵')} **{c['rarete']}**",
+        color=RARETE_COULEURS.get(c["rarete"], 0x95a5a6)
     )
-
-    image = get_card_image(uid, key)
-    if image:
-        embed.set_image(url=image)
-
+    if c.get("image"):
+        embed.set_image(url=c["image"])
+    boost = new_level
     embed.add_field(
-        name="📈 Nouveaux Stats",
-        value=f"❤️ PV : **{c['pv'] + boost_pv}** *(+{boost_pv})*\n"
-              f"⚔️ ATK : **{c['attaque'] + boost_atk}** *(+{boost_atk})*\n"
-              f"🛡️ DEF : **{c['defense'] + boost_def}** *(+{boost_def})*",
+        name="📈 Stats boostées",
+        value=f"❤️ +{boost*20} PV | ⚔️ +{boost*15} ATK | 🛡️ +{boost*10} DEF",
         inline=False
     )
+    embed.set_footer(text=f"Fusion {new_level}/3 • Tokens restants : {gacha_collections[uid][key].get('fusion_tokens', 0)}")
+    await ctx.send(embed=embed)
 
-    remaining = gacha_collections[uid][key]
-    next_msg = f"Il te reste **{remaining}x** {c['nom']} après fusion."
-    if new_level < 3:
-        next_msg += f"\nEncore **3** exemplaires pour le niveau ⭐{'⭐' * new_level} !"
+# (ancien système supprimé — voir nouveau système gacha au-dessus)
+
+# ============================================================
+#  CONFIGURATION SALONS
+# ============================================================
+@bot.command(name="setsalon")
+@commands.has_permissions(administrator=True)
+async def setsalon(ctx, type_salon: str = None):
+    """Configure les salons spéciaux — .setsalon levelup | casino | gacha | boutique"""
+    global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID
+    types = {
+        "levelup": ("SALON_LEVELUP_ID", "level up"),
+        "casino": ("SALON_CASINO_ID", "casino"),
+        "gacha": ("SALON_GACHA_ID", "gacha"),
+        "boutique": ("SALON_BOUTIQUE_ID", "boutique"),
+    }
+    if not type_salon or type_salon.lower() not in types:
+        return await ctx.send("❌ Usage : `.setsalon levelup` | `.setsalon casino` | `.setsalon gacha` | `.setsalon boutique`")
+    
+    var_name, label = types[type_salon.lower()]
+    if var_name == "SALON_LEVELUP_ID": SALON_LEVELUP_ID = ctx.channel.id
+    elif var_name == "SALON_CASINO_ID": SALON_CASINO_ID = ctx.channel.id
+    elif var_name == "SALON_GACHA_ID": SALON_GACHA_ID = ctx.channel.id
+    elif var_name == "SALON_BOUTIQUE_ID": SALON_BOUTIQUE_ID = ctx.channel.id
+    await ctx.send(f"✅ Salon **{label}** configuré sur {ctx.channel.mention} !")
+
+# ============================================================
+#  UTILISER item offensif
+# ============================================================
+@bot.command(name="utiliser")
+async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None):
+    """Utilise un item offensif sur un joueur — .utiliser freeze @joueur"""
+    import time as _time
+    if not item_type or not cible:
+        return await ctx.send("❌ Usage : `.utiliser freeze @joueur` ou `.utiliser curse @joueur`")
+
+    uid_cible = str(cible.id)
+    now_ts = _time.time()
+
+    # Vérif bouclier
+    if uid_cible in shield_active and shield_active[uid_cible] > now_ts:
+        restant = int(shield_active[uid_cible] - now_ts)
+        return await ctx.send(f"🛡️ **{cible.display_name}** est protégé par un bouclier ! (**{restant}s** restants)")
+
+    if item_type.lower() == "freeze":
+        roll_freeze[uid_cible] = now_ts + 300  # 5 min
+        embed = discord.Embed(
+            title="🧊 Sceau des Ombres activé !",
+            description=f"**{cible.mention}** ne peut plus lancer de rolls pendant **5 minutes** ! 😈",
+            color=0x3498db
+        )
+        await ctx.send(embed=embed)
+    elif item_type.lower() == "curse":
+        claim_curse[uid_cible] = now_ts + 300  # +5 min ajoutés au claim cooldown
+        embed = discord.Embed(
+            title="⏳ Malédiction activée !",
+            description=f"**{cible.mention}** a +5 min sur son claim cooldown ! 😈",
+            color=0x9b59b6
+        )
+        await ctx.send(embed=embed)
     else:
-        next_msg += "\n🏆 **Niveau de fusion MAXIMUM atteint !**"
-
-    embed.add_field(name="ℹ️ Info", value=next_msg, inline=False)
-    embed.set_footer(text=f"Fusion niveau {new_level}/3 • .gachastock pour voir ta collection")
-    await ctx.send(embed=embed)
-
-@bot.command(name="gachastock")
-async def gachastock(ctx, member: discord.Member = None):
-    """Voir toutes tes cartes gacha — .gachastock [@joueur]"""
-    target = member or ctx.author
-    uid = str(target.id)
-    collection = gacha_collections[uid]
-
-    if not collection:
-        return await ctx.send(f"📭 {'Ta collection gacha est vide !' if not member else f'La collection de **{target.display_name}** est vide !'}\nTape `.gacha` pour commencer !")
-
-    par_rarete = {"Légendaire": [], "Épique": [], "Rare": [], "Commun": []}
-    for key, count in collection.items():
-        if count > 0 and key in ANIME_CARDS_DB:
-            c = ANIME_CARDS_DB[key]
-            level = fusion_levels[uid][key]
-            stars = "⭐" * level
-            par_rarete[c["rarete"]].append(
-                f"{c['emoji']} **{c['nom']}** {stars} x{count}"
-            )
-
-    embed = discord.Embed(
-        title=f"📚 Collection Gacha de {target.display_name}",
-        color=0xf1c40f
-    )
-    total = sum(v for v in collection.values())
-    embed.description = f"**{total}** cartes au total"
-
-    for rarete, cartes in par_rarete.items():
-        if cartes:
-            embed.add_field(
-                name=f"{RARETE_EMOJI[rarete]} {rarete}",
-                value="\n".join(cartes),
-                inline=False
-            )
-
-    embed.set_footer(text=".fusionner <perso> pour fusionner 3 cartes identiques • .gacha pour tirer !")
-    await ctx.send(embed=embed)
+        await ctx.send("❌ Item inconnu ! Utilise `freeze` ou `curse`")
 
 # ============================================================
 print("🚀 Démarrage du bot...")
