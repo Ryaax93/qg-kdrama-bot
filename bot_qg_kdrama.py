@@ -4008,89 +4008,288 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
     if ctx.channel.id in active_arene:
         return await ctx.send("⚔️ Un combat est déjà en cours ici !")
 
-    active_arene[ctx.channel.id] = {
-        "joueur1": {"membre": ctx.author, "hp": 100},
-        "joueur2": {"membre": adversaire, "hp": 100},
-        "tour": ctx.author.id,
-    }
-
-    embed = discord.Embed(
-        title="⚔️ ARÈNE PVP — QG Kdrama",
+    # ── Invite ──────────────────────────────────────────────────
+    invite_embed = discord.Embed(
+        title="⚔️  DÉFI LANCÉ  ⚔️",
         description=(
-            f"**{ctx.author.mention}** défie **{adversaire.mention}** !\n\n"
-            f"❤️ {ctx.author.display_name} : 100 HP\n"
-            f"❤️ {adversaire.display_name} : 100 HP\n\n"
-            f"C'est à **{ctx.author.mention}** d'attaquer !\n"
-            f"Choisis une attaque en tapant son numéro :"
+            f"# {ctx.author.display_name}  ⚔️  {adversaire.display_name}\n\n"
+            f"{adversaire.mention} — tu as été défié par **{ctx.author.display_name}** !\n\n"
+            f"Réagis avec ✅ pour accepter ou ❌ pour refuser\n"
+            f"*Tu as 30 secondes pour répondre...*"
         ),
         color=0xe74c3c
     )
-    attaques_str = "\n".join([f"`{i+1}` {a['emoji']} **{a['nom']}** *(+{a['degats'][0]}-{a['degats'][1]} dégâts)*" if not a.get('esquive') and not a.get('soin') else f"`{i+1}` {a['emoji']} **{a['nom']}** *({'Esquive' if a.get('esquive') else 'Soin +20-30 HP'})*" for i, a in enumerate(ATTAQUES_PVP[:6])])
-    embed.add_field(name="🗡️ Attaques disponibles", value=attaques_str, inline=False)
-    await ctx.send(embed=embed)
+    invite_embed.set_footer(text="QG Kdrama — Arène PvP ⚔️")
+    invite_msg = await ctx.send(embed=invite_embed)
+    await invite_msg.add_reaction("✅")
+    await invite_msg.add_reaction("❌")
 
-    # Boucle de combat
+    def check_invite(reaction, user):
+        return user.id == adversaire.id and reaction.message.id == invite_msg.id and str(reaction.emoji) in ["✅", "❌"]
+
+    try:
+        reaction, _ = await bot.wait_for("reaction_add", timeout=30.0, check=check_invite)
+        if str(reaction.emoji) == "❌":
+            await invite_msg.delete()
+            return await ctx.send(embed=discord.Embed(
+                description=f"💔 **{adversaire.display_name}** a refusé le défi...",
+                color=0x555555
+            ))
+    except asyncio.TimeoutError:
+        await invite_msg.delete()
+        return await ctx.send(embed=discord.Embed(
+            description=f"⏰ **{adversaire.display_name}** n'a pas répondu — défi annulé.",
+            color=0x555555
+        ))
+
+    await invite_msg.delete()
+
+    # ── Setup combat ────────────────────────────────────────────
+    HP_MAX = 120
+    active_arene[ctx.channel.id] = True
+
+    joueurs = [
+        {"membre": ctx.author,  "hp": HP_MAX, "esquive_active": False},
+        {"membre": adversaire,  "hp": HP_MAX, "esquive_active": False},
+    ]
+    tour = 0  # index du joueur actif
+
+    def barre_vie(hp, hp_max=HP_MAX):
+        ratio = hp / hp_max
+        filled = int(ratio * 10)
+        empty = 10 - filled
+        if ratio > 0.6:   couleur = "🟩"
+        elif ratio > 0.3: couleur = "🟨"
+        else:             couleur = "🟥"
+        return couleur * filled + "⬛" * empty
+
+    def build_combat_embed(attaquant, defenseur, resultat_txt, numero_tour):
+        j1, j2 = joueurs[0], joueurs[1]
+        pct1 = j1["hp"] / HP_MAX
+        pct2 = j2["hp"] / HP_MAX
+
+        embed = discord.Embed(
+            title=f"⚔️  {joueurs[0]['membre'].display_name}  VS  {joueurs[1]['membre'].display_name}",
+            color=0xe74c3c
+        )
+
+        # Barres de vie
+        embed.add_field(
+            name=f"{'▶️ ' if attaquant == j1 else ''}🔴 {j1['membre'].display_name}",
+            value=(
+                f"{barre_vie(j1['hp'])}\n"
+                f"**{j1['hp']} / {HP_MAX} HP** {'💀' if j1['hp'] <= 0 else '❤️' if pct1 > 0.5 else '🩸'}"
+            ),
+            inline=True
+        )
+        embed.add_field(name="\u200b", value="\u200b", inline=True)
+        embed.add_field(
+            name=f"{'▶️ ' if attaquant == j2 else ''}🔵 {j2['membre'].display_name}",
+            value=(
+                f"{barre_vie(j2['hp'])}\n"
+                f"**{j2['hp']} / {HP_MAX} HP** {'💀' if j2['hp'] <= 0 else '❤️' if pct2 > 0.5 else '🩸'}"
+            ),
+            inline=True
+        )
+
+        # Résultat du tour
+        embed.add_field(
+            name=f"⚡ Tour {numero_tour}",
+            value=f">>> {resultat_txt}",
+            inline=False
+        )
+
+        return embed
+
+    def build_action_embed(joueur_actif, adversaire_j, numero_tour):
+        j1, j2 = joueurs[0], joueurs[1]
+        pct1 = j1["hp"] / HP_MAX
+        pct2 = j2["hp"] / HP_MAX
+
+        embed = discord.Embed(
+            title=f"⚔️  {joueurs[0]['membre'].display_name}  VS  {joueurs[1]['membre'].display_name}",
+            description=(
+                f"**Choisis ton attaque avec les réactions ci-dessous !**\n"
+                f"*Tu as **30 secondes** pour agir...*"
+            ),
+            color=0x9b59b6
+        )
+
+        embed.add_field(
+            name=f"🔴 {j1['membre'].display_name}",
+            value=(
+                f"{barre_vie(j1['hp'])}\n"
+                f"**{j1['hp']} / {HP_MAX} HP** {'❤️' if pct1 > 0.5 else '🩸'}"
+            ),
+            inline=True
+        )
+        embed.add_field(name="\u200b", value="\u200b", inline=True)
+        embed.add_field(
+            name=f"🔵 {j2['membre'].display_name}",
+            value=(
+                f"{barre_vie(j2['hp'])}\n"
+                f"**{j2['hp']} / {HP_MAX} HP** {'❤️' if pct2 > 0.5 else '🩸'}"
+            ),
+            inline=True
+        )
+
+        embed.add_field(
+            name=f"▶️ Tour {numero_tour} — {joueur_actif['membre'].display_name} attaque !",
+            value=(
+                "1️⃣ ⚔️ **Attaque Normale** — dégâts stables *(25-40)*\n"
+                "2️⃣ 💥 **Attaque Chargée** — dégâts élevés mais imprécis *(10-65)*\n"
+                "3️⃣ 🌀 **Attaque Spéciale** — dégâts moyens garantis *(30-50)*\n"
+                "4️⃣ 🛡️ **Défense** — réduit les dégâts du prochain tour de 50%\n"
+                "5️⃣ 🌿 **Soin** — récupère 15-30 HP\n"
+                "6️⃣ 💨 **Esquive** — 60% de chance d'éviter la prochaine attaque"
+            ),
+            inline=False
+        )
+        embed.set_footer(text=f"⚔️ C'est au tour de {joueur_actif['membre'].display_name} !")
+        return embed
+
+    REACTIONS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣"]
+
+    # ── Écran de départ ─────────────────────────────────────────
+    start_embed = discord.Embed(
+        title="🏟️  COMBAT COMMENCE  🏟️",
+        description=(
+            f"## ⚔️  {ctx.author.display_name}  **VS**  {adversaire.display_name}  ⚔️\n\n"
+            f"🔴 **{ctx.author.display_name}** — {HP_MAX} HP\n"
+            f"🔵 **{adversaire.display_name}** — {HP_MAX} HP\n\n"
+            f"*{ctx.author.display_name} commence !*"
+        ),
+        color=0xe74c3c
+    )
+    await ctx.send(embed=start_embed)
+    await asyncio.sleep(2)
+
+    # ── Boucle de combat ────────────────────────────────────────
+    numero_tour = 1
+    combat_msg = None
+
     while ctx.channel.id in active_arene:
-        game = active_arene[ctx.channel.id]
-        j1 = game["joueur1"]
-        j2 = game["joueur2"]
-        current = j1 if game["tour"] == j1["membre"].id else j2
-        other = j2 if game["tour"] == j1["membre"].id else j1
+        attaquant = joueurs[tour % 2]
+        defenseur = joueurs[(tour + 1) % 2]
 
-        def check(m):
-            return m.channel == ctx.channel and m.author.id == current["membre"].id and m.content.isdigit() and 1 <= int(m.content) <= 6
+        # Envoyer/modifier l'embed d'action
+        action_embed = build_action_embed(attaquant, defenseur, numero_tour)
+        if combat_msg:
+            try:
+                await combat_msg.clear_reactions()
+            except:
+                pass
+            await combat_msg.edit(embed=action_embed)
+        else:
+            combat_msg = await ctx.send(embed=action_embed)
+
+        for r in REACTIONS:
+            await combat_msg.add_reaction(r)
+
+        def check_reaction(reaction, user):
+            return (
+                user.id == attaquant["membre"].id
+                and reaction.message.id == combat_msg.id
+                and str(reaction.emoji) in REACTIONS
+            )
 
         try:
-            msg = await bot.wait_for("message", check=check, timeout=30)
-            choix = int(msg.content) - 1
-            attaque = ATTAQUES_PVP[choix]
-
-            if attaque.get("esquive"):
-                degats = 0
-                texte = f"💨 **{current['membre'].display_name}** esquive la prochaine attaque !"
-            elif attaque.get("soin"):
-                soin = random.randint(20, 30)
-                current["hp"] = min(100, current["hp"] + soin)
-                degats = 0
-                texte = f"🌸 **{current['membre'].display_name}** se soigne de **{soin} HP** !"
-            else:
-                degats = random.randint(*attaque["degats"])
-                other["hp"] = max(0, other["hp"] - degats)
-                texte = f"{attaque['emoji']} **{current['membre'].display_name}** utilise **{attaque['nom']}** → **-{degats} HP** à {other['membre'].display_name} !"
-
-            # Vérif victoire
-            if other["hp"] <= 0:
-                prize = random.randint(100, 250)
-                economy_data[str(current["membre"].id)]["coins"] += prize
-                xp_data[str(current["membre"].id)]["xp"] += 40
-                del active_arene[ctx.channel.id]
-                embed = discord.Embed(
-                    title="🏆 FIN DU COMBAT !",
-                    description=f"{texte}\n\n🏆 **{current['membre'].mention}** remporte l'arène ! **+{prize} pièces & +40 XP** 🎉",
-                    color=0xf1c40f
-                )
-                await ctx.send(embed=embed)
-                return
-
-            # Prochain tour
-            game["tour"] = other["membre"].id
-            embed = discord.Embed(
-                title="⚔️ Arène PvP",
-                description=(
-                    f"{texte}\n\n"
-                    f"❤️ {j1['membre'].display_name} : **{j1['hp']} HP**\n"
-                    f"❤️ {j2['membre'].display_name} : **{j2['hp']} HP**\n\n"
-                    f"C'est au tour de **{other['membre'].mention}** !\n{attaques_str}"
-                ),
-                color=0xe74c3c
-            )
-            embed.add_field(name="🗡️ Attaques", value=attaques_str, inline=False)
-            await ctx.send(embed=embed)
-
+            reaction, _ = await bot.wait_for("reaction_add", timeout=30.0, check=check_reaction)
+            choix = REACTIONS.index(str(reaction.emoji))
         except asyncio.TimeoutError:
+            # Attaque auto aléatoire
+            choix = 0
+
+        # ── Résolution de l'action ───────────────────────────
+        if choix == 0:  # Attaque normale
+            degats = random.randint(25, 40)
+            if defenseur["esquive_active"]:
+                resultat = f"💨 **{defenseur['membre'].display_name}** esquive l'attaque normale !"
+                defenseur["esquive_active"] = False
+            else:
+                if hasattr(defenseur, 'defense_active') and defenseur.get("defense_active"):
+                    degats = degats // 2
+                    defenseur["defense_active"] = False
+                defenseur["hp"] = max(0, defenseur["hp"] - degats)
+                resultat = f"⚔️ **{attaquant['membre'].display_name}** attaque — **-{degats} HP** à {defenseur['membre'].display_name} !"
+
+        elif choix == 1:  # Attaque chargée
+            degats = random.randint(10, 65)
+            if defenseur["esquive_active"]:
+                resultat = f"💨 **{defenseur['membre'].display_name}** esquive l'attaque chargée !"
+                defenseur["esquive_active"] = False
+            else:
+                defenseur["hp"] = max(0, defenseur["hp"] - degats)
+                resultat = f"💥 **{attaquant['membre'].display_name}** charge — **-{degats} HP** à {defenseur['membre'].display_name} !"
+                if degats >= 50:
+                    resultat += " 🔥 *COUP CRITIQUE !*"
+                elif degats <= 20:
+                    resultat += " 😬 *Attaque ratée...*"
+
+        elif choix == 2:  # Attaque spéciale
+            degats = random.randint(30, 50)
+            if defenseur["esquive_active"]:
+                resultat = f"💨 **{defenseur['membre'].display_name}** esquive l'attaque spéciale !"
+                defenseur["esquive_active"] = False
+            else:
+                defenseur["hp"] = max(0, defenseur["hp"] - degats)
+                resultat = f"🌀 **{attaquant['membre'].display_name}** lance une attaque spéciale — **-{degats} HP** à {defenseur['membre'].display_name} !"
+
+        elif choix == 3:  # Défense
+            attaquant["defense_active"] = True
+            resultat = f"🛡️ **{attaquant['membre'].display_name}** se met en position défensive — dégâts réduits de 50% au prochain tour !"
+
+        elif choix == 4:  # Soin
+            soin = random.randint(15, 30)
+            attaquant["hp"] = min(HP_MAX, attaquant["hp"] + soin)
+            resultat = f"🌿 **{attaquant['membre'].display_name}** se soigne — **+{soin} HP** !"
+
+        elif choix == 5:  # Esquive
+            attaquant["esquive_active"] = True
+            resultat = f"💨 **{attaquant['membre'].display_name}** se prépare à esquiver la prochaine attaque !"
+
+        # ── Afficher le résultat du tour ────────────────────
+        result_embed = build_combat_embed(attaquant, defenseur, resultat, numero_tour)
+        await combat_msg.edit(embed=result_embed)
+        try:
+            await combat_msg.clear_reactions()
+        except:
+            pass
+        await asyncio.sleep(2)
+
+        # ── Vérification victoire ────────────────────────────
+        if defenseur["hp"] <= 0:
             del active_arene[ctx.channel.id]
-            await ctx.send(f"⏰ **{current['membre'].mention}** n'a pas répondu — combat annulé !")
+            prize = random.randint(100, 250)
+            economy_data[str(attaquant["membre"].id)]["coins"] += prize
+            xp_data[str(attaquant["membre"].id)]["xp"] += 40
+
+            win_embed = discord.Embed(
+                title="🏆  FIN DU COMBAT  🏆",
+                description=(
+                    f"## {attaquant['membre'].display_name} remporte l'arène !\n\n"
+                    f"{barre_vie(attaquant['hp'])} **{attaquant['hp']} HP restants**\n\n"
+                    f"💰 **+{prize} pièces** • ⭐ **+40 XP**\n\n"
+                    f"*{defenseur['membre'].display_name} s'effondre... 💀*"
+                ),
+                color=0xf1c40f
+            )
+            win_embed.set_footer(text="⚔️ Arène PvP — QG Kdrama")
+            await ctx.send(embed=win_embed)
             return
+
+        # Tour suivant
+        tour += 1
+        numero_tour += 1
+
+    # Si arène interrompue
+    if combat_msg:
+        try:
+            await combat_msg.clear_reactions()
+        except:
+            pass
+
+
 
 
 # ============================================================
