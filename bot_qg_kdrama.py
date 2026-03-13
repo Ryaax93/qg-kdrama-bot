@@ -61,7 +61,6 @@ SALON_AUREVOIR_ID = None  # Met l'ID du salon aurevoir ici
 SALON_BOOST_ID = None     # Met l'ID du salon boost ici
 SALON_HOF_ID = None       # Met l'ID du salon hall of fame ici
 SALON_REGLEMENT_ID = None # Met l'ID du salon règlement ici
-SALON_BLINDTEST_ID = None # Met l'ID du salon blindtest ici
 ROLE_MEMBRE_NAME = "Membre"  # Nom du rôle à donner après acceptation
 REGLEMENT_MSG_ID = None   # ID du message règlement (auto-rempli par setsalon)
 
@@ -81,7 +80,6 @@ def sauvegarder_salons():
         "SALON_BOOST_ID":     SALON_BOOST_ID,
         "SALON_HOF_ID":       SALON_HOF_ID,
         "SALON_REGLEMENT_ID": SALON_REGLEMENT_ID,
-        "SALON_BLINDTEST_ID": SALON_BLINDTEST_ID,
         "ROLE_MEMBRE_NAME":   ROLE_MEMBRE_NAME,
         "REGLEMENT_MSG_ID":   REGLEMENT_MSG_ID,
     }
@@ -95,7 +93,7 @@ def charger_salons():
     """Charge les IDs de salons depuis le fichier JSON au démarrage"""
     global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID
     global SALON_COMBAT_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID
-    global SALON_BOOST_ID, SALON_HOF_ID, SALON_REGLEMENT_ID, SALON_BLINDTEST_ID, ROLE_MEMBRE_NAME, REGLEMENT_MSG_ID
+    global SALON_BOOST_ID, SALON_HOF_ID, SALON_REGLEMENT_ID, ROLE_MEMBRE_NAME, REGLEMENT_MSG_ID
     if not os.path.exists(CONFIG_FILE):
         return
     try:
@@ -112,7 +110,6 @@ def charger_salons():
         SALON_BOOST_ID     = data.get("SALON_BOOST_ID")
         SALON_HOF_ID       = data.get("SALON_HOF_ID")
         SALON_REGLEMENT_ID = data.get("SALON_REGLEMENT_ID")
-        SALON_BLINDTEST_ID = data.get("SALON_BLINDTEST_ID")
         ROLE_MEMBRE_NAME   = data.get("ROLE_MEMBRE_NAME", "Membre")
         REGLEMENT_MSG_ID   = data.get("REGLEMENT_MSG_ID")
         print("[Config] Salons chargés depuis salons_config.json ✅")
@@ -1116,7 +1113,7 @@ async def rank(ctx, member: discord.Member = None):
     tier = get_tier(lvl)
     s = arena_stats[uid]
     pts = points_amelio[uid]
-    hp_total  = 120 + s["pv_bonus"]  * 8
+    hp_total  = 250 + s["pv_bonus"]  * 8
     end_total = 100 + s["end_bonus"] * 5
     embed = discord.Embed(title=f"📊 Fiche de {member.display_name}", color=0xff6b9d)
     embed.add_field(name="Titre", value=tier, inline=False)
@@ -1184,7 +1181,7 @@ async def ameliorer(ctx, stat: str = None):
     s[cle] += 1
     points_amelio[uid] -= 1
 
-    hp_total  = 120 + s["pv_bonus"]  * 8
+    hp_total  = 250 + s["pv_bonus"]  * 8
     end_total = 100 + s["end_bonus"] * 5
 
     embed = discord.Embed(
@@ -2322,18 +2319,37 @@ async def role_delete(ctx, role: discord.Role):
 async def on_raw_reaction_add(payload):
     if payload.user_id == bot.user.id:
         return
-    if payload.message_id not in reaction_roles:
-        return
-    data = reaction_roles[payload.message_id]
-    if str(payload.emoji) != data["emoji"]:
-        return
     guild = bot.get_guild(payload.guild_id)
     if not guild:
         return
-    role = guild.get_role(data["role_id"])
     member = guild.get_member(payload.user_id)
-    if role and member:
-        await member.add_roles(role)
+    if not member:
+        return
+
+    # ── Règlement : ✅ → donne le rôle Membre ───────────────
+    if SALON_REGLEMENT_ID and payload.channel_id == SALON_REGLEMENT_ID and str(payload.emoji) == "✅":
+        role = discord.utils.get(guild.roles, name=ROLE_MEMBRE_NAME)
+        if role and role not in member.roles:
+            try:
+                await member.add_roles(role, reason="Règlement accepté ✅")
+                try:
+                    embed = discord.Embed(
+                        description=f"✅ Bienvenue **{member.display_name}** ! Tu as accepté le règlement et tu as accès au serveur. Amuse-toi bien ! 🎌",
+                        color=0x2ecc71
+                    )
+                    await member.send(embed=embed)
+                except:
+                    pass
+            except discord.Forbidden:
+                pass
+
+    # ── Reaction roles classiques ────────────────────────────
+    if payload.message_id in reaction_roles:
+        data = reaction_roles[payload.message_id]
+        if str(payload.emoji) == data["emoji"]:
+            role = guild.get_role(data["role_id"])
+            if role:
+                await member.add_roles(role)
 
 @bot.event
 async def on_raw_reaction_remove(payload):
@@ -2671,32 +2687,7 @@ async def on_reaction_add(reaction, user):
     await hof_channel.send(embed=title_embed)
     await hof_channel.send(embed=embed)
 
-@bot.event
-async def on_raw_reaction_add(payload):
-    """Donne le rôle Membre quand quelqu'un accepte le règlement"""
-    if payload.user_id == bot.user.id:
-        return
-    if REGLEMENT_MSG_ID and payload.message_id == REGLEMENT_MSG_ID and str(payload.emoji) == "✅":
-        guild = bot.get_guild(payload.guild_id)
-        if not guild:
-            return
-        member = guild.get_member(payload.user_id)
-        if not member:
-            return
-        role = discord.utils.get(guild.roles, name=ROLE_MEMBRE_NAME)
-        if role and role not in member.roles:
-            try:
-                await member.add_roles(role, reason="Règlement accepté ✅")
-                try:
-                    embed = discord.Embed(
-                        description=f"✅ Bienvenue **{member.display_name}** ! Tu as accepté le règlement et tu as accès au serveur. Amuse-toi bien ! 🎌",
-                        color=0x2ecc71
-                    )
-                    await member.send(embed=embed)
-                except:
-                    pass
-            except discord.Forbidden:
-                pass
+
 
 @bot.command(name="raidstop")
 @commands.has_permissions(administrator=True)
@@ -4163,7 +4154,7 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
     # ── Setup stats avec bonus d'amélioration ──────────────────
     def get_stats(uid):
         s = arena_stats[uid]
-        hp_max  = 120 + s["pv_bonus"]  * 8
+        hp_max  = 250 + s["pv_bonus"]  * 8
         end_max = 100 + s["end_bonus"] * 5
         atk_b   = s["atk_bonus"] * 3
         def_b   = s["def_bonus"] * 3
@@ -4371,9 +4362,16 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
             attaquant["hp"] = min(attaquant["hp_max"], attaquant["hp"] + soin)
             resultat = f"🌿 **{attaquant['membre'].display_name}** se soigne — **+{soin} HP** !"
 
-        elif choix == 5:  # Esquive
+        elif choix == 5:  # Esquive — SECRÈTE
             attaquant["esquive_active"] = True
-            resultat = f"💨 **{attaquant['membre'].display_name}** se prépare à esquiver !"
+            resultat = f"🌀 **{attaquant['membre'].display_name}** se concentre..."
+            # DM secret à l'attaquant uniquement
+            try:
+                await attaquant["membre"].send(
+                    f"🤫 **Esquive activée !** Ton adversaire ne sait pas que tu vas esquiver — il attaque dans le vide au prochain tour !"
+                )
+            except:
+                pass
 
         # ── Afficher résultat ────────────────────────────────
         result_embed = build_result_embed(attaquant, defenseur, resultat, numero_tour)
@@ -4456,7 +4454,7 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
     await invite_msg.delete()
 
     # ── Setup combat ────────────────────────────────────────────
-    HP_MAX = 120
+    HP_MAX = 250
     active_arene[ctx.channel.id] = True
 
     joueurs = [
@@ -4655,9 +4653,15 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
             attaquant["hp"] = min(HP_MAX, attaquant["hp"] + soin)
             resultat = f"🌿 **{attaquant['membre'].display_name}** se soigne — **+{soin} HP** !"
 
-        elif choix == 5:  # Esquive
+        elif choix == 5:  # Esquive — SECRÈTE
             attaquant["esquive_active"] = True
-            resultat = f"💨 **{attaquant['membre'].display_name}** se prépare à esquiver la prochaine attaque !"
+            resultat = f"🌀 **{attaquant['membre'].display_name}** se concentre..."
+            try:
+                await attaquant["membre"].send(
+                    f"🤫 **Esquive activée !** Ton adversaire ne sait pas que tu vas esquiver — il attaque dans le vide au prochain tour !"
+                )
+            except:
+                pass
 
         # ── Afficher le résultat du tour ────────────────────
         result_embed = build_combat_embed(attaquant, defenseur, resultat, numero_tour)
@@ -7314,333 +7318,23 @@ async def send_salon_embed(channel, t):
         embed1.set_footer(text="⚔️ Gagne des niveaux → .rank • .ameliorer • plus fort en arène !")
         await channel.send(embed=embed1)
 
-    elif t == "blindtest":
-        embed1 = discord.Embed(
-            title="🎵 Blindtest Animé — QG Kdrama",
-            description=(
-                "Reconnais les openings, endings et OST de tes animés préférés !\n"
-                "*Le bot joue un extrait dans le vocal — premier à taper le bon titre gagne !* 🎶"
-            ),
-            color=0x1db954
-        )
-        embed1.add_field(name="🎮 Commandes", value=(
-            "`.blindtest` `.bt` `.blind` — Lance une session de 10 sons\n"
-            "*(Rejoins un salon vocal d'abord !)*\n\n"
-            "`.stopsong` — ⏹️ Arrête le blindtest *(admin)*\n"
-            "`.listesons` `.btlist` — Voir tous les sons *(admin)*\n"
-            "`.ajouterson` `.addson` — Ajouter un son *(admin)*"
-        ), inline=False)
-        embed1.add_field(name="📜 Règles", value=(
-            "**1.** Rejoins un salon **vocal** avant de lancer\n"
-            "**2.** Le bot joue un extrait et affiche l'animé + le type *(opening/ending)*\n"
-            "**3.** Tape le **titre exact** du son dans ce salon\n"
-            "**4.** **20 secondes** pour répondre, sinon la réponse est révélée\n"
-            "**5.** Les fautes de frappe légères sont **tolérées** ✅\n"
-            "**6.** Scores calculés sur toute la session !"
-        ), inline=False)
-        embed1.add_field(name="💰 Récompenses", value=(
-            "🎯 Bonne réponse → **+30 pièces**\n"
-            "🥇 Meilleur score de la session → **+100 pièces bonus**"
-        ), inline=False)
-        embed1.add_field(name="➕ Ajouter des sons *(admin)*", value=(
-            "Upload ton MP3 sur **[catbox.moe](https://catbox.moe)** *(gratuit)*\n"
-            "Copie l'URL directe et utilise :\n"
-            "`.ajouterson \"Titre\" https://files.catbox.moe/xxx.mp3 \"Animé\" Opening 1`"
-        ), inline=False)
-        embed1.set_footer(text="🎵 Blindtest — QG Kdrama • Rejoins un vocal et lance .blindtest !")
-        await channel.send(embed=embed1)
 
-# ── Liste des sons — ajoute tes URLs catbox.moe ici ──────────
-# Format : {"titre": "Nom exact à deviner", "url": "https://files.catbox.moe/xxx.mp3",
-#            "anime": "Nom de l'animé", "indice": "Opening / Ending / OST"}
-BLINDTEST_SONS = [
-    # ── EXEMPLES — remplace par tes vraies URLs catbox.moe ──
-    # {"titre": "Guren no Yumiya", "url": "https://files.catbox.moe/TON_URL.mp3", "anime": "Attack on Titan", "indice": "Opening 1"},
-    # {"titre": "We Are", "url": "https://files.catbox.moe/TON_URL.mp3", "anime": "One Piece", "indice": "Opening 1"},
-    # Ajoute tes sons ici !
-]
 
-# Scores de la session blindtest
-blindtest_scores = {}       # {uid: {"nom": str, "score": int}}
-active_blindtest = {}       # {guild_id: True}
 
-def normaliser(texte):
-    """Normalise le texte pour comparer les réponses — ignore accents/casse/espaces"""
-    import unicodedata
-    texte = texte.lower().strip()
-    texte = unicodedata.normalize("NFD", texte)
-    texte = "".join(c for c in texte if unicodedata.category(c) != "Mn")
-    texte = texte.replace("-", " ").replace("_", " ")
-    return texte
 
-def reponse_correcte(reponse, titre):
-    """Vérifie si la réponse est correcte — tolère les fautes légères"""
-    r = normaliser(reponse)
-    t = normaliser(titre)
-    if r == t:
-        return True
-    # Tolérance : si la réponse contient le titre ou vice versa (pour les titres longs)
-    if len(t) > 5 and (t in r or r in t):
-        return True
-    # Tolérance Levenshtein simple (1 faute de frappe)
-    if len(r) >= 4 and len(t) >= 4:
-        diff = sum(1 for a, b in zip(r.ljust(len(t)), t.ljust(len(r))) if a != b)
-        if diff <= 1 and abs(len(r) - len(t)) <= 1:
-            return True
-    return False
 
-@bot.command(name="blindtest", aliases=["bt", "blind"])
-async def blindtest_cmd(ctx, action: str = None):
-    """🎵 Lance un blindtest animé — .blindtest"""
-    global active_blindtest
-
-    if SALON_BLINDTEST_ID and ctx.channel.id != SALON_BLINDTEST_ID:
-        salon = ctx.guild.get_channel(SALON_BLINDTEST_ID)
-        mention = salon.mention if salon else "le salon blindtest"
-        return await ctx.send(f"🎵 Le blindtest c'est dans {mention} !", delete_after=5)
-
-    if not BLINDTEST_SONS:
-        return await ctx.send(embed=discord.Embed(
-            description="❌ Aucun son configuré dans le bot !\nAjoute tes URLs catbox.moe dans `BLINDTEST_SONS` du code.",
-            color=0xe74c3c
-        ))
-
-    gid = ctx.guild.id
-    if gid in active_blindtest:
-        return await ctx.send("🎵 Un blindtest est déjà en cours !", delete_after=5)
-
-    # Vérifier que le bot est dans un salon vocal
-    if not ctx.author.voice or not ctx.author.voice.channel:
-        return await ctx.send(embed=discord.Embed(
-            description="❌ Tu dois être dans un **salon vocal** pour lancer le blindtest !\nRejoins un vocal puis relance `.blindtest`",
-            color=0xe74c3c
-        ))
-
-    vocal = ctx.author.voice.channel
-    active_blindtest[gid] = True
-    scores_session = {}  # {uid: {"nom": str, "score": int}}
-
-    # Nombre de sons à jouer (max 10 ou tout si moins)
-    sons = random.sample(BLINDTEST_SONS, min(10, len(BLINDTEST_SONS)))
-    nb_sons = len(sons)
-
-    # ── Embed de départ ──────────────────────────────────────
-    start_embed = discord.Embed(
-        title="🎵 BLINDTEST ANIMÉ — QG Kdrama",
-        description=(
-            f"## 🎶 {nb_sons} sons à reconnaître !\n\n"
-            f"🎙️ Les sons jouent dans **{vocal.name}**\n"
-            f"⌨️ Tape le **nom exact** dans ce salon pour gagner des points !\n"
-            f"⏱️ **20 secondes** par son\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"🥇 **+100 pièces** au 1er\n"
-            f"🎯 **+30 pièces** par bonne réponse\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"*Le blindtest commence dans **5 secondes**... 🎵*"
-        ),
-        color=0x1db954
-    )
-    start_embed.set_footer(text="QG Kdrama — Blindtest Animé 🎵")
-    await ctx.send(embed=start_embed)
-    await asyncio.sleep(5)
-
-    # Connexion vocale
-    vc = None
-    try:
-        vc = await vocal.connect()
-    except Exception as e:
-        del active_blindtest[gid]
-        return await ctx.send(f"❌ Impossible de rejoindre le vocal : {e}")
-
-    try:
-        for numero, son in enumerate(sons, 1):
-            if gid not in active_blindtest:
-                break
-
-            # ── Embed "Son en cours" ─────────────────────────
-            question_embed = discord.Embed(
-                title=f"🎵 Son {numero}/{nb_sons}",
-                description=(
-                    f"## 🎶 Quel est ce son ?\n\n"
-                    f"*Écoute attentivement et tape ta réponse !*\n\n"
-                    f"⏱️ **20 secondes**\n"
-                    f"💡 Indice : **{son['indice']}** de *{son['anime']}*"
-                ),
-                color=0x1db954
-            )
-            question_embed.set_footer(text=f"Son {numero}/{nb_sons} — Tape ta réponse dans le chat !")
-            q_msg = await ctx.send(embed=question_embed)
-
-            # Jouer le son
-            try:
-                source = discord.FFmpegPCMAudio(son["url"], before_options="-reconnect 1 -reconnect_streamed 1")
-                if vc.is_playing():
-                    vc.stop()
-                vc.play(source)
-            except Exception as e:
-                await ctx.send(f"⚠️ Erreur lecture son {numero} : {e}", delete_after=5)
-
-            # Attente des réponses — 20 secondes
-            gagnant = None
-            debut = asyncio.get_event_loop().time()
-
-            while asyncio.get_event_loop().time() - debut < 20:
-                if gid not in active_blindtest:
-                    break
-                try:
-                    def check_reponse(m):
-                        return (
-                            m.channel == ctx.channel
-                            and not m.author.bot
-                            and reponse_correcte(m.content, son["titre"])
-                        )
-                    msg = await bot.wait_for("message", check=check_reponse,
-                                             timeout=20 - (asyncio.get_event_loop().time() - debut))
-                    gagnant = msg.author
-                    break
-                except asyncio.TimeoutError:
-                    break
-
-            # Arrêter le son
-            if vc.is_playing():
-                vc.stop()
-
-            # ── Résultat du son ──────────────────────────────
-            if gagnant:
-                uid = str(gagnant.id)
-                if uid not in scores_session:
-                    scores_session[uid] = {"nom": gagnant.display_name, "score": 0}
-                scores_session[uid]["score"] += 1
-                economy_data[uid]["coins"] += 30
-
-                result_embed = discord.Embed(
-                    description=(
-                        f"## ✅ {gagnant.display_name} a trouvé !\n\n"
-                        f"🎵 **{son['titre']}** — *{son['anime']}*\n"
-                        f"💰 **+30 pièces** !\n\n"
-                        f"Score : **{scores_session[uid]['score']} point(s)**"
-                    ),
-                    color=0x2ecc71
-                )
-            else:
-                result_embed = discord.Embed(
-                    description=(
-                        f"## ⏰ Personne n'a trouvé !\n\n"
-                        f"🎵 C'était : **{son['titre']}** — *{son['anime']}*"
-                    ),
-                    color=0xe74c3c
-                )
-
-            await q_msg.edit(embed=result_embed)
-            await asyncio.sleep(3)
-
-        # ── Fin du blindtest — classement final ──────────────
-        if scores_session:
-            top = sorted(scores_session.values(), key=lambda x: x["score"], reverse=True)
-
-            # Bonus pièces au 1er
-            premier_uid = next(uid for uid, d in scores_session.items() if d["nom"] == top[0]["nom"])
-            economy_data[premier_uid]["coins"] += 100
-
-            medailles = ["🥇", "🥈", "🥉"]
-            classement_txt = "\n".join([
-                f"{medailles[i] if i < 3 else f'`{i+1}.`'} **{d['nom']}** — {d['score']} point(s)"
-                for i, d in enumerate(top)
-            ])
-
-            fin_embed = discord.Embed(
-                title="🏆 FIN DU BLINDTEST !",
-                description=(
-                    f"## 🎵 Résultats finaux\n\n"
-                    f"{classement_txt}\n\n"
-                    f"━━━━━━━━━━━━━━━━━━━━\n"
-                    f"🥇 **{top[0]['nom']}** remporte **+100 pièces bonus** !\n"
-                    f"━━━━━━━━━━━━━━━━━━━━"
-                ),
-                color=0xf1c40f
-            )
-            fin_embed.set_footer(text="QG Kdrama — Blindtest Animé 🎵")
-        else:
-            fin_embed = discord.Embed(
-                description="## 🎵 Blindtest terminé !\n\nPersonne n'a trouvé un seul son... 😅",
-                color=0x555555
-            )
-
-        await ctx.send(embed=fin_embed)
-
-    finally:
-        # Déconnexion vocale propre
-        if vc and vc.is_connected():
-            await vc.disconnect()
-        active_blindtest.pop(gid, None)
-
-@bot.command(name="stopsong", aliases=["stopbt", "stopblind"])
-@commands.has_permissions(manage_guild=True)
-async def stopsong_cmd(ctx):
-    """Arrête le blindtest en cours — admin"""
-    gid = ctx.guild.id
-    if gid not in active_blindtest:
-        return await ctx.send("❌ Aucun blindtest en cours.", delete_after=5)
-    active_blindtest.pop(gid, None)
-    # Déconnecter le bot du vocal
-    for vc in ctx.bot.voice_clients:
-        if vc.guild.id == gid:
-            await vc.disconnect()
-            break
-    await ctx.send(embed=discord.Embed(
-        description="⏹️ Blindtest arrêté par un admin.",
-        color=0xe74c3c
-    ))
-
-@bot.command(name="ajouterson", aliases=["addson"])
+# ============================================================
+#  SETSALON — Configure ou désactive un salon (toggle)
+# ============================================================
+@bot.command(name="setsalon")
 @commands.has_permissions(administrator=True)
-async def ajouterson_cmd(ctx, titre: str = None, url: str = None, anime: str = None, *, indice: str = "Opening"):
-    """Ajoute un son au blindtest — admin — .ajouterson \"titre\" url \"anime\" indice"""
-    if not titre or not url or not anime:
-        return await ctx.send(
-            "❌ Usage : `.ajouterson \"Titre du son\" https://files.catbox.moe/xxx.mp3 \"Nom animé\" Opening 1`\n"
-            "Ex : `.ajouterson \"Guren no Yumiya\" https://files.catbox.moe/abc.mp3 \"Attack on Titan\" Opening 1`"
-        )
-    if "catbox.moe" not in url and "http" not in url:
-        return await ctx.send("❌ L'URL doit être un lien direct vers un fichier audio (catbox.moe recommandé) !")
+async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
+    """Configure ou désactive un salon — .setsalon casino | .setsalon reglement @Role"""
+    global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID
+    global SALON_COMBAT_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID
+    global SALON_BOOST_ID, SALON_HOF_ID, SALON_REGLEMENT_ID, ROLE_MEMBRE_NAME
 
-    BLINDTEST_SONS.append({
-        "titre": titre,
-        "url": url,
-        "anime": anime,
-        "indice": indice
-    })
-    await ctx.send(embed=discord.Embed(
-        description=(
-            f"✅ Son ajouté au blindtest !\n\n"
-            f"🎵 **{titre}** — *{anime}*\n"
-            f"💡 Indice : {indice}\n\n"
-            f"*Total : **{len(BLINDTEST_SONS)} son(s)** dans le blindtest*"
-        ),
-        color=0x2ecc71
-    ))
-
-@bot.command(name="listesons", aliases=["sons", "btlist"])
-@commands.has_permissions(administrator=True)
-async def listesons_cmd(ctx):
-    """Liste tous les sons du blindtest — admin"""
-    if not BLINDTEST_SONS:
-        return await ctx.send("❌ Aucun son dans le blindtest pour le moment.")
-    desc = "\n".join([
-        f"`{i+1}.` **{s['titre']}** — *{s['anime']}* ({s['indice']})"
-        for i, s in enumerate(BLINDTEST_SONS)
-    ])
-    embed = discord.Embed(
-        title=f"🎵 Sons du Blindtest ({len(BLINDTEST_SONS)} total)",
-        description=desc,
-        color=0x1db954
-    )
-    await ctx.send(embed=embed)
-
-
-    """Configure les salons spéciaux — .setsalon reglement @Role | .setsalon casino etc."""
-    global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_COMBAT_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID, SALON_BOOST_ID, SALON_HOF_ID, SALON_REGLEMENT_ID, SALON_BLINDTEST_ID, ROLE_MEMBRE_NAME
-    types = {
+    TYPES = {
         "levelup":    ("SALON_LEVELUP_ID",    "level up"),
         "casino":     ("SALON_CASINO_ID",     "casino"),
         "gacha":      ("SALON_GACHA_ID",      "gacha"),
@@ -7652,13 +7346,19 @@ async def listesons_cmd(ctx):
         "boost":      ("SALON_BOOST_ID",      "boost"),
         "halloffame": ("SALON_HOF_ID",        "hall of fame"),
         "reglement":  ("SALON_REGLEMENT_ID",  "règlement"),
-        "blindtest":  ("SALON_BLINDTEST_ID",  "blindtest"),
     }
-    if not type_salon or type_salon.lower() not in types:
-        return await ctx.send("❌ Usage : `.setsalon levelup` | `casino` | `gacha` | `boutique` | `combat` | `duel` | `bienvenue` | `aurevoir` | `boost` | `halloffame` | `reglement @Role` | `blindtest`")
 
-    # Règlement nécessite un rôle mentionné
-    if type_salon.lower() == "reglement":
+    if not type_salon or type_salon.lower() not in TYPES:
+        return await ctx.send(
+            "❌ Usage : `.setsalon levelup` | `casino` | `gacha` | `boutique` | `combat` | "
+            "`duel` | `bienvenue` | `aurevoir` | `boost` | `halloffame` | `reglement @Role`"
+        )
+
+    t = type_salon.lower()
+    var_name, label = TYPES[t]
+
+    # ── Cas spécial : règlement ──────────────────────────────
+    if t == "reglement":
         if not role:
             return await ctx.send("❌ Pour le règlement, mentionne le rôle à donner !\nEx: `.setsalon reglement @Membres`")
         ROLE_MEMBRE_NAME = role.name
@@ -7668,21 +7368,55 @@ async def listesons_cmd(ctx):
         await send_salon_embed(ctx.channel, "reglement")
         return
 
-    var_name, label = types[type_salon.lower()]
-    if var_name == "SALON_LEVELUP_ID":    SALON_LEVELUP_ID    = ctx.channel.id
-    elif var_name == "SALON_CASINO_ID":   SALON_CASINO_ID     = ctx.channel.id
-    elif var_name == "SALON_GACHA_ID":    SALON_GACHA_ID      = ctx.channel.id
-    elif var_name == "SALON_BOUTIQUE_ID": SALON_BOUTIQUE_ID   = ctx.channel.id
-    elif var_name == "SALON_COMBAT_ID":   SALON_COMBAT_ID     = ctx.channel.id
-    elif var_name == "SALON_DUEL_ID":     SALON_DUEL_ID       = ctx.channel.id
-    elif var_name == "SALON_BIENVENUE_ID":SALON_BIENVENUE_ID  = ctx.channel.id
-    elif var_name == "SALON_AUREVOIR_ID": SALON_AUREVOIR_ID   = ctx.channel.id
-    elif var_name == "SALON_BOOST_ID":    SALON_BOOST_ID      = ctx.channel.id
-    elif var_name == "SALON_HOF_ID":       SALON_HOF_ID        = ctx.channel.id
-    elif var_name == "SALON_BLINDTEST_ID": SALON_BLINDTEST_ID  = ctx.channel.id
-    sauvegarder_salons()
-    await ctx.send(f"✅ Salon **{label}** configuré sur {ctx.channel.mention} !")
-    await send_salon_embed(ctx.channel, type_salon.lower())
+    # ── Lire la valeur actuelle ───────────────────────────────
+    vals = {
+        "SALON_LEVELUP_ID":    SALON_LEVELUP_ID,
+        "SALON_CASINO_ID":     SALON_CASINO_ID,
+        "SALON_GACHA_ID":      SALON_GACHA_ID,
+        "SALON_BOUTIQUE_ID":   SALON_BOUTIQUE_ID,
+        "SALON_COMBAT_ID":     SALON_COMBAT_ID,
+        "SALON_DUEL_ID":       SALON_DUEL_ID,
+        "SALON_BIENVENUE_ID":  SALON_BIENVENUE_ID,
+        "SALON_AUREVOIR_ID":   SALON_AUREVOIR_ID,
+        "SALON_BOOST_ID":      SALON_BOOST_ID,
+        "SALON_HOF_ID":        SALON_HOF_ID,
+    }
+    current = vals.get(var_name)
+
+    def set_var(vname, value):
+        global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID
+        global SALON_COMBAT_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID
+        global SALON_BOOST_ID, SALON_HOF_ID
+        if vname == "SALON_LEVELUP_ID":    SALON_LEVELUP_ID    = value
+        elif vname == "SALON_CASINO_ID":   SALON_CASINO_ID     = value
+        elif vname == "SALON_GACHA_ID":    SALON_GACHA_ID      = value
+        elif vname == "SALON_BOUTIQUE_ID": SALON_BOUTIQUE_ID   = value
+        elif vname == "SALON_COMBAT_ID":   SALON_COMBAT_ID     = value
+        elif vname == "SALON_DUEL_ID":     SALON_DUEL_ID       = value
+        elif vname == "SALON_BIENVENUE_ID":SALON_BIENVENUE_ID  = value
+        elif vname == "SALON_AUREVOIR_ID": SALON_AUREVOIR_ID   = value
+        elif vname == "SALON_BOOST_ID":    SALON_BOOST_ID      = value
+        elif vname == "SALON_HOF_ID":      SALON_HOF_ID        = value
+
+    # ── TOGGLE ────────────────────────────────────────────────
+    # Même salon et déjà actif → DÉSACTIVER
+    if current == ctx.channel.id:
+        set_var(var_name, None)
+        sauvegarder_salons()
+        await ctx.send(embed=discord.Embed(
+            description=f"🔕 Salon **{label}** **désactivé** — la restriction est levée.",
+            color=0xe74c3c
+        ))
+
+    # Même salon mais None (désactivé) OU autre salon → ACTIVER + embed
+    else:
+        set_var(var_name, ctx.channel.id)
+        sauvegarder_salons()
+        await ctx.send(embed=discord.Embed(
+            description=f"✅ Salon **{label}** **activé** sur {ctx.channel.mention} !",
+            color=0x2ecc71
+        ))
+        await send_salon_embed(ctx.channel, t)
 
 # ============================================================
 #  UTILISER item offensif
