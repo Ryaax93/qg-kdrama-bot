@@ -49,6 +49,8 @@ SALON_GACHA_ID = None     # Met l'ID du salon gacha ici
 SALON_BOUTIQUE_ID = None  # Met l'ID du salon boutique ici
 SALON_COMBAT_ID = None    # Met l'ID du salon pokebattle ici
 SALON_DUEL_ID = None      # Met l'ID du salon duel/pvp ici
+SALON_BIENVENUE_ID = None # Met l'ID du salon bienvenue ici
+SALON_AUREVOIR_ID = None  # Met l'ID du salon aurevoir ici
 
 def get_tier(level):
     title = TIERS[0][1]
@@ -461,9 +463,38 @@ async def help_cmd(ctx, categorie: str = None):
         await ctx.send(embed=embed)
 
     elif categorie.lower() in ["modo", "moderation", "modération", "admin"]:
-        embed = discord.Embed(title="🛡️ Modération", description="⚠️ Réservé aux membres avec les permissions appropriées", color=0x95a5a6)
-        embed.add_field(name="Sanctions", value="`.ban @joueur [raison]` — Bannir\n`.kick @joueur [raison]` — Expulser\n`.mute @joueur [minutes]` — Muet (10 min défaut)\n`.unmute @joueur` — Retirer le mute", inline=False)
-        embed.add_field(name="Gestion", value="`.clear [nombre]` — Supprimer X messages\n`.rolecreate` — Créer un rôle par réaction\n`.rolelist` — Voir les rôles\n`.roledelete` — Supprimer un rôle", inline=False)
+        embed = discord.Embed(
+            title="🛡️ Modération & Configuration",
+            description="⚠️ Toutes ces commandes sont réservées aux **administrateurs**",
+            color=0xe74c3c
+        )
+        embed.add_field(name="⚔️ Sanctions", value=(
+            "`.ban @joueur [raison]` — Bannir un membre\n"
+            "`.kick @joueur [raison]` — Expulser un membre\n"
+            "`.mute @joueur [minutes]` — Rendre muet (10 min défaut)\n"
+            "`.unmute @joueur` — Retirer le mute\n"
+            "`.clear [nombre]` — Supprimer X messages"
+        ), inline=False)
+        embed.add_field(name="🎭 Rôles", value=(
+            "`.rolecreate` — Créer un rôle par réaction\n"
+            "`.rolelist` — Voir les rôles\n"
+            "`.roledelete` — Supprimer un rôle"
+        ), inline=False)
+        embed.add_field(name="📌 Configuration des salons — `.setsalon <type>`", value=(
+            "`.setsalon bienvenue` — 🎌 Salon d'arrivée des membres\n"
+            "`.setsalon aurevoir` — 💔 Salon de départ des membres\n"
+            "`.setsalon gacha` — 🎰 Salon gacha (tirage cartes)\n"
+            "`.setsalon boutique` — 🛒 Salon boutique\n"
+            "`.setsalon casino` — 🎰 Salon casino\n"
+            "`.setsalon combat` — ⚔️ Salon combat cartes\n"
+            "`.setsalon duel` — ⚔️ Salon duels & PvP\n"
+            "`.setsalon levelup` — 📊 Salon notifications level up\n\n"
+            "💡 *Tape la commande dans le salon à configurer — un embed d'info s'affiche automatiquement !*"
+        ), inline=False)
+        embed.add_field(name="🛡️ Anti-Raid", value=(
+            "`.raidstop` — Désactiver le mode anti-raid\n"
+            "*Le bot détecte automatiquement les raids (5+ joins en 10s)*"
+        ), inline=False)
         await ctx.send(embed=embed)
 
     else:
@@ -2087,24 +2118,53 @@ async def on_member_join(member):
 
     # Message de bienvenue normal (si pas de raid)
     if not raid_mode:
-        channel = (
-            discord.utils.get(member.guild.text_channels, name="général") or
-            member.guild.system_channel
-        )
+        channel = None
+        if SALON_BIENVENUE_ID:
+            channel = member.guild.get_channel(SALON_BIENVENUE_ID)
+        if not channel:
+            channel = discord.utils.get(member.guild.text_channels, name="général") or member.guild.system_channel
         if channel:
+            member_count = member.guild.member_count
+            # Numéro stylé
+            suffixes = {1: "er", 2: "ème"}
+            suffix = suffixes.get(member_count, "ème")
+
             embed = discord.Embed(
-                title="🎬 Bienvenue au QG Kdrama !",
+                title="🎌 Un nouveau guerrier rejoint le QG !",
                 description=(
-                    f"Salut {member.mention} ! 👋\n\n"
-                    "Tu viens d'entrer dans le meilleur QG pour parler de :\n"
-                    "🎬 **Kdramas** • 🎮 **Gaming** • ✨ **Animés**\n\n"
-                    "Tape `.help` pour voir les commandes du bot !\n"
-                    "_Bon visionnage et bonnes parties !_ 💫"
+                    f"## Bienvenue {member.mention} ! 👋\n\n"
+                    f"🏯 Tu es le **{member_count}{suffix} membre** du QG Kdrama !\n\n"
+                    f"🎬 **Kdramas** • 🎮 **Gaming** • ✨ **Animés**\n\n"
+                    f"Tape `.help` pour découvrir toutes les commandes du bot !\n"
+                    f"*Bon visionnage et bonnes parties !* 🍿"
                 ),
                 color=0xff6b9d
             )
             embed.set_thumbnail(url=member.display_avatar.url)
+            embed.set_footer(text=f"QG Kdrama — {member_count} membres", icon_url=member.guild.icon.url if member.guild.icon else None)
             await channel.send(embed=embed)
+
+@bot.event
+async def on_member_remove(member):
+    """Message d'aurevoir quand un membre quitte"""
+    channel = None
+    if SALON_AUREVOIR_ID:
+        channel = member.guild.get_channel(SALON_AUREVOIR_ID)
+    if not channel:
+        return
+    member_count = member.guild.member_count
+    embed = discord.Embed(
+        title="💔 Un membre a quitté le QG...",
+        description=(
+            f"**{member.display_name}** vient de quitter le serveur.\n\n"
+            f"*On espère te revoir bientôt parmi nous...* 🌸\n\n"
+            f"Il nous reste **{member_count} membres** dans le QG."
+        ),
+        color=0x555555
+    )
+    embed.set_thumbnail(url=member.display_avatar.url)
+    embed.set_footer(text="QG Kdrama", icon_url=member.guild.icon.url if member.guild.icon else None)
+    await channel.send(embed=embed)
 
 @bot.command(name="raidstop")
 @commands.has_permissions(administrator=True)
@@ -5807,6 +5867,37 @@ async def send_salon_embed(channel, t):
         embed.set_footer(text="Claim des cartes dans le salon gacha d'abord ! 🎰")
         await channel.send(embed=embed)
 
+    elif t == "bienvenue":
+        embed = discord.Embed(
+            title="✅ Salon Bienvenue configuré !",
+            description=(
+                "Ce salon accueillera les nouveaux membres avec un embed stylé contenant :\n\n"
+                "🎌 Un message de bienvenue personnalisé\n"
+                "🏅 Le numéro du membre *(ex: Tu es le 42ème membre !)*\n"
+                "🖼️ L'avatar du nouveau membre\n"
+                "📊 Le compteur total de membres\n\n"
+                "*L'embed s'affiche automatiquement à chaque arrivée.*"
+            ),
+            color=0x2ecc71
+        )
+        embed.set_footer(text="Configuration — QG Kdrama 🎌")
+        await channel.send(embed=embed)
+
+    elif t == "aurevoir":
+        embed = discord.Embed(
+            title="✅ Salon Aurevoir configuré !",
+            description=(
+                "Ce salon affichera un message quand un membre quitte le serveur :\n\n"
+                "💔 Le nom du membre qui est parti\n"
+                "🖼️ Son avatar\n"
+                "📊 Le nombre de membres restants\n\n"
+                "*L'embed s'affiche automatiquement à chaque départ.*"
+            ),
+            color=0x95a5a6
+        )
+        embed.set_footer(text="Configuration — QG Kdrama 💔")
+        await channel.send(embed=embed)
+
     elif t == "duel":
         embed = discord.Embed(
             title="⚔️ Duels & PvP — QG Kdrama",
@@ -5842,17 +5933,19 @@ async def send_salon_embed(channel, t):
 @commands.has_permissions(administrator=True)
 async def setsalon(ctx, type_salon: str = None):
     """Configure les salons spéciaux — .setsalon levelup | casino | gacha | boutique | combat | duel"""
-    global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_COMBAT_ID, SALON_DUEL_ID
+    global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_COMBAT_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID
     types = {
         "levelup":  ("SALON_LEVELUP_ID",  "level up"),
         "casino":   ("SALON_CASINO_ID",   "casino"),
         "gacha":    ("SALON_GACHA_ID",    "gacha"),
         "boutique": ("SALON_BOUTIQUE_ID", "boutique"),
-        "combat":   ("SALON_COMBAT_ID",   "combat cartes"),
-        "duel":     ("SALON_DUEL_ID",     "duel & PvP"),
+        "combat":     ("SALON_COMBAT_ID",     "combat cartes"),
+        "duel":       ("SALON_DUEL_ID",       "duel & PvP"),
+        "bienvenue":  ("SALON_BIENVENUE_ID",  "bienvenue"),
+        "aurevoir":   ("SALON_AUREVOIR_ID",   "aurevoir"),
     }
     if not type_salon or type_salon.lower() not in types:
-        return await ctx.send("❌ Usage : `.setsalon levelup` | `casino` | `gacha` | `boutique` | `combat` | `duel`")
+        return await ctx.send("❌ Usage : `.setsalon levelup` | `casino` | `gacha` | `boutique` | `combat` | `duel` | `bienvenue` | `aurevoir`")
 
     var_name, label = types[type_salon.lower()]
     if var_name == "SALON_LEVELUP_ID":  SALON_LEVELUP_ID  = ctx.channel.id
@@ -5860,7 +5953,9 @@ async def setsalon(ctx, type_salon: str = None):
     elif var_name == "SALON_GACHA_ID":    SALON_GACHA_ID    = ctx.channel.id
     elif var_name == "SALON_BOUTIQUE_ID": SALON_BOUTIQUE_ID = ctx.channel.id
     elif var_name == "SALON_COMBAT_ID":   SALON_COMBAT_ID   = ctx.channel.id
-    elif var_name == "SALON_DUEL_ID":     SALON_DUEL_ID     = ctx.channel.id
+    elif var_name == "SALON_DUEL_ID":       SALON_DUEL_ID       = ctx.channel.id
+    elif var_name == "SALON_BIENVENUE_ID":  SALON_BIENVENUE_ID  = ctx.channel.id
+    elif var_name == "SALON_AUREVOIR_ID":   SALON_AUREVOIR_ID   = ctx.channel.id
     await ctx.send(f"✅ Salon **{label}** configuré sur {ctx.channel.mention} !")
     await send_salon_embed(ctx.channel, type_salon.lower())
 
