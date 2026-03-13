@@ -3797,7 +3797,7 @@ ANIME_CARDS_DB = {
     "itachi": {
         "nom": "Itachi Uchiha", "serie": "Naruto", "emoji": "🌙",
         "pv": 100, "attaque": 90, "defense": 70,
-        "rarete": "Légendaire", "faiblesse": "💨", "resistance": "🔥",
+        "rarete": "Légendaire", "image": "https://i.imgur.com/UIA8L7u.jpg", "faiblesse": "💨", "resistance": "🔥",
         "attaques": [
             {"nom": "Tsukuyomi", "degats": 55, "emoji": "🌙", "desc": "Genjutsu dévastateur"},
             {"nom": "Susanoo", "degats": 75, "emoji": "🗡️", "desc": "Armure de chakra gigantesque"},
@@ -4050,7 +4050,7 @@ ANIME_CARDS_DB = {
     "kakashi": {
         "nom": "Kakashi Hatake", "serie": "Naruto", "emoji": "📖",
         "pv": 105, "attaque": 88, "defense": 78,
-        "rarete": "Légendaire", "faiblesse": "🌊", "resistance": "⚡",
+        "rarete": "Légendaire", "image": "https://i.imgur.com/XcHGLHb.jpg", "faiblesse": "🌊", "resistance": "⚡",
         "attaques": [
             {"nom": "Chidori", "degats": 55, "emoji": "⚡", "desc": "Mille oiseaux — foudre dans la main"},
             {"nom": "Sharingan Copié", "degats": 65, "emoji": "👁️", "desc": "Copie parfaite de l'attaque adverse"},
@@ -4139,7 +4139,7 @@ ANIME_CARDS_DB = {
     "erza": {
         "nom": "Erza Scarlet", "serie": "Fairy Tail", "emoji": "⚔️",
         "pv": 115, "attaque": 90, "defense": 88,
-        "rarete": "Légendaire", "faiblesse": "⚡", "resistance": "⚔️",
+        "rarete": "Légendaire", "image": "https://i.imgur.com/VGa6MhQ.jpg", "faiblesse": "⚡", "resistance": "⚔️",
         "attaques": [
             {"nom": "Armure du Paradis", "degats": 55, "emoji": "🛡️", "desc": "Armure la plus puissante de Fairy Tail"},
             {"nom": "Cent Épées", "degats": 75, "emoji": "⚔️", "desc": "Pluie de lames simultanées"},
@@ -4218,7 +4218,7 @@ ANIME_CARDS_DB = {
     "rimuru": {
         "nom": "Rimuru Tempest", "serie": "Tensura", "emoji": "💧",
         "pv": 135, "attaque": 92, "defense": 90,
-        "rarete": "Mythique", "faiblesse": "🌙", "resistance": "💧",
+        "rarete": "Mythique", "image": "https://i.imgur.com/2kqDGwW.jpg", "faiblesse": "🌙", "resistance": "💧",
         "attaques": [
             {"nom": "Prédateur", "degats": 55, "emoji": "💧", "desc": "Absorbe et copie les capacités"},
             {"nom": "Tempête Noire", "degats": 75, "emoji": "🌪️", "desc": "Magie ultime multiples éléments"},
@@ -4230,7 +4230,7 @@ ANIME_CARDS_DB = {
     "kirito": {
         "nom": "Kirito", "serie": "Sword Art Online", "emoji": "⚫",
         "pv": 110, "attaque": 85, "defense": 75,
-        "rarete": "Épique", "faiblesse": "🌊", "resistance": "⚫",
+        "rarete": "Épique", "image": "https://i.imgur.com/I2OwE8u.jpg", "faiblesse": "🌊", "resistance": "⚫",
         "attaques": [
             {"nom": "Vorpal Strike", "degats": 50, "emoji": "⚫", "desc": "Coup d'épée ultrarapide"},
             {"nom": "Double Style", "degats": 65, "emoji": "⚔️", "desc": "Deux épées simultanées"},
@@ -4287,7 +4287,7 @@ ANIME_CARDS_DB = {
     "kenshin": {
         "nom": "Kenshin Himura", "serie": "Rurouni Kenshin", "emoji": "🌸",
         "pv": 100, "attaque": 90, "defense": 78,
-        "rarete": "Légendaire", "faiblesse": "💥", "resistance": "🌸",
+        "rarete": "Légendaire", "image": "https://i.imgur.com/6pVtY0C.jpg", "faiblesse": "💥", "resistance": "🌸",
         "attaques": [
             {"nom": "Ryūtsui-sen", "degats": 50, "emoji": "🌊", "desc": "Frappe descendante en arc de cercle"},
             {"nom": "Dō-ryūsen", "degats": 65, "emoji": "💨", "desc": "Onde de choc au sol"},
