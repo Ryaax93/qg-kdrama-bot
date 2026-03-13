@@ -47,6 +47,8 @@ SALON_LEVELUP_ID = None   # Met l'ID du salon level up ici
 SALON_CASINO_ID = None    # Met l'ID du salon casino ici
 SALON_GACHA_ID = None     # Met l'ID du salon gacha ici
 SALON_BOUTIQUE_ID = None  # Met l'ID du salon boutique ici
+SALON_COMBAT_ID = None    # Met l'ID du salon pokebattle ici
+SALON_DUEL_ID = None      # Met l'ID du salon duel/pvp ici
 
 def get_tier(level):
     title = TIERS[0][1]
@@ -834,6 +836,10 @@ async def pay(ctx, member: discord.Member, amount: int):
 # ============================================================
 @bot.command()
 async def duel(ctx, opponent: discord.Member):
+    if SALON_DUEL_ID and ctx.channel.id != SALON_DUEL_ID:
+        salon = ctx.guild.get_channel(SALON_DUEL_ID)
+        mention = salon.mention if salon else "le salon duel"
+        return await ctx.send(f"⚔️ Les duels c'est dans {mention} !", delete_after=5)
     if opponent.bot or opponent == ctx.author:
         return await ctx.send("❌ Cible invalide !")
     duels[ctx.author.id] = opponent.id
@@ -3469,6 +3475,10 @@ active_arene = {}
 @bot.command(name="arene")
 async def arene_cmd(ctx, adversaire: discord.Member = None):
     """⚔️ Combat PvP en arène ! — .arene @joueur"""
+    if SALON_DUEL_ID and ctx.channel.id != SALON_DUEL_ID:
+        salon = ctx.guild.get_channel(SALON_DUEL_ID)
+        mention = salon.mention if salon else "le salon duel"
+        return await ctx.send(f"⚔️ L'arène c'est dans {mention} !", delete_after=5)
     if not adversaire:
         return await ctx.send("❌ Mentionne un adversaire ! Ex: `.arene @ami`")
     if adversaire.bot or adversaire.id == ctx.author.id:
@@ -3604,7 +3614,7 @@ ANIME_CARDS_DB = {
     "tanjiro": {
         "nom": "Tanjiro Kamado", "serie": "Demon Slayer", "emoji": "💧",
         "pv": 105, "attaque": 75, "defense": 70,
-        "rarete": "Épique",
+        "rarete": "Légendaire",
         "image": "https://i.imgur.com/RmLMZaP.jpg", "faiblesse": "⚡", "resistance": "💧",
         "attaques": [
             {"nom": "Respiration de l'Eau", "degats": 40, "emoji": "🌊", "desc": "Flux constant et puissant"},
@@ -3671,7 +3681,7 @@ ANIME_CARDS_DB = {
     "yuji": {
         "nom": "Yuji Itadori", "serie": "Jujutsu Kaisen", "emoji": "💪",
         "pv": 125, "attaque": 83, "defense": 78,
-        "rarete": "Épique",
+        "rarete": "Légendaire",
         "image": "https://i.imgur.com/wxIT2y4.jpg", "faiblesse": "💨", "resistance": "💪",
         "attaques": [
             {"nom": "Divergent Fist", "degats": 50, "emoji": "👊", "desc": "Double impact de malédiction"},
@@ -3694,7 +3704,7 @@ ANIME_CARDS_DB = {
     "zoro": {
         "nom": "Roronoa Zoro", "serie": "One Piece", "emoji": "⚔️",
         "pv": 115, "attaque": 92, "defense": 80,
-        "rarete": "Épique",
+        "rarete": "Légendaire",
         "image": "https://i.imgur.com/Nr66sRV.jpg", "faiblesse": "🔥", "resistance": "⚡",
         "attaques": [
             {"nom": "Oni Giri", "degats": 45, "emoji": "⚔️", "desc": "Slash triple simultané"},
@@ -3729,7 +3739,7 @@ ANIME_CARDS_DB = {
     "edward": {
         "nom": "Edward Elric", "serie": "FMA Brotherhood", "emoji": "⚗️",
         "pv": 100, "attaque": 80, "defense": 68,
-        "rarete": "Rare", "faiblesse": "💧", "resistance": "⚗️",
+        "rarete": "Épique", "faiblesse": "💧", "resistance": "⚗️",
         "attaques": [
             {"nom": "Lance Alchimique", "degats": 40, "emoji": "⚗️", "desc": "Transmutation express en lance"},
             {"nom": "Armure de Métal", "degats": 30, "emoji": "🛡️", "desc": "Bouclier + contre-attaque"},
@@ -3740,7 +3750,7 @@ ANIME_CARDS_DB = {
     "light": {
         "nom": "Light Yagami", "serie": "Death Note", "emoji": "📓",
         "pv": 80, "attaque": 70, "defense": 55,
-        "rarete": "Rare", "faiblesse": "💡", "resistance": "🌙",
+        "rarete": "Épique", "faiblesse": "💡", "resistance": "🌙",
         "attaques": [
             {"nom": "Manipulation Mentale", "degats": 35, "emoji": "🧠", "desc": "Réduit l'attaque adverse de 20%"},
             {"nom": "Death Note", "degats": 60, "emoji": "📓", "desc": "Inscription du nom — dégâts directs"},
@@ -3836,7 +3846,7 @@ ANIME_CARDS_DB = {
     "sakura": {
         "nom": "Sakura Haruno", "serie": "Naruto", "emoji": "🌸",
         "pv": 105, "attaque": 75, "defense": 85,
-        "rarete": "Rare", "faiblesse": "⚡", "resistance": "💪",
+        "rarete": "Commun", "faiblesse": "⚡", "resistance": "💪",
         "attaques": [
             {"nom": "Poing Chakra", "degats": 55, "emoji": "👊", "desc": "Frappe au chakra concentré"},
             {"nom": "Soin Médical", "degats": -30, "emoji": "💚", "desc": "Soigne 30 HP — technique médicale ninja"},
@@ -3925,7 +3935,7 @@ ANIME_CARDS_DB = {
     "natsu": {
         "nom": "Natsu Dragneel", "serie": "Fairy Tail", "emoji": "🔥",
         "pv": 120, "attaque": 85, "defense": 70,
-        "rarete": "Rare", "faiblesse": "🌊", "resistance": "🔥",
+        "rarete": "Épique", "faiblesse": "🌊", "resistance": "🔥",
         "attaques": [
             {"nom": "Rugissement du Dragon Ardent", "degats": 50, "emoji": "🔥", "desc": "Souffle de feu dévastateur"},
             {"nom": "Poing de Flamme", "degats": 65, "emoji": "👊", "desc": "Frappe enflammée explosive"},
@@ -4026,7 +4036,7 @@ ANIME_CARDS_DB = {
     "kirito": {
         "nom": "Kirito", "serie": "Sword Art Online", "emoji": "⚫",
         "pv": 110, "attaque": 85, "defense": 75,
-        "rarete": "Rare", "faiblesse": "🌊", "resistance": "⚫",
+        "rarete": "Épique", "faiblesse": "🌊", "resistance": "⚫",
         "attaques": [
             {"nom": "Vorpal Strike", "degats": 50, "emoji": "⚫", "desc": "Coup d'épée ultrarapide"},
             {"nom": "Double Style", "degats": 65, "emoji": "⚔️", "desc": "Deux épées simultanées"},
@@ -4175,7 +4185,7 @@ ANIME_CARDS_DB = {
     "thorfinn": {
         "nom": "Thorfinn", "serie": "Vinland Saga", "emoji": "🪓",
         "pv": 110, "attaque": 88, "defense": 72,
-        "rarete": "Rare", "faiblesse": "🔥", "resistance": "❄️",
+        "rarete": "Épique", "faiblesse": "🔥", "resistance": "❄️",
         "attaques": [
             {"nom": "Dague Viking", "degats": 50, "emoji": "🗡️", "desc": "Rapidité et précision nordique"},
             {"nom": "Frappe de Guerrier", "degats": 65, "emoji": "🪓", "desc": "Force brute des Vikings"},
@@ -4187,7 +4197,7 @@ ANIME_CARDS_DB = {
     "erwin": {
         "nom": "Erwin Smith", "serie": "Attack on Titan", "emoji": "🎖️",
         "pv": 95, "attaque": 78, "defense": 80,
-        "rarete": "Rare", "faiblesse": "🔥", "resistance": "⚔️",
+        "rarete": "Épique", "faiblesse": "🔥", "resistance": "⚔️",
         "image": "https://i.imgur.com/jV3h5SB.jpg",
         "attaques": [
             {"nom": "Charge Suicidaire", "degats": 55, "emoji": "🎖️", "desc": "Mène ses hommes à la mort pour la victoire"},
@@ -4200,7 +4210,7 @@ ANIME_CARDS_DB = {
     "tengen": {
         "nom": "Tengen Uzui", "serie": "Demon Slayer", "emoji": "💥",
         "pv": 110, "attaque": 85, "defense": 75,
-        "rarete": "Rare", "faiblesse": "🌊", "resistance": "💥",
+        "rarete": "Épique", "faiblesse": "🌊", "resistance": "💥",
         "image": "https://i.imgur.com/Mv099qN.jpg",
         "attaques": [
             {"nom": "Respiration du Son", "degats": 50, "emoji": "🎵", "desc": "Attaque en rythme explosif"},
@@ -4211,7 +4221,7 @@ ANIME_CARDS_DB = {
     "muichiro": {
         "nom": "Muichiro Tokito", "serie": "Demon Slayer", "emoji": "🌫️",
         "pv": 100, "attaque": 88, "defense": 70,
-        "rarete": "Rare", "faiblesse": "🔥", "resistance": "💨",
+        "rarete": "Épique", "faiblesse": "🔥", "resistance": "💨",
         "image": "https://i.imgur.com/C9Q0GcG.jpg",
         "attaques": [
             {"nom": "Respiration de la Brume", "degats": 48, "emoji": "🌫️", "desc": "Attaque imprévisible comme la brume"},
@@ -4222,7 +4232,7 @@ ANIME_CARDS_DB = {
     "giyu": {
         "nom": "Giyu Tomioka", "serie": "Demon Slayer", "emoji": "🌊",
         "pv": 108, "attaque": 86, "defense": 78,
-        "rarete": "Rare", "faiblesse": "⚡", "resistance": "🌊",
+        "rarete": "Épique", "faiblesse": "⚡", "resistance": "🌊",
         "image": "https://i.imgur.com/oWIcMrV.jpg",
         "attaques": [
             {"nom": "Respiration de l'Eau", "degats": 45, "emoji": "🌊", "desc": "Flux d'eau constant et précis"},
@@ -4244,7 +4254,7 @@ ANIME_CARDS_DB = {
     "sanemi": {
         "nom": "Sanemi Shinazugawa", "serie": "Demon Slayer", "emoji": "💨",
         "pv": 112, "attaque": 89, "defense": 76,
-        "rarete": "Rare", "faiblesse": "🔥", "resistance": "💨",
+        "rarete": "Épique", "faiblesse": "🔥", "resistance": "💨",
         "image": "https://i.imgur.com/fHuqIaF.jpg",
         "attaques": [
             {"nom": "Respiration du Vent", "degats": 50, "emoji": "💨", "desc": "Rafales tranchantes du Pillier du Vent"},
@@ -4279,7 +4289,7 @@ ANIME_CARDS_DB = {
     "rize": {
         "nom": "Rize Kamishiro", "serie": "Tokyo Ghoul", "emoji": "🦋",
         "pv": 105, "attaque": 85, "defense": 72,
-        "rarete": "Rare", "faiblesse": "💡", "resistance": "🦋",
+        "rarete": "Épique", "faiblesse": "💡", "resistance": "🦋",
         "image": "https://i.imgur.com/qAhrKOO.jpg",
         "attaques": [
             {"nom": "Kagune Multiple", "degats": 55, "emoji": "🦋", "desc": "Plusieurs tentacules simultanés"},
@@ -4397,7 +4407,7 @@ ANIME_CARDS_DB = {
     "deku": {
         "nom": "Izuku Midoriya", "serie": "My Hero Academia", "emoji": "🥦",
         "pv": 115, "attaque": 85, "defense": 72,
-        "rarete": "Rare", "faiblesse": "⚡", "resistance": "💪",
+        "rarete": "Épique", "faiblesse": "⚡", "resistance": "💪",
         "image": "https://i.imgur.com/aKjpPQs.jpg",
         "attaques": [
             {"nom": "Delaware Smash", "degats": 50, "emoji": "🥦", "desc": "One For All concentré dans un doigt"},
@@ -4408,7 +4418,7 @@ ANIME_CARDS_DB = {
     "bakugo": {
         "nom": "Katsuki Bakugo", "serie": "My Hero Academia", "emoji": "💣",
         "pv": 110, "attaque": 90, "defense": 70,
-        "rarete": "Rare", "faiblesse": "🌊", "resistance": "💣",
+        "rarete": "Épique", "faiblesse": "🌊", "resistance": "💣",
         "image": "https://i.imgur.com/jlLDh3h.jpg",
         "attaques": [
             {"nom": "Explosion", "degats": 55, "emoji": "💣", "desc": "Nitroglycérine explosive dans les paumes"},
@@ -4443,7 +4453,7 @@ ANIME_CARDS_DB = {
     "suzaku": {
         "nom": "Suzaku Kururugi", "serie": "Code Geass", "emoji": "⚔️",
         "pv": 105, "attaque": 85, "defense": 80,
-        "rarete": "Rare", "faiblesse": "🧠", "resistance": "⚔️",
+        "rarete": "Épique", "faiblesse": "🧠", "resistance": "⚔️",
         "image": "https://i.imgur.com/b5cVGjx.jpg",
         "attaques": [
             {"nom": "Spinning Kick", "degats": 50, "emoji": "🦵", "desc": "Coup de pied rotatif surhumain"},
@@ -4727,6 +4737,10 @@ async def pokepersos(ctx):
 @bot.command(name="pokebattle")
 async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
     """Lance un combat 3v3 avec tes cartes gacha ! — .pokebattle @joueur"""
+    if SALON_COMBAT_ID and ctx.channel.id != SALON_COMBAT_ID:
+        salon = ctx.guild.get_channel(SALON_COMBAT_ID)
+        mention = salon.mention if salon else "le salon combat"
+        return await ctx.send(f"⚔️ Les combats de cartes c'est dans {mention} !", delete_after=5)
     if not adversaire or adversaire.bot or adversaire.id == ctx.author.id:
         return await ctx.send("❌ Mentionne un adversaire valide ! Ex: `.pokebattle @ami`")
     if ctx.channel.id in active_pokebattles:
@@ -5560,26 +5574,199 @@ async def fusionner(ctx, perso: str = None):
 # ============================================================
 #  CONFIGURATION SALONS
 # ============================================================
+async def send_salon_embed(channel, t):
+    """Envoie l'embed d'information dans le salon configuré"""
+    if t == "gacha":
+        embed = discord.Embed(
+            title="🎰 Bienvenue au Gacha — QG Kdrama",
+            description="Tire des cartes de personnages animé/manga et construis ta collection unique !",
+            color=0x9b59b6
+        )
+        embed.add_field(name="🎮 Commandes", value=(
+            "`.ga` — Tire une carte aléatoire\n"
+            "`.rolls` — Voir tes rolls restants & cooldowns\n"
+            "`.daily` — 150-300 pièces + 1 roll bonus (24h)\n"
+            "`.gachastock [@joueur]` — Ta collection avec ◀️ ▶️\n"
+            "`.gacha <perso>` — Voir qui possède une carte\n"
+            "`.gacha recent` — Dernières cartes claimées\n"
+            "`.gacha ordre naruto 1 luffy 2` — Réorganiser ta collection\n"
+            "`.fusionner <perso>` — Booster une carte avec des tokens ⭐"
+        ), inline=False)
+        embed.add_field(name="📜 Règles", value=(
+            "• **10 rolls** rechargés toutes les **6h**\n"
+            "• Carte affichée avec ❤️ → clique en **30 secondes** pour la claim !\n"
+            "• **1 claim toutes les 30 min** — pas de spam\n"
+            "• Cartes claimées **uniques** — elles ne repopent plus jamais\n"
+            "• Carte déjà claimée → ⚡ personne peut la prendre"
+        ), inline=False)
+        embed.add_field(name="⭐ Fusion", value=(
+            "• Claim une carte déjà possédée → **token de fusion**\n"
+            "• **2 tokens** → `.fusionner <perso>` pour booster ⭐\n"
+            "• ⭐+1 : +20PV +15ATK +10DEF\n"
+            "• ⭐+2 : +40PV +30ATK +20DEF\n"
+            "• ⭐+3 : +60PV +45ATK +30DEF *(max)*"
+        ), inline=False)
+        embed.add_field(name="💎 Raretés & Taux", value=(
+            "🔵 **Commun** — 60%\n"
+            "⭐ **Rare** — 25%\n"
+            "💜 **Épique** — 11%\n"
+            "👑 **Légendaire** — 3.5%\n"
+            "🔮 **Mythique** — 0.5%"
+        ), inline=False)
+        embed.set_footer(text="Bonne chance pour les Mythiques... 🔮")
+        await channel.send(embed=embed)
+
+    elif t == "boutique":
+        embed = discord.Embed(
+            title="🛒 Boutique — QG Kdrama",
+            description="Dépense tes pièces pour des rôles exclusifs, des boosts et des items offensifs !",
+            color=0xf39c12
+        )
+        embed.add_field(name="👑 Rôles exclusifs", value=(
+            "`vip` — 💎 Rang S VIP → **1000p**\n"
+            "`drama_king` — 👑 Roi des Malédictions → **1500p**\n"
+            "`oeil_dieu` — 🌀 Oeil de Dieu → **1200p**\n"
+            "`chasseur` — ⚔️ Chasseur National → **800p**\n"
+            "`monarque` — 🌑 Monarque des Ombres → **3000p**\n"
+            "`pilier` — 🔥 Pillier du Soleil → **2000p**"
+        ), inline=False)
+        embed.add_field(name="⚡ Boosts Gacha", value=(
+            "`double_xp` — ⚡ Double XP 1h → **300p**\n"
+            "`rolls_10` — 🎰 +10 Rolls → **600p**\n"
+            "`claim_20` — ⚡ Claim en 20 min *(permanent)* → **800p**\n"
+            "`claim_15` — ⚡ Claim en 15 min *(permanent)* → **1500p**\n"
+            "`claim_10` — ⚡ Claim en 10 min *(permanent)* → **3000p**\n"
+            "`boost_rarete` — 🎯 Boost Rareté 5 rolls *(1x/jour)* → **1500p**"
+        ), inline=False)
+        embed.add_field(name="⚔️ Items offensifs & défensifs", value=(
+            "`freeze` — 🧊 Sceau des Ombres — Freeze rolls 5 min *(1x/jour)* → **500p**\n"
+            "`curse` — ⏳ Malédiction — +5 min claim adverse *(1x/jour)* → **400p**\n"
+            "`shield` — 🛡️ Bouclier — Protège Sceau & Malédiction 30 min → **600p**\n"
+            "`reset_claim` — 🔄 Reset ton claim immédiatement → **1200p**\n\n"
+            "➡️ `.utiliser freeze @joueur` / `.utiliser curse @joueur`"
+        ), inline=False)
+        embed.add_field(name="💡 Comment acheter ?", value=(
+            "`.shop` — Voir tous les items disponibles\n"
+            "`.acheter <id>` — Acheter *(ex: `.acheter vip`)*\n"
+            "`.balance` — Voir ton solde\n"
+            "`.daily` — Récupérer tes pièces journalières"
+        ), inline=False)
+        embed.set_footer(text="Gagne des pièces avec .daily • .quiz • .boss • .duel 💰")
+        await channel.send(embed=embed)
+
+    elif t == "casino":
+        embed = discord.Embed(
+            title="🎰 Casino — QG Kdrama",
+            description="Tente ta chance à la slot machine... mais la maison gagne toujours 😈",
+            color=0xe74c3c
+        )
+        embed.add_field(name="🎮 Commande", value=(
+            "`.slot [mise]` — Lancer la slot machine\n"
+            "Mise minimum : **10 pièces** • Mise maximum : **500 pièces**"
+        ), inline=False)
+        embed.add_field(name="💰 Gains possibles", value=(
+            "🐉🐉🐉 → **x10** ta mise\n"
+            "💎💎💎 → **x7** ta mise\n"
+            "👑👑👑 → **x5** ta mise\n"
+            "⚡⚡⚡ → **x4** ta mise\n"
+            "🔥🔥🔥 → **x3** ta mise\n"
+            "🎭🎭🎭 → **x2.5** ta mise\n"
+            "2 symboles identiques → **x1.5** ta mise\n"
+            "Aucune correspondance → ❌ mise perdue"
+        ), inline=False)
+        embed.add_field(name="⚠️ Règles", value=(
+            "• Ce salon est **réservé au casino** uniquement\n"
+            "• Cooldown **10 secondes** entre chaque spin\n"
+            "• Mise tes pièces intelligemment 🙏"
+        ), inline=False)
+        embed.set_footer(text="Fais .daily avant de jouer pour avoir des pièces ! 💰")
+        await channel.send(embed=embed)
+
+    elif t == "combat":
+        embed = discord.Embed(
+            title="⚔️ Combat Cartes — QG Kdrama",
+            description="Affronte d'autres joueurs en combat 3v3 avec tes cartes gacha claimées !",
+            color=0xe74c3c
+        )
+        embed.add_field(name="🎮 Commandes", value=(
+            "`.pokebattle @joueur` — Défier un joueur en 3v3\n"
+            "`.pokestop` — Annuler un combat en cours"
+        ), inline=False)
+        embed.add_field(name="📜 Comment ça marche ?", value=(
+            "• Tu choisis **3 cartes** parmi ta collection gacha\n"
+            "• Chaque carte a ses propres **PV, ATK et DEF**\n"
+            "• Tu choisis une attaque parmi **3** à chaque tour\n"
+            "• Le combat continue jusqu'à élimination totale d'une équipe\n"
+            "• Les boosts de **fusion ⭐** sont pris en compte !"
+        ), inline=False)
+        embed.add_field(name="🏆 Récompenses", value=(
+            "• Victoire → **+150 pièces & +60 XP**\n"
+            "• Plus ta carte est rare, plus elle est puissante !"
+        ), inline=False)
+        embed.add_field(name="💡 Conseils", value=(
+            "• Claim des cartes Légendaires/Mythiques dans le salon gacha\n"
+            "• Fusionne tes cartes avec `.fusionner` pour les booster ⭐\n"
+            "• Compose une équipe équilibrée ATK/DEF !"
+        ), inline=False)
+        embed.set_footer(text="Claim des cartes dans le salon gacha d'abord ! 🎰")
+        await channel.send(embed=embed)
+
+    elif t == "duel":
+        embed = discord.Embed(
+            title="⚔️ Duels & PvP — QG Kdrama",
+            description="Défie les autres membres en duel rapide ou en arène PvP tour par tour !",
+            color=0xe67e22
+        )
+        embed.add_field(name="🎮 Commandes", value=(
+            "`.duel @joueur` — Défi rapide\n"
+            "`.arene @joueur` — Combat PvP tour par tour\n"
+            "`.accept` — Accepter un défi\n"
+            "`.decline` — Refuser un défi"
+        ), inline=False)
+        embed.add_field(name="⚡ Duel rapide", value=(
+            "• Résultat instantané\n"
+            "• Gagnant remporte **50-100 pièces** au perdant\n"
+            "• Simple et rapide !"
+        ), inline=False)
+        embed.add_field(name="🏟️ Arène PvP", value=(
+            "• Combat tour par tour avec PV\n"
+            "• Chaque joueur choisit son action à chaque tour\n"
+            "• Victoire → **+150 pièces & +40 XP**"
+        ), inline=False)
+        embed.add_field(name="🐉 Boss commun", value=(
+            "• `.boss` — Un admin invoque un boss *(admin only)*\n"
+            "• `.attaque` — Tout le monde frappe le boss !\n"
+            "• Cooldown **13 secondes** entre chaque attaque\n"
+            "• Récompenses partagées entre tous les participants 🏆"
+        ), inline=False)
+        embed.set_footer(text="Que le meilleur gagne ! ⚔️")
+        await channel.send(embed=embed)
+
 @bot.command(name="setsalon")
 @commands.has_permissions(administrator=True)
 async def setsalon(ctx, type_salon: str = None):
-    """Configure les salons spéciaux — .setsalon levelup | casino | gacha | boutique"""
-    global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID
+    """Configure les salons spéciaux — .setsalon levelup | casino | gacha | boutique | combat | duel"""
+    global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_COMBAT_ID, SALON_DUEL_ID
     types = {
-        "levelup": ("SALON_LEVELUP_ID", "level up"),
-        "casino": ("SALON_CASINO_ID", "casino"),
-        "gacha": ("SALON_GACHA_ID", "gacha"),
+        "levelup":  ("SALON_LEVELUP_ID",  "level up"),
+        "casino":   ("SALON_CASINO_ID",   "casino"),
+        "gacha":    ("SALON_GACHA_ID",    "gacha"),
         "boutique": ("SALON_BOUTIQUE_ID", "boutique"),
+        "combat":   ("SALON_COMBAT_ID",   "combat cartes"),
+        "duel":     ("SALON_DUEL_ID",     "duel & PvP"),
     }
     if not type_salon or type_salon.lower() not in types:
-        return await ctx.send("❌ Usage : `.setsalon levelup` | `.setsalon casino` | `.setsalon gacha` | `.setsalon boutique`")
-    
+        return await ctx.send("❌ Usage : `.setsalon levelup` | `casino` | `gacha` | `boutique` | `combat` | `duel`")
+
     var_name, label = types[type_salon.lower()]
-    if var_name == "SALON_LEVELUP_ID": SALON_LEVELUP_ID = ctx.channel.id
-    elif var_name == "SALON_CASINO_ID": SALON_CASINO_ID = ctx.channel.id
-    elif var_name == "SALON_GACHA_ID": SALON_GACHA_ID = ctx.channel.id
+    if var_name == "SALON_LEVELUP_ID":  SALON_LEVELUP_ID  = ctx.channel.id
+    elif var_name == "SALON_CASINO_ID":   SALON_CASINO_ID   = ctx.channel.id
+    elif var_name == "SALON_GACHA_ID":    SALON_GACHA_ID    = ctx.channel.id
     elif var_name == "SALON_BOUTIQUE_ID": SALON_BOUTIQUE_ID = ctx.channel.id
+    elif var_name == "SALON_COMBAT_ID":   SALON_COMBAT_ID   = ctx.channel.id
+    elif var_name == "SALON_DUEL_ID":     SALON_DUEL_ID     = ctx.channel.id
     await ctx.send(f"✅ Salon **{label}** configuré sur {ctx.channel.mention} !")
+    await send_salon_embed(ctx.channel, type_salon.lower())
 
 # ============================================================
 #  UTILISER item offensif
