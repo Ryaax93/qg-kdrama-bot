@@ -6586,4 +6586,4 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
 
 # ============================================================
 print("🚀 Démarrage du bot...")
-bot.run(TOKEN) 
+bot.run(TOKEN)
