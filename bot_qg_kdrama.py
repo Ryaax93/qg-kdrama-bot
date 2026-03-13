@@ -2512,7 +2512,7 @@ async def on_member_join(member):
         raid_mode = False
         return
 
-    # Message de bienvenue normal (si pas de raid)
+    # Message de bienvenue — Simple et stylé
     if not raid_mode:
         channel = None
         if SALON_BIENVENUE_ID:
@@ -2520,43 +2520,31 @@ async def on_member_join(member):
         if not channel:
             channel = discord.utils.get(member.guild.text_channels, name="général") or member.guild.system_channel
         if channel:
-            member_count = member.guild.member_count
-            # Numéro stylé
-            suffixes = {1: "er", 2: "ème"}
-            suffix = suffixes.get(member_count, "ème")
-
-            citations_bienvenue = [
-                ("*« Le chemin vers le sommet n'a pas de raccourcis. »*", "— Rock Lee, Naruto"),
-                ("*« Je ne reculerai jamais et je ne regretterai rien. »*", "— Naruto Uzumaki"),
-                ("*« Peu importe combien tu es blessé, redresse-toi. »*", "— Izuku Midoriya, MHA"),
-                ("*« Si tu ne peux pas supporter d'être seul, tu ne seras jamais fort. »*", "— Levi Ackerman, AoT"),
-                ("*« Un seul coup suffit. »*", "— Saitama, One Punch Man"),
-                ("*« Je protègerai ceux que j'aime, quoi qu'il arrive. »*", "— Tanjiro, Demon Slayer"),
-                ("*« Ceux qui enfreignent les règles sont des ordures, mais ceux qui abandonnent leurs amis sont pire que des ordures. »*", "— Kakashi, Naruto"),
-                ("*« La douleur nous permet de grandir. »*", "— Pain, Naruto"),
-                ("*« Un héros naît parmi cent, un homme sage se trouve parmi mille, mais une âme accomplie ne peut être rencontrée qu'une fois dans un million d'années. »*", "— Goku, DBZ"),
-                ("*« Peu importe le monde, tu dois vivre ta propre vie. »*", "— Kirito, SAO"),
-            ]
-
             import random as _random
-            citation, auteur = _random.choice(citations_bienvenue)
+            member_count = member.guild.member_count
+
+            msgs = [
+                "Prépare-toi, l'aventure commence ici.",
+                "Un nouveau guerrier entre en scène.",
+                "Le QG s'agrandit. Bienvenue parmi nous.",
+                "Une nouvelle légende vient de rejoindre le QG.",
+                "Le destin t'a conduit jusqu'ici. Bienvenue.",
+            ]
+            msg = _random.choice(msgs)
 
             embed = discord.Embed(
-                title="⚔️ Un nouveau guerrier rejoint le QG !",
                 description=(
-                    f"## Bienvenue {member.mention} ! 👋\n\n"
-                    f"🏯 Tu es le **{member_count}{suffix} membre** du QG Kdrama !\n\n"
-                    f"🎬 **Kdramas** • 🎮 **Gaming** • 🗡️ **Animés**\n\n"
-                    f"{citation}\n"
-                    f"*{auteur}*\n\n"
-                    f"Tape `.help` pour découvrir toutes les commandes du bot ! 🍿"
+                    f"## Bienvenue, {member.mention} 👋\n"
+                    f"{msg}\n\n"
+                    f"🏯 Tu es notre **{member_count}ème membre**\n"
+                    f"📖 Tape \`.help\` pour découvrir le bot"
                 ),
-                color=0xff6b9d
+                color=0xe74c3c
             )
-            embed.set_thumbnail(url=member.display_avatar.url)
-            embed.set_footer(text=f"QG Kdrama — {member_count} membres", icon_url=member.guild.icon.url if member.guild.icon else None)
+                text="QG Kdrama",
+                icon_url=member.guild.icon.url if member.guild.icon else None
+            )
             await channel.send(embed=embed)
-
 @bot.event
 async def on_member_remove(member):
     """Message d'aurevoir quand un membre quitte"""
@@ -4207,13 +4195,21 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
             f"{c2} `{barre(j2['hp'], j2['hp_max'])}` **{j2['hp']}/{j2['hp_max']} HP**\n"
             f"⚡ `{barre(j2['end'], j2['end_max'])}` {j2['end']}/{j2['end_max']} END"
         ), inline=True)
+        # Séparateur + dernière action en bas bien visible
+        embed.add_field(name="​", value="​", inline=False)
         if historique:
             embed.add_field(
-                name=f"⚡ Tour {tour_num} — dernières actions",
-                value="\n".join(historique[-3:]),
+                name="╔══ DERNIÈRE ACTION ══╗",
+                value=f"> {historique[-1]}",
                 inline=False
             )
-        embed.set_footer(text="Arène PvP — QG Kdrama")
+        else:
+            embed.add_field(
+                name="╔══ DERNIÈRE ACTION ══╗",
+                value=f"> ⏳ En attente de la première action...",
+                inline=False
+            )
+        embed.set_footer(text=f"Tour {tour_num} • Arène PvP — QG Kdrama")
         return embed
 
     def build_view_actions(attaquant):
