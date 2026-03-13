@@ -3615,7 +3615,7 @@ ANIME_CARDS_DB = {
     "zenitsu": {
         "nom": "Zenitsu Agatsuma", "serie": "Demon Slayer", "emoji": "⚡",
         "pv": 90, "attaque": 88, "defense": 45,
-        "rarete": "Rare",
+        "rarete": "Épique",
         "image": "https://i.imgur.com/xBnRNSv.jpg", "faiblesse": "🌊", "resistance": "⚡",
         "attaques": [
             {"nom": "Tonnerre — 1ère Forme", "degats": 70, "emoji": "⚡", "desc": "Vitesse de l'éclair endormi"},
@@ -3729,7 +3729,7 @@ ANIME_CARDS_DB = {
     "edward": {
         "nom": "Edward Elric", "serie": "FMA Brotherhood", "emoji": "⚗️",
         "pv": 100, "attaque": 80, "defense": 68,
-        "rarete": "Épique", "faiblesse": "💧", "resistance": "⚗️",
+        "rarete": "Rare", "faiblesse": "💧", "resistance": "⚗️",
         "attaques": [
             {"nom": "Lance Alchimique", "degats": 40, "emoji": "⚗️", "desc": "Transmutation express en lance"},
             {"nom": "Armure de Métal", "degats": 30, "emoji": "🛡️", "desc": "Bouclier + contre-attaque"},
@@ -3740,7 +3740,7 @@ ANIME_CARDS_DB = {
     "light": {
         "nom": "Light Yagami", "serie": "Death Note", "emoji": "📓",
         "pv": 80, "attaque": 70, "defense": 55,
-        "rarete": "Épique", "faiblesse": "💡", "resistance": "🌙",
+        "rarete": "Rare", "faiblesse": "💡", "resistance": "🌙",
         "attaques": [
             {"nom": "Manipulation Mentale", "degats": 35, "emoji": "🧠", "desc": "Réduit l'attaque adverse de 20%"},
             {"nom": "Death Note", "degats": 60, "emoji": "📓", "desc": "Inscription du nom — dégâts directs"},
@@ -3811,7 +3811,7 @@ ANIME_CARDS_DB = {
     "l": {
         "nom": "L Lawliet", "serie": "Death Note", "emoji": "🍬",
         "pv": 75, "attaque": 65, "defense": 50,
-        "rarete": "Épique", "faiblesse": "🌙", "resistance": "🧠",
+        "rarete": "Rare", "faiblesse": "🌙", "resistance": "🧠",
         "attaques": [
             {"nom": "Déduction Logique", "degats": 30, "emoji": "🧠", "desc": "Réduit l'attaque adverse de 25%"},
             {"nom": "Piège Mental", "degats": 50, "emoji": "🍬", "desc": "Stratégie imparable à 99%"},
@@ -3880,7 +3880,7 @@ ANIME_CARDS_DB = {
     "kurapika": {
         "nom": "Kurapika", "serie": "Hunter x Hunter", "emoji": "🔴",
         "pv": 95, "attaque": 85, "defense": 68,
-        "rarete": "Épique", "faiblesse": "💨", "resistance": "🔴",
+        "rarete": "Rare", "faiblesse": "💨", "resistance": "🔴",
         "attaques": [
             {"nom": "Chaînes Nen", "degats": 50, "emoji": "⛓️", "desc": "Chaînes de Nen impénétrables"},
             {"nom": "Jugement Éternel", "degats": 70, "emoji": "🔴", "desc": "Loi absolue — la mort au moindre mensonge"},
@@ -3903,7 +3903,7 @@ ANIME_CARDS_DB = {
     "alphonse": {
         "nom": "Alphonse Elric", "serie": "FMA Brotherhood", "emoji": "🛡️",
         "pv": 130, "attaque": 72, "defense": 95,
-        "rarete": "Épique", "faiblesse": "⚡", "resistance": "🛡️",
+        "rarete": "Rare", "faiblesse": "⚡", "resistance": "🛡️",
         "attaques": [
             {"nom": "Armure de Métal", "degats": 35, "emoji": "🛡️", "desc": "Frappe avec son armure gigantesque"},
             {"nom": "Transmutation Défensive", "degats": 50, "emoji": "⚗️", "desc": "Transforme le sol en piège"},
@@ -3913,7 +3913,7 @@ ANIME_CARDS_DB = {
     "roy": {
         "nom": "Roy Mustang", "serie": "FMA Brotherhood", "emoji": "🔥",
         "pv": 95, "attaque": 88, "defense": 65,
-        "rarete": "Épique", "faiblesse": "🌊", "resistance": "🔥",
+        "rarete": "Rare", "faiblesse": "🌊", "resistance": "🔥",
         "attaques": [
             {"nom": "Claquement de Doigts", "degats": 45, "emoji": "🔥", "desc": "Étincelle alchimique instantanée"},
             {"nom": "Mur de Flammes", "degats": 65, "emoji": "🔥", "desc": "Barrière enflammée dévastratrice"},
@@ -3925,7 +3925,7 @@ ANIME_CARDS_DB = {
     "natsu": {
         "nom": "Natsu Dragneel", "serie": "Fairy Tail", "emoji": "🔥",
         "pv": 120, "attaque": 85, "defense": 70,
-        "rarete": "Épique", "faiblesse": "🌊", "resistance": "🔥",
+        "rarete": "Rare", "faiblesse": "🌊", "resistance": "🔥",
         "attaques": [
             {"nom": "Rugissement du Dragon Ardent", "degats": 50, "emoji": "🔥", "desc": "Souffle de feu dévastateur"},
             {"nom": "Poing de Flamme", "degats": 65, "emoji": "👊", "desc": "Frappe enflammée explosive"},
@@ -4026,7 +4026,7 @@ ANIME_CARDS_DB = {
     "kirito": {
         "nom": "Kirito", "serie": "Sword Art Online", "emoji": "⚫",
         "pv": 110, "attaque": 85, "defense": 75,
-        "rarete": "Épique", "faiblesse": "🌊", "resistance": "⚫",
+        "rarete": "Rare", "faiblesse": "🌊", "resistance": "⚫",
         "attaques": [
             {"nom": "Vorpal Strike", "degats": 50, "emoji": "⚫", "desc": "Coup d'épée ultrarapide"},
             {"nom": "Double Style", "degats": 65, "emoji": "⚔️", "desc": "Deux épées simultanées"},
@@ -4036,7 +4036,7 @@ ANIME_CARDS_DB = {
     "asuna": {
         "nom": "Asuna Yuuki", "serie": "Sword Art Online", "emoji": "⚡",
         "pv": 105, "attaque": 88, "defense": 70,
-        "rarete": "Épique", "faiblesse": "🔥", "resistance": "⚡",
+        "rarete": "Rare", "faiblesse": "🔥", "resistance": "⚡",
         "attaques": [
             {"nom": "Linear", "degats": 50, "emoji": "⚡", "desc": "Estoc rectiligne à vitesse éclair"},
             {"nom": "Quadruple Pain", "degats": 70, "emoji": "⚔️", "desc": "4 coups simultanés en une fraction de seconde"},
@@ -4117,7 +4117,7 @@ ANIME_CARDS_DB = {
     "motoko": {
         "nom": "Motoko Kusanagi", "serie": "Ghost in the Shell", "emoji": "🤖",
         "pv": 105, "attaque": 88, "defense": 85,
-        "rarete": "Épique", "faiblesse": "⚡", "resistance": "🤖",
+        "rarete": "Rare", "faiblesse": "⚡", "resistance": "🤖",
         "attaques": [
             {"nom": "Camouflage Optique", "degats": 40, "emoji": "👁️", "desc": "Invisibilité totale — esquive garantie"},
             {"nom": "Hacking Neural", "degats": 60, "emoji": "💻", "desc": "Prend le contrôle de l'ennemi"},
@@ -4129,7 +4129,7 @@ ANIME_CARDS_DB = {
     "zerotwo": {
         "nom": "Zero Two", "serie": "Darling in the Franxx", "emoji": "🌸",
         "pv": 120, "attaque": 87, "defense": 75,
-        "rarete": "Épique", "faiblesse": "🌊", "resistance": "🔥",
+        "rarete": "Rare", "faiblesse": "🌊", "resistance": "🔥",
         "attaques": [
             {"nom": "Instinct de Klaxosaure", "degats": 55, "emoji": "🌸", "desc": "Puissance instinctive mi-humaine"},
             {"nom": "Strelizia — Mode Pistil", "degats": 70, "emoji": "🌺", "desc": "Fusion parfaite avec Franxx"},
@@ -4163,7 +4163,7 @@ ANIME_CARDS_DB = {
     "yor": {
         "nom": "Yor Forger", "serie": "Spy x Family", "emoji": "🌹",
         "pv": 115, "attaque": 92, "defense": 80,
-        "rarete": "Épique", "faiblesse": "💭", "resistance": "🌹",
+        "rarete": "Rare", "faiblesse": "💭", "resistance": "🌹",
         "attaques": [
             {"nom": "Épine de Rose", "degats": 55, "emoji": "🌹", "desc": "Lancer de l'épée avec précision mortelle"},
             {"nom": "Rotation Mortelle", "degats": 70, "emoji": "🔄", "desc": "Tourbillon de l'assassin"},
@@ -4175,7 +4175,7 @@ ANIME_CARDS_DB = {
     "thorfinn": {
         "nom": "Thorfinn", "serie": "Vinland Saga", "emoji": "🪓",
         "pv": 110, "attaque": 88, "defense": 72,
-        "rarete": "Épique", "faiblesse": "🔥", "resistance": "❄️",
+        "rarete": "Rare", "faiblesse": "🔥", "resistance": "❄️",
         "attaques": [
             {"nom": "Dague Viking", "degats": 50, "emoji": "🗡️", "desc": "Rapidité et précision nordique"},
             {"nom": "Frappe de Guerrier", "degats": 65, "emoji": "🪓", "desc": "Force brute des Vikings"},
@@ -4187,7 +4187,7 @@ ANIME_CARDS_DB = {
     "erwin": {
         "nom": "Erwin Smith", "serie": "Attack on Titan", "emoji": "🎖️",
         "pv": 95, "attaque": 78, "defense": 80,
-        "rarete": "Épique", "faiblesse": "🔥", "resistance": "⚔️",
+        "rarete": "Rare", "faiblesse": "🔥", "resistance": "⚔️",
         "image": "https://i.imgur.com/jV3h5SB.jpg",
         "attaques": [
             {"nom": "Charge Suicidaire", "degats": 55, "emoji": "🎖️", "desc": "Mène ses hommes à la mort pour la victoire"},
@@ -4200,7 +4200,7 @@ ANIME_CARDS_DB = {
     "tengen": {
         "nom": "Tengen Uzui", "serie": "Demon Slayer", "emoji": "💥",
         "pv": 110, "attaque": 85, "defense": 75,
-        "rarete": "Épique", "faiblesse": "🌊", "resistance": "💥",
+        "rarete": "Rare", "faiblesse": "🌊", "resistance": "💥",
         "image": "https://i.imgur.com/Mv099qN.jpg",
         "attaques": [
             {"nom": "Respiration du Son", "degats": 50, "emoji": "🎵", "desc": "Attaque en rythme explosif"},
@@ -4211,7 +4211,7 @@ ANIME_CARDS_DB = {
     "muichiro": {
         "nom": "Muichiro Tokito", "serie": "Demon Slayer", "emoji": "🌫️",
         "pv": 100, "attaque": 88, "defense": 70,
-        "rarete": "Épique", "faiblesse": "🔥", "resistance": "💨",
+        "rarete": "Rare", "faiblesse": "🔥", "resistance": "💨",
         "image": "https://i.imgur.com/C9Q0GcG.jpg",
         "attaques": [
             {"nom": "Respiration de la Brume", "degats": 48, "emoji": "🌫️", "desc": "Attaque imprévisible comme la brume"},
@@ -4222,7 +4222,7 @@ ANIME_CARDS_DB = {
     "giyu": {
         "nom": "Giyu Tomioka", "serie": "Demon Slayer", "emoji": "🌊",
         "pv": 108, "attaque": 86, "defense": 78,
-        "rarete": "Épique", "faiblesse": "⚡", "resistance": "🌊",
+        "rarete": "Rare", "faiblesse": "⚡", "resistance": "🌊",
         "image": "https://i.imgur.com/oWIcMrV.jpg",
         "attaques": [
             {"nom": "Respiration de l'Eau", "degats": 45, "emoji": "🌊", "desc": "Flux d'eau constant et précis"},
@@ -4244,7 +4244,7 @@ ANIME_CARDS_DB = {
     "sanemi": {
         "nom": "Sanemi Shinazugawa", "serie": "Demon Slayer", "emoji": "💨",
         "pv": 112, "attaque": 89, "defense": 76,
-        "rarete": "Épique", "faiblesse": "🔥", "resistance": "💨",
+        "rarete": "Rare", "faiblesse": "🔥", "resistance": "💨",
         "image": "https://i.imgur.com/fHuqIaF.jpg",
         "attaques": [
             {"nom": "Respiration du Vent", "degats": 50, "emoji": "💨", "desc": "Rafales tranchantes du Pillier du Vent"},
@@ -4279,7 +4279,7 @@ ANIME_CARDS_DB = {
     "rize": {
         "nom": "Rize Kamishiro", "serie": "Tokyo Ghoul", "emoji": "🦋",
         "pv": 105, "attaque": 85, "defense": 72,
-        "rarete": "Épique", "faiblesse": "💡", "resistance": "🦋",
+        "rarete": "Rare", "faiblesse": "💡", "resistance": "🦋",
         "image": "https://i.imgur.com/qAhrKOO.jpg",
         "attaques": [
             {"nom": "Kagune Multiple", "degats": 55, "emoji": "🦋", "desc": "Plusieurs tentacules simultanés"},
@@ -4373,7 +4373,7 @@ ANIME_CARDS_DB = {
     "yelin": {
         "nom": "Ye Lin", "serie": "Magic Emperor", "emoji": "🌸",
         "pv": 105, "attaque": 80, "defense": 75,
-        "rarete": "Épique", "faiblesse": "🌑", "resistance": "🌸",
+        "rarete": "Rare", "faiblesse": "🌑", "resistance": "🌸",
         "image": "https://i.imgur.com/Ml8v5UX.jpg",
         "attaques": [
             {"nom": "Art de Soin", "degats": -30, "emoji": "💚", "desc": "Récupère 30 HP"},
@@ -4397,7 +4397,7 @@ ANIME_CARDS_DB = {
     "deku": {
         "nom": "Izuku Midoriya", "serie": "My Hero Academia", "emoji": "🥦",
         "pv": 115, "attaque": 85, "defense": 72,
-        "rarete": "Épique", "faiblesse": "⚡", "resistance": "💪",
+        "rarete": "Rare", "faiblesse": "⚡", "resistance": "💪",
         "image": "https://i.imgur.com/aKjpPQs.jpg",
         "attaques": [
             {"nom": "Delaware Smash", "degats": 50, "emoji": "🥦", "desc": "One For All concentré dans un doigt"},
@@ -4408,7 +4408,7 @@ ANIME_CARDS_DB = {
     "bakugo": {
         "nom": "Katsuki Bakugo", "serie": "My Hero Academia", "emoji": "💣",
         "pv": 110, "attaque": 90, "defense": 70,
-        "rarete": "Épique", "faiblesse": "🌊", "resistance": "💣",
+        "rarete": "Rare", "faiblesse": "🌊", "resistance": "💣",
         "image": "https://i.imgur.com/jlLDh3h.jpg",
         "attaques": [
             {"nom": "Explosion", "degats": 55, "emoji": "💣", "desc": "Nitroglycérine explosive dans les paumes"},
@@ -4443,7 +4443,7 @@ ANIME_CARDS_DB = {
     "suzaku": {
         "nom": "Suzaku Kururugi", "serie": "Code Geass", "emoji": "⚔️",
         "pv": 105, "attaque": 85, "defense": 80,
-        "rarete": "Épique", "faiblesse": "🧠", "resistance": "⚔️",
+        "rarete": "Rare", "faiblesse": "🧠", "resistance": "⚔️",
         "image": "https://i.imgur.com/b5cVGjx.jpg",
         "attaques": [
             {"nom": "Spinning Kick", "degats": 50, "emoji": "🦵", "desc": "Coup de pied rotatif surhumain"},
@@ -4505,18 +4505,19 @@ ANIME_CARDS_DB = {
 
 
 RARETE_COULEURS = {
-    "Mythique": 0xff4500,
+    "Mythique":   0xff4500,
     "Légendaire": 0xf1c40f,
-    "Épique": 0x9b59b6,
-    "Commun": 0x95a5a6,
+    "Épique":     0x9b59b6,
+    "Rare":       0x3498db,
+    "Commun":     0x95a5a6,
 }
 
 RARETE_EMOJI = {
-    "Mythique": "🔮",
+    "Mythique":   "🔮",
     "Légendaire": "👑",
-    "Épique": "💎",
-    "Rare": "⭐",
-    "Commun": "🔵",
+    "Épique":     "💎",
+    "Rare":       "⭐",
+    "Commun":     "🔵",
 }
 
 # Stockage collections et combats
@@ -4711,7 +4712,7 @@ async def pokepersos(ctx):
     par_rarete = defaultdict(list)
     for key, c in ANIME_CARDS_DB.items():
         par_rarete[c["rarete"]].append(f"`{key}` — {c['emoji']} {c['nom']}")
-    for rarete in ["Légendaire", "Épique", "Rare", "Commun"]:
+    for rarete in ["Mythique", "Légendaire", "Épique", "Rare", "Commun"]:
         if par_rarete[rarete]:
             embed.add_field(
                 name=f"{RARETE_EMOJI[rarete]} {rarete}",
@@ -5037,10 +5038,11 @@ daily_item_usage = defaultdict(lambda: defaultdict(float))  # {uid: {item_id: la
 
 # Probabilités gacha
 GACHA_RATES = {
-    "Mythique":   3,
-    "Légendaire": 12,
-    "Épique":     30,
-    "Commun":     55,
+    "Mythique":   1,   # 0.5% (pondération relative)
+    "Légendaire": 7,   # 3.5%
+    "Épique":     22,  # 11%
+    "Rare":       50,  # 25%
+    "Commun":     120, # 60%
 }
 
 def gacha_tirage(boost=False):
@@ -5050,10 +5052,11 @@ def gacha_tirage(boost=False):
         return None
     rates = dict(GACHA_RATES)
     if boost:
-        rates["Commun"] = 25
-        rates["Épique"] = 40
-        rates["Légendaire"] = 25
-        rates["Mythique"] = 10
+        rates["Commun"] = 30
+        rates["Rare"] = 35
+        rates["Épique"] = 20
+        rates["Légendaire"] = 12
+        rates["Mythique"] = 3
     pool = []
     for key in available:
         c = ANIME_CARDS_DB[key]
