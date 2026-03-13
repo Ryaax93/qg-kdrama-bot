@@ -740,18 +740,37 @@ async def leaderboard(ctx):
 # ============================================================
 @bot.command()
 async def daily(ctx):
+    """Pièces journalières + roll bonus gacha"""
     uid = str(ctx.author.id)
-    now = datetime.datetime.utcnow()
+    import time as _time
+    now_dt = datetime.datetime.utcnow()
+    now_ts = _time.time()
+
+    # Pièces journalières
     last = cooldowns.get(f"daily_{uid}")
-    if last and (now - last).total_seconds() < 86400:
-        reste = 86400 - (now - last).total_seconds()
+    if last and (now_dt - last).total_seconds() < 86400:
+        reste = 86400 - (now_dt - last).total_seconds()
         h, m = divmod(int(reste) // 60, 60)
         return await ctx.send(f"⏳ Reviens dans **{h}h {m}m** pour tes pièces journalières !")
+
     gain = random.randint(150, 300)
     economy_data[uid]["coins"] += gain
-    cooldowns[f"daily_{uid}"] = now
+    cooldowns[f"daily_{uid}"] = now_dt
+
+    # Roll bonus gacha
+    data = roll_data[uid]
+    if now_ts - data["daily_reset"] >= 86400:
+        data["daily_used"] = False
+        data["daily_reset"] = now_ts
+
+    roll_msg = ""
+    if not data["daily_used"]:
+        data["daily_used"] = True
+        data["rolls"] = min(data["rolls"] + 1, ROLLS_MAX + 1)
+        roll_msg = f"\n🎰 +1 roll bonus ! Tu as **{data['rolls']} rolls** disponibles"
+
     await ctx.send(embed=discord.Embed(
-        description=f"💰 {ctx.author.mention} reçoit **{gain} pièces** ! Total : {economy_data[uid]['coins']} 🎬",
+        description=f"💰 {ctx.author.mention} reçoit **{gain} pièces** ! Total : {economy_data[uid]['coins']}{roll_msg}",
         color=0x2ecc71
     ))
 
@@ -5191,35 +5210,6 @@ async def ga_cmd(ctx):
                 await msg.edit(embed=expired_embed)
             except:
                 pass
-
-@bot.command(name="daily")
-async def daily_gacha(ctx):
-    """Claim ton roll quotidien bonus — .daily"""
-    import time
-
-    if SALON_GACHA_ID and ctx.channel.id != SALON_GACHA_ID:
-        salon = ctx.guild.get_channel(SALON_GACHA_ID)
-        mention = salon.mention if salon else "le salon gacha"
-        return await ctx.send(f"🎰 Le gacha c'est dans {mention} !", delete_after=5)
-
-    uid = str(ctx.author.id)
-    now = time.time()
-    data = roll_data[uid]
-
-    # Reset daily si 24h passées
-    if now - data["daily_reset"] >= 86400:
-        data["daily_used"] = False
-        data["daily_reset"] = now
-
-    if data["daily_used"]:
-        remaining = 86400 - (now - data["daily_reset"])
-        h = int(remaining // 3600)
-        m = int((remaining % 3600) // 60)
-        return await ctx.send(f"⏳ Daily déjà utilisé ! Reviens dans **{h}h{m:02d}min**", delete_after=8)
-
-    data["daily_used"] = True
-    data["rolls"] = min(data["rolls"] + 1, ROLLS_MAX + 1)
-    await ctx.send(f"🎁 {ctx.author.mention} a reçu **1 roll bonus** ! Tu as maintenant **{data['rolls']} rolls** 🎰")
 
 @bot.command(name="rolls")
 async def rolls_cmd(ctx):
