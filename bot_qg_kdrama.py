@@ -26,6 +26,13 @@ cooldowns = {}
 voice_clients = {}
 queues = defaultdict(list)
 
+# ---------- Stats arène & points d'amélioration ----------
+def default_arena_stats():
+    return {"pv_bonus": 0, "atk_bonus": 0, "def_bonus": 0, "end_bonus": 0}
+
+arena_stats = defaultdict(default_arena_stats)   # {uid: {pv_bonus, atk_bonus, def_bonus, end_bonus}}
+points_amelio = defaultdict(int)                  # {uid: points disponibles}
+
 # ---------- Titres selon niveau ----------
 TIERS = [
     (1,   "🌱 Académicien Débutant"),
@@ -365,14 +372,38 @@ async def on_message(message):
         xp_data[uid]["level"] += 1
         xp_data[uid]["xp"] = 0
         new_tier = get_tier(xp_data[uid]["level"])
+        points_amelio[uid] += 1
+        new_level = xp_data[uid]["level"]
+
+        # Barre de progression visuelle niveau
+        next_tier_level = next((lvl for lvl, _ in TIERS if lvl > new_level), None)
+        if next_tier_level:
+            progress = new_level / next_tier_level
+            filled = int(progress * 12)
+            bar = "▰" * filled + "▱" * (12 - filled)
+            next_tier_name = next(t for l, t in TIERS if l == next_tier_level)
+            progression_txt = f"`{bar}` → {next_tier_name}"
+        else:
+            progression_txt = "🌟 **RANG MAXIMUM ATTEINT !**"
+
         embed = discord.Embed(
-            title="🎉 Level Up !",
+            title="",
             description=(
-                f"{message.author.mention} est maintenant **niveau {xp_data[uid]['level']}** !\n"
-                f"Nouveau titre : **{new_tier}**"
+                f"## ⬆️  LEVEL UP  ⬆️\n"
+                f"# Niveau **{new_level}** !\n\n"
+                f"**{message.author.display_name}** vient de passer au niveau **{new_level}** !\n\n"
+                f"✨ Nouveau titre : **{new_tier}**\n\n"
+                f"{progression_txt}\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"🆙 **+1 point d'amélioration** disponible !\n"
+                f"*Utilise* `.ameliorer` *pour booster tes stats d'arène*\n"
+                f"*(PV • ATK • DEF • Endurance)*\n"
+                f"━━━━━━━━━━━━━━━━━━━━"
             ),
-            color=0xff6b9d
+            color=0xf1c40f
         )
+        embed.set_thumbnail(url=message.author.display_avatar.url)
+        embed.set_footer(text=f"⚔️ Points dispo : {points_amelio[uid]}  •  .ameliorer pour les dépenser !")
         # Envoyer dans le salon level up configuré ou dans le salon actuel
         levelup_channel = None
         if SALON_LEVELUP_ID:
@@ -1080,13 +1111,95 @@ async def rank(ctx, member: discord.Member = None):
     needed = lvl * 100
     bar = "█" * int((xp / needed) * 20) + "░" * (20 - int((xp / needed) * 20))
     tier = get_tier(lvl)
+    s = arena_stats[uid]
+    pts = points_amelio[uid]
+    hp_total  = 120 + s["pv_bonus"]  * 8
+    end_total = 100 + s["end_bonus"] * 5
     embed = discord.Embed(title=f"📊 Fiche de {member.display_name}", color=0xff6b9d)
     embed.add_field(name="Titre", value=tier, inline=False)
     embed.add_field(name="Niveau", value=str(lvl))
     embed.add_field(name="XP", value=f"{xp}/{needed}")
     embed.add_field(name="Progression", value=f"`{bar}`", inline=False)
+    embed.add_field(name="⚔️ Stats Arène", value=(
+        f"❤️ **PV** : {hp_total} *(+{s['pv_bonus']*8})*\n"
+        f"⚡ **Endurance** : {end_total} *(+{s['end_bonus']*5})*\n"
+        f"🗡️ **ATK bonus** : +{s['atk_bonus']*3}\n"
+        f"🛡️ **DEF bonus** : +{s['def_bonus']*3}\n"
+        f"🆙 **Points dispo** : **{pts}**"
+    ), inline=False)
+    embed.set_footer(text="Utilise .ameliorer pour dépenser tes points !" if pts > 0 else "Gagne de l'XP pour obtenir des points d'amélioration !")
     embed.set_thumbnail(url=member.display_avatar.url)
     await ctx.send(embed=embed)
+
+@bot.command(name="ameliorer", aliases=["amelio", "upgrade", "up"])
+async def ameliorer(ctx, stat: str = None):
+    """Dépense tes points d'amélioration — .ameliorer <pv|atk|def|endurance>"""
+    uid = str(ctx.author.id)
+    pts = points_amelio[uid]
+    s = arena_stats[uid]
+
+    stats_valides = {
+        "pv":        ("pv_bonus",  "❤️ PV",         "+8 HP max"),
+        "atk":       ("atk_bonus", "🗡️ Attaque",    "+3 ATK"),
+        "def":       ("def_bonus", "🛡️ Défense",    "+3 DEF"),
+        "endurance": ("end_bonus", "⚡ Endurance",   "+5 END max"),
+        "end":       ("end_bonus", "⚡ Endurance",   "+5 END max"),
+    }
+
+    # Affichage sans argument
+    if not stat:
+        embed = discord.Embed(
+            title="🆙 Points d'amélioration",
+            description=(
+                f"Tu as **{pts} point(s)** disponible(s) !\n\n"
+                f"Utilise `.ameliorer <stat>` pour dépenser un point :\n\n"
+                f"`.ameliorer pv` — ❤️ **+8 HP max** *(actuellement {120 + s['pv_bonus']*8})*\n"
+                f"`.ameliorer atk` — 🗡️ **+3 ATK bonus** *(actuellement +{s['atk_bonus']*3})*\n"
+                f"`.ameliorer def` — 🛡️ **+3 DEF bonus** *(actuellement +{s['def_bonus']*3})*\n"
+                f"`.ameliorer endurance` — ⚡ **+5 END max** *(actuellement {100 + s['end_bonus']*5})*\n\n"
+                f"*1 point = 1 amélioration. Points gagnés à chaque level up !*"
+            ),
+            color=0x3498db
+        )
+        embed.set_footer(text="💡 Gagne des niveaux avec .daily .quiz .boss .arene !")
+        return await ctx.send(embed=embed)
+
+    stat = stat.lower()
+    if stat not in stats_valides:
+        return await ctx.send(
+            f"❌ Stat invalide ! Choisis : `pv` • `atk` • `def` • `endurance`\n"
+            f"Ex : `.ameliorer pv`"
+        )
+
+    if pts <= 0:
+        return await ctx.send(embed=discord.Embed(
+            description="❌ Tu n'as pas de points d'amélioration disponibles !\nGagne des niveaux pour en obtenir 🆙",
+            color=0xe74c3c
+        ))
+
+    cle, label, effet = stats_valides[stat]
+    s[cle] += 1
+    points_amelio[uid] -= 1
+
+    hp_total  = 120 + s["pv_bonus"]  * 8
+    end_total = 100 + s["end_bonus"] * 5
+
+    embed = discord.Embed(
+        title="✅ Amélioration appliquée !",
+        description=(
+            f"**{label}** améliorée — **{effet}** !\n\n"
+            f"❤️ **PV max** : {hp_total}\n"
+            f"⚡ **END max** : {end_total}\n"
+            f"🗡️ **ATK bonus** : +{s['atk_bonus']*3}\n"
+            f"🛡️ **DEF bonus** : +{s['def_bonus']*3}\n\n"
+            f"*Points restants : **{points_amelio[uid]}***"
+        ),
+        color=0x2ecc71
+    )
+    embed.set_footer(text="⚔️ Ces stats sont actives dans l'arène !")
+    await ctx.send(embed=embed)
+
+
 
 @bot.command()
 async def leaderboard(ctx):
@@ -1167,50 +1280,6 @@ async def pay(ctx, member: discord.Member, amount: int):
         description=f"💸 **{ctx.author.display_name}** a envoyé **{amount} pièces** à **{member.display_name}**.",
         color=0x27ae60
     ))
-
-# ============================================================
-#  DUELS
-# ============================================================
-@bot.command()
-async def duel(ctx, opponent: discord.Member):
-    if SALON_DUEL_ID and ctx.channel.id != SALON_DUEL_ID:
-        salon = ctx.guild.get_channel(SALON_DUEL_ID)
-        mention = salon.mention if salon else "le salon duel"
-        return await ctx.send(f"⚔️ Les duels c'est dans {mention} !", delete_after=5)
-    if opponent.bot or opponent == ctx.author:
-        return await ctx.send("❌ Cible invalide !")
-    duels[ctx.author.id] = opponent.id
-    embed = discord.Embed(
-        title="⚔️ Défi lancé !",
-        description=f"{opponent.mention}, **{ctx.author.display_name}** te défie !\nTape `.accept` pour accepter ou `.decline` pour refuser.",
-        color=0xe74c3c
-    )
-    await ctx.send(embed=embed)
-
-@bot.command()
-async def accept(ctx):
-    challenger_id = next((k for k, v in duels.items() if v == ctx.author.id), None)
-    if not challenger_id:
-        return await ctx.send("❌ Aucun défi en attente.")
-    challenger = ctx.guild.get_member(challenger_id)
-    del duels[challenger_id]
-    winner = random.choice([ctx.author, challenger])
-    loser = challenger if winner == ctx.author else ctx.author
-    prize = random.randint(50, 100)
-    economy_data[str(winner.id)]["coins"] += prize
-    economy_data[str(loser.id)]["coins"] = max(0, economy_data[str(loser.id)]["coins"] - prize)
-    await ctx.send(embed=discord.Embed(
-        title="⚔️ Résultat du duel !",
-        description=f"🏆 **{winner.display_name}** bat **{loser.display_name}** et gagne **{prize} pièces** !",
-        color=0xf1c40f
-    ))
-
-@bot.command()
-async def decline(ctx):
-    challenger_id = next((k for k, v in duels.items() if v == ctx.author.id), None)
-    if challenger_id:
-        del duels[challenger_id]
-    await ctx.send(f"❌ {ctx.author.display_name} a refusé le duel.")
 
 # ============================================================
 #  MUSIQUE
@@ -3877,7 +3946,7 @@ BOSS_LIST = [
     {"nom": "Gilgamesh", "anime": "Fate/Zero", "hp_max": 2500, "emoji": "⚔️", "image": "https://upload.wikimedia.org/wikipedia/en/thumb/4/44/Gilgamesh_Fate.png/220px-Gilgamesh_Fate.png", "recompense": 400},
 ]
 
-active_boss = {}  # {guild_id: {boss, hp, participants, message_id}}
+active_boss = {}  # {guild_id: {boss, hp, participants, msg}}
 
 @bot.command(name="boss")
 @commands.has_permissions(manage_guild=True)
@@ -3885,51 +3954,78 @@ async def boss_cmd(ctx):
     """Fait apparaître un boss de serveur ! (admin) — .boss"""
     gid = ctx.guild.id
     if gid in active_boss:
-        return await ctx.send("⚔️ Un boss est déjà en cours ! Tape `.attaque` pour combattre !")
+        return await ctx.send("⚔️ Un boss est déjà en cours ! Tape `.attaque` pour combattre !", delete_after=5)
 
     boss = random.choice(BOSS_LIST)
+
+    def barre_boss(hp, hp_max):
+        ratio = hp / hp_max
+        filled = int(ratio * 14)
+        empty = 14 - filled
+        if ratio > 0.6:   c = "🟩"
+        elif ratio > 0.3: c = "🟨"
+        else:             c = "🟥"
+        return c * filled + "⬛" * empty
+
+    def build_boss_embed(hp, derniere_attaque=None):
+        ratio = hp / boss["hp_max"]
+        pct = int(ratio * 100)
+        color = 0xe74c3c if ratio < 0.3 else 0xf39c12 if ratio < 0.6 else 0x2ecc71
+
+        desc = (
+            f"## {boss['emoji']} {boss['nom']}\n"
+            f"*{boss['anime']}*\n\n"
+            f"❤️ **{hp:,} / {boss['hp_max']:,} HP** — {pct}%\n"
+            f"{barre_boss(hp, boss['hp_max'])}\n\n"
+        )
+        if derniere_attaque:
+            desc += f"⚔️ {derniere_attaque}\n\n"
+        desc += f"━━━━━━━━━━━━━━━━━━━━\n"
+        desc += f"🗡️ Tape `.attaque` pour frapper ! *(cooldown 13s)*\n"
+        desc += f"🏆 Récompense : **{boss['recompense']} pièces** pour tous + **+250 bonus** au coup fatal !"
+
+        embed = discord.Embed(description=desc, color=color)
+        embed.set_image(url=boss["image"])
+        embed.set_footer(text=f"QG Kdrama — Boss Event ⚔️")
+        return embed
+
+    msg = await ctx.send(embed=build_boss_embed(boss["hp_max"]))
+
     active_boss[gid] = {
         "boss": boss,
         "hp": boss["hp_max"],
         "participants": {},
         "channel": ctx.channel.id,
+        "msg": msg,
+        "barre_fn": barre_boss,
+        "embed_fn": build_boss_embed,
     }
-
-    embed = discord.Embed(
-        title=f"{boss['emoji']} BOSS APPARU — {boss['nom']} !",
-        description=(
-            f"*{boss['nom']}* de **{boss['anime']}** attaque le serveur !\n\n"
-            f"❤️ HP : **{boss['hp_max']}/{boss['hp_max']}**\n"
-            f"{'█' * 20} 100%\n\n"
-            f"⚔️ Tape `.attaque` pour combattre !\n"
-            f"🏆 Récompense finale : **{boss['recompense']} pièces** pour tous les participants !"
-        ),
-        color=0xe74c3c
-    )
-    embed.set_image(url=boss["image"])
-    await ctx.send(embed=embed)
 
 @bot.command(name="attaque")
 async def attaque_cmd(ctx):
     """Attaque le boss en cours ! — .attaque"""
     gid = ctx.guild.id
     if gid not in active_boss:
-        return await ctx.send("❌ Aucun boss en cours ! Attends qu'un admin lance `.boss`")
+        return await ctx.send("❌ Aucun boss en cours ! Attends qu'un admin lance `.boss`", delete_after=5)
 
     game = active_boss[gid]
     if game["hp"] <= 0:
-        return await ctx.send("💀 Le boss est déjà vaincu !")
+        return await ctx.send("💀 Le boss est déjà vaincu !", delete_after=5)
 
     uid = str(ctx.author.id)
     now = datetime.datetime.utcnow().timestamp()
 
-    # Cooldown 13sec par attaque
     last = game["participants"].get(uid, {}).get("last_attack", 0)
     if now - last < 13:
         restant = int(13 - (now - last))
-        return await ctx.send(f"⏳ Tu dois attendre **{restant}s** avant d'attaquer à nouveau !", delete_after=5)
+        return await ctx.send(f"⏳ Cooldown — **{restant}s** restants !", delete_after=4)
 
-    # Calculer les dégâts selon le niveau du joueur
+    # Supprimer le message de commande pour garder le salon propre
+    try:
+        await ctx.message.delete()
+    except:
+        pass
+
     niveau = xp_data[uid]["level"]
     degats = random.randint(10 + niveau * 2, 30 + niveau * 5)
 
@@ -3941,40 +4037,57 @@ async def attaque_cmd(ctx):
     game["hp"] = max(0, game["hp"] - degats)
 
     boss = game["boss"]
-    hp_pct = game["hp"] / boss["hp_max"]
-    barres = int(hp_pct * 20)
-    barre = "█" * barres + "░" * (20 - barres)
+    build_embed = game["embed_fn"]
 
     if game["hp"] <= 0:
-        # Boss vaincu !
+        # ── Boss vaincu ──────────────────────────────────────
         recompense = boss["recompense"]
-        embed = discord.Embed(
-            title=f"💀 {boss['nom']} est vaincu !",
-            description=(
-                f"⚔️ **{ctx.author.mention}** a porté le coup fatal ! **-{degats} dégâts** (+250 bonus 💀)\n\n"
-                f"🏆 Tous les participants reçoivent **{recompense} pièces** !\n\n"
-                + "\n".join([f"• **{d['membre']}** — {d['degats_total']} dégâts" for d in sorted(game["participants"].values(), key=lambda x: x["degats_total"], reverse=True)])
-            ),
-            color=0xf1c40f
-        )
-        embed.set_thumbnail(url=boss["image"])
-        economy_data[uid]["coins"] += 250  # Bonus coup fatal
+        economy_data[uid]["coins"] += 250
         for pid, data in game["participants"].items():
             economy_data[pid]["coins"] += recompense
             xp_data[pid]["xp"] += 50
-        del active_boss[gid]
-        await ctx.send(embed=embed)
-    else:
-        embed = discord.Embed(
-            title=f"{boss['emoji']} {boss['nom']}",
+
+        top_participants = sorted(
+            game["participants"].values(),
+            key=lambda x: x["degats_total"],
+            reverse=True
+        )[:8]
+        classement = "\n".join([
+            f"{'🥇' if i==0 else '🥈' if i==1 else '🥉' if i==2 else f'`{i+1}.`'} **{d['membre']}** — {d['degats_total']:,} dégâts"
+            for i, d in enumerate(top_participants)
+        ])
+
+        win_embed = discord.Embed(
             description=(
-                f"⚔️ **{ctx.author.mention}** inflige **{degats} dégâts** !\n\n"
-                f"❤️ **{game['hp']}/{boss['hp_max']} HP**\n"
-                f"`{barre}` {int(hp_pct*100)}%"
+                f"## 💀 {boss['emoji']} {boss['nom']} est vaincu !\n\n"
+                f"⚔️ **{ctx.author.display_name}** porte le **coup fatal** — *-{degats} dégâts* 💀\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"🏆 **Classement des dégâts**\n{classement}\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"💰 Tous les participants reçoivent **{recompense} pièces** !\n"
+                f"🎯 Coup fatal : **{ctx.author.display_name}** +250 pièces bonus !"
             ),
-            color=0xe74c3c if hp_pct < 0.3 else 0xf39c12 if hp_pct < 0.6 else 0x2ecc71
+            color=0xf1c40f
         )
-        await ctx.send(embed=embed, delete_after=15)
+        win_embed.set_thumbnail(url=boss["image"])
+        win_embed.set_footer(text="⚔️ Boss Event terminé — QG Kdrama")
+
+        try:
+            await game["msg"].edit(embed=win_embed)
+        except:
+            await ctx.send(embed=win_embed)
+
+        del active_boss[gid]
+
+    else:
+        # ── Mise à jour de l'embed boss ──────────────────────
+        derniere = f"**{ctx.author.display_name}** inflige **{degats:,} dégâts** !"
+        try:
+            await game["msg"].edit(embed=build_embed(game["hp"], derniere))
+        except:
+            game["msg"] = await ctx.send(embed=build_embed(game["hp"], derniere))
+
+
 
 # ============================================================
 #  ⚔️ ARÈNE PVP
@@ -3996,6 +4109,301 @@ active_arene = {}
 
 @bot.command(name="arene")
 async def arene_cmd(ctx, adversaire: discord.Member = None):
+    """⚔️ Combat PvP en arène ! — .arene @joueur"""
+    if SALON_DUEL_ID and ctx.channel.id != SALON_DUEL_ID:
+        salon = ctx.guild.get_channel(SALON_DUEL_ID)
+        mention = salon.mention if salon else "le salon duel"
+        return await ctx.send(f"⚔️ L'arène c'est dans {mention} !", delete_after=5)
+    if not adversaire:
+        return await ctx.send("❌ Mentionne un adversaire ! Ex: `.arene @ami`")
+    if adversaire.bot or adversaire.id == ctx.author.id:
+        return await ctx.send("❌ Adversaire invalide !")
+    if ctx.channel.id in active_arene:
+        return await ctx.send("⚔️ Un combat est déjà en cours ici !")
+
+    # ── Invite ──────────────────────────────────────────────────
+    invite_embed = discord.Embed(
+        title="⚔️  DÉFI LANCÉ  ⚔️",
+        description=(
+            f"# {ctx.author.display_name}  ⚔️  {adversaire.display_name}\n\n"
+            f"{adversaire.mention} — tu as été défié par **{ctx.author.display_name}** !\n\n"
+            f"Réagis avec ✅ pour accepter ou ❌ pour refuser\n"
+            f"*Tu as 30 secondes pour répondre...*"
+        ),
+        color=0xe74c3c
+    )
+    invite_embed.set_footer(text="QG Kdrama — Arène PvP ⚔️")
+    invite_msg = await ctx.send(embed=invite_embed)
+    await invite_msg.add_reaction("✅")
+    await invite_msg.add_reaction("❌")
+
+    def check_invite(reaction, user):
+        return user.id == adversaire.id and reaction.message.id == invite_msg.id and str(reaction.emoji) in ["✅", "❌"]
+
+    try:
+        reaction, _ = await bot.wait_for("reaction_add", timeout=30.0, check=check_invite)
+        if str(reaction.emoji) == "❌":
+            await invite_msg.delete()
+            return await ctx.send(embed=discord.Embed(
+                description=f"💔 **{adversaire.display_name}** a refusé le défi...",
+                color=0x555555
+            ))
+    except asyncio.TimeoutError:
+        await invite_msg.delete()
+        return await ctx.send(embed=discord.Embed(
+            description=f"⏰ **{adversaire.display_name}** n'a pas répondu — défi annulé.",
+            color=0x555555
+        ))
+
+    await invite_msg.delete()
+
+    # ── Setup stats avec bonus d'amélioration ──────────────────
+    def get_stats(uid):
+        s = arena_stats[uid]
+        hp_max  = 120 + s["pv_bonus"]  * 8
+        end_max = 100 + s["end_bonus"] * 5
+        atk_b   = s["atk_bonus"] * 3
+        def_b   = s["def_bonus"] * 3
+        return hp_max, end_max, atk_b, def_b
+
+    uid1 = str(ctx.author.id)
+    uid2 = str(adversaire.id)
+    hp1_max,  end1_max, atk1_b, def1_b = get_stats(uid1)
+    hp2_max,  end2_max, atk2_b, def2_b = get_stats(uid2)
+
+    active_arene[ctx.channel.id] = True
+
+    joueurs = [
+        {"membre": ctx.author,  "hp": hp1_max,  "hp_max": hp1_max,
+         "end": end1_max, "end_max": end1_max, "atk_b": atk1_b, "def_b": def1_b,
+         "esquive_active": False, "defense_active": False},
+        {"membre": adversaire,  "hp": hp2_max,  "hp_max": hp2_max,
+         "end": end2_max, "end_max": end2_max, "atk_b": atk2_b, "def_b": def2_b,
+         "esquive_active": False, "defense_active": False},
+    ]
+
+    # ── Coût en endurance par action ──
+    COUT_END = {
+        0: 10,   # Attaque normale
+        1: 30,   # Attaque chargée
+        2: 20,   # Attaque spéciale
+        3: 5,    # Défense
+        4: 8,    # Soin
+        5: 15,   # Esquive
+    }
+    REGEN_END = 12   # regain d'endurance à chaque tour
+
+    def barre(val, max_val, couleur_high, couleur_mid, couleur_low, size=8):
+        ratio = val / max_val if max_val > 0 else 0
+        filled = int(ratio * size)
+        empty = size - filled
+        if ratio > 0.6:   c = couleur_high
+        elif ratio > 0.3: c = couleur_mid
+        else:             c = couleur_low
+        return c * filled + "⬛" * empty
+
+    def barre_vie(j):
+        return barre(j["hp"], j["hp_max"], "🟩", "🟨", "🟥")
+
+    def barre_end(j):
+        return barre(j["end"], j["end_max"], "🔵", "🟣", "⚫", size=6)
+
+    def bloc_joueur(j, actif=False):
+        prefix = "▶️ " if actif else ""
+        hp_icon = "❤️" if j["hp"] / j["hp_max"] > 0.5 else "🩸"
+        end_icon = "⚡" if j["end"] / j["end_max"] > 0.3 else "😮‍💨"
+        return (
+            f"{prefix}**{j['membre'].display_name}**\n"
+            f"{hp_icon} {barre_vie(j)}  **{j['hp']}/{j['hp_max']}**\n"
+            f"{end_icon} {barre_end(j)}  **{j['end']}/{j['end_max']}**"
+        )
+
+    def build_action_embed(attaquant, defenseur, numero_tour):
+        embed = discord.Embed(
+            title=f"⚔️  {joueurs[0]['membre'].display_name}  VS  {joueurs[1]['membre'].display_name}",
+            description=f"**Tour {numero_tour} — {attaquant['membre'].display_name} choisit son action !**\n*30 secondes...*",
+            color=0x9b59b6
+        )
+        embed.add_field(name="🔴", value=bloc_joueur(joueurs[0], attaquant==joueurs[0]), inline=True)
+        embed.add_field(name="\u200b", value="\u200b", inline=True)
+        embed.add_field(name="🔵", value=bloc_joueur(joueurs[1], attaquant==joueurs[1]), inline=True)
+        embed.add_field(name="🗡️ Actions disponibles", value=(
+            f"1️⃣ ⚔️ **Attaque Normale** — 25-40 dégâts *(⚡ -{COUT_END[0]})*\n"
+            f"2️⃣ 💥 **Attaque Chargée** — 10-65 dégâts, imprécis *(⚡ -{COUT_END[1]})*\n"
+            f"3️⃣ 🌀 **Attaque Spéciale** — 30-50 dégâts garantis *(⚡ -{COUT_END[2]})*\n"
+            f"4️⃣ 🛡️ **Défense** — réduit les dégâts de 50% ce tour *(⚡ -{COUT_END[3]})*\n"
+            f"5️⃣ 🌿 **Soin** — récupère 15-30 HP *(⚡ -{COUT_END[4]})*\n"
+            f"6️⃣ 💨 **Esquive** — évite la prochaine attaque *(⚡ -{COUT_END[5]})*\n\n"
+            f"*⚡ Endurance insuffisante → attaque normale forcée !*"
+        ), inline=False)
+        embed.set_footer(text="❤️ Vie  •  ⚡ Endurance  •  ⚡ se régénère de 12 par tour")
+        return embed
+
+    def build_result_embed(attaquant, defenseur, resultat_txt, numero_tour):
+        embed = discord.Embed(
+            title=f"⚔️  {joueurs[0]['membre'].display_name}  VS  {joueurs[1]['membre'].display_name}",
+            color=0xe74c3c
+        )
+        embed.add_field(name="🔴", value=bloc_joueur(joueurs[0]), inline=True)
+        embed.add_field(name="\u200b", value="\u200b", inline=True)
+        embed.add_field(name="🔵", value=bloc_joueur(joueurs[1]), inline=True)
+        embed.add_field(name=f"⚡ Tour {numero_tour}", value=f">>> {resultat_txt}", inline=False)
+        return embed
+
+    REACTIONS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣"]
+
+    # ── Écran de départ ─────────────────────────────────────────
+    start_embed = discord.Embed(
+        title="🏟️  COMBAT COMMENCE  🏟️",
+        description=(
+            f"## ⚔️  {ctx.author.display_name}  **VS**  {adversaire.display_name}  ⚔️\n\n"
+            f"🔴 **{ctx.author.display_name}** — {hp1_max} HP • {end1_max} END\n"
+            f"🔵 **{adversaire.display_name}** — {hp2_max} HP • {end2_max} END\n\n"
+            f"*Stats boostées par vos points d'amélioration !*\n"
+            f"*{ctx.author.display_name} commence !*"
+        ),
+        color=0xe74c3c
+    )
+    await ctx.send(embed=start_embed)
+    await asyncio.sleep(2)
+
+    # ── Boucle de combat ────────────────────────────────────────
+    numero_tour = 1
+    combat_msg = None
+
+    while ctx.channel.id in active_arene:
+        attaquant = joueurs[(numero_tour - 1) % 2]
+        defenseur = joueurs[numero_tour % 2]
+
+        # Regain d'endurance au début du tour
+        attaquant["end"] = min(attaquant["end_max"], attaquant["end"] + REGEN_END)
+
+        action_embed = build_action_embed(attaquant, defenseur, numero_tour)
+        if combat_msg:
+            try: await combat_msg.clear_reactions()
+            except: pass
+            await combat_msg.edit(embed=action_embed)
+        else:
+            combat_msg = await ctx.send(embed=action_embed)
+        for r in REACTIONS:
+            await combat_msg.add_reaction(r)
+
+        def check_reaction(reaction, user):
+            return (
+                user.id == attaquant["membre"].id
+                and reaction.message.id == combat_msg.id
+                and str(reaction.emoji) in REACTIONS
+            )
+
+        try:
+            reaction, _ = await bot.wait_for("reaction_add", timeout=30.0, check=check_reaction)
+            choix = REACTIONS.index(str(reaction.emoji))
+        except asyncio.TimeoutError:
+            choix = 0
+
+        # Forcer attaque normale si endurance insuffisante
+        cout = COUT_END[choix]
+        if attaquant["end"] < cout:
+            choix = 0
+            cout = COUT_END[0]
+            forced_txt = " *(endurance insuffisante — attaque normale forcée !)*"
+        else:
+            forced_txt = ""
+
+        attaquant["end"] = max(0, attaquant["end"] - cout)
+
+        # ── Résolution de l'action ───────────────────────────
+        atk_bonus = attaquant["atk_b"]
+        def_bonus  = defenseur["def_b"]
+
+        if choix == 0:  # Attaque normale
+            degats = random.randint(25, 40) + atk_bonus
+            if defenseur["esquive_active"]:
+                resultat = f"💨 **{defenseur['membre'].display_name}** esquive !"
+                defenseur["esquive_active"] = False
+            else:
+                if defenseur["defense_active"]:
+                    degats = max(1, (degats - def_bonus) // 2)
+                    defenseur["defense_active"] = False
+                else:
+                    degats = max(1, degats - def_bonus)
+                defenseur["hp"] = max(0, defenseur["hp"] - degats)
+                resultat = f"⚔️ **{attaquant['membre'].display_name}** attaque — **-{degats} HP** !{forced_txt}"
+
+        elif choix == 1:  # Attaque chargée
+            degats = random.randint(10, 65) + atk_bonus
+            if defenseur["esquive_active"]:
+                resultat = f"💨 **{defenseur['membre'].display_name}** esquive l'attaque chargée !"
+                defenseur["esquive_active"] = False
+            else:
+                if defenseur["defense_active"]:
+                    degats = max(1, (degats - def_bonus) // 2)
+                    defenseur["defense_active"] = False
+                else:
+                    degats = max(1, degats - def_bonus)
+                defenseur["hp"] = max(0, defenseur["hp"] - degats)
+                extra = " 🔥 ***COUP CRITIQUE !***" if degats >= 60 else (" 😬 *raté...*" if degats <= 15 else "")
+                resultat = f"💥 **{attaquant['membre'].display_name}** charge — **-{degats} HP** !{extra}"
+
+        elif choix == 2:  # Attaque spéciale
+            degats = random.randint(30, 50) + atk_bonus
+            if defenseur["esquive_active"]:
+                resultat = f"💨 **{defenseur['membre'].display_name}** esquive l'attaque spéciale !"
+                defenseur["esquive_active"] = False
+            else:
+                if defenseur["defense_active"]:
+                    degats = max(1, (degats - def_bonus) // 2)
+                    defenseur["defense_active"] = False
+                else:
+                    degats = max(1, degats - def_bonus)
+                defenseur["hp"] = max(0, defenseur["hp"] - degats)
+                resultat = f"🌀 **{attaquant['membre'].display_name}** — attaque spéciale — **-{degats} HP** !"
+
+        elif choix == 3:  # Défense
+            attaquant["defense_active"] = True
+            resultat = f"🛡️ **{attaquant['membre'].display_name}** se défend — dégâts réduits de 50% ce tour !"
+
+        elif choix == 4:  # Soin
+            soin = random.randint(15, 30)
+            attaquant["hp"] = min(attaquant["hp_max"], attaquant["hp"] + soin)
+            resultat = f"🌿 **{attaquant['membre'].display_name}** se soigne — **+{soin} HP** !"
+
+        elif choix == 5:  # Esquive
+            attaquant["esquive_active"] = True
+            resultat = f"💨 **{attaquant['membre'].display_name}** se prépare à esquiver !"
+
+        # ── Afficher résultat ────────────────────────────────
+        result_embed = build_result_embed(attaquant, defenseur, resultat, numero_tour)
+        await combat_msg.edit(embed=result_embed)
+        try: await combat_msg.clear_reactions()
+        except: pass
+        await asyncio.sleep(2)
+
+        # ── Victoire ? ───────────────────────────────────────
+        if defenseur["hp"] <= 0:
+            del active_arene[ctx.channel.id]
+            prize = random.randint(100, 250)
+            economy_data[str(attaquant["membre"].id)]["coins"] += prize
+            xp_data[str(attaquant["membre"].id)]["xp"] += 40
+            win_embed = discord.Embed(
+                title="🏆  FIN DU COMBAT  🏆",
+                description=(
+                    f"## {attaquant['membre'].display_name} remporte l'arène !\n\n"
+                    f"{barre_vie(attaquant)} **{attaquant['hp']} / {attaquant['hp_max']} HP restants**\n\n"
+                    f"💰 **+{prize} pièces** • ⭐ **+40 XP**\n\n"
+                    f"*{defenseur['membre'].display_name} s'effondre... 💀*"
+                ),
+                color=0xf1c40f
+            )
+            win_embed.set_footer(text="⚔️ Arène PvP — QG Kdrama")
+            await ctx.send(embed=win_embed)
+            return
+
+        numero_tour += 1
+
+    if combat_msg:
+        try: await combat_msg.clear_reactions()
+        except: pass
     """⚔️ Combat PvP en arène ! — .arene @joueur"""
     if SALON_DUEL_ID and ctx.channel.id != SALON_DUEL_ID:
         salon = ctx.guild.get_channel(SALON_DUEL_ID)
@@ -6852,44 +7260,55 @@ async def send_salon_embed(channel, t):
 
     elif t == "duel":
         embed1 = discord.Embed(
-            title="⚔️ Duels & PvP — QG Kdrama",
+            title="⚔️ Combat & PvP — QG Kdrama",
             description=(
-                "Prouve que t'es le plus fort du QG ! Trois façons de te battre :\n"
-                "**Duel rapide**, **Arène PvP** et **Boss commun** 🔥"
+                "Prouve que t'es le plus fort du QG !\n"
+                "**Arène PvP**, **Boss commun** et **Quiz Duel** 🔥"
             ),
             color=0xe67e22
         )
-        embed1.add_field(name="⚡ Duel Rapide", value=(
-            "`.duel @joueur` — Lance un défi\n"
-            "`.accept` — Accepter • `.decline` — Refuser\n\n"
-            "• Résultat **instantané**\n"
-            "• Le gagnant remporte **50-100 pièces** 💰\n"
-            "• Idéal pour régler ses comptes rapidement 😄"
-        ), inline=False)
-        embed1.add_field(name="🏟️ Arène PvP — Combat tour par tour", value=(
+        embed1.add_field(name="🏟️ Arène PvP — Combat interactif tour par tour", value=(
             "`.arene @joueur` — Lance un combat\n\n"
-            "• Combat **tour par tour** avec barre de PV\n"
-            "• Chaque joueur choisit son action à chaque tour :\n"
-            "  ⚔️ **Attaque normale** • 💥 **Attaque chargée** • 🛡️ **Défense**\n"
-            "• Victoire → **+150 pièces & +40 XP** 🏆\n"
-            "• Défaite → tu perds des pièces selon le résultat"
+            "• L'adversaire **accepte ou refuse** avec ✅ ❌\n"
+            "• Un seul embed se met à jour en temps réel 🎮\n"
+            "• **Barres de vie et d'endurance visuelles** ❤️ ⚡\n"
+            "• Actions via **réactions** — pas besoin de taper !\n"
+            "• **30s** pour choisir, sinon attaque automatique\n"
+            "• Victoire → **+100-250 pièces & +40 XP** 🏆"
+        ), inline=False)
+        embed1.add_field(name="⚡ Système d'Endurance", value=(
+            "Chaque action coûte de l'endurance *(⚡)* :\n\n"
+            "⚔️ Attaque Normale — **-10 END**\n"
+            "💥 Attaque Chargée — **-30 END** *(attention !)*\n"
+            "🌀 Attaque Spéciale — **-20 END**\n"
+            "🛡️ Défense — **-5 END**\n"
+            "🌿 Soin — **-8 END**\n"
+            "💨 Esquive — **-15 END**\n\n"
+            "📈 **+12 END** récupérés automatiquement à chaque tour\n"
+            "*Si ton endurance est trop basse → attaque normale forcée !*"
+        ), inline=False)
+        embed1.add_field(name="🆙 Points d'Amélioration — Personnalise tes stats !", value=(
+            "À chaque **level up** tu gagnes **1 point d'amélioration** !\n\n"
+            "`.ameliorer` — Voir tes stats & points disponibles\n"
+            "`.ameliorer pv` — ❤️ **+8 HP max** par point\n"
+            "`.ameliorer atk` — 🗡️ **+3 ATK bonus** par point\n"
+            "`.ameliorer def` — 🛡️ **+3 DEF bonus** par point\n"
+            "`.ameliorer endurance` — ⚡ **+5 END max** par point\n\n"
+            "*Tes stats améliorées sont actives dans toutes les arènes !*"
         ), inline=False)
         embed1.add_field(name="🐉 Boss Commun — Tout le monde attaque !", value=(
             "`.boss` — Invoque un boss *(admin only)*\n"
             "`.attaque` — Frappe le boss ! *(cooldown 13s)*\n\n"
             "• **Tout le monde** peut participer en même temps\n"
-            "• Cooldown de **13 secondes** entre chaque attaque\n"
-            "• Le boss a des milliers de PV — coordonnez-vous !\n"
-            "• **Coup fatal** (dernier coup) → **+250 pièces bonus** 🎯\n"
+            "• **Coup fatal** → **+250 pièces bonus** 🎯\n"
             "• Récompenses partagées entre tous les participants"
         ), inline=False)
-        embed1.add_field(name="🎯 Quiz Duel — Le plus cultivé gagne !", value=(
-            "`.quizduel [thème] @joueur` — Duel de quiz 5 questions\n\n"
-            "• **5 questions** sur le thème choisi\n"
-            "• *Thèmes : kdrama • anime • gaming • culture • mix*\n"
-            "• Victoire → **80-150 pièces** 💰"
+        embed1.add_field(name="🎯 Quiz Duel", value=(
+            "`.quizduel [thème] @joueur` — 5 questions en duel\n"
+            "*Thèmes : kdrama • anime • gaming • culture • mix*\n"
+            "Victoire → **80-150 pièces** 💰"
         ), inline=False)
-        embed1.set_footer(text="Que le meilleur gagne ! ⚔️ • Duel réservé à ce salon")
+        embed1.set_footer(text="⚔️ Gagne des niveaux → .rank • .ameliorer • plus fort en arène !")
         await channel.send(embed=embed1)
 
 @bot.command(name="setsalon")
