@@ -1,11 +1,15 @@
 import discord
 from discord.ext import commands, tasks
+from discord import ui
 import asyncio
 import random
 import json
 import os
+import io
 import datetime
 from collections import defaultdict
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+import urllib.request as _urllib_request
 
 # ============================================================
 #  CONFIG — remplace TOKEN par ton vrai token
@@ -16,6 +20,271 @@ PREFIX = "."
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
+
+# ============================================================
+#  🎮 GÉNÉRATEUR IMAGE COMBAT — Pillow
+# ============================================================
+_FONT_BOLD  = "/app/Rajdhani-Bold.ttf"
+_FONT_LIGHT = "/app/Rajdhani-Light.ttf"
+_FONT_BEBAS = "/app/BebasNeue-Regular.ttf"
+
+# Fallback si fichiers pas trouvés (dev local)
+for _p, _f in [(_FONT_BOLD,"Rajdhani-Bold.ttf"),(_FONT_LIGHT,"Rajdhani-Light.ttf"),(_FONT_BEBAS,"BebasNeue-Regular.ttf")]:
+    if not os.path.exists(_p) and os.path.exists(_f):
+        _FONT_BOLD  = "Rajdhani-Bold.ttf"
+        _FONT_LIGHT = "Rajdhani-Light.ttf"
+        _FONT_BEBAS = "BebasNeue-Regular.ttf"
+        break
+
+def _load_fonts():
+    try:
+        return {
+            "title":  ImageFont.truetype(_FONT_BEBAS,  34),
+            "header": ImageFont.truetype(_FONT_BOLD,   26),
+            "name":   ImageFont.truetype(_FONT_BOLD,   22),
+            "sub":    ImageFont.truetype(_FONT_LIGHT,  18),
+            "small":  ImageFont.truetype(_FONT_LIGHT,  15),
+            "dmg":    ImageFont.truetype(_FONT_BEBAS,  56),
+            "dmg_sm": ImageFont.truetype(_FONT_BEBAS,  32),
+            "turn":   ImageFont.truetype(_FONT_BEBAS,  19),
+            "action": ImageFont.truetype(_FONT_BOLD,   17),
+        }
+    except:
+        f = ImageFont.load_default()
+        return {k: f for k in ["title","header","name","sub","small","dmg","dmg_sm","turn","action"]}
+
+_CW, _CH = 940, 520
+_BG1, _BG2 = (6,4,18), (14,8,32)
+_ACCENT  = (120,50,255)
+_ACCENT2 = (50,150,255)
+_GOLD    = (255,195,50)
+_WHITE   = (255,255,255)
+_GRAY    = (150,150,175)
+_SEP     = (50,35,85)
+_SAFE    = (50,210,90)
+_WARN    = (220,180,30)
+_DANGER  = (220,45,45)
+_ENDCOL  = (50,140,255)
+_KO      = (80,80,100)
+_PANEL   = (16,10,36,230)
+
+_RARITY_COL = {
+    "Mythique":(255,70,70),"Légendaire":(255,195,50),
+    "Épique":(160,60,255),"Rare":(50,150,255),"Commun":(140,140,155),
+}
+_RARITY_LBL = {
+    "Mythique":"✦✦✦ MYTHIQUE","Légendaire":"✦✦ LÉGENDAIRE",
+    "Épique":"✦ ÉPIQUE","Rare":"◆ RARE","Commun":"◇ COMMUN",
+}
+
+def _hp_col(pct):
+    if pct > 0.6: return _SAFE
+    if pct > 0.3: return _WARN
+    return _DANGER
+
+def _fetch_img(url, size):
+    try:
+        req = _urllib_request.Request(url, headers={"User-Agent":"Mozilla/5.0"})
+        data = _urllib_request.urlopen(req, timeout=4).read()
+        img = Image.open(io.BytesIO(data)).convert("RGBA")
+        return img.resize(size, Image.LANCZOS)
+    except:
+        return None
+
+def _grad(draw, w, h, c1, c2):
+    for y in range(h):
+        t = y/h
+        draw.line([(0,y),(w,y)], fill=tuple(int(c1[i]+(c2[i]-c1[i])*t) for i in range(3)))
+
+def _hpbar(draw, x, y, bw, bh, pct, col):
+    draw.rounded_rectangle([x,y,x+bw,y+bh], radius=bh//2, fill=(25,15,50))
+    fw = max(0, int(bw*min(pct,1.0)))
+    if fw > bh:
+        draw.rounded_rectangle([x,y,x+fw,y+bh], radius=bh//2, fill=col)
+        sy,sh = y+bh//4, max(2,bh//3)
+        draw.rounded_rectangle([x+3,sy,x+fw-3,sy+sh], radius=sh//2,
+                                fill=tuple(min(255,c+70) for c in col))
+    draw.rounded_rectangle([x,y,x+bw,y+bh], radius=bh//2, outline=_SEP, width=1)
+
+def _glow(draw, x, y, text, font, col, gcol, r=2):
+    for dx in range(-r,r+1):
+        for dy in range(-r,r+1):
+            if dx*dx+dy*dy <= r*r:
+                draw.text((x+dx,y+dy), text, font=font, fill=gcol)
+    draw.text((x,y), text, font=font, fill=col)
+
+def _center(draw, text, font, cx, y, col, gcol=None):
+    bb = draw.textbbox((0,0),text,font=font)
+    tx = cx-(bb[2]-bb[0])//2
+    if gcol: _glow(draw,tx,y,text,font,col,gcol)
+    else: draw.text((tx,y),text,font=font,fill=col)
+
+def _card_panel(img, draw, fonts, x, y, pw, ph, card):
+    rc  = _RARITY_COL.get(card.get("rarity","Commun"), _GRAY)
+    ko  = card.get("ko", False)
+    bc  = _KO if ko else rc
+
+    ov = Image.new("RGBA",(pw,ph),_PANEL)
+    img.paste(ov,(x,y),ov)
+    draw.rounded_rectangle([x,y,x+pw,y+ph], radius=10, outline=bc, width=2)
+    draw.rounded_rectangle([x+2,y+2,x+pw-2,y+7], radius=3, fill=bc)
+
+    pad, cy = 11, y+14
+    IW, IH  = pw-pad*2, 108
+
+    # Image carte
+    img_url = card.get("image")
+    if img_url and not ko:
+        ci = _fetch_img(img_url, (IW,IH))
+        if ci:
+            mask = Image.new("L",(IW,IH),0)
+            ImageDraw.Draw(mask).rounded_rectangle([0,0,IW,IH],radius=6,fill=255)
+            img.paste(ci,(x+pad,cy),mask)
+            draw.rounded_rectangle([x+pad,cy,x+pad+IW,cy+IH],radius=6,outline=bc,width=1)
+        else:
+            draw.rounded_rectangle([x+pad,cy,x+pad+IW,cy+IH],radius=6,fill=(20,12,40),outline=_SEP,width=1)
+            _center(draw,card.get("emoji","?"),fonts["title"],x+pad+IW//2,cy+IH//2-16,_GRAY)
+    else:
+        draw.rounded_rectangle([x+pad,cy,x+pad+IW,cy+IH//2],radius=6,fill=(18,10,30),outline=_KO,width=1)
+        _center(draw,"💀 KO",fonts["dmg_sm"],x+pad+IW//2,cy+IH//4-10,_KO)
+    cy += (IH if not ko else IH//2) + 8
+
+    # Nom
+    name = card.get("name","???").upper()
+    _glow(draw,x+pad,cy,name,fonts["name"],_KO if ko else _WHITE,
+          tuple(c//4 for c in rc),r=2)
+    cy += 26
+
+    if not ko:
+        draw.text((x+pad,cy),_RARITY_LBL.get(card.get("rarity","Commun"),"◇ COMMUN"),
+                  font=fonts["small"],fill=rc)
+    cy += 20
+    draw.line([(x+pad,cy),(x+pw-pad,cy)],fill=_SEP)
+    cy += 7
+
+    if ko:
+        _center(draw,"ÉLIMINÉ",fonts["dmg_sm"],x+pw//2,cy+2,_KO)
+        return
+
+    hp,hm = card.get("hp",100), card.get("hp_max",250)
+    phc   = hp/max(hm,1)
+    hc    = _hp_col(phc)
+    draw.text((x+pad,cy),"HP",font=fonts["small"],fill=hc)
+    ht=f"{hp}/{hm}"
+    bb=draw.textbbox((0,0),ht,font=fonts["small"])
+    draw.text((x+pw-pad-(bb[2]-bb[0]),cy),ht,font=fonts["small"],fill=hc)
+    cy+=17; _hpbar(draw,x+pad,cy,pw-pad*2,10,phc,hc); cy+=15
+
+    en,em = card.get("end",100), card.get("end_max",100)
+    pe    = en/max(em,1)
+    draw.text((x+pad,cy),"END",font=fonts["small"],fill=_ENDCOL)
+    et=f"{en}/{em}"
+    bb2=draw.textbbox((0,0),et,font=fonts["small"])
+    draw.text((x+pw-pad-(bb2[2]-bb2[0]),cy),et,font=fonts["small"],fill=_ENDCOL)
+    cy+=17; _hpbar(draw,x+pad,cy,pw-pad*2,10,pe,_ENDCOL); cy+=13
+
+    if phc < 0.3:
+        _center(draw,"⚠ EN DANGER",fonts["small"],x+pw//2,cy,_DANGER)
+
+def _center_zone(draw, fonts, x, y, cw, ch, action_txt, sub_txt, flavor, tour):
+    draw.rounded_rectangle([x,y,x+cw,y+ch],radius=8,fill=(12,7,28),outline=_SEP,width=1)
+    draw.rounded_rectangle([x+1,y+1,x+cw-1,y+5],radius=3,fill=_ACCENT)
+    cy = y+13
+    _center(draw,f"TOUR  {tour}",fonts["turn"],x+cw//2,cy,_ACCENT2); cy+=24
+    draw.line([(x+10,cy),(x+cw-10,cy)],fill=_SEP); cy+=9
+    if action_txt:
+        _center(draw,action_txt,fonts["dmg_sm"],x+cw//2,cy,_WHITE,gcol=_ACCENT); cy+=40
+    if sub_txt:
+        _center(draw,sub_txt,fonts["sub"],x+cw//2,cy,_GOLD); cy+=24
+    draw.line([(x+10,cy),(x+cw-10,cy)],fill=_SEP); cy+=8
+    if flavor:
+        words=flavor.split(); lines,line=[],""
+        for w in words:
+            test=(line+" "+w).strip()
+            bb=draw.textbbox((0,0),test,font=fonts["small"])
+            if bb[2]-bb[0]>cw-18: lines.append(line); line=w
+            else: line=test
+        if line: lines.append(line)
+        for l in lines[:3]:
+            _center(draw,l,fonts["small"],x+cw//2,cy,_GRAY); cy+=17
+    if not action_txt:
+        _center(draw,"VS",fonts["title"],x+cw//2,y+ch//2-18,_ACCENT,
+                gcol=tuple(c//4 for c in _ACCENT))
+
+def _actions_row(draw, fonts, x, y, aw, ah, active_name):
+    draw.rounded_rectangle([x,y,x+aw,y+ah],radius=8,fill=(10,6,24),outline=_SEP,width=1)
+    draw.rounded_rectangle([x+1,y+1,x+aw-1,y+5],radius=3,fill=_ACCENT2)
+    draw.text((x+12,y+8),f"▸  {active_name.upper()}  —  CHOISIS TON ACTION",
+              font=fonts["turn"],fill=_ACCENT2)
+    ACTS=[("1","⚔","ATTAQUE","25-40 dmg",_WHITE),("2","💥","CHARGÉE","10-65 dmg",_WARN),
+          ("3","🌀","SPÉCIALE","30-50 dmg",_ACCENT),("4","🛡","DÉFENSE","-50% dmg",_ACCENT2),
+          ("5","🌿","SOIN","+15-30 hp",_SAFE),("6","💨","ESQUIVE","?? secret",_GRAY)]
+    nb=len(ACTS); bw=(aw-18)//nb; bh=ah-36; bx=x+9; by=y+30
+    for i,(num,em,nm,desc,col) in enumerate(ACTS):
+        bxi=bx+i*bw
+        draw.rounded_rectangle([bxi,by,bxi+bw-5,by+bh],radius=5,fill=(18,11,38),outline=_SEP,width=1)
+        draw.text((bxi+6,by+4),num,font=fonts["turn"],fill=col)
+        draw.text((bxi+20,by+4),nm,font=fonts["action"],fill=col)
+        draw.text((bxi+6,by+24),desc,font=fonts["small"],fill=_GRAY)
+
+def _equipe_dots(draw, fonts, x, y, pw, equipe):
+    if not equipe: return
+    dot_r=8; sp=dot_r*2+5
+    total=(len(equipe)*sp)-5; sx=x+(pw-total)//2
+    for i,c in enumerate(equipe):
+        cx2=sx+i*sp+dot_r
+        ko=c.get("ko",False); act=c.get("active",False)
+        col=_KO if ko else _RARITY_COL.get(c.get("rarity","Commun"),_GRAY)
+        if act:
+            draw.ellipse([cx2-dot_r-2,y+7,cx2+dot_r+2,y+23],fill=_WHITE)
+        draw.ellipse([cx2-dot_r,y+9,cx2+dot_r,y+21],fill=col)
+        if ko: _center(draw,"✕",fonts["small"],cx2,y+9,_BG1)
+
+def generate_battle_image(p1,p2,action_txt="",sub_txt="",flavor="",tour=1,
+                          active_name="",phase="fight",winner_name="",
+                          equipe1=None,equipe2=None) -> bytes:
+    fonts = _load_fonts()
+    img   = Image.new("RGBA",(_CW,_CH),_BG1)
+    draw  = ImageDraw.Draw(img)
+    _grad(draw,_CW,_CH,_BG1,_BG2)
+    for yy in range(0,_CH,35):
+        draw.line([(0,yy),(_CW,yy)],fill=(255,255,255,4))
+
+    # Header
+    draw.rectangle([0,0,_CW,36],fill=(10,6,26))
+    draw.text((13,8),"⚡  ARENA  BATTLE",font=fonts["turn"],fill=_ACCENT)
+    _center(draw,f"TOUR  {tour}",fonts["turn"],_CW//2,8,_WHITE)
+    draw.text((_CW-118,8),"QG  KDRAMA",font=fonts["turn"],fill=_ACCENT2)
+    draw.line([(0,36),(_CW,36)],fill=_ACCENT,width=1)
+
+    PW,PH,PY = 252,270,45
+    CX = PW+15; CW2 = _CW-2*PW-30; CH = PH
+
+    _card_panel(img,draw,fonts, 8,PY,PW,PH, p2)
+    _card_panel(img,draw,fonts, _CW-PW-8,PY,PW,PH, p1)
+    _center_zone(draw,fonts, CX,PY,CW2,CH, action_txt,sub_txt,flavor,tour)
+
+    EQY = PY+PH+6
+    if equipe2: _equipe_dots(draw,fonts, 8,EQY,PW,equipe2)
+    if equipe1: _equipe_dots(draw,fonts, _CW-PW-8,EQY,PW,equipe1)
+
+    if phase=="win" and winner_name:
+        ov=Image.new("RGBA",(_CW,_CH),(0,0,0,160))
+        img.paste(ov,(0,0),ov)
+        d2=ImageDraw.Draw(img)
+        _center(d2,"VICTOIRE !",fonts["title"],_CW//2,_CH//2-48,_GOLD,gcol=(80,60,0))
+        _center(d2,winner_name.upper(),fonts["header"],_CW//2,_CH//2,_WHITE,gcol=(40,40,80))
+        _center(d2,"+300 PIÈCES  •  +60 XP",fonts["sub"],_CW//2,_CH//2+42,_ACCENT2)
+    elif phase=="fight":
+        ACT_Y=EQY+26; ACT_H=_CH-ACT_Y-8
+        if ACT_H>40: _actions_row(draw,fonts,8,ACT_Y,_CW-16,ACT_H,active_name)
+
+    buf=io.BytesIO()
+    img.convert("RGB").save(buf,format="PNG",optimize=True)
+    buf.seek(0)
+    return buf.read()
+
+
 
 # ---------- Stockage en mémoire ----------
 xp_data = defaultdict(lambda: {"xp": 0, "level": 1})
@@ -5870,9 +6139,9 @@ async def pokepersos(ctx):
 
 # ═══ COMBAT POKÉMON 3v3 ═══
 
-@bot.command(name="pokebattle")
+@bot.command(name="pokebattle", aliases=["pb","pokefight"])
 async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
-    """Lance un combat 3v3 avec tes cartes gacha ! — .pokebattle @joueur"""
+    """Lance un combat 3v3 style anime avec tes cartes ! — .pokebattle @joueur"""
     if SALON_COMBAT_ID and ctx.channel.id != SALON_COMBAT_ID:
         salon = ctx.guild.get_channel(SALON_COMBAT_ID)
         mention = salon.mention if salon else "le salon combat"
@@ -5888,264 +6157,410 @@ async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
     col2 = gacha_collections[uid2]
 
     if len(col1) < 3:
-        return await ctx.send(f"❌ **{ctx.author.display_name}** n'a pas assez de cartes ! (minimum 3)\nClaime des cartes avec `.ga` d'abord !")
+        return await ctx.send(f"❌ **{ctx.author.display_name}** n'a pas assez de cartes ! (minimum 3)")
     if len(col2) < 3:
-        return await ctx.send(f"❌ **{adversaire.display_name}** n'a pas assez de cartes ! (minimum 3)\nIl faut claimer des cartes avec `.ga` d'abord !")
+        return await ctx.send(f"❌ **{adversaire.display_name}** n'a pas assez de cartes ! (minimum 3)")
 
-    # Demander à chaque joueur de choisir ses 3 cartes parmi sa collection gacha
+    # ── Sélection équipe via boutons ──────────────────────────
     async def choisir_equipe(joueur):
         uid = str(joueur.id)
         col = gacha_collections[uid]
         order = collection_order.get(uid, [])
         all_keys = [k for k in order if k in col] + [k for k in col if k not in order]
+        valid_keys = [k for k in all_keys if k in ANIME_CARDS_DB][:10]
 
-        lines = []
-        for i, key in enumerate(all_keys):
-            if key in ANIME_CARDS_DB:
-                c = ANIME_CARDS_DB[key]
-                level = fusion_levels[uid][key]
-                stars = "⭐" * level
-                boost_pv = level * 20
-                boost_atk = level * 15
-                lines.append(
-                    f"`{i+1}` {c['emoji']} **{c['nom']}** {stars} — ❤️{c['pv']+boost_pv} | ⚔️{c['attaque']+boost_atk} | {RARETE_EMOJI.get(c['rarete'],'🔵')}"
-                )
-
-        embed = discord.Embed(
-            title=f"⚔️ {joueur.display_name} — Choisis tes 3 combattants !",
-            description="\n".join(lines) + "\n\n**Tape 3 numéros séparés par des espaces**\nEx: `1 3 5`",
-            color=0x9b59b6
-        )
-        await ctx.send(embed=embed)
-
-        def check(m):
-            return m.author.id == joueur.id and m.channel == ctx.channel
-
-        try:
-            rep = await bot.wait_for("message", check=check, timeout=60)
-            choix = rep.content.strip().split()[:3]
-            equipe = []
-            for c_str in choix:
-                if c_str.isdigit():
-                    idx = int(c_str) - 1
-                    if 0 <= idx < len(all_keys):
-                        key = all_keys[idx]
-                        if key in ANIME_CARDS_DB:
-                            level = fusion_levels[uid][key]
-                            card = ANIME_CARDS_DB[key].copy()
-                            card["key"] = key
-                            card["pv"] = card["pv"] + level * 20
-                            card["attaque"] = card["attaque"] + level * 15
-                            card["defense"] = card["defense"] + level * 10
-                            card["hp_actuel"] = card["pv"]
-                            card["ko"] = False
-                            equipe.append(card)
-            if len(equipe) < 3:
-                return None
-            return equipe
-        except asyncio.TimeoutError:
+        if len(valid_keys) < 3:
             return None
 
+        chosen = []
+
+        class CardSelect(ui.View):
+            def __init__(self):
+                super().__init__(timeout=60)
+                self.done = asyncio.Event()
+                for i, key in enumerate(valid_keys[:5]):
+                    c = ANIME_CARDS_DB[key]
+                    lv = fusion_levels[uid][key]
+                    stars = "⭐"*lv if lv else ""
+                    btn = ui.Button(
+                        label=f"{c['nom'][:14]}{stars}",
+                        emoji=c.get("emoji","⚔️"),
+                        style=discord.ButtonStyle.secondary,
+                        custom_id=f"pick_{i}",
+                        row=0
+                    )
+                    btn.callback = self.make_cb(key, c)
+                    self.add_item(btn)
+                if len(valid_keys) > 5:
+                    for i, key in enumerate(valid_keys[5:10]):
+                        c = ANIME_CARDS_DB[key]
+                        lv = fusion_levels[uid][key]
+                        stars = "⭐"*lv if lv else ""
+                        btn = ui.Button(
+                            label=f"{c['nom'][:14]}{stars}",
+                            emoji=c.get("emoji","⚔️"),
+                            style=discord.ButtonStyle.secondary,
+                            custom_id=f"pick2_{i}",
+                            row=1
+                        )
+                        btn.callback = self.make_cb(key, c)
+                        self.add_item(btn)
+
+            def make_cb(self, key, c):
+                async def cb(interaction):
+                    if interaction.user.id != joueur.id:
+                        return await interaction.response.send_message("❌ C'est pas ton tour !", ephemeral=True)
+                    if key in [x["key"] for x in chosen]:
+                        return await interaction.response.send_message("❌ Déjà sélectionné !", ephemeral=True)
+                    lv = fusion_levels[uid][key]
+                    card = c.copy()
+                    card["key"] = key
+                    card["pv"] = card["pv"] + lv*20
+                    card["attaque"] = card["attaque"] + lv*15
+                    card["defense"] = card["defense"] + lv*10
+                    card["hp_actuel"] = card["pv"]
+                    card["ko"] = False
+                    chosen.append(card)
+                    await interaction.response.edit_message(
+                        content=f"⚔️ **{joueur.display_name}** — Choisis tes 3 cartes ({len(chosen)}/3) :",
+                        view=self if len(chosen) < 3 else None
+                    )
+                    if len(chosen) >= 3:
+                        self.done.set()
+                        self.stop()
+                return cb
+
+        view = CardSelect()
+        lines = []
+        for i, key in enumerate(valid_keys[:10]):
+            c = ANIME_CARDS_DB[key]
+            lv = fusion_levels[uid][key]
+            lines.append(f"{c['emoji']} **{c['nom']}** {'⭐'*lv} — ❤️{c['pv']+lv*20} ⚔️{c['attaque']+lv*15}")
+        await ctx.send(
+            f"⚔️ **{joueur.display_name}** — Choisis tes **3 cartes** (0/3) :",
+            view=view
+        )
+        try:
+            await asyncio.wait_for(view.done.wait(), timeout=60)
+        except asyncio.TimeoutError:
+            return None
+        return chosen if len(chosen) >= 3 else None
+
     await ctx.send(embed=discord.Embed(
-        description=f"⚔️ **{ctx.author.mention}** vs **{adversaire.mention}** — Combat 3v3 !\n\nChacun choisit son équipe de 3 cartes dans 5 secondes...",
-        color=0xe74c3c
+        description=f"⚡ **{ctx.author.mention}** défie **{adversaire.mention}** — Combat 3v3 !\n\nChacun choisit son équipe...",
+        color=0x7000ff
     ))
-    await asyncio.sleep(3)
+    await asyncio.sleep(1)
 
     equipe1 = await choisir_equipe(ctx.author)
     if not equipe1:
-        return await ctx.send(f"❌ **{ctx.author.display_name}** n'a pas choisi son équipe à temps !")
+        return await ctx.send(f"❌ **{ctx.author.display_name}** n'a pas choisi son équipe !")
 
     equipe2 = await choisir_equipe(adversaire)
     if not equipe2:
-        return await ctx.send(f"❌ **{adversaire.display_name}** n'a pas choisi son équipe à temps !")
+        return await ctx.send(f"❌ **{adversaire.display_name}** n'a pas choisi son équipe !")
 
+    # ── Setup combat ──────────────────────────────────────────
     active_pokebattles[ctx.channel.id] = {
-        "j1": {"membre": ctx.author, "equipe": equipe1, "actif": 0},
-        "j2": {"membre": adversaire, "equipe": equipe2, "actif": 0},
+        "j1": {"membre": ctx.author,  "equipe": equipe1, "actif": 0},
+        "j2": {"membre": adversaire,  "equipe": equipe2, "actif": 0},
         "tour": ctx.author.id,
+        "tour_num": 1,
+        "combat_msg": None,
     }
-
-    game = active_pokebattles[ctx.channel.id]
-
-    # Afficher les équipes
-    def equipe_str(j):
-        return " | ".join([
-            f"{'💀' if c['ko'] else c['emoji']} {c['nom']} ❤️{c['hp_actuel']}"
-            for c in j["equipe"]
-        ])
 
     def carte_active(j):
         return j["equipe"][j["actif"]]
 
-    async def afficher_carte_combat(j, adversaire_j):
-        carte = carte_active(j)
-        adverse = carte_active(adversaire_j)
-        embed = discord.Embed(
-            title=f"⚔️ {j['membre'].display_name} — {carte['emoji']} {carte['nom']}",
-            description=(
-                f"❤️ HP : **{carte['hp_actuel']}/{carte['pv']}**\n\n"
-                f"**Équipe adverse :** {equipe_str(adversaire_j)}"
-            ),
-            color=RARETE_COULEURS[carte["rarete"]]
-        )
-        if carte.get("image"):
-            embed.set_thumbnail(url=carte["image"])
-        attaques_str = "\n".join([
-            f"`{i+1}` {a['emoji']} **{a['nom']}** — `{a['degats']} dégâts` • *{a['desc']}*"
-            for i, a in enumerate(carte["attaques"])
-        ])
-        embed.add_field(name="🗡️ Choisis ton attaque :", value=attaques_str, inline=False)
-        embed.set_footer(text=f"Ton équipe : {equipe_str(j)}")
-        return embed
+    def make_p_dict(j, equipe):
+        """Convertit une carte en dict pour generate_battle_image"""
+        c = carte_active(j)
+        return {
+            "name":    c["nom"],
+            "rarity":  c["rarete"],
+            "hp":      c["hp_actuel"],
+            "hp_max":  c["pv"],
+            "end":     100,
+            "end_max": 100,
+            "image":   c.get("image"),
+            "emoji":   c.get("emoji","⚔️"),
+            "ko":      c["ko"],
+        }
 
-    # Boucle de combat
+    def make_eq_list(j):
+        return [
+            {"rarity": c["rarete"], "ko": c["ko"], "active": (i == j["actif"])}
+            for i, c in enumerate(j["equipe"])
+        ]
+
+    async def envoyer_image_combat(action_txt="", sub_txt="", flavor="", phase="fight", winner_name=""):
+        game = active_pokebattles.get(ctx.channel.id)
+        if not game: return
+        j1, j2 = game["j1"], game["j2"]
+        current = j1 if game["tour"] == j1["membre"].id else j2
+
+        p1 = make_p_dict(j1, equipe1)
+        p2 = make_p_dict(j2, equipe2)
+
+        img_bytes = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: generate_battle_image(
+                p1=p1, p2=p2,
+                action_txt=action_txt, sub_txt=sub_txt, flavor=flavor,
+                tour=game["tour_num"],
+                active_name=current["membre"].display_name,
+                phase=phase, winner_name=winner_name,
+                equipe1=make_eq_list(j1),
+                equipe2=make_eq_list(j2),
+            )
+        )
+        return img_bytes
+
+    # ── Boucle principale ─────────────────────────────────────
+    combat_msg = None
+
     while ctx.channel.id in active_pokebattles:
         game = active_pokebattles[ctx.channel.id]
         j1, j2 = game["j1"], game["j2"]
 
-        # Vérifier victoire
+        # Vérif victoire
         if all(c["ko"] for c in j1["equipe"]):
+            img_bytes = await envoyer_image_combat(
+                action_txt="VICTOIRE !",
+                sub_txt=f"{j2['membre'].display_name} remporte le combat !",
+                phase="win", winner_name=j2["membre"].display_name
+            )
             del active_pokebattles[ctx.channel.id]
-            prize = 300
-            economy_data[str(j2["membre"].id)]["coins"] += prize
+            economy_data[str(j2["membre"].id)]["coins"] += 300
             xp_data[str(j2["membre"].id)]["xp"] += 60
-            await ctx.send(embed=discord.Embed(
-                title="🏆 FIN DU COMBAT !",
-                description=f"🎉 **{j2['membre'].mention}** remporte le combat 3v3 !\n**+{prize} pièces & +60 XP** 💰",
-                color=0xf1c40f
-            ))
+            if img_bytes:
+                f = discord.File(io.BytesIO(img_bytes), filename="combat.png")
+                await ctx.send(f"🏆 **{j2['membre'].mention}** gagne ! **+300 pièces & +60 XP**", file=f)
             return
+
         if all(c["ko"] for c in j2["equipe"]):
+            img_bytes = await envoyer_image_combat(
+                action_txt="VICTOIRE !",
+                sub_txt=f"{j1['membre'].display_name} remporte le combat !",
+                phase="win", winner_name=j1["membre"].display_name
+            )
             del active_pokebattles[ctx.channel.id]
-            prize = 300
-            economy_data[str(j1["membre"].id)]["coins"] += prize
+            economy_data[str(j1["membre"].id)]["coins"] += 300
             xp_data[str(j1["membre"].id)]["xp"] += 60
-            await ctx.send(embed=discord.Embed(
-                title="🏆 FIN DU COMBAT !",
-                description=f"🎉 **{j1['membre'].mention}** remporte le combat 3v3 !\n**+{prize} pièces & +60 XP** 💰",
-                color=0xf1c40f
-            ))
+            if img_bytes:
+                f = discord.File(io.BytesIO(img_bytes), filename="combat.png")
+                await ctx.send(f"🏆 **{j1['membre'].mention}** gagne ! **+300 pièces & +60 XP**", file=f)
             return
 
         current = j1 if game["tour"] == j1["membre"].id else j2
-        other = j2 if game["tour"] == j1["membre"].id else j1
+        other   = j2 if game["tour"] == j1["membre"].id else j1
 
-        # Passer à la prochaine carte si KO
+        # Avancer si carte KO
         while carte_active(current)["ko"]:
-            current["actif"] = (current["actif"] + 1) % 3
+            current["actif"] = (current["actif"]+1) % 3
 
-        embed = await afficher_carte_combat(current, other)
-        await ctx.send(embed=embed)
+        # ── Générer image + boutons ───────────────────────────
+        img_bytes = await envoyer_image_combat()
+        if not img_bytes:
+            break
 
-        def check(m):
-            return m.channel == ctx.channel and m.author.id == current["membre"].id and m.content in ["1", "2", "3", "changer"]
+        chosen_action = asyncio.Event()
+        action_result = {"choix": None}
 
+        ATTAQUES = carte_active(current).get("attaques", [])
+
+        class CombatButtons(ui.View):
+            def __init__(self):
+                super().__init__(timeout=35)
+
+            async def check_player(self, interaction):
+                if interaction.user.id != current["membre"].id:
+                    await interaction.response.send_message(
+                        "❌ C'est pas ton tour !", ephemeral=True)
+                    return False
+                return True
+
+            @ui.button(label="ATTAQUE", emoji="⚔️", style=discord.ButtonStyle.danger, row=0)
+            async def btn_atk(self, interaction, button):
+                if not await self.check_player(interaction): return
+                action_result["choix"] = 0
+                chosen_action.set(); self.stop()
+                await interaction.response.defer()
+
+            @ui.button(label="CHARGÉE", emoji="💥", style=discord.ButtonStyle.danger, row=0)
+            async def btn_charge(self, interaction, button):
+                if not await self.check_player(interaction): return
+                action_result["choix"] = 1
+                chosen_action.set(); self.stop()
+                await interaction.response.defer()
+
+            @ui.button(label="SPÉCIALE", emoji="🌀", style=discord.ButtonStyle.primary, row=0)
+            async def btn_special(self, interaction, button):
+                if not await self.check_player(interaction): return
+                action_result["choix"] = 2
+                chosen_action.set(); self.stop()
+                await interaction.response.defer()
+
+            @ui.button(label="DÉFENSE", emoji="🛡️", style=discord.ButtonStyle.secondary, row=1)
+            async def btn_def(self, interaction, button):
+                if not await self.check_player(interaction): return
+                action_result["choix"] = 3
+                chosen_action.set(); self.stop()
+                await interaction.response.defer()
+
+            @ui.button(label="SOIN", emoji="🌿", style=discord.ButtonStyle.success, row=1)
+            async def btn_heal(self, interaction, button):
+                if not await self.check_player(interaction): return
+                action_result["choix"] = 4
+                chosen_action.set(); self.stop()
+                await interaction.response.defer()
+
+            @ui.button(label="ESQUIVE", emoji="💨", style=discord.ButtonStyle.secondary, row=1)
+            async def btn_dodge(self, interaction, button):
+                if not await self.check_player(interaction): return
+                action_result["choix"] = 5
+                chosen_action.set(); self.stop()
+                await interaction.response.defer()
+
+            async def on_timeout(self):
+                action_result["choix"] = 0  # attaque auto si timeout
+                chosen_action.set()
+
+        view = CombatButtons()
+        f = discord.File(io.BytesIO(img_bytes), filename="combat.png")
+
+        if combat_msg:
+            try: await combat_msg.delete()
+            except: pass
+
+        combat_msg = await ctx.send(
+            content=f"🎮 {current['membre'].mention} — **C'est ton tour !**",
+            file=f, view=view
+        )
+
+        # Attendre le choix
         try:
-            msg = await bot.wait_for("message", check=check, timeout=45)
+            await asyncio.wait_for(chosen_action.wait(), timeout=36)
+        except asyncio.TimeoutError:
+            action_result["choix"] = 0
 
-            if msg.content == "changer":
-                # Changer de carte
-                dispo = [
-                    f"`{i+1}` {c['emoji']} {c['nom']} ❤️{c['hp_actuel']}"
-                    for i, c in enumerate(current["equipe"])
-                    if not c["ko"] and i != current["actif"]
-                ]
-                if not dispo:
-                    await ctx.send("❌ Pas d'autre carte disponible !")
-                    continue
-                await ctx.send(embed=discord.Embed(
-                    description=f"**Choisis ta nouvelle carte :**\n" + "\n".join(dispo) + "\n\nRéponds avec le numéro (1-3)",
-                    color=0x9b59b6
-                ))
-                def check2(m):
-                    return m.channel == ctx.channel and m.author.id == current["membre"].id and m.content in ["1","2","3"]
-                try:
-                    msg2 = await bot.wait_for("message", check=check2, timeout=20)
-                    new_slot = int(msg2.content) - 1
-                    if 0 <= new_slot < 3 and not current["equipe"][new_slot]["ko"]:
-                        current["actif"] = new_slot
-                        new_carte = carte_active(current)
-                        await ctx.send(embed=discord.Embed(
-                            description=f"🔄 **{current['membre'].display_name}** envoie **{new_carte['emoji']} {new_carte['nom']}** !",
-                            color=0x3498db
-                        ))
-                    game["tour"] = other["membre"].id
-                    continue
-                except asyncio.TimeoutError:
-                    pass
-                continue
+        choix = action_result["choix"]
+        carte_cur = carte_active(current)
+        carte_adv = carte_active(other)
 
-            # Attaque
-            choix = int(msg.content) - 1
-            attaque = carte_active(current)["attaques"][choix]
-            carte_adv = carte_active(other)
+        action_txt = ""
+        sub_txt    = ""
+        flavor_txt = ""
 
-            # Calcul dégâts avec stats
-            base = attaque["degats"]
-            if base == 0:
-                # Défense / soin
-                await ctx.send(embed=discord.Embed(
-                    description=f"🛡️ **{carte_active(current)['nom']}** utilise **{attaque['emoji']} {attaque['nom']}** — *{attaque['desc']}*\nDégâts réduits de 50% ce tour !",
-                    color=0x3498db
-                ))
-                game["tour"] = other["membre"].id
-                continue
+        # ── Traitement de l'action ───────────────────────────
+        if choix == 3:  # Défense
+            action_txt = "DÉFENSE !"
+            sub_txt    = "Dégâts réduits de 50% ce tour"
+            flavor_txt = f"{carte_cur['nom']} prend position..."
+            current["defense_ce_tour"] = True
+
+        elif choix == 4:  # Soin
+            soin = random.randint(15, 35)
+            carte_cur["hp_actuel"] = min(carte_cur["pv"], carte_cur["hp_actuel"] + soin)
+            action_txt = f"SOIN — +{soin} HP"
+            sub_txt    = "Les blessures se referment..."
+            flavor_txt = f"{carte_cur['nom']} récupère de l'énergie !"
+
+        elif choix == 5:  # Esquive secrète
+            current["esquive_ce_tour"] = True
+            action_txt = "CONCENTRATION..."
+            sub_txt    = "??? "
+            flavor_txt = f"{carte_cur['nom']} se prépare en silence..."
+            # DM secret
+            try:
+                await current["membre"].send(
+                    "🤫 **Esquive activée !** Ton adversaire ne sait pas — il attaquera dans le vide !"
+                )
+            except: pass
+
+        else:
+            # Attaque — calcul dégâts
+            atk_data = ATTAQUES[choix] if choix < len(ATTAQUES) else ATTAQUES[0]
+            base = atk_data.get("degats", 30)
+            if isinstance(base, tuple):
+                base = random.randint(base[0], base[1])
+            elif base == 0:
+                base = random.randint(25, 45)
+
+            # Critique
+            critique = random.random() < 0.12
+            if critique: base = int(base * 1.5)
 
             # Faiblesse/résistance
-            multiplicateur = 1.0
-            if attaque["emoji"] == carte_adv["faiblesse"]:
-                multiplicateur = 1.5
-            elif attaque["emoji"] == carte_adv["resistance"]:
-                multiplicateur = 0.5
+            mult = 1.0
+            if atk_data.get("emoji","") == carte_adv.get("faiblesse",""):  mult = 1.5
+            elif atk_data.get("emoji","") == carte_adv.get("resistance",""): mult = 0.6
 
-            # Stats influence dégâts
-            ratio = carte_active(current)["attaque"] / max(carte_adv["defense"], 1)
-            degats_finaux = int(base * multiplicateur * min(ratio, 2.0))
-            degats_finaux = max(5, degats_finaux)
+            ratio = carte_cur["attaque"] / max(carte_adv["defense"], 1)
+            degats = int(base * mult * min(ratio, 2.0))
+            degats = max(5, degats)
 
-            carte_adv["hp_actuel"] = max(0, carte_adv["hp_actuel"] - degats_finaux)
+            # Esquive adverse ?
+            if other.get("esquive_ce_tour"):
+                other["esquive_ce_tour"] = False
+                action_txt = f"{atk_data['nom'].upper()} — ESQUIVÉ !"
+                sub_txt    = "💨 L'attaque passe dans le vide !"
+                flavor_txt = f"{carte_adv['nom']} disparaît au dernier instant..."
+            else:
+                # Défense adverse ?
+                if other.get("defense_ce_tour"):
+                    degats = degats // 2
+                    other["defense_ce_tour"] = False
 
-            bonus_text = ""
-            if multiplicateur == 1.5:
-                bonus_text = " ⚡ **C'est super efficace !**"
-            elif multiplicateur == 0.5:
-                bonus_text = " 😶 *Peu efficace...*"
+                carte_adv["hp_actuel"] = max(0, carte_adv["hp_actuel"] - degats)
+                action_txt = f"{atk_data.get('nom','ATTAQUE').upper()} — {degats} DMG"
 
-            embed_atk = discord.Embed(
-                title=f"{attaque['emoji']} {carte_active(current)['nom']} → {attaque['nom']} !",
-                description=(
-                    f"💥 **{degats_finaux} dégâts** infligés à **{carte_adv['nom']}** !{bonus_text}\n"
-                    f"❤️ {carte_adv['nom']} : **{carte_adv['hp_actuel']}/{carte_adv['pv']} HP**"
-                ),
-                color=RARETE_COULEURS[carte_active(current)["rarete"]]
-            )
-            await ctx.send(embed=embed_atk)
+                if critique:
+                    sub_txt = "★ COUP CRITIQUE !"
+                elif mult == 1.5:
+                    sub_txt = "⚡ C'EST SUPER EFFICACE !"
+                elif mult == 0.6:
+                    sub_txt = "😶 PEU EFFICACE..."
+                else:
+                    sub_txt = atk_data.get("desc", "")[:40] if atk_data.get("desc") else ""
 
-            # KO ?
-            if carte_adv["hp_actuel"] <= 0:
-                carte_adv["ko"] = True
-                await ctx.send(embed=discord.Embed(
-                    description=f"💀 **{carte_adv['emoji']} {carte_adv['nom']}** est KO !",
-                    color=0xe74c3c
-                ))
-                # Trouver prochaine carte dispo
-                next_idx = next((i for i, c in enumerate(other["equipe"]) if not c["ko"]), None)
-                if next_idx is not None:
-                    other["actif"] = next_idx
-                    await ctx.send(embed=discord.Embed(
-                        description=f"🔄 **{other['membre'].display_name}** envoie **{other['equipe'][next_idx]['emoji']} {other['equipe'][next_idx]['nom']}** !",
-                        color=0x9b59b6
-                    ))
+                FLAVORS = [
+                    f"Les dégâts font trembler {carte_adv['nom']} !",
+                    f"L'impact résonne dans tout le salon...",
+                    f"{carte_cur['nom']} donne tout ce qu'il a !",
+                    f"Le choc est violent — {degats} dégâts !",
+                    f"Une frappe dévastatrice de {carte_cur['nom']} !",
+                ]
+                flavor_txt = random.choice(FLAVORS)
 
-            game["tour"] = other["membre"].id
+                # KO ?
+                if carte_adv["hp_actuel"] <= 0:
+                    carte_adv["ko"] = True
+                    action_txt = f"KO — {carte_adv['nom'].upper()} !"
+                    sub_txt    = "💀 Carte éliminée !"
+                    flavor_txt = f"{carte_adv['nom']} s'effondre !"
+                    next_idx = next((i for i,c in enumerate(other["equipe"]) if not c["ko"]), None)
+                    if next_idx is not None:
+                        other["actif"] = next_idx
 
-        except asyncio.TimeoutError:
-            del active_pokebattles[ctx.channel.id]
-            await ctx.send(f"⏰ **{current['membre'].mention}** n'a pas répondu — combat annulé !")
-            return
+        # Nettoyer esquive si pas utilisée
+        current.pop("esquive_ce_tour", None)
+        current.pop("defense_ce_tour", None)
 
-@bot.command(name="pokestop")
+        # ── Image résultat ────────────────────────────────────
+        game["tour_num"] += 1
+        game["tour"] = other["membre"].id
+
+        img_result = await envoyer_image_combat(
+            action_txt=action_txt, sub_txt=sub_txt, flavor=flavor_txt, phase="fight"
+        )
+        if img_result:
+            try: await combat_msg.delete()
+            except: pass
+            f2 = discord.File(io.BytesIO(img_result), filename="combat.png")
+            combat_msg = await ctx.send(file=f2)
+            await asyncio.sleep(2.5)
+
+@bot.command(name="pokestop", aliases=["stopcombat"])
 async def pokestop(ctx):
     """Annule le combat en cours — .pokestop"""
     if ctx.channel.id in active_pokebattles:
