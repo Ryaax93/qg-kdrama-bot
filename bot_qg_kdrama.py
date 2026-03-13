@@ -340,7 +340,7 @@ async def help_cmd(ctx, categorie: str = None):
             color=0xff6b9d
         )
         embed.add_field(name="🎬 Contenu — `.help contenu`", value="Dramas, animés, recommandations, notes, watchlist, sorties", inline=False)
-        embed.add_field(name="🎮 Jeux & Divertissement — `.help jeux`", value="Quiz, Loup Garou, Pendu, Devine, Arène PvP, Boss, Bracket Tournoi, Combat Cartes Animé", inline=False)
+        embed.add_field(name="🎮 Jeux & Divertissement — `.help jeux`", value="Quiz, Gacha style Mudae, Combat Cartes, Boss, Loup Garou, Bracket", inline=False)
         embed.add_field(name="💰 Économie & Récompenses — `.help economie`", value="Pièces, daily, boutique, banque, vol, slot machine", inline=False)
         embed.add_field(name="📊 Progression — `.help progression`", value="XP, niveaux, rang, leaderboard, titres", inline=False)
         embed.add_field(name="💬 Social & Communauté — `.help social`", value="Mariage, anniversaires, sondages, giveaway, stats serveur", inline=False)
@@ -360,41 +360,75 @@ async def help_cmd(ctx, categorie: str = None):
         await ctx.send(embed=embed)
 
     elif categorie.lower() in ["jeux", "jeu", "quiz", "minijeux", "mini-jeux", "divertissement"]:
-        embed = discord.Embed(title="🎮 Jeux & Divertissement", description="Quiz, combats, tournois et jeux de société !", color=0x9b59b6)
-        embed.add_field(name="🎯 Quiz", value="`.quiz [thème]` — Quiz solo qui s\'enchaîne auto !\n`.quizduel [thème] @joueur` — Duel 5 questions\n`.quizstop` — Arrêter\n*Thèmes : kdrama • anime • gaming • culture • mix*", inline=False)
-        embed.add_field(name="🎬 Bracket Tournoi", value="`.bracket kdrama` — Tournoi Kdramas (50 titres !)\n`.bracket anime` — Tournoi Animés (49 titres !)\n`.bracketskip` — Passer (admin) • `.bracketstop` — Annuler (admin)", inline=False)
-        embed.add_field(name="🐺 Loup Garou", value="`.lgcreate` `.lgjoin` `.lgstart` `.lgstop`\n`.lg` — Aide complète • `.lgroles` — Voir les rôles", inline=False)
-        embed.add_field(name="⚔️ Combat & Boss", value="`.arene @joueur` — PvP tour par tour\n`.duel @joueur` — Défi simple\n`.boss` — Faire apparaître un boss (admin)\n`.attaque` — Frapper le boss !", inline=False)
-        embed.add_field(name="🎰 Gacha & Fusion", value=(
-            "`.gacha` — Tire une carte aléatoire (100 pièces)\n"
-            "`.gachax10` — 10 tirages d'un coup (900 pièces)\n"
-            "`.gachastock [@joueur]` — Voir ta collection gacha\n"
-            "`.fusionner <perso>` — Fusionne 3 cartes identiques pour un boost ⭐"
+        embed = discord.Embed(title="🎮 Jeux & Divertissement", description="Quiz, combats, gacha et jeux de société !", color=0x9b59b6)
+        embed.add_field(name="🎯 Quiz", value=(
+            "`.quiz [thème]` — Quiz solo qui s'enchaîne auto !\n"
+            "`.quizduel [thème] @joueur` — Duel 5 questions\n"
+            "`.quizstop` — Arrêter\n"
+            "*Thèmes : kdrama • anime • gaming • culture • mix*"
         ), inline=False)
-        embed.add_field(name="🃏 Combat Cartes Animé", value=(
-            "`.pokepersos` — Voir les 54 persos disponibles\n"
-            "`.enregistrer <perso> <image>` — Ajouter une carte (jpg/gif cdn Discord)\n"
-            "`.pokecollection [@joueur]` — Voir ta collection avec ◀️ ▶️\n"
-            "`.pokecarte <perso>` — Voir une carte en détail\n"
-            "`.pokesupprimer <perso>` — Retirer une carte\n"
-            "`.pokebattle @joueur` — Combat 3v3 style Pokémon !\n"
+        embed.add_field(name="🎰 Gacha style Mudae", value=(
+            "`.ga` — Tire une carte (10 rolls / 6h)\n"
+            "`.rolls` — Voir tes rolls & cooldowns\n"
+            "`.daily` — Pièces + 1 roll bonus !\n"
+            "`.gachastock [@joueur]` — Collection avec ◀️ ▶️\n"
+            "`.gachastock naruto` — Aller direct sur une carte\n"
+            "`.gacha ordre naruto 1 luffy 2` — Réorganiser ta collection\n"
+            "`.gacha recent` — Dernières cartes claimées\n"
+            "`.gacha <perso>` — Voir qui possède la carte\n"
+            "`.fusionner <perso>` — Boost avec tokens de fusion ⭐\n"
+            "🔮 Raretés : Commun • Épique • Légendaire • Mythique"
+        ), inline=False)
+        embed.add_field(name="⚔️ Combat Cartes", value=(
+            "`.pokebattle @joueur` — Combat 3v3 avec tes cartes claimées !\n"
             "`.pokestop` — Annuler un combat en cours"
         ), inline=False)
+        embed.add_field(name="⚔️ Combat & Boss", value=(
+            "`.arene @joueur` — PvP tour par tour\n"
+            "`.duel @joueur` — Défi simple\n"
+            "`.boss` — Faire apparaître un boss (admin)\n"
+            "`.attaque` — Frapper le boss ! (cooldown 13s)"
+        ), inline=False)
+        embed.add_field(name="🎬 Bracket Tournoi", value=(
+            "`.bracket kdrama` — Tournoi Kdramas\n"
+            "`.bracket anime` — Tournoi Animés\n"
+            "`.bracketskip` — Passer (admin) • `.bracketstop` — Annuler"
+        ), inline=False)
+        embed.add_field(name="🐺 Loup Garou", value="`.lgcreate` `.lgjoin` `.lgstart` `.lgstop`\n`.lg` — Aide complète • `.lgroles` — Voir les rôles", inline=False)
         embed.add_field(name="🎭 Mini-Jeux", value="`.devine` — Devine le personnage\n`.pendu` — Pendu animé/drama\n`.rps <choix>` — Pierre Feuille Ciseaux\n`.dice [faces]` — Lancer un dé", inline=False)
         await ctx.send(embed=embed)
 
     elif categorie.lower() in ["economie", "économie", "eco", "argent"]:
-        embed = discord.Embed(title="💰 Économie & Récompenses", description="Gagne des pièces, dépense-les, enrichis-toi !", color=0xf39c12)
-        embed.add_field(name="💵 Pièces", value="`.daily` — Pièces journalières (150-300) ⏳ 24h\n`.balance [@joueur]` — Voir ton solde\n`.pay @joueur <montant>` — Envoyer des pièces\n`.steal @joueur` — Vol (45% réussite, cooldown 1h)", inline=False)
-        embed.add_field(name="🏦 Banque", value="`.banque depot <montant>` — Déposer\n`.banque retrait` — Retirer + intérêts\n`.banque solde` — Voir le solde\n📈 Intérêts : +5% toutes les 24h !", inline=False)
-        embed.add_field(name="🛒 Boutique & Casino", value="`.shop` — Voir les items\n`.acheter <id>` — Acheter (vip • drama_king • otaku • gamer_pro • double_xp)\n`.slot [mise]` — Slot machine (min 10 / max 500 pièces)", inline=False)
-        embed.add_field(name="💡 Comment gagner des pièces ?", value="`.daily` `.quiz` `.arene` `.duel` `.pendu` `.devine` `.slot` `.attaque boss`", inline=False)
+        embed = discord.Embed(title="💰 Économie & Récompenses", description="Gagne des pièces, dépense-les intelligemment !", color=0xf39c12)
+        embed.add_field(name="💵 Pièces", value=(
+            "`.daily` — 150-300 pièces + 1 roll gacha ⏳ 24h\n"
+            "`.balance [@joueur]` — Voir ton solde\n"
+            "`.pay @joueur <montant>` — Envoyer des pièces\n"
+            "`.steal @joueur` — Vol (45% réussite, cooldown 1h)"
+        ), inline=False)
+        embed.add_field(name="🏦 Banque", value=(
+            "`.banque depot <montant>` — Déposer\n"
+            "`.banque retrait` — Retirer + intérêts\n"
+            "`.banque solde` — Voir le solde\n"
+            "📈 Intérêts : +5% toutes les 24h !"
+        ), inline=False)
+        embed.add_field(name="🛒 Boutique", value=(
+            "`.shop` — Voir tous les items\n"
+            "`.acheter <id>` — Acheter un item\n"
+            "🎰 +10 Rolls → 600p | 🔄 Reset Claim → 1200p\n"
+            "⚡ Claim 20min → 800p | 15min → 1500p | 10min → 3000p\n"
+            "🧊 Sceau → 500p | ⏳ Malédiction → 400p | 🛡️ Bouclier → 600p\n"
+            "🎯 Boost Rareté → 1500p\n"
+            "`.utiliser freeze @joueur` / `.utiliser curse @joueur`"
+        ), inline=False)
+        embed.add_field(name="🎰 Casino", value="`.slot [mise]` — Slot machine (min 10 / max 500 pièces) • Salon casino uniquement !", inline=False)
+        embed.add_field(name="💡 Sources de pièces", value="`.daily` • `.quiz` • `.arene` • `.duel` • `.attaque` boss", inline=False)
         await ctx.send(embed=embed)
 
     elif categorie.lower() in ["progression", "xp", "niveaux", "niveau", "rang"]:
         embed = discord.Embed(title="📊 Progression — XP & Niveaux", color=0xf1c40f)
         embed.add_field(name="Commandes", value="`.rank [@joueur]` — Ton niveau, XP et titre\n`.leaderboard` — Top 10 membres les plus actifs", inline=False)
-        embed.add_field(name="📈 Comment gagner de l\'XP ?", value="• Chatter → 3-8 XP/message\n• Gagner un quiz → +30 XP\n• Gagner une arène → +40 XP\n• Tuer un boss → +50 XP", inline=False)
+        embed.add_field(name="📈 Comment gagner de l\'XP ?", value="• Chatter → 2-5 XP/message\n• Gagner un quiz → +30 XP\n• Gagner une arène → +40 XP\n• Tuer un boss → +50 XP\n• Claimer une carte → +20 XP", inline=False)
         embed.add_field(name="🏆 Titres", value=(
             "Niv.1 → 🌱 Académicien Débutant\n"
             "Niv.5 → ⚔️ Chasseur Rang E\n"
