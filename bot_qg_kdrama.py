@@ -2522,7 +2522,6 @@ async def on_member_join(member):
         if channel:
             import random as _random
             member_count = member.guild.member_count
-
             msgs = [
                 "Prépare-toi, l'aventure commence ici.",
                 "Un nouveau guerrier entre en scène.",
@@ -2531,20 +2530,20 @@ async def on_member_join(member):
                 "Le destin t'a conduit jusqu'ici. Bienvenue.",
             ]
             msg = _random.choice(msgs)
-
-            embed = discord.Embed(
-                description=(
-                    f"## Bienvenue, {member.mention} 👋\n"
-                    f"{msg}\n\n"
-                    f"🏯 Tu es notre **{member_count}ème membre**\n"
-                    f"📖 Tape \`.help\` pour découvrir le bot"
-                ),
-                color=0xe74c3c
+            desc = (
+                f"## Bienvenue {member.mention} 👋\n"
+                f"{msg}\n\n"
+                f"🏯 Tu es notre **{member_count}ème membre**\n"
+                "📖 Tape `.help` pour découvrir le bot"
             )
+            embed = discord.Embed(description=desc, color=0xe74c3c)
+            embed.set_image(url=member.display_avatar.url)
+            embed.set_footer(
                 text="QG Kdrama",
                 icon_url=member.guild.icon.url if member.guild.icon else None
             )
             await channel.send(embed=embed)
+
 @bot.event
 async def on_member_remove(member):
     """Message d'aurevoir quand un membre quitte"""
@@ -5994,4 +5993,4 @@ while True:
         print(f"❌ CRASH BOT: {e}")
         traceback.print_exc()
         print("🔄 Redémarrage dans 5 secondes...")
-        time.sleep(5)
+        time.sleep(5) 
