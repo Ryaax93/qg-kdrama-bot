@@ -9,5 +9,4 @@ yt-dlp
 # Narration vocale Loup Garou
 gTTS
 
-# Génération images combat
-Pillow==10.4.0
+
