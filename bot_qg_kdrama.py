@@ -2514,7 +2514,7 @@ async def on_member_join(member):
         raid_mode = False
         return
 
-    # Message de bienvenue
+    # Message de bienvenue — Style C (bandeau dégradé)
     if not raid_mode:
         channel = None
         if SALON_BIENVENUE_ID:
@@ -2524,20 +2524,26 @@ async def on_member_join(member):
         if channel:
             import random as _random
             member_count = member.guild.member_count
-            msgs = [
-                "Prépare-toi, l'aventure commence ici. 🎌",
+            phrases = [
+                "Le destin t'a conduit jusqu'ici. Bienvenue. 🌀",
                 "Un nouveau guerrier entre en scène. ⚔️",
-                "Le QG s'agrandit. Bienvenue ! 🏯",
-                "Une nouvelle légende rejoint le QG. 🌟",
-                "Le destin t'a conduit jusqu'ici. 🌀",
+                "Le QG s'agrandit. À toi de marquer l'histoire. 🏯",
+                "Une nouvelle légende vient de rejoindre nos rangs. 🌟",
+                "Prépare-toi. L'aventure commence maintenant. 🔥",
             ]
-            embed = discord.Embed(
-                description=f"{member.mention} vient de rejoindre le QG ! {_random.choice(msgs)}",
-                color=0xe74c3c
+            phrase = _random.choice(phrases)
+            # Couleur dégradé simulé — change selon le membre
+            couleurs = [0xe74c3c, 0xe67e22, 0x9b59b6, 0x2980b9, 0x27ae60, 0xc0392b, 0x8e44ad]
+            couleur  = couleurs[member_count % len(couleurs)]
+            embed = discord.Embed(color=couleur)
+            embed.set_author(
+                name=f"{member.display_name}  •  Membre n°{member_count}",
+                icon_url=member.display_avatar.url
             )
+            embed.description = f"*{phrase}*\n\n📖 Tape `.help` pour découvrir le bot"
             embed.set_thumbnail(url=member.display_avatar.url)
             embed.set_footer(
-                text=f"Membre n°{member_count} • QG Kdrama",
+                text="QG Kdrama",
                 icon_url=member.guild.icon.url if member.guild.icon else None
             )
             await channel.send(embed=embed)
@@ -5992,4 +5998,4 @@ while True:
         print(f"❌ CRASH BOT: {e}")
         traceback.print_exc()
         print("🔄 Redémarrage dans 5 secondes...")
-        time.sleep(5) 
+        time.sleep(5)
