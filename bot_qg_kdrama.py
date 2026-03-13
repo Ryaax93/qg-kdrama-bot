@@ -57,6 +57,61 @@ SALON_REGLEMENT_ID = None # Met l'ID du salon règlement ici
 ROLE_MEMBRE_NAME = "Membre"  # Nom du rôle à donner après acceptation
 REGLEMENT_MSG_ID = None   # ID du message règlement (auto-rempli par setsalon)
 
+CONFIG_FILE = "salons_config.json"
+
+def sauvegarder_salons():
+    """Sauvegarde tous les IDs de salons dans un fichier JSON"""
+    data = {
+        "SALON_LEVELUP_ID":   SALON_LEVELUP_ID,
+        "SALON_CASINO_ID":    SALON_CASINO_ID,
+        "SALON_GACHA_ID":     SALON_GACHA_ID,
+        "SALON_BOUTIQUE_ID":  SALON_BOUTIQUE_ID,
+        "SALON_COMBAT_ID":    SALON_COMBAT_ID,
+        "SALON_DUEL_ID":      SALON_DUEL_ID,
+        "SALON_BIENVENUE_ID": SALON_BIENVENUE_ID,
+        "SALON_AUREVOIR_ID":  SALON_AUREVOIR_ID,
+        "SALON_BOOST_ID":     SALON_BOOST_ID,
+        "SALON_HOF_ID":       SALON_HOF_ID,
+        "SALON_REGLEMENT_ID": SALON_REGLEMENT_ID,
+        "ROLE_MEMBRE_NAME":   ROLE_MEMBRE_NAME,
+        "REGLEMENT_MSG_ID":   REGLEMENT_MSG_ID,
+    }
+    try:
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(data, f)
+    except Exception as e:
+        print(f"[Config] Erreur sauvegarde : {e}")
+
+def charger_salons():
+    """Charge les IDs de salons depuis le fichier JSON au démarrage"""
+    global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID
+    global SALON_COMBAT_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID
+    global SALON_BOOST_ID, SALON_HOF_ID, SALON_REGLEMENT_ID, ROLE_MEMBRE_NAME, REGLEMENT_MSG_ID
+    if not os.path.exists(CONFIG_FILE):
+        return
+    try:
+        with open(CONFIG_FILE, "r") as f:
+            data = json.load(f)
+        SALON_LEVELUP_ID   = data.get("SALON_LEVELUP_ID")
+        SALON_CASINO_ID    = data.get("SALON_CASINO_ID")
+        SALON_GACHA_ID     = data.get("SALON_GACHA_ID")
+        SALON_BOUTIQUE_ID  = data.get("SALON_BOUTIQUE_ID")
+        SALON_COMBAT_ID    = data.get("SALON_COMBAT_ID")
+        SALON_DUEL_ID      = data.get("SALON_DUEL_ID")
+        SALON_BIENVENUE_ID = data.get("SALON_BIENVENUE_ID")
+        SALON_AUREVOIR_ID  = data.get("SALON_AUREVOIR_ID")
+        SALON_BOOST_ID     = data.get("SALON_BOOST_ID")
+        SALON_HOF_ID       = data.get("SALON_HOF_ID")
+        SALON_REGLEMENT_ID = data.get("SALON_REGLEMENT_ID")
+        ROLE_MEMBRE_NAME   = data.get("ROLE_MEMBRE_NAME", "Membre")
+        REGLEMENT_MSG_ID   = data.get("REGLEMENT_MSG_ID")
+        print("[Config] Salons chargés depuis salons_config.json ✅")
+    except Exception as e:
+        print(f"[Config] Erreur chargement : {e}")
+
+# Charger au démarrage
+charger_salons()
+
 HOF_MESSAGES = set()      # IDs des messages déjà dans le Hall of Fame
 HOF_EMOJIS = {"😭", "🤣", "😂", "😹"}
 HOF_SEUIL = 4
@@ -6412,6 +6467,7 @@ async def send_salon_embed(channel, t):
         # Sauvegarder l'ID du message règlement
         global REGLEMENT_MSG_ID
         REGLEMENT_MSG_ID = msg.id
+        sauvegarder_salons()
 
     elif t == "duel":
         embed = discord.Embed(
@@ -6471,6 +6527,7 @@ async def setsalon(ctx, type_salon: str = None, role: discord.Role = None):
             return await ctx.send("❌ Pour le règlement, mentionne le rôle à donner !\nEx: `.setsalon reglement @Membres`")
         ROLE_MEMBRE_NAME = role.name
         SALON_REGLEMENT_ID = ctx.channel.id
+        sauvegarder_salons()
         await ctx.send(f"✅ Salon **règlement** configuré sur {ctx.channel.mention} ! Rôle attribué : **{role.name}** 👥")
         await send_salon_embed(ctx.channel, "reglement")
         return
@@ -6486,6 +6543,7 @@ async def setsalon(ctx, type_salon: str = None, role: discord.Role = None):
     elif var_name == "SALON_AUREVOIR_ID": SALON_AUREVOIR_ID   = ctx.channel.id
     elif var_name == "SALON_BOOST_ID":    SALON_BOOST_ID      = ctx.channel.id
     elif var_name == "SALON_HOF_ID":      SALON_HOF_ID        = ctx.channel.id
+    sauvegarder_salons()
     await ctx.send(f"✅ Salon **{label}** configuré sur {ctx.channel.mention} !")
     await send_salon_embed(ctx.channel, type_salon.lower())
 
@@ -6528,4 +6586,4 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
 
 # ============================================================
 print("🚀 Démarrage du bot...")
-bot.run(TOKEN)
+bot.run(TOKEN) 
