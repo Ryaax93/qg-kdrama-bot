@@ -4370,57 +4370,21 @@ ATTAQUES_PVP = [
 
 active_arene = {}
 
-@bot.command(name="arene")
+@bot.command(name="arene", aliases=["duel","pvp"])
 async def arene_cmd(ctx, adversaire: discord.Member = None):
-    """⚔️ Combat PvP en arène ! — .arene @joueur"""
+    """⚔️ Combat PvP avec image anime ! — .arene @joueur"""
     if SALON_DUEL_ID and ctx.channel.id != SALON_DUEL_ID:
         salon = ctx.guild.get_channel(SALON_DUEL_ID)
         mention = salon.mention if salon else "le salon duel"
         return await ctx.send(f"⚔️ L'arène c'est dans {mention} !", delete_after=5)
-    if not adversaire:
-        return await ctx.send("❌ Mentionne un adversaire ! Ex: `.arene @ami`")
-    if adversaire.bot or adversaire.id == ctx.author.id:
-        return await ctx.send("❌ Adversaire invalide !")
+    if not adversaire or adversaire.bot or adversaire.id == ctx.author.id:
+        return await ctx.send("❌ Mentionne un adversaire valide ! Ex: `.arene @ami`")
     if ctx.channel.id in active_arene:
         return await ctx.send("⚔️ Un combat est déjà en cours ici !")
 
-    # ── Invite ──────────────────────────────────────────────────
-    invite_embed = discord.Embed(
-        title="⚔️  DÉFI LANCÉ  ⚔️",
-        description=(
-            f"# {ctx.author.display_name}  ⚔️  {adversaire.display_name}\n\n"
-            f"{adversaire.mention} — tu as été défié par **{ctx.author.display_name}** !\n\n"
-            f"Réagis avec ✅ pour accepter ou ❌ pour refuser\n"
-            f"*Tu as 30 secondes pour répondre...*"
-        ),
-        color=0xe74c3c
-    )
-    invite_embed.set_footer(text="QG Kdrama — Arène PvP ⚔️")
-    invite_msg = await ctx.send(embed=invite_embed)
-    await invite_msg.add_reaction("✅")
-    await invite_msg.add_reaction("❌")
+    uid1 = str(ctx.author.id)
+    uid2 = str(adversaire.id)
 
-    def check_invite(reaction, user):
-        return user.id == adversaire.id and reaction.message.id == invite_msg.id and str(reaction.emoji) in ["✅", "❌"]
-
-    try:
-        reaction, _ = await bot.wait_for("reaction_add", timeout=30.0, check=check_invite)
-        if str(reaction.emoji) == "❌":
-            await invite_msg.delete()
-            return await ctx.send(embed=discord.Embed(
-                description=f"💔 **{adversaire.display_name}** a refusé le défi...",
-                color=0x555555
-            ))
-    except asyncio.TimeoutError:
-        await invite_msg.delete()
-        return await ctx.send(embed=discord.Embed(
-            description=f"⏰ **{adversaire.display_name}** n'a pas répondu — défi annulé.",
-            color=0x555555
-        ))
-
-    await invite_msg.delete()
-
-    # ── Setup stats avec bonus d'amélioration ──────────────────
     def get_stats(uid):
         s = arena_stats[uid]
         hp_max  = 250 + s["pv_bonus"]  * 8
@@ -4429,1545 +4393,385 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
         def_b   = s["def_bonus"] * 3
         return hp_max, end_max, atk_b, def_b
 
-    uid1 = str(ctx.author.id)
-    uid2 = str(adversaire.id)
-    hp1_max,  end1_max, atk1_b, def1_b = get_stats(uid1)
-    hp2_max,  end2_max, atk2_b, def2_b = get_stats(uid2)
+    # ── Invitation ────────────────────────────────────────────
+    class InviteView(ui.View):
+        def __init__(self):
+            super().__init__(timeout=30)
+            self.accepted = None
+            self.done = asyncio.Event()
 
-    active_arene[ctx.channel.id] = True
+        @ui.button(label="ACCEPTER", emoji="✅", style=discord.ButtonStyle.success)
+        async def accept(self, interaction, button):
+            if interaction.user.id != adversaire.id:
+                return await interaction.response.send_message("❌ Pas ton défi !", ephemeral=True)
+            self.accepted = True
+            self.done.set(); self.stop()
+            await interaction.response.edit_message(
+                content=f"⚡ **{adversaire.display_name}** accepte le défi ! Que le combat commence...",
+                view=None
+            )
+
+        @ui.button(label="REFUSER", emoji="❌", style=discord.ButtonStyle.danger)
+        async def refuse(self, interaction, button):
+            if interaction.user.id != adversaire.id:
+                return await interaction.response.send_message("❌ Pas ton défi !", ephemeral=True)
+            self.accepted = False
+            self.done.set(); self.stop()
+            await interaction.response.edit_message(
+                content=f"❌ **{adversaire.display_name}** refuse le défi.",
+                view=None
+            )
+
+    invite_view = InviteView()
+    await ctx.send(
+        f"⚡ **{ctx.author.mention}** défie **{adversaire.mention}** en arène !",
+        view=invite_view
+    )
+    try:
+        await asyncio.wait_for(invite_view.done.wait(), timeout=31)
+    except asyncio.TimeoutError:
+        pass
+
+    if not invite_view.accepted:
+        return
+
+    # ── Choix de carte représentante (pour l'image) ───────────
+    async def choisir_carte_arene(joueur):
+        uid = str(joueur.id)
+        col = gacha_collections[uid]
+        order = collection_order.get(uid, [])
+        all_keys = [k for k in order if k in col] + [k for k in col if k not in order]
+        valid_keys = [k for k in all_keys if k in ANIME_CARDS_DB]
+
+        if not valid_keys:
+            # Pas de carte — carte fantôme par défaut
+            return {"nom": joueur.display_name, "rarete": "Commun", "image": None, "emoji": "⚔️"}
+
+        page    = [0]
+        PAGE_SZ = 5
+        chosen  = [None]
+        done_ev = asyncio.Event()
+
+        def build_view_arene():
+            v = ui.View(timeout=60)
+            start = page[0]*PAGE_SZ
+            keys_page = valid_keys[start:start+PAGE_SZ]
+            total_pages = (len(valid_keys)-1)//PAGE_SZ + 1
+
+            for i, key in enumerate(keys_page):
+                c  = ANIME_CARDS_DB[key]
+                lv = fusion_levels[uid].get(key, 0)
+                stars = "⭐"*lv if lv else ""
+                btn = ui.Button(
+                    label=f"{c['nom'][:15]}{stars}",
+                    emoji=c.get("emoji","⚔️"),
+                    style=discord.ButtonStyle.secondary,
+                    custom_id=f"arene_pick_{i}",
+                    row=i // 3
+                )
+                async def cb(interaction, k=key, card=c):
+                    if interaction.user.id != joueur.id:
+                        return await interaction.response.send_message("❌ Pas ton tour !", ephemeral=True)
+                    chosen[0] = card
+                    done_ev.set()
+                    await interaction.response.edit_message(
+                        content=f"✅ **{joueur.display_name}** choisit {card['emoji']} **{card['nom']}** !",
+                        view=None
+                    )
+                btn.callback = cb
+                v.add_item(btn)
+
+            if total_pages > 1:
+                prev_btn = ui.Button(label="◀", style=discord.ButtonStyle.primary, custom_id="ap", disabled=page[0]==0, row=2)
+                info_btn = ui.Button(label=f"Page {page[0]+1}/{total_pages}", style=discord.ButtonStyle.secondary, custom_id="ai", disabled=True, row=2)
+                next_btn = ui.Button(label="▶", style=discord.ButtonStyle.primary, custom_id="an", disabled=page[0]>=total_pages-1, row=2)
+                async def prev_cb(interaction):
+                    if interaction.user.id != joueur.id: return await interaction.response.send_message("❌", ephemeral=True)
+                    page[0] = max(0, page[0]-1)
+                    await interaction.response.edit_message(content=f"🎴 **{joueur.display_name}** — Choisis ta carte :", view=build_view_arene())
+                async def next_cb(interaction):
+                    if interaction.user.id != joueur.id: return await interaction.response.send_message("❌", ephemeral=True)
+                    page[0] = min(total_pages-1, page[0]+1)
+                    await interaction.response.edit_message(content=f"🎴 **{joueur.display_name}** — Choisis ta carte :", view=build_view_arene())
+                prev_btn.callback = prev_cb; next_btn.callback = next_cb
+                v.add_item(prev_btn); v.add_item(info_btn); v.add_item(next_btn)
+            return v
+
+        await ctx.send(
+            content=f"🎴 **{joueur.display_name}** — Choisis ta carte pour le combat :",
+            view=build_view_arene()
+        )
+        try:
+            await asyncio.wait_for(done_ev.wait(), timeout=60)
+        except asyncio.TimeoutError:
+            pass
+
+        return chosen[0] or ANIME_CARDS_DB[valid_keys[0]]
+
+    carte1 = await choisir_carte_arene(ctx.author)
+    carte2 = await choisir_carte_arene(adversaire)
+
+    # ── Setup stats ───────────────────────────────────────────
+    hp1_max, end1_max, atk1_b, def1_b = get_stats(uid1)
+    hp2_max, end2_max, atk2_b, def2_b = get_stats(uid2)
 
     joueurs = [
-        {"membre": ctx.author,  "hp": hp1_max,  "hp_max": hp1_max,
-         "end": end1_max, "end_max": end1_max, "atk_b": atk1_b, "def_b": def1_b,
-         "esquive_active": False, "defense_active": False},
-        {"membre": adversaire,  "hp": hp2_max,  "hp_max": hp2_max,
-         "end": end2_max, "end_max": end2_max, "atk_b": atk2_b, "def_b": def2_b,
-         "esquive_active": False, "defense_active": False},
+        {
+            "membre":         ctx.author,
+            "hp":             hp1_max, "hp_max":  hp1_max,
+            "end":            end1_max,"end_max": end1_max,
+            "atk_b":          atk1_b,  "def_b":   def1_b,
+            "esquive_active": False,   "defense_active": False,
+            "carte":          carte1,
+        },
+        {
+            "membre":         adversaire,
+            "hp":             hp2_max, "hp_max":  hp2_max,
+            "end":            end2_max,"end_max": end2_max,
+            "atk_b":          atk2_b,  "def_b":   def2_b,
+            "esquive_active": False,   "defense_active": False,
+            "carte":          carte2,
+        },
     ]
 
-    # ── Coût en endurance par action ──
-    COUT_END = {
-        0: 10,   # Attaque normale
-        1: 30,   # Attaque chargée
-        2: 20,   # Attaque spéciale
-        3: 5,    # Défense
-        4: 8,    # Soin
-        5: 15,   # Esquive
-    }
-    REGEN_END = 12   # regain d'endurance à chaque tour
-
-    def barre(val, max_val, couleur_high, couleur_mid, couleur_low, size=8):
-        ratio = val / max_val if max_val > 0 else 0
-        filled = int(ratio * size)
-        empty = size - filled
-        if ratio > 0.6:   c = couleur_high
-        elif ratio > 0.3: c = couleur_mid
-        else:             c = couleur_low
-        return c * filled + "⬛" * empty
-
-    def barre_vie(j):
-        return barre(j["hp"], j["hp_max"], "🟩", "🟨", "🟥")
-
-    def barre_end(j):
-        return barre(j["end"], j["end_max"], "🔵", "🟣", "⚫", size=6)
-
-    def bloc_joueur(j, actif=False):
-        prefix = "▶️ " if actif else ""
-        hp_icon = "❤️" if j["hp"] / j["hp_max"] > 0.5 else "🩸"
-        end_icon = "⚡" if j["end"] / j["end_max"] > 0.3 else "😮‍💨"
-        return (
-            f"{prefix}**{j['membre'].display_name}**\n"
-            f"{hp_icon} {barre_vie(j)}  **{j['hp']}/{j['hp_max']}**\n"
-            f"{end_icon} {barre_end(j)}  **{j['end']}/{j['end_max']}**"
-        )
-
-    def build_action_embed(attaquant, defenseur, numero_tour):
-        embed = discord.Embed(
-            title=f"⚔️  {joueurs[0]['membre'].display_name}  VS  {joueurs[1]['membre'].display_name}",
-            description=f"**Tour {numero_tour} — {attaquant['membre'].display_name} choisit son action !**\n*30 secondes...*",
-            color=0x9b59b6
-        )
-        embed.add_field(name="🔴", value=bloc_joueur(joueurs[0], attaquant==joueurs[0]), inline=True)
-        embed.add_field(name="\u200b", value="\u200b", inline=True)
-        embed.add_field(name="🔵", value=bloc_joueur(joueurs[1], attaquant==joueurs[1]), inline=True)
-        embed.add_field(name="🗡️ Actions disponibles", value=(
-            f"1️⃣ ⚔️ **Attaque Normale** — 25-40 dégâts *(⚡ -{COUT_END[0]})*\n"
-            f"2️⃣ 💥 **Attaque Chargée** — 10-65 dégâts, imprécis *(⚡ -{COUT_END[1]})*\n"
-            f"3️⃣ 🌀 **Attaque Spéciale** — 30-50 dégâts garantis *(⚡ -{COUT_END[2]})*\n"
-            f"4️⃣ 🛡️ **Défense** — réduit les dégâts de 50% ce tour *(⚡ -{COUT_END[3]})*\n"
-            f"5️⃣ 🌿 **Soin** — récupère 15-30 HP *(⚡ -{COUT_END[4]})*\n"
-            f"6️⃣ 💨 **Esquive** — évite la prochaine attaque *(⚡ -{COUT_END[5]})*\n\n"
-            f"*⚡ Endurance insuffisante → attaque normale forcée !*"
-        ), inline=False)
-        embed.set_footer(text="❤️ Vie  •  ⚡ Endurance  •  ⚡ se régénère de 12 par tour")
-        return embed
-
-    def build_result_embed(attaquant, defenseur, resultat_txt, numero_tour):
-        embed = discord.Embed(
-            title=f"⚔️  {joueurs[0]['membre'].display_name}  VS  {joueurs[1]['membre'].display_name}",
-            color=0xe74c3c
-        )
-        embed.add_field(name="🔴", value=bloc_joueur(joueurs[0]), inline=True)
-        embed.add_field(name="\u200b", value="\u200b", inline=True)
-        embed.add_field(name="🔵", value=bloc_joueur(joueurs[1]), inline=True)
-        embed.add_field(name=f"⚡ Tour {numero_tour}", value=f">>> {resultat_txt}", inline=False)
-        return embed
-
-    REACTIONS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣"]
-
-    # ── Écran de départ ─────────────────────────────────────────
-    start_embed = discord.Embed(
-        title="🏟️  COMBAT COMMENCE  🏟️",
-        description=(
-            f"## ⚔️  {ctx.author.display_name}  **VS**  {adversaire.display_name}  ⚔️\n\n"
-            f"🔴 **{ctx.author.display_name}** — {hp1_max} HP • {end1_max} END\n"
-            f"🔵 **{adversaire.display_name}** — {hp2_max} HP • {end2_max} END\n\n"
-            f"*Stats boostées par vos points d'amélioration !*\n"
-            f"*{ctx.author.display_name} commence !*"
-        ),
-        color=0xe74c3c
-    )
-    await ctx.send(embed=start_embed)
-    await asyncio.sleep(2)
-
-    # ── Boucle de combat ────────────────────────────────────────
-    numero_tour = 1
+    active_arene[ctx.channel.id] = True
+    tour_num  = 1
+    tour_idx  = 0   # index dans joueurs[]
     combat_msg = None
 
-    while ctx.channel.id in active_arene:
-        attaquant = joueurs[(numero_tour - 1) % 2]
-        defenseur = joueurs[numero_tour % 2]
+    COUT_END  = {0:10, 1:30, 2:20, 3:5, 4:8, 5:15}
+    REGEN_END = 12
 
-        # Regain d'endurance au début du tour
+    def make_p(j):
+        c = j["carte"]
+        return {
+            "name":    c.get("nom", j["membre"].display_name),
+            "rarity":  c.get("rarete","Commun"),
+            "hp":      j["hp"],  "hp_max": j["hp_max"],
+            "end":     j["end"], "end_max":j["end_max"],
+            "image":   c.get("image"),
+            "emoji":   c.get("emoji","⚔️"),
+            "ko":      j["hp"] <= 0,
+        }
+
+    async def gen_image(action_txt="", sub_txt="", flavor="", phase="fight", winner_name=""):
+        p1 = make_p(joueurs[0])
+        p2 = make_p(joueurs[1])
+        active_name = joueurs[tour_idx]["membre"].display_name
+        img_bytes = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: generate_battle_image(
+                p1=p1, p2=p2,
+                action_txt=action_txt, sub_txt=sub_txt, flavor=flavor,
+                tour=tour_num, active_name=active_name,
+                phase=phase, winner_name=winner_name,
+            )
+        )
+        return img_bytes
+
+    # ── Boucle principale ─────────────────────────────────────
+    while ctx.channel.id in active_arene:
+        attaquant = joueurs[tour_idx]
+        defenseur = joueurs[1 - tour_idx]
+
+        # Régénération endurance
         attaquant["end"] = min(attaquant["end_max"], attaquant["end"] + REGEN_END)
 
-        action_embed = build_action_embed(attaquant, defenseur, numero_tour)
-        if combat_msg:
-            try: await combat_msg.clear_reactions()
-            except: pass
-            await combat_msg.edit(embed=action_embed)
-        else:
-            combat_msg = await ctx.send(embed=action_embed)
-        for r in REACTIONS:
-            await combat_msg.add_reaction(r)
+        # Générer image + boutons
+        img_bytes = await gen_image()
+        if not img_bytes:
+            break
 
-        def check_reaction(reaction, user):
-            return (
-                user.id == attaquant["membre"].id
-                and reaction.message.id == combat_msg.id
-                and str(reaction.emoji) in REACTIONS
-            )
+        chosen_action = asyncio.Event()
+        action_result = {"choix": -1}
+
+        def enough_end(action_idx):
+            return attaquant["end"] >= COUT_END[action_idx]
+
+        class ArenaButtons(ui.View):
+            def __init__(self):
+                super().__init__(timeout=35)
+
+            async def check_player(self, interaction):
+                if interaction.user.id != attaquant["membre"].id:
+                    await interaction.response.send_message("❌ C'est pas ton tour !", ephemeral=True)
+                    return False
+                return True
+
+            @ui.button(label="ATTAQUE", emoji="⚔️", style=discord.ButtonStyle.danger, row=0)
+            async def btn_atk(self, interaction, button):
+                if not await self.check_player(interaction): return
+                action_result["choix"] = 0; chosen_action.set(); self.stop()
+                await interaction.response.defer()
+
+            @ui.button(label="CHARGÉE", emoji="💥", style=discord.ButtonStyle.danger, row=0)
+            async def btn_charge(self, interaction, button):
+                if not await self.check_player(interaction): return
+                action_result["choix"] = 1; chosen_action.set(); self.stop()
+                await interaction.response.defer()
+
+            @ui.button(label="SPÉCIALE", emoji="🌀", style=discord.ButtonStyle.primary, row=0)
+            async def btn_special(self, interaction, button):
+                if not await self.check_player(interaction): return
+                action_result["choix"] = 2; chosen_action.set(); self.stop()
+                await interaction.response.defer()
+
+            @ui.button(label="DÉFENSE", emoji="🛡️", style=discord.ButtonStyle.secondary, row=1)
+            async def btn_def(self, interaction, button):
+                if not await self.check_player(interaction): return
+                action_result["choix"] = 3; chosen_action.set(); self.stop()
+                await interaction.response.defer()
+
+            @ui.button(label="SOIN", emoji="🌿", style=discord.ButtonStyle.success, row=1)
+            async def btn_heal(self, interaction, button):
+                if not await self.check_player(interaction): return
+                action_result["choix"] = 4; chosen_action.set(); self.stop()
+                await interaction.response.defer()
+
+            @ui.button(label="ESQUIVE", emoji="💨", style=discord.ButtonStyle.secondary, row=1)
+            async def btn_dodge(self, interaction, button):
+                if not await self.check_player(interaction): return
+                action_result["choix"] = 5; chosen_action.set(); self.stop()
+                await interaction.response.defer()
+
+            async def on_timeout(self):
+                action_result["choix"] = 0
+                chosen_action.set()
+
+        view = ArenaButtons()
+        f = discord.File(io.BytesIO(img_bytes), filename="arena.png")
+        if combat_msg:
+            try: await combat_msg.delete()
+            except: pass
+        combat_msg = await ctx.send(
+            content=f"🎮 {attaquant['membre'].mention} — **À toi de jouer !**",
+            file=f, view=view
+        )
 
         try:
-            reaction, _ = await bot.wait_for("reaction_add", timeout=30.0, check=check_reaction)
-            choix = REACTIONS.index(str(reaction.emoji))
+            await asyncio.wait_for(chosen_action.wait(), timeout=36)
         except asyncio.TimeoutError:
+            action_result["choix"] = 0
+
+        choix = action_result["choix"]
+
+        # Si pas assez d'END → attaque normale forcée
+        if not enough_end(choix):
             choix = 0
 
-        # Forcer attaque normale si endurance insuffisante
-        cout = COUT_END[choix]
-        if attaquant["end"] < cout:
-            choix = 0
-            cout = COUT_END[0]
-            forced_txt = " *(endurance insuffisante — attaque normale forcée !)*"
-        else:
-            forced_txt = ""
+        attaquant["end"] -= COUT_END.get(choix, 10)
+        attaquant["end"] = max(0, attaquant["end"])
 
-        attaquant["end"] = max(0, attaquant["end"] - cout)
+        action_txt = ""
+        sub_txt    = ""
+        flavor_txt = ""
 
-        # ── Résolution de l'action ───────────────────────────
-        atk_bonus = attaquant["atk_b"]
-        def_bonus  = defenseur["def_b"]
-
-        if choix == 0:  # Attaque normale
-            degats = random.randint(25, 40) + atk_bonus
-            if defenseur["esquive_active"]:
-                resultat = f"💨 **{defenseur['membre'].display_name}** esquive !"
-                defenseur["esquive_active"] = False
-            else:
-                if defenseur["defense_active"]:
-                    degats = max(1, (degats - def_bonus) // 2)
-                    defenseur["defense_active"] = False
-                else:
-                    degats = max(1, degats - def_bonus)
-                defenseur["hp"] = max(0, defenseur["hp"] - degats)
-                resultat = f"⚔️ **{attaquant['membre'].display_name}** attaque — **-{degats} HP** !{forced_txt}"
-
-        elif choix == 1:  # Attaque chargée
-            degats = random.randint(10, 65) + atk_bonus
-            if defenseur["esquive_active"]:
-                resultat = f"💨 **{defenseur['membre'].display_name}** esquive l'attaque chargée !"
-                defenseur["esquive_active"] = False
-            else:
-                if defenseur["defense_active"]:
-                    degats = max(1, (degats - def_bonus) // 2)
-                    defenseur["defense_active"] = False
-                else:
-                    degats = max(1, degats - def_bonus)
-                defenseur["hp"] = max(0, defenseur["hp"] - degats)
-                extra = " 🔥 ***COUP CRITIQUE !***" if degats >= 60 else (" 😬 *raté...*" if degats <= 15 else "")
-                resultat = f"💥 **{attaquant['membre'].display_name}** charge — **-{degats} HP** !{extra}"
-
-        elif choix == 2:  # Attaque spéciale
-            degats = random.randint(30, 50) + atk_bonus
-            if defenseur["esquive_active"]:
-                resultat = f"💨 **{defenseur['membre'].display_name}** esquive l'attaque spéciale !"
-                defenseur["esquive_active"] = False
-            else:
-                if defenseur["defense_active"]:
-                    degats = max(1, (degats - def_bonus) // 2)
-                    defenseur["defense_active"] = False
-                else:
-                    degats = max(1, degats - def_bonus)
-                defenseur["hp"] = max(0, defenseur["hp"] - degats)
-                resultat = f"🌀 **{attaquant['membre'].display_name}** — attaque spéciale — **-{degats} HP** !"
-
-        elif choix == 3:  # Défense
+        # ── Actions ───────────────────────────────────────────
+        if choix == 3:   # Défense
             attaquant["defense_active"] = True
-            resultat = f"🛡️ **{attaquant['membre'].display_name}** se défend — dégâts réduits de 50% ce tour !"
+            action_txt = "DÉFENSE !"
+            sub_txt    = "Dégâts réduits de 50% ce tour"
+            flavor_txt = f"{attaquant['carte'].get('nom','??')} prend position..."
 
-        elif choix == 4:  # Soin
+        elif choix == 4: # Soin
             soin = random.randint(15, 30)
             attaquant["hp"] = min(attaquant["hp_max"], attaquant["hp"] + soin)
-            resultat = f"🌿 **{attaquant['membre'].display_name}** se soigne — **+{soin} HP** !"
+            action_txt = f"SOIN — +{soin} HP"
+            sub_txt    = "L'énergie se régénère..."
+            flavor_txt = f"{attaquant['carte'].get('nom','??')} récupère !"
 
-        elif choix == 5:  # Esquive — SECRÈTE
+        elif choix == 5: # Esquive secrète
             attaquant["esquive_active"] = True
-            resultat = f"🌀 **{attaquant['membre'].display_name}** se concentre..."
-            # DM secret à l'attaquant uniquement
+            action_txt = "CONCENTRATION..."
+            sub_txt    = "???"
+            flavor_txt = "Quelque chose se prépare..."
             try:
                 await attaquant["membre"].send(
-                    f"🤫 **Esquive activée !** Ton adversaire ne sait pas que tu vas esquiver — il attaque dans le vide au prochain tour !"
+                    "🤫 **Esquive activée !** Ton adversaire ne sait pas — il attaquera dans le vide !"
                 )
-            except:
-                pass
+            except: pass
 
-        # ── Afficher résultat ────────────────────────────────
-        result_embed = build_result_embed(attaquant, defenseur, resultat, numero_tour)
-        await combat_msg.edit(embed=result_embed)
-        try: await combat_msg.clear_reactions()
-        except: pass
-        await asyncio.sleep(2)
+        else:  # Attaques 0, 1, 2
+            dmg_ranges = {0:(25,40), 1:(10,65), 2:(30,50)}
+            lo, hi = dmg_ranges.get(choix, (25,40))
+            base = random.randint(lo, hi)
 
-        # ── Victoire ? ───────────────────────────────────────
-        if defenseur["hp"] <= 0:
-            del active_arene[ctx.channel.id]
-            prize = random.randint(100, 250)
-            economy_data[str(attaquant["membre"].id)]["coins"] += prize
-            xp_data[str(attaquant["membre"].id)]["xp"] += 40
-            win_embed = discord.Embed(
-                title="🏆  FIN DU COMBAT  🏆",
-                description=(
-                    f"## {attaquant['membre'].display_name} remporte l'arène !\n\n"
-                    f"{barre_vie(attaquant)} **{attaquant['hp']} / {attaquant['hp_max']} HP restants**\n\n"
-                    f"💰 **+{prize} pièces** • ⭐ **+40 XP**\n\n"
-                    f"*{defenseur['membre'].display_name} s'effondre... 💀*"
-                ),
-                color=0xf1c40f
-            )
-            win_embed.set_footer(text="⚔️ Arène PvP — QG Kdrama")
-            await ctx.send(embed=win_embed)
-            return
+            # Critique
+            critique = random.random() < 0.12
+            if critique: base = int(base * 1.5)
 
-        numero_tour += 1
+            # Bonus/malus stats
+            base += attaquant["atk_b"]
+            base = max(1, base - defenseur["def_b"])
 
-    if combat_msg:
-        try: await combat_msg.clear_reactions()
-        except: pass
-    """⚔️ Combat PvP en arène ! — .arene @joueur"""
-    if SALON_DUEL_ID and ctx.channel.id != SALON_DUEL_ID:
-        salon = ctx.guild.get_channel(SALON_DUEL_ID)
-        mention = salon.mention if salon else "le salon duel"
-        return await ctx.send(f"⚔️ L'arène c'est dans {mention} !", delete_after=5)
-    if not adversaire:
-        return await ctx.send("❌ Mentionne un adversaire ! Ex: `.arene @ami`")
-    if adversaire.bot or adversaire.id == ctx.author.id:
-        return await ctx.send("❌ Adversaire invalide !")
-    if ctx.channel.id in active_arene:
-        return await ctx.send("⚔️ Un combat est déjà en cours ici !")
-
-    # ── Invite ──────────────────────────────────────────────────
-    invite_embed = discord.Embed(
-        title="⚔️  DÉFI LANCÉ  ⚔️",
-        description=(
-            f"# {ctx.author.display_name}  ⚔️  {adversaire.display_name}\n\n"
-            f"{adversaire.mention} — tu as été défié par **{ctx.author.display_name}** !\n\n"
-            f"Réagis avec ✅ pour accepter ou ❌ pour refuser\n"
-            f"*Tu as 30 secondes pour répondre...*"
-        ),
-        color=0xe74c3c
-    )
-    invite_embed.set_footer(text="QG Kdrama — Arène PvP ⚔️")
-    invite_msg = await ctx.send(embed=invite_embed)
-    await invite_msg.add_reaction("✅")
-    await invite_msg.add_reaction("❌")
-
-    def check_invite(reaction, user):
-        return user.id == adversaire.id and reaction.message.id == invite_msg.id and str(reaction.emoji) in ["✅", "❌"]
-
-    try:
-        reaction, _ = await bot.wait_for("reaction_add", timeout=30.0, check=check_invite)
-        if str(reaction.emoji) == "❌":
-            await invite_msg.delete()
-            return await ctx.send(embed=discord.Embed(
-                description=f"💔 **{adversaire.display_name}** a refusé le défi...",
-                color=0x555555
-            ))
-    except asyncio.TimeoutError:
-        await invite_msg.delete()
-        return await ctx.send(embed=discord.Embed(
-            description=f"⏰ **{adversaire.display_name}** n'a pas répondu — défi annulé.",
-            color=0x555555
-        ))
-
-    await invite_msg.delete()
-
-    # ── Setup combat ────────────────────────────────────────────
-    HP_MAX = 250
-    active_arene[ctx.channel.id] = True
-
-    joueurs = [
-        {"membre": ctx.author,  "hp": HP_MAX, "esquive_active": False},
-        {"membre": adversaire,  "hp": HP_MAX, "esquive_active": False},
-    ]
-    tour = 0  # index du joueur actif
-
-    def barre_vie(hp, hp_max=HP_MAX):
-        ratio = hp / hp_max
-        filled = int(ratio * 10)
-        empty = 10 - filled
-        if ratio > 0.6:   couleur = "🟩"
-        elif ratio > 0.3: couleur = "🟨"
-        else:             couleur = "🟥"
-        return couleur * filled + "⬛" * empty
-
-    def build_combat_embed(attaquant, defenseur, resultat_txt, numero_tour):
-        j1, j2 = joueurs[0], joueurs[1]
-        pct1 = j1["hp"] / HP_MAX
-        pct2 = j2["hp"] / HP_MAX
-
-        embed = discord.Embed(
-            title=f"⚔️  {joueurs[0]['membre'].display_name}  VS  {joueurs[1]['membre'].display_name}",
-            color=0xe74c3c
-        )
-
-        # Barres de vie
-        embed.add_field(
-            name=f"{'▶️ ' if attaquant == j1 else ''}🔴 {j1['membre'].display_name}",
-            value=(
-                f"{barre_vie(j1['hp'])}\n"
-                f"**{j1['hp']} / {HP_MAX} HP** {'💀' if j1['hp'] <= 0 else '❤️' if pct1 > 0.5 else '🩸'}"
-            ),
-            inline=True
-        )
-        embed.add_field(name="\u200b", value="\u200b", inline=True)
-        embed.add_field(
-            name=f"{'▶️ ' if attaquant == j2 else ''}🔵 {j2['membre'].display_name}",
-            value=(
-                f"{barre_vie(j2['hp'])}\n"
-                f"**{j2['hp']} / {HP_MAX} HP** {'💀' if j2['hp'] <= 0 else '❤️' if pct2 > 0.5 else '🩸'}"
-            ),
-            inline=True
-        )
-
-        # Résultat du tour
-        embed.add_field(
-            name=f"⚡ Tour {numero_tour}",
-            value=f">>> {resultat_txt}",
-            inline=False
-        )
-
-        return embed
-
-    def build_action_embed(joueur_actif, adversaire_j, numero_tour):
-        j1, j2 = joueurs[0], joueurs[1]
-        pct1 = j1["hp"] / HP_MAX
-        pct2 = j2["hp"] / HP_MAX
-
-        embed = discord.Embed(
-            title=f"⚔️  {joueurs[0]['membre'].display_name}  VS  {joueurs[1]['membre'].display_name}",
-            description=(
-                f"**Choisis ton attaque avec les réactions ci-dessous !**\n"
-                f"*Tu as **30 secondes** pour agir...*"
-            ),
-            color=0x9b59b6
-        )
-
-        embed.add_field(
-            name=f"🔴 {j1['membre'].display_name}",
-            value=(
-                f"{barre_vie(j1['hp'])}\n"
-                f"**{j1['hp']} / {HP_MAX} HP** {'❤️' if pct1 > 0.5 else '🩸'}"
-            ),
-            inline=True
-        )
-        embed.add_field(name="\u200b", value="\u200b", inline=True)
-        embed.add_field(
-            name=f"🔵 {j2['membre'].display_name}",
-            value=(
-                f"{barre_vie(j2['hp'])}\n"
-                f"**{j2['hp']} / {HP_MAX} HP** {'❤️' if pct2 > 0.5 else '🩸'}"
-            ),
-            inline=True
-        )
-
-        embed.add_field(
-            name=f"▶️ Tour {numero_tour} — {joueur_actif['membre'].display_name} attaque !",
-            value=(
-                "1️⃣ ⚔️ **Attaque Normale** — dégâts stables *(25-40)*\n"
-                "2️⃣ 💥 **Attaque Chargée** — dégâts élevés mais imprécis *(10-65)*\n"
-                "3️⃣ 🌀 **Attaque Spéciale** — dégâts moyens garantis *(30-50)*\n"
-                "4️⃣ 🛡️ **Défense** — réduit les dégâts du prochain tour de 50%\n"
-                "5️⃣ 🌿 **Soin** — récupère 15-30 HP\n"
-                "6️⃣ 💨 **Esquive** — 60% de chance d'éviter la prochaine attaque"
-            ),
-            inline=False
-        )
-        embed.set_footer(text=f"⚔️ C'est au tour de {joueur_actif['membre'].display_name} !")
-        return embed
-
-    REACTIONS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣"]
-
-    # ── Écran de départ ─────────────────────────────────────────
-    start_embed = discord.Embed(
-        title="🏟️  COMBAT COMMENCE  🏟️",
-        description=(
-            f"## ⚔️  {ctx.author.display_name}  **VS**  {adversaire.display_name}  ⚔️\n\n"
-            f"🔴 **{ctx.author.display_name}** — {HP_MAX} HP\n"
-            f"🔵 **{adversaire.display_name}** — {HP_MAX} HP\n\n"
-            f"*{ctx.author.display_name} commence !*"
-        ),
-        color=0xe74c3c
-    )
-    await ctx.send(embed=start_embed)
-    await asyncio.sleep(2)
-
-    # ── Boucle de combat ────────────────────────────────────────
-    numero_tour = 1
-    combat_msg = None
-
-    while ctx.channel.id in active_arene:
-        attaquant = joueurs[tour % 2]
-        defenseur = joueurs[(tour + 1) % 2]
-
-        # Envoyer/modifier l'embed d'action
-        action_embed = build_action_embed(attaquant, defenseur, numero_tour)
-        if combat_msg:
-            try:
-                await combat_msg.clear_reactions()
-            except:
-                pass
-            await combat_msg.edit(embed=action_embed)
-        else:
-            combat_msg = await ctx.send(embed=action_embed)
-
-        for r in REACTIONS:
-            await combat_msg.add_reaction(r)
-
-        def check_reaction(reaction, user):
-            return (
-                user.id == attaquant["membre"].id
-                and reaction.message.id == combat_msg.id
-                and str(reaction.emoji) in REACTIONS
-            )
-
-        try:
-            reaction, _ = await bot.wait_for("reaction_add", timeout=30.0, check=check_reaction)
-            choix = REACTIONS.index(str(reaction.emoji))
-        except asyncio.TimeoutError:
-            # Attaque auto aléatoire
-            choix = 0
-
-        # ── Résolution de l'action ───────────────────────────
-        if choix == 0:  # Attaque normale
-            degats = random.randint(25, 40)
             if defenseur["esquive_active"]:
-                resultat = f"💨 **{defenseur['membre'].display_name}** esquive l'attaque normale !"
                 defenseur["esquive_active"] = False
+                action_txt = "ATTAQUE ESQUIVÉE !"
+                sub_txt    = "💨 Dans le vide !"
+                flavor_txt = f"{defenseur['carte'].get('nom','??')} disparaît au dernier instant..."
             else:
-                if hasattr(defenseur, 'defense_active') and defenseur.get("defense_active"):
-                    degats = degats // 2
+                if defenseur["defense_active"]:
+                    base = base // 2
                     defenseur["defense_active"] = False
-                defenseur["hp"] = max(0, defenseur["hp"] - degats)
-                resultat = f"⚔️ **{attaquant['membre'].display_name}** attaque — **-{degats} HP** à {defenseur['membre'].display_name} !"
 
-        elif choix == 1:  # Attaque chargée
-            degats = random.randint(10, 65)
-            if defenseur["esquive_active"]:
-                resultat = f"💨 **{defenseur['membre'].display_name}** esquive l'attaque chargée !"
-                defenseur["esquive_active"] = False
-            else:
-                defenseur["hp"] = max(0, defenseur["hp"] - degats)
-                resultat = f"💥 **{attaquant['membre'].display_name}** charge — **-{degats} HP** à {defenseur['membre'].display_name} !"
-                if degats >= 50:
-                    resultat += " 🔥 *COUP CRITIQUE !*"
-                elif degats <= 20:
-                    resultat += " 😬 *Attaque ratée...*"
+                defenseur["hp"] = max(0, defenseur["hp"] - base)
 
-        elif choix == 2:  # Attaque spéciale
-            degats = random.randint(30, 50)
-            if defenseur["esquive_active"]:
-                resultat = f"💨 **{defenseur['membre'].display_name}** esquive l'attaque spéciale !"
-                defenseur["esquive_active"] = False
-            else:
-                defenseur["hp"] = max(0, defenseur["hp"] - degats)
-                resultat = f"🌀 **{attaquant['membre'].display_name}** lance une attaque spéciale — **-{degats} HP** à {defenseur['membre'].display_name} !"
+                noms_atk = {0:"ATTAQUE", 1:"FRAPPE CHARGÉE", 2:"ATTAQUE SPÉCIALE"}
+                action_txt = f"{noms_atk.get(choix,'ATTAQUE')} — {base} DMG"
 
-        elif choix == 3:  # Défense
-            attaquant["defense_active"] = True
-            resultat = f"🛡️ **{attaquant['membre'].display_name}** se met en position défensive — dégâts réduits de 50% au prochain tour !"
+                if critique:
+                    sub_txt = "★ COUP CRITIQUE !"
+                else:
+                    sub_txt = ""
 
-        elif choix == 4:  # Soin
-            soin = random.randint(15, 30)
-            attaquant["hp"] = min(HP_MAX, attaquant["hp"] + soin)
-            resultat = f"🌿 **{attaquant['membre'].display_name}** se soigne — **+{soin} HP** !"
+                FLAVORS = [
+                    f"{defenseur['carte'].get('nom','??')} encaisse {base} dégâts !",
+                    f"L'impact résonne dans l'arène...",
+                    f"{attaquant['carte'].get('nom','??')} donne tout !",
+                    f"Une frappe dévastatrice — {base} dégâts !",
+                ]
+                flavor_txt = random.choice(FLAVORS)
 
-        elif choix == 5:  # Esquive — SECRÈTE
-            attaquant["esquive_active"] = True
-            resultat = f"🌀 **{attaquant['membre'].display_name}** se concentre..."
-            try:
-                await attaquant["membre"].send(
-                    f"🤫 **Esquive activée !** Ton adversaire ne sait pas que tu vas esquiver — il attaque dans le vide au prochain tour !"
-                )
-            except:
-                pass
-
-        # ── Afficher le résultat du tour ────────────────────
-        result_embed = build_combat_embed(attaquant, defenseur, resultat, numero_tour)
-        await combat_msg.edit(embed=result_embed)
-        try:
-            await combat_msg.clear_reactions()
-        except:
-            pass
-        await asyncio.sleep(2)
-
-        # ── Vérification victoire ────────────────────────────
+        # ── Vérif victoire ────────────────────────────────────
         if defenseur["hp"] <= 0:
-            del active_arene[ctx.channel.id]
-            prize = random.randint(100, 250)
-            economy_data[str(attaquant["membre"].id)]["coins"] += prize
-            xp_data[str(attaquant["membre"].id)]["xp"] += 40
+            defenseur["hp"] = 0
+            active_arene.pop(ctx.channel.id, None)
+            winner = attaquant["membre"]
+            loser  = defenseur["membre"]
 
-            win_embed = discord.Embed(
-                title="🏆  FIN DU COMBAT  🏆",
-                description=(
-                    f"## {attaquant['membre'].display_name} remporte l'arène !\n\n"
-                    f"{barre_vie(attaquant['hp'])} **{attaquant['hp']} HP restants**\n\n"
-                    f"💰 **+{prize} pièces** • ⭐ **+40 XP**\n\n"
-                    f"*{defenseur['membre'].display_name} s'effondre... 💀*"
-                ),
-                color=0xf1c40f
+            prize  = random.randint(100, 250)
+            xp_gain = 40
+            economy_data[str(winner.id)]["coins"] += prize
+            xp_data[str(winner.id)]["xp"]         += xp_gain
+
+            img_win = await gen_image(
+                action_txt="VICTOIRE !",
+                sub_txt=f"{winner.display_name} remporte l'arène !",
+                flavor_txt=f"+{prize} pièces • +{xp_gain} XP",
+                phase="win", winner_name=winner.display_name
             )
-            win_embed.set_footer(text="⚔️ Arène PvP — QG Kdrama")
-            await ctx.send(embed=win_embed)
+            if combat_msg:
+                try: await combat_msg.delete()
+                except: pass
+            if img_win:
+                f = discord.File(io.BytesIO(img_win), filename="arena.png")
+                await ctx.send(
+                    f"🏆 **{winner.mention}** remporte l'arène ! **+{prize} pièces & +{xp_gain} XP**",
+                    file=f
+                )
             return
 
-        # Tour suivant
-        tour += 1
-        numero_tour += 1
+        # ── Image résultat tour ───────────────────────────────
+        tour_num += 1
+        tour_idx  = 1 - tour_idx
 
-    # Si arène interrompue
-    if combat_msg:
-        try:
-            await combat_msg.clear_reactions()
-        except:
-            pass
-
-
-
-
-# ============================================================
-#  🃏 CARTES ANIMÉ — Système type Pokémon
-# ============================================================
-
-# Base de données des personnages avec stats + attaques uniques
-ANIME_CARDS_DB = {
-    # ═══ NARUTO ═══
-    "naruto": {
-        "nom": "Naruto Uzumaki", "serie": "Naruto", "emoji": "🍥",
-        "pv": 120, "attaque": 80, "defense": 60,
-        "rarete": "Légendaire",
-        "image": "https://i.imgur.com/2S8HWaq.jpg", "faiblesse": "⚡", "resistance": "🌊",
-        "attaques": [
-            {"nom": "Rasengan", "degats": 40, "emoji": "🌀", "desc": "Sphère de chakra concentrée"},
-            {"nom": "Mode Ermite", "degats": 65, "emoji": "🐸", "desc": "Puissance de la nature"},
-            {"nom": "Kurama — Mode Chakra", "degats": 90, "emoji": "🦊", "desc": "Fusion avec le Renard à 9 queues !"},
-        ]
-    },
-    "sasuke": {
-        "nom": "Sasuke Uchiha", "serie": "Naruto", "emoji": "⚡",
-        "pv": 110, "attaque": 85, "defense": 65,
-        "rarete": "Légendaire",
-        "image": "https://i.imgur.com/AN6W4g6.jpg", "faiblesse": "🌊", "resistance": "🔥",
-        "attaques": [
-            {"nom": "Chidori", "degats": 50, "emoji": "⚡", "desc": "Foudre concentrée dans la main"},
-            {"nom": "Sharingan", "degats": 35, "emoji": "👁️", "desc": "Copie l'attaque suivante de l'ennemi"},
-            {"nom": "Amaterasu", "degats": 80, "emoji": "🔥", "desc": "Flammes noires inextinguibles !"},
-        ]
-    },
-    "itachi": {
-        "nom": "Itachi Uchiha", "serie": "Naruto", "emoji": "🌙",
-        "pv": 100, "attaque": 90, "defense": 70,
-        "rarete": "Légendaire", "image": "https://i.imgur.com/UIA8L7u.jpg", "faiblesse": "💨", "resistance": "🔥",
-        "attaques": [
-            {"nom": "Tsukuyomi", "degats": 55, "emoji": "🌙", "desc": "Genjutsu dévastateur"},
-            {"nom": "Susanoo", "degats": 75, "emoji": "🗡️", "desc": "Armure de chakra gigantesque"},
-            {"nom": "Izanami", "degats": 85, "emoji": "👁️", "desc": "Boucle sensorielle infinie !"},
-        ]
-    },
-    # ═══ DEMON SLAYER ═══
-    "tanjiro": {
-        "nom": "Tanjiro Kamado", "serie": "Demon Slayer", "emoji": "💧",
-        "pv": 105, "attaque": 75, "defense": 70,
-        "rarete": "Légendaire",
-        "image": "https://i.imgur.com/RmLMZaP.jpg", "faiblesse": "⚡", "resistance": "💧",
-        "attaques": [
-            {"nom": "Respiration de l'Eau", "degats": 40, "emoji": "🌊", "desc": "Flux constant et puissant"},
-            {"nom": "Danse des Flammes", "degats": 60, "emoji": "🔥", "desc": "Forme du soleil hinokami"},
-            {"nom": "Kagura Hinokami", "degats": 85, "emoji": "☀️", "desc": "Technique ancestrale ultime !"},
-        ]
-    },
-    "zenitsu": {
-        "nom": "Zenitsu Agatsuma", "serie": "Demon Slayer", "emoji": "⚡",
-        "pv": 90, "attaque": 88, "defense": 45,
-        "rarete": "Épique",
-        "image": "https://i.imgur.com/xBnRNSv.jpg", "faiblesse": "🌊", "resistance": "⚡",
-        "attaques": [
-            {"nom": "Tonnerre — 1ère Forme", "degats": 70, "emoji": "⚡", "desc": "Vitesse de l'éclair endormi"},
-            {"nom": "Dieu du Tonnerre", "degats": 55, "emoji": "🌩️", "desc": "Frappe multiple ultrarapide"},
-            {"nom": "Tonnerre Godspeed", "degats": 95, "emoji": "💫", "desc": "Vitesse absolue, forme ultime !"},
-        ]
-    },
-    "inosuke": {
-        "nom": "Inosuke Hashibira", "serie": "Demon Slayer", "emoji": "🐗",
-        "pv": 115, "attaque": 78, "defense": 80,
-        "rarete": "Rare", "faiblesse": "🔥", "resistance": "💨",
-        "attaques": [
-            {"nom": "Respiration de la Bête", "degats": 45, "emoji": "🐗", "desc": "Attaque sauvage et imprévisible"},
-            {"nom": "Griffe du Sanglier", "degats": 60, "emoji": "⚔️", "desc": "Double lame déchirante"},
-            {"nom": "Tempête du Sanglier", "degats": 80, "emoji": "🌪️", "desc": "Tourbillon de lames dévastateur !"},
-        ]
-    },
-    # ═══ ATTACK ON TITAN ═══
-    "levi": {
-        "nom": "Levi Ackerman", "serie": "Attack on Titan", "emoji": "⚔️",
-        "pv": 95, "attaque": 97, "defense": 75,
-        "rarete": "Légendaire",
-        "image": "https://i.imgur.com/cvXCIWl.jpg", "faiblesse": "🔥", "resistance": "⚡",
-        "attaques": [
-            {"nom": "ODM — Frappe Éclair", "degats": 55, "emoji": "🗡️", "desc": "Vitesse surhumaine avec les câbles"},
-            {"nom": "Tornade Levi", "degats": 75, "emoji": "🌀", "desc": "Rotation à 360° dévastateur"},
-            {"nom": "Frappe du Capitaine", "degats": 95, "emoji": "⚔️", "desc": "L'humain le plus fort de l'humanité !"},
-        ]
-    },
-    "eren": {
-        "nom": "Eren Yeager", "serie": "Attack on Titan", "emoji": "👹",
-        "pv": 130, "attaque": 82, "defense": 85,
-        "rarete": "Légendaire",
-        "image": "https://i.imgur.com/BE73Bud.jpg", "faiblesse": "⚡", "resistance": "🌊",
-        "attaques": [
-            {"nom": "Transformation Titan", "degats": 60, "emoji": "💥", "desc": "Explosion de vapeur au contact"},
-            {"nom": "Titan Assaillant", "degats": 75, "emoji": "👊", "desc": "Frappe de titan dévastatrice"},
-            {"nom": "Rugissement de la Terre", "degats": 100, "emoji": "🌍", "desc": "Le Grondement — titans infinis !"},
-        ]
-    },
-    # ═══ JUJUTSU KAISEN ═══
-    "gojo": {
-        "nom": "Satoru Gojo", "serie": "Jujutsu Kaisen", "emoji": "♾️",
-        "pv": 140, "attaque": 99, "defense": 99,
-        "rarete": "Mythique",
-        "image": "https://i.imgur.com/7n8Gmn3.jpg", "faiblesse": "🌙", "resistance": "♾️",
-        "attaques": [
-            {"nom": "Infini", "degats": 0, "emoji": "🛡️", "desc": "Réduit les dégâts reçus de 50% ce tour"},
-            {"nom": "Blue — Attraction", "degats": 65, "emoji": "💙", "desc": "Technique de l'infini inversé"},
-            {"nom": "Hollow Purple", "degats": 110, "emoji": "💜", "desc": "Fusion Red + Blue — attaque ultime !"},
-        ]
-    },
-    "yuji": {
-        "nom": "Yuji Itadori", "serie": "Jujutsu Kaisen", "emoji": "💪",
-        "pv": 125, "attaque": 83, "defense": 78,
-        "rarete": "Légendaire",
-        "image": "https://i.imgur.com/wxIT2y4.jpg", "faiblesse": "💨", "resistance": "💪",
-        "attaques": [
-            {"nom": "Divergent Fist", "degats": 50, "emoji": "👊", "desc": "Double impact de malédiction"},
-            {"nom": "Black Flash", "degats": 70, "emoji": "⚡", "desc": "Distorsion de l'espace-temps"},
-            {"nom": "Sukuna — Malédiction", "degats": 90, "emoji": "👹", "desc": "Pouvoir du roi des malédictions !"},
-        ]
-    },
-    # ═══ ONE PIECE ═══
-    "luffy": {
-        "nom": "Monkey D. Luffy", "serie": "One Piece", "emoji": "🏴‍☠️",
-        "pv": 130, "attaque": 88, "defense": 72,
-        "rarete": "Légendaire",
-        "image": "https://i.imgur.com/WaXKIPM.jpg", "faiblesse": "⚡", "resistance": "💧",
-        "attaques": [
-            {"nom": "Gomu Gomu no Pistol", "degats": 40, "emoji": "👊", "desc": "Poing élastique propulsé"},
-            {"nom": "Gear Third — Giant", "degats": 70, "emoji": "💥", "desc": "Membre gonflé à l'os"},
-            {"nom": "Gear Fifth — Nika", "degats": 100, "emoji": "☀️", "desc": "Forme du Dieu du Soleil !"},
-        ]
-    },
-    "zoro": {
-        "nom": "Roronoa Zoro", "serie": "One Piece", "emoji": "⚔️",
-        "pv": 115, "attaque": 92, "defense": 80,
-        "rarete": "Légendaire",
-        "image": "https://i.imgur.com/Nr66sRV.jpg", "faiblesse": "🔥", "resistance": "⚡",
-        "attaques": [
-            {"nom": "Oni Giri", "degats": 45, "emoji": "⚔️", "desc": "Slash triple simultané"},
-            {"nom": "108 Pound Cannon", "degats": 65, "emoji": "💨", "desc": "Vague de tranchant comprimée"},
-            {"nom": "Ashura — 9 Lames", "degats": 90, "emoji": "👹", "desc": "Forme démon à neuf sabres !"},
-        ]
-    },
-    # ═══ DRAGON BALL ═══
-    "goku": {
-        "nom": "Son Goku", "serie": "Dragon Ball Z", "emoji": "🐉",
-        "pv": 140, "attaque": 98, "defense": 85,
-        "rarete": "Mythique",
-        "image": "https://i.imgur.com/YbSpxzS.jpg", "faiblesse": "🌙", "resistance": "⚡",
-        "attaques": [
-            {"nom": "Kamehameha", "degats": 60, "emoji": "💙", "desc": "Vague d'énergie légendaire"},
-            {"nom": "Super Saiyan", "degats": 75, "emoji": "⚡", "desc": "Transformation dorée surpuissante"},
-            {"nom": "Ultra Instinct", "degats": 105, "emoji": "🌟", "desc": "Mouvement sans pensée — forme divine !"},
-        ]
-    },
-    "vegeta": {
-        "nom": "Vegeta", "serie": "Dragon Ball Z", "emoji": "👑",
-        "pv": 130, "attaque": 94, "defense": 80,
-        "rarete": "Légendaire",
-        "image": "https://i.imgur.com/ld1LPss.jpg", "faiblesse": "🌙", "resistance": "🔥",
-        "attaques": [
-            {"nom": "Big Bang Attack", "degats": 55, "emoji": "💥", "desc": "Sphère d'énergie explosive"},
-            {"nom": "Final Flash", "degats": 80, "emoji": "⚡", "desc": "Tout son Ki concentré en un tir"},
-            {"nom": "Super Saiyan Blue", "degats": 100, "emoji": "💙", "desc": "Fusion Ki divin + Saiyan !"},
-        ]
-    },
-    # ═══ FMA ═══
-    "edward": {
-        "nom": "Edward Elric", "serie": "FMA Brotherhood", "emoji": "⚗️",
-        "pv": 100, "attaque": 80, "defense": 68,
-        "rarete": "Épique", "faiblesse": "💧", "resistance": "⚗️",
-        "attaques": [
-            {"nom": "Lance Alchimique", "degats": 40, "emoji": "⚗️", "desc": "Transmutation express en lance"},
-            {"nom": "Armure de Métal", "degats": 30, "emoji": "🛡️", "desc": "Bouclier + contre-attaque"},
-            {"nom": "Transmutation Ultime", "degats": 85, "emoji": "✨", "desc": "Alchimie sans cercle — pouvoir des portes !"},
-        ]
-    },
-    # ═══ DEATH NOTE ═══
-    "light": {
-        "nom": "Light Yagami", "serie": "Death Note", "emoji": "📓",
-        "pv": 80, "attaque": 70, "defense": 55,
-        "rarete": "Épique", "faiblesse": "💡", "resistance": "🌙",
-        "attaques": [
-            {"nom": "Manipulation Mentale", "degats": 35, "emoji": "🧠", "desc": "Réduit l'attaque adverse de 20%"},
-            {"nom": "Death Note", "degats": 60, "emoji": "📓", "desc": "Inscription du nom — dégâts directs"},
-            {"nom": "Plan Kira", "degats": 80, "emoji": "👑", "desc": "Stratégie parfaite, aucune issue !"},
-        ]
-    },
-    # ═══ COMMUNS ═══
-    "krillin": {
-        "nom": "Krillin", "serie": "Dragon Ball Z", "emoji": "🥚",
-        "pv": 70, "attaque": 45, "defense": 40,
-        "rarete": "Commun", "faiblesse": "⚡", "resistance": "💧",
-        "attaques": [
-            {"nom": "Kienzan", "degats": 35, "emoji": "💿", "desc": "Disque tranchant en énergie"},
-            {"nom": "Kamehameha", "degats": 25, "emoji": "💙", "desc": "Version mini du maître"},
-            {"nom": "Destructo Disc", "degats": 45, "emoji": "⚡", "desc": "Lancer de disque ultime !"},
-        ]
-    },
-    "usopp": {
-        "nom": "Usopp", "serie": "One Piece", "emoji": "🎯",
-        "pv": 75, "attaque": 50, "defense": 35,
-        "rarete": "Commun", "faiblesse": "🔥", "resistance": "💨",
-        "attaques": [
-            {"nom": "Tir de Fronde", "degats": 30, "emoji": "🎯", "desc": "Précision de tireur d'élite"},
-            {"nom": "Feu de Pop-Green", "degats": 40, "emoji": "🌿", "desc": "Plante explosive"},
-            {"nom": "Atlas Comet", "degats": 55, "emoji": "💫", "desc": "Tir de sniper légendaire !"},
-        ]
-    },
-
-    # ═══ BLEACH ═══
-    "ichigo": {
-        "nom": "Ichigo Kurosaki", "serie": "Bleach", "emoji": "🌙",
-        "pv": 130, "attaque": 93, "defense": 78,
-        "rarete": "Légendaire",
-        "image": "https://i.imgur.com/tGmGlBB.jpg", "faiblesse": "⚡", "resistance": "🌙",
-        "attaques": [
-            {"nom": "Getsuga Tensho", "degats": 60, "emoji": "🌙", "desc": "Vague de lune tranchante"},
-            {"nom": "Bankai — Tensa Zangetsu", "degats": 80, "emoji": "⚫", "desc": "Vitesse et puissance décuplées"},
-            {"nom": "Forme Hollow", "degats": 100, "emoji": "💀", "desc": "Puissance instinctive du Hollow !"},
-        ]
-    },
-
-    # ═══ ATTACK ON TITAN ═══
-    "mikasa": {
-        "nom": "Mikasa Ackerman", "serie": "Attack on Titan", "emoji": "🔴",
-        "pv": 100, "attaque": 92, "defense": 80,
-        "rarete": "Épique",
-        "image": "https://i.imgur.com/vwLKjUw.jpg", "faiblesse": "🔥", "resistance": "⚡",
-        "attaques": [
-            {"nom": "ODM Précision", "degats": 55, "emoji": "🗡️", "desc": "Frappe chirurgicale ultrarapide"},
-            {"nom": "Instinct Ackerman", "degats": 70, "emoji": "🔴", "desc": "Éveil du pouvoir ancestral"},
-            {"nom": "Lame Finale", "degats": 90, "emoji": "⚔️", "desc": "Détermination absolue — aucune pitié !"},
-        ]
-    },
-
-    # ═══ ONE PUNCH MAN ═══
-    "saitama": {
-        "nom": "Saitama", "serie": "One Punch Man", "emoji": "👊",
-        "pv": 999, "attaque": 100, "defense": 100,
-        "rarete": "Mythique", "faiblesse": "😴", "resistance": "💥",
-        "attaques": [
-            {"nom": "Coup Normal", "degats": 50, "emoji": "👊", "desc": "Un simple coup... ou pas ?"},
-            {"nom": "Coup Sérieux", "degats": 85, "emoji": "💥", "desc": "Il se donne vraiment cette fois"},
-            {"nom": "Punch Consécutif", "degats": 110, "emoji": "⚡", "desc": "Série infinie de coups devastateurs !"},
-        ]
-    },
-
-    # ═══ DEATH NOTE ═══
-    "l": {
-        "nom": "L Lawliet", "serie": "Death Note", "emoji": "🍬",
-        "pv": 75, "attaque": 65, "defense": 50,
-        "rarete": "Rare", "faiblesse": "🌙", "resistance": "🧠",
-        "attaques": [
-            {"nom": "Déduction Logique", "degats": 30, "emoji": "🧠", "desc": "Réduit l'attaque adverse de 25%"},
-            {"nom": "Piège Mental", "degats": 50, "emoji": "🍬", "desc": "Stratégie imparable à 99%"},
-            {"nom": "Kira Identifié", "degats": 75, "emoji": "🔍", "desc": "Le plus grand détective du monde frappe !"},
-        ]
-    },
-
-    # ═══ DEMON SLAYER ═══
-    "nezuko": {
-        "nom": "Nezuko Kamado", "serie": "Demon Slayer", "emoji": "🎋",
-        "pv": 110, "attaque": 78, "defense": 72,
-        "rarete": "Épique",
-        "image": "https://i.imgur.com/n9kTXuX.jpg", "faiblesse": "☀️", "resistance": "🔥",
-        "attaques": [
-            {"nom": "Sang Explosif", "degats": 55, "emoji": "🔥", "desc": "Flammes de sang démoniaques"},
-            {"nom": "Coup de Pied Démon", "degats": 65, "emoji": "🎋", "desc": "Force démoniaque décuplée"},
-            {"nom": "Forme Démon Adulte", "degats": 85, "emoji": "💥", "desc": "Puissance de démon à son maximum !"},
-        ]
-    },
-
-    # ═══ NARUTO ═══
-    "sakura": {
-        "nom": "Sakura Haruno", "serie": "Naruto", "emoji": "🌸",
-        "pv": 105, "attaque": 75, "defense": 85,
-        "rarete": "Commun", "faiblesse": "⚡", "resistance": "💪",
-        "attaques": [
-            {"nom": "Poing Chakra", "degats": 55, "emoji": "👊", "desc": "Frappe au chakra concentré"},
-            {"nom": "Soin Médical", "degats": -30, "emoji": "💚", "desc": "Soigne 30 HP — technique médicale ninja"},
-            {"nom": "Cent Frappe", "degats": 85, "emoji": "💥", "desc": "Stockage de chakra ultime — frappe titanesque !"},
-        ]
-    },
-    "kakashi": {
-        "nom": "Kakashi Hatake", "serie": "Naruto", "emoji": "📖",
-        "pv": 105, "attaque": 88, "defense": 78,
-        "rarete": "Légendaire", "image": "https://i.imgur.com/XcHGLHb.jpg", "faiblesse": "🌊", "resistance": "⚡",
-        "attaques": [
-            {"nom": "Chidori", "degats": 55, "emoji": "⚡", "desc": "Mille oiseaux — foudre dans la main"},
-            {"nom": "Sharingan Copié", "degats": 65, "emoji": "👁️", "desc": "Copie parfaite de l'attaque adverse"},
-            {"nom": "Kamui", "degats": 90, "emoji": "🌀", "desc": "Téléportation dimensionnelle dévastatrice !"},
-        ]
-    },
-
-    # ═══ HUNTER X HUNTER ═══
-    "killua": {
-        "nom": "Killua Zoldyck", "serie": "Hunter x Hunter", "emoji": "⚡",
-        "pv": 100, "attaque": 90, "defense": 75,
-        "rarete": "Légendaire",
-        "image": "https://i.imgur.com/T0BJceE.jpg", "faiblesse": "🔥", "resistance": "⚡",
-        "attaques": [
-            {"nom": "Narukami", "degats": 55, "emoji": "⚡", "desc": "Foudre Nen ultrarapide"},
-            {"nom": "Godspeed", "degats": 75, "emoji": "💨", "desc": "Vitesse divine — invisible à l'œil nu"},
-            {"nom": "Lightning Palm", "degats": 90, "emoji": "🌩️", "desc": "Décharge électrique maximale !"},
-        ]
-    },
-    "gon": {
-        "nom": "Gon Freecss", "serie": "Hunter x Hunter", "emoji": "🌿",
-        "pv": 115, "attaque": 82, "defense": 70,
-        "rarete": "Épique",
-        "image": "https://i.imgur.com/JEAkcm9.jpg", "faiblesse": "⚡", "resistance": "🌿",
-        "attaques": [
-            {"nom": "Jajanken — Rock", "degats": 50, "emoji": "✊", "desc": "Poing Nen concentré"},
-            {"nom": "Jajanken — Paper", "degats": 60, "emoji": "✋", "desc": "Rayon de Nen à longue portée"},
-            {"nom": "Forme Adulte Gon", "degats": 105, "emoji": "💥", "desc": "Tout sacrifier pour une puissance absolue !"},
-        ]
-    },
-    "kurapika": {
-        "nom": "Kurapika", "serie": "Hunter x Hunter", "emoji": "🔴",
-        "pv": 95, "attaque": 85, "defense": 68,
-        "rarete": "Rare", "faiblesse": "💨", "resistance": "🔴",
-        "attaques": [
-            {"nom": "Chaînes Nen", "degats": 50, "emoji": "⛓️", "desc": "Chaînes de Nen impénétrables"},
-            {"nom": "Jugement Éternel", "degats": 70, "emoji": "🔴", "desc": "Loi absolue — la mort au moindre mensonge"},
-            {"nom": "Œil Écarlate", "degats": 90, "emoji": "👁️", "desc": "Puissance maximale contre les Genei Ryodan !"},
-        ]
-    },
-    "hisoka": {
-        "nom": "Hisoka", "serie": "Hunter x Hunter", "emoji": "🃏",
-        "pv": 120, "attaque": 92, "defense": 80,
-        "rarete": "Légendaire",
-        "image": "https://i.imgur.com/AdQSiCd.jpg", "faiblesse": "🌊", "resistance": "🃏",
-        "attaques": [
-            {"nom": "Bungee Gum", "degats": 55, "emoji": "🎈", "desc": "Élasticité et adhérence combinées"},
-            {"nom": "Texture Surprise", "degats": 40, "emoji": "🃏", "desc": "Illusion parfaite — réduit la défense adverse"},
-            {"nom": "Frappe du Magicien", "degats": 88, "emoji": "✨", "desc": "Puissance dévastatrice du magicien !"},
-        ]
-    },
-
-    # ═══ FMA ═══
-    "alphonse": {
-        "nom": "Alphonse Elric", "serie": "FMA Brotherhood", "emoji": "🛡️",
-        "pv": 130, "attaque": 72, "defense": 95,
-        "rarete": "Rare", "faiblesse": "⚡", "resistance": "🛡️",
-        "attaques": [
-            {"nom": "Armure de Métal", "degats": 35, "emoji": "🛡️", "desc": "Frappe avec son armure gigantesque"},
-            {"nom": "Transmutation Défensive", "degats": 50, "emoji": "⚗️", "desc": "Transforme le sol en piège"},
-            {"nom": "Frappe d'Armure", "degats": 70, "emoji": "💥", "desc": "Toute la force d'une armure vivante !"},
-        ]
-    },
-    "roy": {
-        "nom": "Roy Mustang", "serie": "FMA Brotherhood", "emoji": "🔥",
-        "pv": 95, "attaque": 88, "defense": 65,
-        "rarete": "Rare", "faiblesse": "🌊", "resistance": "🔥",
-        "attaques": [
-            {"nom": "Claquement de Doigts", "degats": 45, "emoji": "🔥", "desc": "Étincelle alchimique instantanée"},
-            {"nom": "Mur de Flammes", "degats": 65, "emoji": "🔥", "desc": "Barrière enflammée dévastratrice"},
-            {"nom": "Soleil Ardent", "degats": 90, "emoji": "☀️", "desc": "Tout incinérer — l'Alchimiste de Flamme !"},
-        ]
-    },
-
-    # ═══ FAIRY TAIL ═══
-    "natsu": {
-        "nom": "Natsu Dragneel", "serie": "Fairy Tail", "emoji": "🔥",
-        "pv": 120, "attaque": 85, "defense": 70,
-        "rarete": "Épique", "faiblesse": "🌊", "resistance": "🔥",
-        "attaques": [
-            {"nom": "Rugissement du Dragon Ardent", "degats": 50, "emoji": "🔥", "desc": "Souffle de feu dévastateur"},
-            {"nom": "Poing de Flamme", "degats": 65, "emoji": "👊", "desc": "Frappe enflammée explosive"},
-            {"nom": "Mode Dragon Force", "degats": 95, "emoji": "🐲", "desc": "Transformation ultime du tueur de dragon !"},
-        ]
-    },
-    "erza": {
-        "nom": "Erza Scarlet", "serie": "Fairy Tail", "emoji": "⚔️",
-        "pv": 115, "attaque": 90, "defense": 88,
-        "rarete": "Légendaire", "image": "https://i.imgur.com/VGa6MhQ.jpg", "faiblesse": "⚡", "resistance": "⚔️",
-        "attaques": [
-            {"nom": "Armure du Paradis", "degats": 55, "emoji": "🛡️", "desc": "Armure la plus puissante de Fairy Tail"},
-            {"nom": "Cent Épées", "degats": 75, "emoji": "⚔️", "desc": "Pluie de lames simultanées"},
-            {"nom": "Robe de la Déesse", "degats": 95, "emoji": "✨", "desc": "Armure divine — puissance absolue !"},
-        ]
-    },
-    "lucy": {
-        "nom": "Lucy Heartfilia", "serie": "Fairy Tail", "emoji": "⭐",
-        "pv": 90, "attaque": 70, "defense": 60,
-        "rarete": "Rare", "faiblesse": "💨", "resistance": "⭐",
-        "attaques": [
-            {"nom": "Invocation — Taurus", "degats": 45, "emoji": "🐂", "desc": "L'Esprit du Taureau"},
-            {"nom": "Invocation — Scorpio", "degats": 55, "emoji": "🦂", "desc": "Tempête de sable dévastratrice"},
-            {"nom": "Porte des Étoiles", "degats": 80, "emoji": "⭐", "desc": "Tous les esprits en même temps !"},
-        ]
-    },
-
-    # ═══ JUJUTSU KAISEN ═══
-    "megumi": {
-        "nom": "Megumi Fushiguro", "serie": "Jujutsu Kaisen", "emoji": "🐺",
-        "pv": 100, "attaque": 80, "defense": 75,
-        "rarete": "Épique",
-        "image": "https://i.imgur.com/1HX2ImD.jpg", "faiblesse": "🔥", "resistance": "🌙",
-        "attaques": [
-            {"nom": "Chien de Divine", "degats": 45, "emoji": "🐺", "desc": "Invocation du chien maléfique"},
-            {"nom": "Serpent Ailé", "degats": 60, "emoji": "🐍", "desc": "Invocation du serpent divin"},
-            {"nom": "Terrain de Jeu de Mahamudra", "degats": 85, "emoji": "♟️", "desc": "Domaine expansif — pièces infernales !"},
-        ]
-    },
-    "nobara": {
-        "nom": "Nobara Kugisaki", "serie": "Jujutsu Kaisen", "emoji": "🔨",
-        "pv": 95, "attaque": 78, "defense": 65,
-        "rarete": "Rare", "faiblesse": "💨", "resistance": "🔨",
-        "attaques": [
-            {"nom": "Marteau et Clou", "degats": 45, "emoji": "🔨", "desc": "Technique de base — dégâts directs"},
-            {"nom": "Résonance", "degats": 65, "emoji": "💥", "desc": "Dégâts sur le corps et l'âme"},
-            {"nom": "Barrage de Clous", "degats": 80, "emoji": "⚡", "desc": "Pluie de clous ensorcelés !"},
-        ]
-    },
-
-    # ═══ BLACK CLOVER ═══
-    "asta": {
-        "nom": "Asta", "serie": "Black Clover", "emoji": "⚔️",
-        "pv": 120, "attaque": 82, "defense": 80,
-        "rarete": "Épique",
-        "image": "https://i.imgur.com/zxT2yys.jpg", "faiblesse": "🌊", "resistance": "✨",
-        "attaques": [
-            {"nom": "Anti-Magie", "degats": 50, "emoji": "⚔️", "desc": "Annule toute magie adverse"},
-            {"nom": "Lame Noire", "degats": 65, "emoji": "⚫", "desc": "Épée imprégnée d'anti-magie"},
-            {"nom": "Forme Démon", "degats": 95, "emoji": "😈", "desc": "Fusion avec Liebe — puissance sans limites !"},
-        ]
-    },
-    "yuno": {
-        "nom": "Yuno", "serie": "Black Clover", "emoji": "💨",
-        "pv": 110, "attaque": 87, "defense": 72,
-        "rarete": "Épique",
-        "image": "https://i.imgur.com/R9lnjWa.jpg", "faiblesse": "🔥", "resistance": "💨",
-        "attaques": [
-            {"nom": "Esprit du Vent", "degats": 50, "emoji": "💨", "desc": "Sylphe — esprit du vent"},
-            {"nom": "Flèche de Tempête", "degats": 65, "emoji": "🌪️", "desc": "Tornade concentrée en flèche"},
-            {"nom": "Dieu du Vent", "degats": 90, "emoji": "⭐", "desc": "Forme divine — magie des étoiles !"},
-        ]
-    },
-    "noelle": {
-        "nom": "Noelle Silva", "serie": "Black Clover", "emoji": "🌊",
-        "pv": 105, "attaque": 80, "defense": 78,
-        "rarete": "Rare", "faiblesse": "⚡", "resistance": "🌊",
-        "attaques": [
-            {"nom": "Bouclier d'Eau", "degats": 30, "emoji": "🛡️", "desc": "Barrière d'eau — réduit dégâts reçus"},
-            {"nom": "Canon de Mer", "degats": 60, "emoji": "🌊", "desc": "Jet d'eau dévastateur"},
-            {"nom": "Valkyrie Dress", "degats": 88, "emoji": "💎", "desc": "Armure d'eau divine — puissance royale !"},
-        ]
-    },
-
-    # ═══ TENSURA ═══
-    "rimuru": {
-        "nom": "Rimuru Tempest", "serie": "Tensura", "emoji": "💧",
-        "pv": 135, "attaque": 92, "defense": 90,
-        "rarete": "Mythique", "image": "https://i.imgur.com/2kqDGwW.jpg", "faiblesse": "🌙", "resistance": "💧",
-        "attaques": [
-            {"nom": "Prédateur", "degats": 55, "emoji": "💧", "desc": "Absorbe et copie les capacités"},
-            {"nom": "Tempête Noire", "degats": 75, "emoji": "🌪️", "desc": "Magie ultime multiples éléments"},
-            {"nom": "Rimuru Divin", "degats": 100, "emoji": "✨", "desc": "Forme de Dieu — au-delà des limites !"},
-        ]
-    },
-
-    # ═══ SWORD ART ONLINE ═══
-    "kirito": {
-        "nom": "Kirito", "serie": "Sword Art Online", "emoji": "⚫",
-        "pv": 110, "attaque": 85, "defense": 75,
-        "rarete": "Épique", "image": "https://i.imgur.com/I2OwE8u.jpg", "faiblesse": "🌊", "resistance": "⚫",
-        "attaques": [
-            {"nom": "Vorpal Strike", "degats": 50, "emoji": "⚫", "desc": "Coup d'épée ultrarapide"},
-            {"nom": "Double Style", "degats": 65, "emoji": "⚔️", "desc": "Deux épées simultanées"},
-            {"nom": "Starburst Stream", "degats": 90, "emoji": "⭐", "desc": "16 coups consécutifs dévastateurs !"},
-        ]
-    },
-    "asuna": {
-        "nom": "Asuna Yuuki", "serie": "Sword Art Online", "emoji": "⚡",
-        "pv": 105, "attaque": 88, "defense": 70,
-        "rarete": "Rare", "faiblesse": "🔥", "resistance": "⚡",
-        "attaques": [
-            {"nom": "Linear", "degats": 50, "emoji": "⚡", "desc": "Estoc rectiligne à vitesse éclair"},
-            {"nom": "Quadruple Pain", "degats": 70, "emoji": "⚔️", "desc": "4 coups simultanés en une fraction de seconde"},
-            {"nom": "Flashing Penetrator", "degats": 90, "emoji": "💫", "desc": "La Fée de l'Éclair à pleine puissance !"},
-        ]
-    },
-
-    # ═══ SOLO LEVELING ═══
-    "jinwoo": {
-        "nom": "Sung Jinwoo", "serie": "Solo Leveling", "emoji": "🗡️",
-        "pv": 145, "attaque": 97, "defense": 92,
-        "rarete": "Légendaire",
-        "image": "https://i.imgur.com/cytYnaz.jpg", "faiblesse": "☀️", "resistance": "🌙",
-        "attaques": [
-            {"nom": "Dague de l'Ombre", "degats": 60, "emoji": "🗡️", "desc": "Vitesse et précision absolues"},
-            {"nom": "Armée des Ombres", "degats": 80, "emoji": "👥", "desc": "Invocation de soldats de l'ombre"},
-            {"nom": "Monarque des Ombres", "degats": 105, "emoji": "👑", "desc": "Pouvoir divin du Monarque !"},
-        ]
-    },
-
-    # ═══ STEINS;GATE ═══
-    "okabe": {
-        "nom": "Rintarou Okabe", "serie": "Steins;Gate", "emoji": "🧪",
-        "pv": 75, "attaque": 55, "defense": 50,
-        "rarete": "Rare", "faiblesse": "🌊", "resistance": "🧪",
-        "attaques": [
-            {"nom": "Reading Steiner", "degats": 35, "emoji": "🧠", "desc": "Mémoire des lignes temporelles"},
-            {"nom": "D-Mail", "degats": 45, "emoji": "📱", "desc": "Modifie la réalité via un SMS"},
-            {"nom": "El Psy Kongroo", "degats": 60, "emoji": "🧪", "desc": "Paradoxe temporel dévastateur !"},
-        ]
-    },
-    "kurisu": {
-        "nom": "Kurisu Makise", "serie": "Steins;Gate", "emoji": "🔬",
-        "pv": 70, "attaque": 60, "defense": 48,
-        "rarete": "Rare", "faiblesse": "💨", "resistance": "🔬",
-        "attaques": [
-            {"nom": "Génie Scientifique", "degats": 30, "emoji": "🔬", "desc": "Analyse et réduit la défense adverse"},
-            {"nom": "Théorie du Tout", "degats": 50, "emoji": "⚛️", "desc": "Attaque basée sur la physique quantique"},
-            {"nom": "Time Leap", "degats": 70, "emoji": "⏰", "desc": "Voyage temporel — esquive et contre-attaque !"},
-        ]
-    },
-
-    # ═══ RUROUNI KENSHIN ═══
-    "kenshin": {
-        "nom": "Kenshin Himura", "serie": "Rurouni Kenshin", "emoji": "🌸",
-        "pv": 100, "attaque": 90, "defense": 78,
-        "rarete": "Légendaire", "image": "https://i.imgur.com/6pVtY0C.jpg", "faiblesse": "💥", "resistance": "🌸",
-        "attaques": [
-            {"nom": "Ryūtsui-sen", "degats": 50, "emoji": "🌊", "desc": "Frappe descendante en arc de cercle"},
-            {"nom": "Dō-ryūsen", "degats": 65, "emoji": "💨", "desc": "Onde de choc au sol"},
-            {"nom": "Amakakeru Ryū no Hirameki", "degats": 95, "emoji": "⚡", "desc": "Technique ultime — dégaine céleste !"},
-        ]
-    },
-
-    # ═══ COWBOY BEBOP ═══
-    "spike": {
-        "nom": "Spike Spiegel", "serie": "Cowboy Bebop", "emoji": "🚬",
-        "pv": 95, "attaque": 80, "defense": 65,
-        "rarete": "Rare", "faiblesse": "🔥", "resistance": "💨",
-        "attaques": [
-            {"nom": "Jeet Kune Do", "degats": 45, "emoji": "👊", "desc": "Art martial fluide et imprévisible"},
-            {"nom": "Tir de Précision", "degats": 55, "emoji": "🔫", "desc": "Vise entre les yeux"},
-            {"nom": "Je verrai au paradis", "degats": 80, "emoji": "⭐", "desc": "Tout donner pour le dernier combat !"},
-        ]
-    },
-    "faye": {
-        "nom": "Faye Valentine", "serie": "Cowboy Bebop", "emoji": "💄",
-        "pv": 85, "attaque": 72, "defense": 60,
-        "rarete": "Rare", "faiblesse": "⚡", "resistance": "💄",
-        "attaques": [
-            {"nom": "Tir Rapide", "degats": 40, "emoji": "🔫", "desc": "Rafale de coups de feu"},
-            {"nom": "Manipulation", "degats": 35, "emoji": "💄", "desc": "Baisse l'attaque adverse de 20%"},
-            {"nom": "Red Tail — Attaque", "degats": 70, "emoji": "🚀", "desc": "Vaisseau personnel en mode combat !"},
-        ]
-    },
-
-    # ═══ GHOST IN THE SHELL ═══
-    "motoko": {
-        "nom": "Motoko Kusanagi", "serie": "Ghost in the Shell", "emoji": "🤖",
-        "pv": 105, "attaque": 88, "defense": 85,
-        "rarete": "Rare", "faiblesse": "⚡", "resistance": "🤖",
-        "attaques": [
-            {"nom": "Camouflage Optique", "degats": 40, "emoji": "👁️", "desc": "Invisibilité totale — esquive garantie"},
-            {"nom": "Hacking Neural", "degats": 60, "emoji": "💻", "desc": "Prend le contrôle de l'ennemi"},
-            {"nom": "Cyborg Full Power", "degats": 85, "emoji": "🤖", "desc": "Force cybernétique maximale !"},
-        ]
-    },
-
-    # ═══ DARLING IN THE FRANXX ═══
-    "zerotwo": {
-        "nom": "Zero Two", "serie": "Darling in the Franxx", "emoji": "🌸",
-        "pv": 120, "attaque": 87, "defense": 75,
-        "rarete": "Rare", "faiblesse": "🌊", "resistance": "🔥",
-        "attaques": [
-            {"nom": "Instinct de Klaxosaure", "degats": 55, "emoji": "🌸", "desc": "Puissance instinctive mi-humaine"},
-            {"nom": "Strelizia — Mode Pistil", "degats": 70, "emoji": "🌺", "desc": "Fusion parfaite avec Franxx"},
-            {"nom": "Strelizia True Apus", "degats": 95, "emoji": "💫", "desc": "Forme cosmique ultime — amour infini !"},
-        ]
-    },
-
-    # ═══ VIOLET EVERGARDEN ═══
-    "violet": {
-        "nom": "Violet Evergarden", "serie": "Violet Evergarden", "emoji": "📝",
-        "pv": 90, "attaque": 75, "defense": 70,
-        "rarete": "Rare", "faiblesse": "💔", "resistance": "⚔️",
-        "attaques": [
-            {"nom": "Bras Mécaniques", "degats": 45, "emoji": "🤖", "desc": "Prothèses de combat ultraprécises"},
-            {"nom": "Soldat d'Élite", "degats": 60, "emoji": "⚔️", "desc": "Entraînement militaire surhumain"},
-            {"nom": "Pour protéger", "degats": 80, "emoji": "💙", "desc": "La volonté de protéger — puissance absolue !"},
-        ]
-    },
-
-    # ═══ SPY X FAMILY ═══
-    "anya": {
-        "nom": "Anya Forger", "serie": "Spy x Family", "emoji": "💭",
-        "pv": 65, "attaque": 40, "defense": 45,
-        "rarete": "Commun", "faiblesse": "🔥", "resistance": "💭",
-        "attaques": [
-            {"nom": "Télépathie", "degats": 20, "emoji": "💭", "desc": "Lit les pensées et prédit l'attaque"},
-            {"nom": "Coup de Poing Inattendu", "degats": 30, "emoji": "👊", "desc": "Tellement imprévisible que ça fait mal"},
-            {"nom": "Heh !", "degats": 45, "emoji": "😆", "desc": "L'expression la plus puissante de l'histoire !"},
-        ]
-    },
-    "yor": {
-        "nom": "Yor Forger", "serie": "Spy x Family", "emoji": "🌹",
-        "pv": 115, "attaque": 92, "defense": 80,
-        "rarete": "Rare", "faiblesse": "💭", "resistance": "🌹",
-        "attaques": [
-            {"nom": "Épine de Rose", "degats": 55, "emoji": "🌹", "desc": "Lancer de l'épée avec précision mortelle"},
-            {"nom": "Rotation Mortelle", "degats": 70, "emoji": "🔄", "desc": "Tourbillon de l'assassin"},
-            {"nom": "Princesse Jardin", "degats": 90, "emoji": "💀", "desc": "L'assassin la plus redoutable du monde !"},
-        ]
-    },
-
-    # ═══ VINLAND SAGA ═══
-    "thorfinn": {
-        "nom": "Thorfinn", "serie": "Vinland Saga", "emoji": "🪓",
-        "pv": 110, "attaque": 88, "defense": 72,
-        "rarete": "Épique", "faiblesse": "🔥", "resistance": "❄️",
-        "attaques": [
-            {"nom": "Dague Viking", "degats": 50, "emoji": "🗡️", "desc": "Rapidité et précision nordique"},
-            {"nom": "Frappe de Guerrier", "degats": 65, "emoji": "🪓", "desc": "Force brute des Vikings"},
-            {"nom": "Voie du Pacifiste", "degats": 85, "emoji": "🕊️", "desc": "Combattre sans tuer — maîtrise absolue !"},
-        ]
-    },
-
-    # ═══ ATTACK ON TITAN (nouveaux) ═══
-    "erwin": {
-        "nom": "Erwin Smith", "serie": "Attack on Titan", "emoji": "🎖️",
-        "pv": 95, "attaque": 78, "defense": 80,
-        "rarete": "Épique", "faiblesse": "🔥", "resistance": "⚔️",
-        "image": "https://i.imgur.com/jV3h5SB.jpg",
-        "attaques": [
-            {"nom": "Charge Suicidaire", "degats": 55, "emoji": "🎖️", "desc": "Mène ses hommes à la mort pour la victoire"},
-            {"nom": "Stratégie du Commandant", "degats": 40, "emoji": "🧠", "desc": "Réduit l'attaque adverse de 25%"},
-            {"nom": "Dernier Ordre", "degats": 85, "emoji": "⚔️", "desc": "Sacrifice ultime pour l'humanité !"},
-        ]
-    },
-
-    # ═══ DEMON SLAYER (nouveaux) ═══
-    "tengen": {
-        "nom": "Tengen Uzui", "serie": "Demon Slayer", "emoji": "💥",
-        "pv": 110, "attaque": 85, "defense": 75,
-        "rarete": "Épique", "faiblesse": "🌊", "resistance": "💥",
-        "image": "https://i.imgur.com/Mv099qN.jpg",
-        "attaques": [
-            {"nom": "Respiration du Son", "degats": 50, "emoji": "🎵", "desc": "Attaque en rythme explosif"},
-            {"nom": "Partition Explosive", "degats": 68, "emoji": "💥", "desc": "Double lame en rythme dévastateur"},
-            {"nom": "Forme Flamboyante", "degats": 90, "emoji": "✨", "desc": "Le Dieu du Divertissement à pleine puissance !"},
-        ]
-    },
-    "muichiro": {
-        "nom": "Muichiro Tokito", "serie": "Demon Slayer", "emoji": "🌫️",
-        "pv": 100, "attaque": 88, "defense": 70,
-        "rarete": "Épique", "faiblesse": "🔥", "resistance": "💨",
-        "image": "https://i.imgur.com/C9Q0GcG.jpg",
-        "attaques": [
-            {"nom": "Respiration de la Brume", "degats": 48, "emoji": "🌫️", "desc": "Attaque imprévisible comme la brume"},
-            {"nom": "Tourbillon de Brume", "degats": 65, "emoji": "🌀", "desc": "Rotation de lame en brume dense"},
-            {"nom": "Mode Pillier", "degats": 88, "emoji": "⚡", "desc": "Éveil du Pillier de la Brume !"},
-        ]
-    },
-    "giyu": {
-        "nom": "Giyu Tomioka", "serie": "Demon Slayer", "emoji": "🌊",
-        "pv": 108, "attaque": 86, "defense": 78,
-        "rarete": "Épique", "faiblesse": "⚡", "resistance": "🌊",
-        "image": "https://i.imgur.com/oWIcMrV.jpg",
-        "attaques": [
-            {"nom": "Respiration de l'Eau", "degats": 45, "emoji": "🌊", "desc": "Flux d'eau constant et précis"},
-            {"nom": "Calme Plat", "degats": 60, "emoji": "💧", "desc": "Technique exclusive — immobilise l'ennemi"},
-            {"nom": "11ème Forme", "degats": 90, "emoji": "🌊", "desc": "Forme créée par Giyu lui-même !"},
-        ]
-    },
-    "rengoku": {
-        "nom": "Kyōjurō Rengoku", "serie": "Demon Slayer", "emoji": "🔥",
-        "pv": 115, "attaque": 92, "defense": 72,
-        "rarete": "Légendaire", "faiblesse": "🌊", "resistance": "🔥",
-        "image": "https://i.imgur.com/utlCuQn.jpg",
-        "attaques": [
-            {"nom": "Respiration des Flammes", "degats": 55, "emoji": "🔥", "desc": "Flammes dévastatrices du Pillier"},
-            {"nom": "Quintuple Explosion", "degats": 72, "emoji": "💥", "desc": "5 coups enflammés simultanés"},
-            {"nom": "9ème Forme — Purgatorio", "degats": 95, "emoji": "☀️", "desc": "Flammes divines du Pillier de Feu !"},
-        ]
-    },
-    "sanemi": {
-        "nom": "Sanemi Shinazugawa", "serie": "Demon Slayer", "emoji": "💨",
-        "pv": 112, "attaque": 89, "defense": 76,
-        "rarete": "Épique", "faiblesse": "🔥", "resistance": "💨",
-        "image": "https://i.imgur.com/fHuqIaF.jpg",
-        "attaques": [
-            {"nom": "Respiration du Vent", "degats": 50, "emoji": "💨", "desc": "Rafales tranchantes du Pillier du Vent"},
-            {"nom": "Cyclone Dévastateur", "degats": 68, "emoji": "🌪️", "desc": "Tourbillon de lames multiples"},
-            {"nom": "Sang Marqué", "degats": 88, "emoji": "🩸", "desc": "Sang rare qui enivrait les démons !"},
-        ]
-    },
-    "akaza": {
-        "nom": "Akaza", "serie": "Demon Slayer", "emoji": "🩸",
-        "pv": 125, "attaque": 93, "defense": 85,
-        "rarete": "Légendaire", "faiblesse": "☀️", "resistance": "🔥",
-        "image": "https://i.imgur.com/s3SbBSM.jpg",
-        "attaques": [
-            {"nom": "Destruction Totale", "degats": 58, "emoji": "💥", "desc": "Arts martiaux démoniaques"},
-            {"nom": "Canon Solaire", "degats": 75, "emoji": "🩸", "desc": "Frappe concentrée dévastatrice"},
-            {"nom": "Lune Supérieure 3", "degats": 98, "emoji": "🌙", "desc": "Puissance de Lune Supérieure au maximum !"},
-        ]
-    },
-
-    # ═══ TOKYO GHOUL ═══
-    "kaneki": {
-        "nom": "Ken Kaneki", "serie": "Tokyo Ghoul", "emoji": "🕷️",
-        "pv": 120, "attaque": 88, "defense": 80,
-        "rarete": "Légendaire", "faiblesse": "💡", "resistance": "🕷️",
-        "image": "https://i.imgur.com/PSZyDlw.jpg",
-        "attaques": [
-            {"nom": "Tentacule Kagune", "degats": 52, "emoji": "🕷️", "desc": "Tentacule de ghoul tranchant"},
-            {"nom": "Régénération", "degats": -25, "emoji": "💚", "desc": "Récupère 25 HP"},
-            {"nom": "Roi Noir", "degats": 95, "emoji": "⚫", "desc": "Forme de Roi — puissance de ghoul absolue !"},
-        ]
-    },
-    "rize": {
-        "nom": "Rize Kamishiro", "serie": "Tokyo Ghoul", "emoji": "🦋",
-        "pv": 105, "attaque": 85, "defense": 72,
-        "rarete": "Épique", "faiblesse": "💡", "resistance": "🦋",
-        "image": "https://i.imgur.com/qAhrKOO.jpg",
-        "attaques": [
-            {"nom": "Kagune Multiple", "degats": 55, "emoji": "🦋", "desc": "Plusieurs tentacules simultanés"},
-            {"nom": "Prédateur Né", "degats": 68, "emoji": "🩸", "desc": "Instinct de chasse naturel"},
-            {"nom": "Binge Eater", "degats": 88, "emoji": "💀", "desc": "La Ghoul la plus vorace de Tokyo !"},
-        ]
-    },
-    "arima": {
-        "nom": "Kishou Arima", "serie": "Tokyo Ghoul", "emoji": "👓",
-        "pv": 110, "attaque": 95, "defense": 88,
-        "rarete": "Mythique", "faiblesse": "🕷️", "resistance": "👓",
-        "image": "https://i.imgur.com/GEsZ3uD.jpg",
-        "attaques": [
-            {"nom": "IXA", "degats": 60, "emoji": "⚡", "desc": "Quinque lance-projectiles ultrarapide"},
-            {"nom": "Narukami", "degats": 78, "emoji": "⚡", "desc": "Quinque électrique dévastateur"},
-            {"nom": "Le Faucheteur", "degats": 98, "emoji": "👓", "desc": "Le Chasseur Invaincu — zéro défaite !"},
-        ]
-    },
-
-    # ═══ DRAGON BALL (nouveaux) ═══
-    "frieza": {
-        "nom": "Frieza", "serie": "Dragon Ball Z", "emoji": "👾",
-        "pv": 130, "attaque": 92, "defense": 82,
-        "rarete": "Légendaire", "faiblesse": "🐉", "resistance": "👾",
-        "image": "https://i.imgur.com/qIelqUS.jpg",
-        "attaques": [
-            {"nom": "Death Beam", "degats": 55, "emoji": "💜", "desc": "Rayon mortel ultraprécis"},
-            {"nom": "Death Ball", "degats": 75, "emoji": "🔮", "desc": "Sphère d'énergie planétaire"},
-            {"nom": "Golden Frieza", "degats": 100, "emoji": "👑", "desc": "Forme dorée — puissance divine !"},
-        ]
-    },
-    "beerus": {
-        "nom": "Beerus", "serie": "Dragon Ball Super", "emoji": "😺",
-        "pv": 145, "attaque": 99, "defense": 95,
-        "rarete": "Mythique", "faiblesse": "🌟", "resistance": "😺",
-        "image": "https://i.imgur.com/qlJdPS6.jpg",
-        "attaques": [
-            {"nom": "Hakai", "degats": 70, "emoji": "💥", "desc": "Destruction pure et simple"},
-            {"nom": "Sphere of Destruction", "degats": 85, "emoji": "🔮", "desc": "Énergie de destruction concentrée"},
-            {"nom": "Dieu de la Destruction", "degats": 110, "emoji": "😺", "desc": "Puissance divine illimitée !"},
-        ]
-    },
-
-    # ═══ ONE PIECE (nouveaux) ═══
-    "mihawk": {
-        "nom": "Dracule Mihawk", "serie": "One Piece", "emoji": "🗡️",
-        "pv": 120, "attaque": 97, "defense": 85,
-        "rarete": "Légendaire", "faiblesse": "🌊", "resistance": "🗡️",
-        "image": "https://i.imgur.com/pB4lYTn.jpg",
-        "attaques": [
-            {"nom": "Slash Noir", "degats": 60, "emoji": "⚫", "desc": "Coup d'épée qui tranche tout"},
-            {"nom": "Croix de Feu", "degats": 75, "emoji": "✝️", "desc": "Vague tranchante en croix"},
-            {"nom": "Yoru — Pleine Puissance", "degats": 100, "emoji": "🗡️", "desc": "La plus grande lame du monde !"},
-        ]
-    },
-    "kaido": {
-        "nom": "Kaido", "serie": "One Piece", "emoji": "🐉",
-        "pv": 160, "attaque": 96, "defense": 98,
-        "rarete": "Mythique", "faiblesse": "⚡", "resistance": "🐉",
-        "image": "https://i.imgur.com/Q76UJEX.jpg",
-        "attaques": [
-            {"nom": "Ragnaraku", "degats": 65, "emoji": "⚡", "desc": "Massue géante dévastatrice"},
-            {"nom": "Blast Breath", "degats": 80, "emoji": "🔥", "desc": "Souffle de dragon incandescent"},
-            {"nom": "Forme Dragon", "degats": 105, "emoji": "🐉", "desc": "La créature la plus forte du monde !"},
-        ]
-    },
-    "shanks": {
-        "nom": "Shanks", "serie": "One Piece", "emoji": "⚓",
-        "pv": 135, "attaque": 98, "defense": 90,
-        "rarete": "Légendaire", "faiblesse": "💨", "resistance": "⚓",
-        "image": "https://i.imgur.com/BkCK51H.jpg",
-        "attaques": [
-            {"nom": "Haki des Rois", "degats": 60, "emoji": "👑", "desc": "Haki Conquerant qui terrasse les faibles"},
-            {"nom": "Slash de Sabre", "degats": 75, "emoji": "⚔️", "desc": "Coup d'épée d'un Yonko"},
-            {"nom": "Ambition Divine", "degats": 98, "emoji": "⚓", "desc": "Puissance d'un des 4 Empereurs !"},
-        ]
-    },
-
-    # ═══ MAGIC EMPEROR ═══
-    "zhuofan": {
-        "nom": "Zhuo Fan", "serie": "Magic Emperor", "emoji": "🌑",
-        "pv": 125, "attaque": 90, "defense": 85,
-        "rarete": "Légendaire", "faiblesse": "☀️", "resistance": "🌑",
-        "image": "https://i.imgur.com/gqEyuY0.jpg",
-        "attaques": [
-            {"nom": "Art Démoniaque", "degats": 58, "emoji": "🌑", "desc": "Magie noire de l'Empereur Démoniaque"},
-            {"nom": "Sceau du Démon", "degats": 75, "emoji": "🔮", "desc": "Scelle les capacités adverses"},
-            {"nom": "Domination Absolue", "degats": 95, "emoji": "👑", "desc": "L'Empereur Démoniaque frappe !"},
-        ]
-    },
-    "yelin": {
-        "nom": "Ye Lin", "serie": "Magic Emperor", "emoji": "🌸",
-        "pv": 105, "attaque": 80, "defense": 75,
-        "rarete": "Rare", "faiblesse": "🌑", "resistance": "🌸",
-        "image": "https://i.imgur.com/Ml8v5UX.jpg",
-        "attaques": [
-            {"nom": "Art de Soin", "degats": -30, "emoji": "💚", "desc": "Récupère 30 HP"},
-            {"nom": "Fleur de Combat", "degats": 55, "emoji": "🌸", "desc": "Frappe délicate mais précise"},
-            {"nom": "Magie Florale", "degats": 80, "emoji": "✨", "desc": "Explosion de magie florale !"},
-        ]
-    },
-
-    # ═══ MY HERO ACADEMIA ═══
-    "allmight": {
-        "nom": "All Might", "serie": "My Hero Academia", "emoji": "💪",
-        "pv": 140, "attaque": 97, "defense": 88,
-        "rarete": "Légendaire", "faiblesse": "🩸", "resistance": "💪",
-        "image": "https://i.imgur.com/5YVOpkT.jpg",
-        "attaques": [
-            {"nom": "Detroit Smash", "degats": 65, "emoji": "👊", "desc": "Poing droit dévastateur"},
-            {"nom": "United States Smash", "degats": 80, "emoji": "💥", "desc": "Force de One For All déchaînée"},
-            {"nom": "United States of Smash", "degats": 105, "emoji": "💪", "desc": "Dernier coup du Symbole de la Paix !"},
-        ]
-    },
-    "deku": {
-        "nom": "Izuku Midoriya", "serie": "My Hero Academia", "emoji": "🥦",
-        "pv": 115, "attaque": 85, "defense": 72,
-        "rarete": "Épique", "faiblesse": "⚡", "resistance": "💪",
-        "image": "https://i.imgur.com/aKjpPQs.jpg",
-        "attaques": [
-            {"nom": "Delaware Smash", "degats": 50, "emoji": "🥦", "desc": "One For All concentré dans un doigt"},
-            {"nom": "Shoot Style", "degats": 65, "emoji": "🦵", "desc": "Coups de pied en style personnel"},
-            {"nom": "Full Cowl 100%", "degats": 90, "emoji": "⚡", "desc": "One For All à pleine puissance !"},
-        ]
-    },
-    "bakugo": {
-        "nom": "Katsuki Bakugo", "serie": "My Hero Academia", "emoji": "💣",
-        "pv": 110, "attaque": 90, "defense": 70,
-        "rarete": "Épique", "faiblesse": "🌊", "resistance": "💣",
-        "image": "https://i.imgur.com/jlLDh3h.jpg",
-        "attaques": [
-            {"nom": "Explosion", "degats": 55, "emoji": "💣", "desc": "Nitroglycérine explosive dans les paumes"},
-            {"nom": "Stun Grenade", "degats": 45, "emoji": "💥", "desc": "Flash aveuglant + explosion"},
-            {"nom": "AP Shot: Auto-Cannon", "degats": 88, "emoji": "🔥", "desc": "Rafale d'explosions ultrarapides !"},
-        ]
-    },
-    "shigaraki": {
-        "nom": "Shigaraki Tomura", "serie": "My Hero Academia", "emoji": "💀",
-        "pv": 130, "attaque": 92, "defense": 78,
-        "rarete": "Légendaire", "faiblesse": "💪", "resistance": "💀",
-        "image": "https://i.imgur.com/464ERG7.jpg",
-        "attaques": [
-            {"nom": "Désintégration", "degats": 60, "emoji": "💀", "desc": "5 doigts = tout se désintègre"},
-            {"nom": "Propagation", "degats": 78, "emoji": "🕸️", "desc": "Désintégration en chaîne au sol"},
-            {"nom": "All For One", "degats": 100, "emoji": "👁️", "desc": "Successeur d'All For One — destruction totale !"},
-        ]
-    },
-
-    # ═══ CODE GEASS ═══
-    "lelouch": {
-        "nom": "Lelouch vi Britannia", "serie": "Code Geass", "emoji": "♟️",
-        "pv": 80, "attaque": 72, "defense": 60,
-        "rarete": "Légendaire", "faiblesse": "💔", "resistance": "🧠",
-        "image": "https://i.imgur.com/T0AqdVz.jpg",
-        "attaques": [
-            {"nom": "Géass", "degats": 45, "emoji": "👁️", "desc": "Ordre absolu — l'ennemi obéit"},
-            {"nom": "Stratégie de Zéro", "degats": 60, "emoji": "♟️", "desc": "Plan parfait — réduit DEF adverse de 30%"},
-            {"nom": "Requiem de Zéro", "degats": 85, "emoji": "♟️", "desc": "Le plan ultime du Roi des Ombres !"},
-        ]
-    },
-    "suzaku": {
-        "nom": "Suzaku Kururugi", "serie": "Code Geass", "emoji": "⚔️",
-        "pv": 105, "attaque": 85, "defense": 80,
-        "rarete": "Épique", "faiblesse": "🧠", "resistance": "⚔️",
-        "image": "https://i.imgur.com/b5cVGjx.jpg",
-        "attaques": [
-            {"nom": "Spinning Kick", "degats": 50, "emoji": "🦵", "desc": "Coup de pied rotatif surhumain"},
-            {"nom": "FLEIJA", "degats": 70, "emoji": "💥", "desc": "Arme de destruction massive"},
-            {"nom": "Lancelot Full Power", "degats": 90, "emoji": "⚔️", "desc": "Knightmare Frame à puissance maximale !"},
-        ]
-    },
-
-    # ═══ JUJUTSU KAISEN (nouveaux) ═══
-    "sukuna": {
-        "nom": "Ryomen Sukuna", "serie": "Jujutsu Kaisen", "emoji": "☠️",
-        "pv": 150, "attaque": 100, "defense": 95,
-        "rarete": "Mythique", "faiblesse": "♾️", "resistance": "☠️",
-        "image": "https://i.imgur.com/UbB1tmt.jpg",
-        "attaques": [
-            {"nom": "Dismantle", "degats": 65, "emoji": "🗡️", "desc": "Slash invisible qui tranche tout"},
-            {"nom": "Cleave", "degats": 80, "emoji": "☠️", "desc": "Adapte la puissance à l'ennemi"},
-            {"nom": "Malveillance Brûlante", "degats": 110, "emoji": "🔥", "desc": "Le Roi des Malédictions à son apogée !"},
-        ]
-    },
-
-    # ═══ NARUTO (nouveaux) ═══
-    "madara": {
-        "nom": "Madara Uchiha", "serie": "Naruto", "emoji": "🌑",
-        "pv": 145, "attaque": 98, "defense": 92,
-        "rarete": "Mythique", "faiblesse": "🌊", "resistance": "🔥",
-        "image": "https://i.imgur.com/FYEJwwH.jpg",
-        "attaques": [
-            {"nom": "Susanoo Parfait", "degats": 70, "emoji": "🌑", "desc": "Armure de chakra titanesque"},
-            {"nom": "Météorite", "degats": 85, "emoji": "☄️", "desc": "Fait tomber des météorites du ciel"},
-            {"nom": "Rinnegan Infini", "degats": 105, "emoji": "👁️", "desc": "Dieu du ninja — puissance absolue !"},
-        ]
-    },
-    "kaguya": {
-        "nom": "Kaguya Ootsutsuki", "serie": "Naruto", "emoji": "🌸",
-        "pv": 155, "attaque": 99, "defense": 96,
-        "rarete": "Mythique", "faiblesse": "⚡", "resistance": "🌸",
-        "image": "https://i.imgur.com/6E9Q66v.jpg",
-        "attaques": [
-            {"nom": "Cendres Célestes", "degats": 68, "emoji": "🌸", "desc": "Cendres qui paralysent au contact"},
-            {"nom": "Dimension Glace", "degats": 82, "emoji": "❄️", "desc": "Téléporte dans une dimension gelée"},
-            {"nom": "Vérité de Toute Chose", "degats": 108, "emoji": "🌙", "desc": "La Mère du Chakra — puissance originelle !"},
-        ]
-    },
-
-    # ═══ BLACK CLOVER (nouveau) ═══
-    "yami": {
-        "nom": "Yami Sukehiro", "serie": "Black Clover", "emoji": "🌑",
-        "pv": 125, "attaque": 93, "defense": 82,
-        "rarete": "Légendaire", "faiblesse": "☀️", "resistance": "🌑",
-        "image": "https://i.imgur.com/H5UTEEg.jpg",
-        "attaques": [
-            {"nom": "Slash des Ténèbres", "degats": 58, "emoji": "🌑", "desc": "Lame de magie noire tranchante"},
-            {"nom": "Dimension Slash", "degats": 75, "emoji": "⚔️", "desc": "Coupe à travers les dimensions"},
-            {"nom": "Dark Cloaked Dimension Slash", "degats": 95, "emoji": "🌑", "desc": "Attaque ultime du Capitaine des Taureaux Noirs !"},
-        ]
-    },
-}
-
-
-RARETE_COULEURS = {
-    "Mythique":   0xff4500,
-    "Légendaire": 0xf1c40f,
-    "Épique":     0x9b59b6,
-    "Rare":       0x3498db,
-    "Commun":     0x95a5a6,
-}
-
-RARETE_EMOJI = {
-    "Mythique":   "🔮",
-    "Légendaire": "👑",
-    "Épique":     "💎",
-    "Rare":       "⭐",
-    "Commun":     "🔵",
-}
-
-# Stockage collections et combats
-cartes_collections = defaultdict(dict)  # {user_id: {slot: {card_key, image_url}}}
-active_pokebattles = {}  # {channel_id: game_data}
-
-def build_card_embed(card_key, image_url=None, owner_name=None):
-    """Construit l'embed carte style Pokémon"""
-    if card_key not in ANIME_CARDS_DB:
-        return None
-    c = ANIME_CARDS_DB[card_key]
-    rarete_emoji = RARETE_EMOJI[c["rarete"]]
-    couleur = RARETE_COULEURS[c["rarete"]]
-
-    embed = discord.Embed(
-        title=f"{c['emoji']} {c['nom']}  —  ❤️ {c['pv']} PV",
-        description=f"*{c['serie']}* {rarete_emoji} **{c['rarete']}**",
-        color=couleur
-    )
-    if image_url:
-        embed.set_image(url=image_url)
-
-    attaques_str = "\n".join([
-        f"{a['emoji']} **{a['nom']}** — `{a['degats']} dégâts`\n*{a['desc']}*"
-        for a in c["attaques"]
-    ])
-    embed.add_field(name="⚔️ Attaques", value=attaques_str, inline=False)
-    embed.add_field(
-        name="📊 Stats",
-        value=f"⚔️ Attaque : **{c['attaque']}** | 🛡️ Défense : **{c['defense']}**\n❌ Faiblesse : {c['faiblesse']} | ✅ Résistance : {c['resistance']}",
-        inline=False
-    )
-    if owner_name:
-        embed.set_footer(text=f"Carte de {owner_name} • .pokecollection pour voir ta collection")
-    return embed
+        img_result = await gen_image(action_txt=action_txt, sub_txt=sub_txt, flavor=flavor_txt)
+        if img_result:
+            if combat_msg:
+                try: await combat_msg.delete()
+                except: pass
+            f2 = discord.File(io.BytesIO(img_result), filename="arena.png")
+            combat_msg = await ctx.send(file=f2)
+            await asyncio.sleep(2)
 
 @bot.command(name="enregistrer")
 async def enregistrer_carte(ctx, perso: str = None, image_url: str = None):
@@ -6161,88 +4965,110 @@ async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
     if len(col2) < 3:
         return await ctx.send(f"❌ **{adversaire.display_name}** n'a pas assez de cartes ! (minimum 3)")
 
-    # ── Sélection équipe via boutons ──────────────────────────
+    # ── Sélection équipe — boutons paginés ───────────────────
     async def choisir_equipe(joueur):
         uid = str(joueur.id)
         col = gacha_collections[uid]
         order = collection_order.get(uid, [])
         all_keys = [k for k in order if k in col] + [k for k in col if k not in order]
-        valid_keys = [k for k in all_keys if k in ANIME_CARDS_DB][:10]
+        valid_keys = [k for k in all_keys if k in ANIME_CARDS_DB]
 
         if len(valid_keys) < 3:
             return None
 
-        chosen = []
+        chosen  = []   # liste des cartes choisies
+        page    = [0]  # page courante (dans une liste pour modif dans closure)
+        PAGE_SZ = 5    # cartes par page
+        done_ev = asyncio.Event()
 
-        class CardSelect(ui.View):
-            def __init__(self):
-                super().__init__(timeout=60)
-                self.done = asyncio.Event()
-                for i, key in enumerate(valid_keys[:5]):
-                    c = ANIME_CARDS_DB[key]
-                    lv = fusion_levels[uid][key]
-                    stars = "⭐"*lv if lv else ""
-                    btn = ui.Button(
-                        label=f"{c['nom'][:14]}{stars}",
-                        emoji=c.get("emoji","⚔️"),
-                        style=discord.ButtonStyle.secondary,
-                        custom_id=f"pick_{i}",
-                        row=0
-                    )
-                    btn.callback = self.make_cb(key, c)
-                    self.add_item(btn)
-                if len(valid_keys) > 5:
-                    for i, key in enumerate(valid_keys[5:10]):
-                        c = ANIME_CARDS_DB[key]
-                        lv = fusion_levels[uid][key]
-                        stars = "⭐"*lv if lv else ""
-                        btn = ui.Button(
-                            label=f"{c['nom'][:14]}{stars}",
-                            emoji=c.get("emoji","⚔️"),
-                            style=discord.ButtonStyle.secondary,
-                            custom_id=f"pick2_{i}",
-                            row=1
-                        )
-                        btn.callback = self.make_cb(key, c)
-                        self.add_item(btn)
+        def build_view():
+            v = ui.View(timeout=60)
+            start = page[0] * PAGE_SZ
+            keys_page = valid_keys[start:start+PAGE_SZ]
 
-            def make_cb(self, key, c):
-                async def cb(interaction):
+            for i, key in enumerate(keys_page):
+                c  = ANIME_CARDS_DB[key]
+                lv = fusion_levels[uid][key]
+                stars = "⭐"*lv if lv else ""
+                already = key in [x["key"] for x in chosen]
+                btn = ui.Button(
+                    label=f"{c['nom'][:15]}{stars}",
+                    emoji=c.get("emoji","⚔️"),
+                    style=discord.ButtonStyle.success if already else discord.ButtonStyle.secondary,
+                    custom_id=f"pick_{i}",
+                    disabled=already,
+                    row=i // 3
+                )
+                async def cb(interaction, k=key, card=c):
                     if interaction.user.id != joueur.id:
-                        return await interaction.response.send_message("❌ C'est pas ton tour !", ephemeral=True)
-                    if key in [x["key"] for x in chosen]:
+                        return await interaction.response.send_message("❌ Pas ton tour !", ephemeral=True)
+                    if k in [x["key"] for x in chosen]:
                         return await interaction.response.send_message("❌ Déjà sélectionné !", ephemeral=True)
-                    lv = fusion_levels[uid][key]
-                    card = c.copy()
-                    card["key"] = key
-                    card["pv"] = card["pv"] + lv*20
-                    card["attaque"] = card["attaque"] + lv*15
-                    card["defense"] = card["defense"] + lv*10
-                    card["hp_actuel"] = card["pv"]
-                    card["ko"] = False
-                    chosen.append(card)
-                    await interaction.response.edit_message(
-                        content=f"⚔️ **{joueur.display_name}** — Choisis tes 3 cartes ({len(chosen)}/3) :",
-                        view=self if len(chosen) < 3 else None
-                    )
+                    lv2 = fusion_levels[uid][k]
+                    new_card = card.copy()
+                    new_card["key"] = k
+                    new_card["pv"]      = new_card["pv"]      + lv2*20
+                    new_card["attaque"] = new_card["attaque"] + lv2*15
+                    new_card["defense"] = new_card["defense"] + lv2*10
+                    new_card["hp_actuel"] = new_card["pv"]
+                    new_card["ko"] = False
+                    chosen.append(new_card)
                     if len(chosen) >= 3:
-                        self.done.set()
-                        self.stop()
-                return cb
+                        done_ev.set()
+                        await interaction.response.edit_message(
+                            content=f"✅ **{joueur.display_name}** — Équipe prête ! ({len(chosen)}/3)",
+                            view=None
+                        )
+                    else:
+                        await interaction.response.edit_message(
+                            content=build_content(),
+                            view=build_view()
+                        )
+                btn.callback = cb
+                v.add_item(btn)
 
-        view = CardSelect()
-        lines = []
-        for i, key in enumerate(valid_keys[:10]):
-            c = ANIME_CARDS_DB[key]
-            lv = fusion_levels[uid][key]
-            lines.append(f"{c['emoji']} **{c['nom']}** {'⭐'*lv} — ❤️{c['pv']+lv*20} ⚔️{c['attaque']+lv*15}")
-        await ctx.send(
-            f"⚔️ **{joueur.display_name}** — Choisis tes **3 cartes** (0/3) :",
-            view=view
-        )
+            # Boutons navigation page
+            total_pages = (len(valid_keys)-1)//PAGE_SZ + 1
+            if total_pages > 1:
+                prev_btn = ui.Button(label="◀", style=discord.ButtonStyle.primary,
+                                     custom_id="prev", disabled=(page[0]==0), row=2)
+                next_btn = ui.Button(label="▶", style=discord.ButtonStyle.primary,
+                                     custom_id="next", disabled=(page[0]>=total_pages-1), row=2)
+                info_btn = ui.Button(label=f"Page {page[0]+1}/{total_pages}",
+                                     style=discord.ButtonStyle.secondary,
+                                     custom_id="info", disabled=True, row=2)
+                async def prev_cb(interaction):
+                    if interaction.user.id != joueur.id:
+                        return await interaction.response.send_message("❌ Pas ton tour !", ephemeral=True)
+                    page[0] = max(0, page[0]-1)
+                    await interaction.response.edit_message(content=build_content(), view=build_view())
+                async def next_cb(interaction):
+                    if interaction.user.id != joueur.id:
+                        return await interaction.response.send_message("❌ Pas ton tour !", ephemeral=True)
+                    page[0] = min(total_pages-1, page[0]+1)
+                    await interaction.response.edit_message(content=build_content(), view=build_view())
+                prev_btn.callback = prev_cb
+                next_btn.callback = next_cb
+                v.add_item(prev_btn)
+                v.add_item(info_btn)
+                v.add_item(next_btn)
+            return v
+
+        def build_content():
+            lines = [f"⚔️ **{joueur.display_name}** — Choisis tes **3 cartes** ({len(chosen)}/3) :"]
+            if chosen:
+                lines.append("✅ Sélectionnées : " + " • ".join(f"{c['emoji']} **{c['nom']}**" for c in chosen))
+            start = page[0]*PAGE_SZ
+            total_pages = (len(valid_keys)-1)//PAGE_SZ + 1
+            lines.append(f"*Page {page[0]+1}/{total_pages} — {len(valid_keys)} cartes au total*")
+            return "\n".join(lines)
+
+        msg = await ctx.send(content=build_content(), view=build_view())
+
         try:
-            await asyncio.wait_for(view.done.wait(), timeout=60)
+            await asyncio.wait_for(done_ev.wait(), timeout=90)
         except asyncio.TimeoutError:
+            await msg.edit(content=f"⏰ **{joueur.display_name}** n'a pas choisi à temps !", view=None)
             return None
         return chosen if len(chosen) >= 3 else None
 
