@@ -582,24 +582,24 @@ async def help_cmd(ctx, categorie: str = None):
             "📌 **Catégories disponibles :**\n"
             "🎬 Contenu • 🎮 Gacha • ⚔️ Combats & Jeux\n"
             "💰 Économie • 📊 Progression • 💬 Social\n"
-            "😄 Fun • 🛡️ Modération"
+            "😄 Fun • 🛡️ Modération • 🔧 Utilitaires"
         ),
         color=0xff6b9d
     )
-    p0.set_footer(text="Page 1/8 • QG Kdrama 🌸")
+    p0.set_footer(text="Page 1/9 • QG Kdrama 🌸")
     pages.append(p0)
 
     # Page 1 — Contenu
     p1 = discord.Embed(title="🎬 Contenu — Dramas & Animés", color=0xff6b9d)
     p1.add_field(name="🎬 Dramas", value=(
-        "`.drama` — Drama aléatoire\n"
-        "`.dramarec [genre]` — Reco par genre\n"
-        "`.quote` — Citation Kdrama"
+        "`.drama <titre>` — Infos sur un drama\n"
+        "`.dramarec` — Recommandation drama aléatoire\n"
+        "`.quote` — Citation aléatoire animé ou kdrama"
     ), inline=False)
     p1.add_field(name="✨ Animés", value=(
-        "`.anime` — Animé aléatoire\n"
-        "`.animerec [genre]` — Reco par genre\n"
-        "`.animequote` — Citation animé"
+        "`.anime <titre>` — Infos sur un animé\n"
+        "`.animerec` — Recommandation animé aléatoire\n"
+        "`.animequote` — Citation animé aléatoire"
     ), inline=False)
     p1.add_field(name="⭐ Notes & Avis", value=(
         "`.noter 9 Goblin` — Note un drama/animé /10\n"
@@ -611,8 +611,11 @@ async def help_cmd(ctx, categorie: str = None):
         "`.watch vu <titre>` — Marquer comme vu ✅\n"
         "`.watch supprimer <titre>` — Retirer"
     ), inline=False)
-    p1.add_field(name="📅 Sorties", value="`.sorties` — Calendrier des prochaines sorties", inline=False)
-    p1.set_footer(text="Page 2/8 • QG Kdrama 🌸")
+    p1.add_field(name="📅 Sorties & Sondages", value=(
+        "`.sorties` — Prochaines sorties kdramas & animés\n"
+        "`.sondage <question>` — Créer un sondage rapide"
+    ), inline=False)
+    p1.set_footer(text="Page 2/9 • QG Kdrama 🌸")
     pages.append(p1)
 
     # Page 2 — Gacha
@@ -778,28 +781,60 @@ async def help_cmd(ctx, categorie: str = None):
     )
     p7.add_field(name="⚔️ Sanctions", value=(
         "`.ban @joueur [raison]` — Bannir\n"
-        "`.kick @joueur [raison]` — Expulser\n"
+        "`.kick @joueur [raison]` — Expulser + MP au membre\n"
+        "`.warn @joueur [raison]` — Avertir + MP au membre\n"
         "`.mute @joueur [minutes]` — Rendre muet\n"
-        "`.unmute @joueur` — Retirer le mute\n"
-        "`.clear [nombre]` — Supprimer X messages"
+        "`.unmute @joueur` — Retirer le mute"
+    ), inline=False)
+    p7.add_field(name="🔧 Gestion Salon", value=(
+        "`.clear [nombre]` `.clear all` — Supprimer X messages ou tous\n"
+        "`.slowmode [secondes]` — Activer le slowmode\n"
+        "`.lock [#salon]` — Verrouiller un salon\n"
+        "`.unlock [#salon]` — Déverrouiller un salon"
     ), inline=False)
     p7.add_field(name="🎁 Cartes", value=(
-        "`.givecard @joueur <perso>` — Donner une carte à un membre\n"
-        "`.removecard @joueur <perso>` — Retirer une carte à un membre"
+        "`.givecard @joueur <perso>` — Donner une carte\n"
+        "`.removecard @joueur <perso>` — Retirer une carte"
     ), inline=False)
     p7.add_field(name="📌 Salons — `.setsalon <type>`", value=(
         "`bienvenue` 🎌 • `aurevoir` 💔 • `boost` 💎\n"
         "`gacha` 🎰 • `boutique` 🛒 • `casino` 🎲\n"
         "`combat` ⚔️ • `duel` ⚔️ • `levelup` 📊\n"
-        "`halloffame` 🏆 • `reglement @Role` 📜\n\n"
-        "💡 *Tape dans le salon visé — embed d'info auto !*"
+        "`halloffame` 🏆 • `reglement @Role` 📜"
     ), inline=False)
     p7.add_field(name="🛡️ Anti-Raid", value=(
         "`.raidstop` — Désactiver le mode anti-raid\n"
         "*Détection auto : 5+ joins en 10 secondes*"
     ), inline=False)
-    p7.set_footer(text="Page 8/8 • QG Kdrama 🌸")
+    p7.set_footer(text="Page 8/9 • QG Kdrama 🌸")
     pages.append(p7)
+
+    # Page 8 — Utilitaires
+    p8 = discord.Embed(title="🔧 Utilitaires", color=0x3498db)
+    p8.add_field(name="🖼️ Profil & Info", value=(
+        "`.avatar [@membre]` — Affiche l'avatar d'un membre\n"
+        "`.snipe` — Dernier message supprimé du salon\n"
+        "`.invitations [@membre]` — Voir le nombre d'invitations\n"
+        "`.topinvitations` — Classement des meilleurs inviteurs"
+    ), inline=False)
+    p8.add_field(name="🔗 Invitations (Admin)", value=(
+        "`.setinvitation` — Définit le salon pour les logs d'invitations\n"
+        "*Quand un membre rejoint → message auto avec le compteur !*"
+    ), inline=False)
+    p8.add_field(name="🎲 Outils", value=(
+        "`.choisir <ID message>` — Choisit un gagnant parmi les réactions\n"
+        "`.sondage <question>` — Crée un sondage rapide\n"
+        "`.8ball <question>` — Boule magique\n"
+        "`.dice [faces]` — Lancer un dé"
+    ), inline=False)
+    p8.add_field(name="💑 Social", value=(
+        "`.marier @membre` — Demande en mariage\n"
+        "`.divorcer` — Divorce\n"
+        "`.anniversaire <JJ/MM>` — Enregistre ton anniversaire\n"
+        "`.giveaway <durée> <prix>` — Lancer un giveaway"
+    ), inline=False)
+    p8.set_footer(text="Page 9/9 • QG Kdrama 🌸")
+    pages.append(p8)
 
     # ── Navigation ────────────────────────────────────────────────
     index = [0]
@@ -1573,13 +1608,22 @@ async def unmute(ctx, member: discord.Member):
         await member.remove_roles(role)
         await ctx.send(embed=discord.Embed(description=f"🔊 **{member}** unmuté.", color=0x2ecc71))
 
-@bot.command()
+@bot.command(name="clear", aliases=["purge"])
 @commands.has_permissions(manage_messages=True)
-async def clear(ctx, amount: int = 5):
-    await ctx.channel.purge(limit=amount + 1)
-    msg = await ctx.send(embed=discord.Embed(description=f"🧹 {amount} message(s) supprimé(s).", color=0x3498db))
-    await asyncio.sleep(3)
-    await msg.delete()
+async def clear_cmd(ctx, nombre: str = "10"):
+    """Supprime des messages — .clear <nombre> ou .clear all"""
+    if nombre.lower() == "all":
+        deleted = await ctx.channel.purge(limit=None)
+        msg = await ctx.send(f"🗑️ {len(deleted)} messages supprimés !", delete_after=3)
+    else:
+        try:
+            n = int(nombre)
+            if n < 1 or n > 1000:
+                return await ctx.send("❌ Entre 1 et 1000 messages !")
+            deleted = await ctx.channel.purge(limit=n + 1)
+            msg = await ctx.send(f"🗑️ {len(deleted)-1} messages supprimés !", delete_after=3)
+        except ValueError:
+            await ctx.send("❌ Utilise `.clear <nombre>` ou `.clear all`")
 
 
 
@@ -2661,6 +2705,37 @@ async def on_member_join(member):
         return
 
     # Message de bienvenue — Prophétie B violet
+    # ── Tracker invitations ──────────────────────────────────
+    try:
+        new_invites = {inv.code: inv.uses for inv in await member.guild.invites()}
+        inviter = None
+        for code, uses in new_invites.items():
+            old_uses = guild_invites.get(member.guild.id, {}).get(code, 0)
+            if uses > old_uses:
+                # Trouver qui possède ce lien
+                for inv in await member.guild.invites():
+                    if inv.code == code and inv.inviter:
+                        inviter = inv.inviter
+                        break
+                break
+        guild_invites[member.guild.id] = new_invites
+        if inviter:
+            invite_counts[str(inviter.id)] += 1
+            total = invite_counts[str(inviter.id)]
+            if SALON_INVITATION_ID:
+                inv_channel = member.guild.get_channel(SALON_INVITATION_ID)
+                if inv_channel:
+                    embed_inv = discord.Embed(
+                        description=(
+                            f"🔗 **{member.mention}** a été invité par **{inviter.mention}** !\n"
+                            f"🎉 Merci pour ta contribution — tu es maintenant à **{total} invitation(s)** au total !"
+                        ),
+                        color=0x2ecc71
+                    )
+                    await inv_channel.send(embed=embed_inv)
+    except:
+        pass
+
     if not raid_mode:
         channel = None
         if SALON_BIENVENUE_ID:
@@ -6471,23 +6546,6 @@ async def unlock_cmd(ctx, salon: discord.TextChannel = None):
     await channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
     await ctx.send(f"🔓 {channel.mention} est maintenant déverrouillé !")
 
-@bot.command(name="sup", aliases=["supprimer"])
-@commands.has_permissions(manage_messages=True)
-async def sup_cmd(ctx, nombre: str = "10"):
-    """Supprime des messages — .clear <nombre> ou .clear all"""
-    if nombre.lower() == "all":
-        deleted = await ctx.channel.purge(limit=None)
-        await ctx.send(f"🗑️ {len(deleted)} messages supprimés !", delete_after=3)
-    else:
-        try:
-            n = int(nombre)
-            if n < 1 or n > 1000:
-                return await ctx.send("❌ Entre 1 et 1000 messages !")
-            deleted = await ctx.channel.purge(limit=n + 1)
-            await ctx.send(f"🗑️ {len(deleted)-1} messages supprimés !", delete_after=3)
-        except ValueError:
-            await ctx.send("❌ Utilise `.sup <nombre>` ou `.sup all`")
-
 # ─── Commandes animés/dramas/quotes (réparées) ───────────────
 
 ANIME_RECS = [
@@ -6643,17 +6701,10 @@ async def sorties_cmd(ctx):
 
 # ─── Système d'invitations ───────────────────────────────────
 
-invite_tracker = {}  # {invited_user_id: inviter_user_id}
-invite_counts  = defaultdict(int)  # {inviter_user_id: count}
-guild_invites  = {}  # cache des invitations
-
-@bot.event
-async def on_ready_invites():
-    for guild in bot.guilds:
-        try:
-            guild_invites[guild.id] = {inv.code: inv.uses for inv in await guild.invites()}
-        except:
-            pass
+invite_tracker  = {}   # {invited_user_id: inviter_user_id}
+invite_counts   = defaultdict(int)   # {inviter_user_id: count}
+guild_invites   = {}   # cache {guild_id: {code: uses}}
+SALON_INVITATION_ID = None  # salon où afficher les invitations
 
 @bot.event
 async def on_invite_create(invite):
@@ -6662,14 +6713,45 @@ async def on_invite_create(invite):
             guild_invites[invite.guild.id] = {}
         guild_invites[invite.guild.id][invite.code] = invite.uses or 0
 
+@bot.command(name="setinvitation")
+@commands.has_permissions(administrator=True)
+async def setinvitation_cmd(ctx):
+    """Définit le salon actuel pour les logs d'invitations — .setinvitation"""
+    global SALON_INVITATION_ID
+    SALON_INVITATION_ID = ctx.channel.id
+    await ctx.send(embed=discord.Embed(
+        description=f"✅ Salon d'invitation configuré sur {ctx.channel.mention} !\nLes nouvelles invitations seront affichées ici.",
+        color=0x2ecc71
+    ))
+
 @bot.command(name="invitations", aliases=["invites","inv"])
 async def invitations_cmd(ctx, membre: discord.Member = None):
     """Voir le nombre d'invitations — .invitations [@membre]"""
     cible = membre or ctx.author
     count = invite_counts[str(cible.id)]
     embed = discord.Embed(
-        description=f"🔗 **{cible.display_name}** a invité **{count}** membre(s) sur le serveur !",
+        title="🔗 Invitations",
+        description=f"**{cible.display_name}** a invité **{count}** membre(s) sur le serveur ! 🎉",
         color=0x2ecc71
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name="topinvitations", aliases=["topinvites"])
+async def topinvitations_cmd(ctx):
+    """Classement des membres qui ont le plus invité — .topinvitations"""
+    if not invite_counts:
+        return await ctx.send("❌ Aucune invitation enregistrée pour l'instant !")
+    sorted_invites = sorted(invite_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+    desc = ""
+    medals = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
+    for i, (uid, count) in enumerate(sorted_invites):
+        member = ctx.guild.get_member(int(uid))
+        name = member.display_name if member else f"Membre {uid}"
+        desc += f"{medals[i]} **{name}** — {count} invitation(s)\n"
+    embed = discord.Embed(
+        title="🏆 Top Invitations",
+        description=desc,
+        color=0xf1c40f
     )
     await ctx.send(embed=embed)
 
