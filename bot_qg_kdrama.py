@@ -5376,16 +5376,34 @@ async def ga_cmd(ctx):
                 )
 
         except asyncio.TimeoutError:
-            # Personne n'a claimé
+            # Personne n'a claimé — garder l'embed intact, juste retirer les réactions
             try:
                 await msg.clear_reactions()
+                rarete_emoji = RARETE_EMOJI.get(c["rarete"], "🔵")
+                couleur = RARETE_COULEURS.get(c["rarete"], 0x95a5a6)
+                level = fusion_levels[uid][key]
+                stars = "⭐" * level if level > 0 else ""
+                boost_atk = level * 15
+                boost_def = level * 10
+                boost_pv  = level * 20
                 expired_embed = discord.Embed(
-                    title=f"{c['emoji']} {c['nom']} — Expirée ⌛",
-                    description=f"*{c['serie']}* • Personne n'a claimé cette carte à temps !",
-                    color=0x555555
+                    title=f"{c['emoji']} {c['nom']} {stars}",
+                    description=f"*{c['serie']}* {rarete_emoji} **{c['rarete']}**",
+                    color=couleur
                 )
                 if c.get("image"):
                     expired_embed.set_image(url=c["image"])
+                expired_embed.add_field(
+                    name="📊 Stats",
+                    value=f"❤️ **{c['pv']+boost_pv}** PV | ⚔️ **{c['attaque']+boost_atk}** ATK | 🛡️ **{c['defense']+boost_def}** DEF",
+                    inline=False
+                )
+                attaques_str = "\n".join([
+                    f"{a['emoji']} **{a['nom']}** — `{a['degats']} dégâts`"
+                    for a in c["attaques"]
+                ])
+                expired_embed.add_field(name="⚔️ Attaques", value=attaques_str, inline=False)
+                expired_embed.set_footer(text="⏰ Claim expiré — personne n'a réclamé cette carte !")
                 await msg.edit(embed=expired_embed)
             except:
                 pass
@@ -5694,7 +5712,13 @@ async def gacha_cmd(ctx, sous_cmd: str = None, *args):
         embed = discord.Embed(title=f"{c['emoji']} {c['nom']}", description=desc, color=couleur)
         if c.get("image"):
             embed.set_image(url=c["image"])
-        embed.set_footer(text=f"ATK {c['atk']} • DEF {c['def']} • PV {c['pv']}")
+        embed.add_field(
+            name="📊 Stats",
+            value=f"❤️ **{c['pv']}** PV | ⚔️ **{c['attaque']}** ATK | 🛡️ **{c['defense']}** DEF",
+            inline=False
+        )
+        attaques_str = "\n".join([f"{a['emoji']} **{a['nom']}** — `{a['degats']} dégâts`" for a in c["attaques"]])
+        embed.add_field(name="⚔️ Attaques", value=attaques_str, inline=False)
         await ctx.send(embed=embed)
 
 @bot.command(name="wishlist", aliases=["wl", "wish"])
