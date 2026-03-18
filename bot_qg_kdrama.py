@@ -815,11 +815,27 @@ async def help_cmd(ctx, categorie: str = None):
         "`.avatar [@membre]` — Affiche l'avatar d'un membre\n"
         "`.snipe` — Dernier message supprimé du salon\n"
         "`.invitations [@membre]` — Voir le nombre d'invitations\n"
-        "`.topinvitations` — Classement des meilleurs inviteurs"
+        "`.topinvitations` — Classement des meilleurs inviteurs\n"
+        "`.setinvitation` — Salon logs invitations (admin)"
     ), inline=False)
-    p8.add_field(name="🔗 Invitations (Admin)", value=(
-        "`.setinvitation` — Définit le salon pour les logs d'invitations\n"
-        "*Quand un membre rejoint → message auto avec le compteur !*"
+    p8.add_field(name="🎲 Outils", value=(
+        "`.choisir <ID message>` — Gagnant aléatoire parmi les réactions\n"
+        "`.sondage <question>` — Créer un sondage rapide\n"
+        "`.8ball <question>` — Boule magique\n"
+        "`.dice [faces]` — Lancer un dé"
+    ), inline=False)
+    p8.add_field(name="💑 Social", value=(
+        "`.marier @membre` — Demande en mariage\n"
+        "`.divorcer` — Divorce\n"
+        "`.anniversaire <JJ/MM>` — Enregistre ton anniversaire\n"
+        "`.giveaway <durée> <prix>` — Lancer un giveaway"
+    ), inline=False)
+    p8.add_field(name="🎭 Autorole (Admin)", value=(
+        "`.autorole create <titre> | <desc>` — Crée un panel\n"
+        "`.autorole add <msg_id> <emoji> @role <label>` — Ajoute un rôle\n"
+        "`.autorole image <msg_id> <url>` — Ajoute une image/gif\n"
+        "`.autorole delete <msg_id>` — Supprime un panel\n"
+        "`.autorole list` — Voir les panels actifs"
     ), inline=False)
     p8.add_field(name="🎲 Outils", value=(
         "`.choisir <ID message>` — Choisit un gagnant parmi les réactions\n"
@@ -3261,25 +3277,25 @@ def _pendu_embed(game):
 #  BOUTIQUE
 # ============================================================
 SHOP_ITEMS = [
-    # ═══ Rôles exclusifs ═══
-    {"id": "vip", "nom": "💎 Rang S — VIP", "prix": 1000, "description": "Le rang des élus — accès exclusif aux salons VIP"},
+    # ═══ Rôles exclusifs (du plus cher au moins cher) ═══
+    {"id": "shadow",     "nom": "🌑 Monarque des Ombres",  "prix": 3000, "description": "Le rôle le plus rare du serveur — prestige absolu"},
+    {"id": "pillier",    "nom": "🔥 Pillier du Soleil",    "prix": 2000, "description": "Rôle légendaire des membres les plus actifs"},
     {"id": "drama_king", "nom": "👑 Roi des Malédictions", "prix": 1500, "description": "Le titre ultime façon Jujutsu Kaisen"},
-    {"id": "otaku", "nom": "🌀 Oeil de Dieu", "prix": 1200, "description": "Rôle exclusif des vrais connaisseurs d'animé"},
-    {"id": "gamer_pro", "nom": "⚔️ Chasseur National", "prix": 800, "description": "Le rang des meilleurs gamers du QG"},
-    {"id": "shadow", "nom": "🌑 Monarque des Ombres", "prix": 3000, "description": "Le rôle le plus rare du serveur — prestige absolu"},
-    {"id": "pillier", "nom": "🔥 Pillier du Soleil", "prix": 2000, "description": "Rôle légendaire des membres les plus actifs"},
-    # ═══ Boosts ═══
-    {"id": "double_xp", "nom": "⚡ Double XP (1h)", "prix": 300, "description": "Double ton XP pendant 1 heure !"},
-    {"id": "rolls_10", "nom": "🎰 +10 Rolls Gacha", "prix": 600, "description": "+10 rolls gacha instantanément !"},
-    {"id": "claim_20", "nom": "⚡ Claim 20 min", "prix": 800, "description": "Réduit le claim reset à 20 min (permanent)"},
-    {"id": "claim_15", "nom": "⚡ Claim 15 min", "prix": 1500, "description": "Réduit le claim reset à 15 min (permanent)"},
-    {"id": "claim_10", "nom": "⚡ Claim 10 min", "prix": 3000, "description": "Réduit le claim reset à 10 min (permanent)"},
-    # ═══ Items offensifs/défensifs (1x par jour) ═══
-    {"id": "freeze", "nom": "🧊 Sceau des Ombres", "prix": 500, "description": "Bloque le claim d'un joueur 10 secondes (1x/jour)", "daily": True},
-    {"id": "curse", "nom": "⏳ Malédiction", "prix": 400, "description": "+5 min sur le claim d'un joueur (1x/jour)", "daily": True},
-    {"id": "shield", "nom": "🛡️ Bouclier", "prix": 600, "description": "Protège du Sceau et Malédiction pendant 30 min"},
-    {"id": "boost_rarete", "nom": "🎯 Boost Rareté", "prix": 1500, "description": "↑↑ chances Épique/Légendaire/Mythique pour 5 rolls (1x/jour)", "daily": True},
-    {"id": "reset_claim", "nom": "🔄 Reset Claim", "prix": 1200, "description": "Reset ton claim cooldown immédiatement"},
+    {"id": "otaku",      "nom": "🌀 Oeil de Dieu",         "prix": 1200, "description": "Rôle exclusif des vrais connaisseurs d'animé"},
+    {"id": "vip",        "nom": "💎 Rang S — VIP",         "prix": 1000, "description": "Le rang des élus — accès exclusif aux salons VIP"},
+    {"id": "gamer_pro",  "nom": "⚔️ Chasseur National",   "prix": 800,  "description": "Le rang des meilleurs gamers du QG"},
+    # ═══ Boosts & Gacha (du plus cher au moins cher) ═══
+    {"id": "claim_10",    "nom": "⚡ Claim 10 min",   "prix": 3000, "description": "Réduit le claim reset à 10 min (permanent)"},
+    {"id": "boost_rarete","nom": "🎯 Boost Rareté",   "prix": 1500, "description": "↑↑ chances Épique/Légendaire/Mythique pour 5 rolls (1x/jour)", "daily": True},
+    {"id": "claim_15",    "nom": "⚡ Claim 15 min",   "prix": 1500, "description": "Réduit le claim reset à 15 min (permanent)"},
+    {"id": "reset_claim", "nom": "🔄 Reset Claim",    "prix": 1200, "description": "Reset ton claim cooldown immédiatement"},
+    {"id": "claim_20",    "nom": "⚡ Claim 20 min",   "prix": 800,  "description": "Réduit le claim reset à 20 min (permanent)"},
+    {"id": "rolls_10",    "nom": "🎰 +10 Rolls Gacha","prix": 600,  "description": "+10 rolls gacha instantanément !"},
+    # ═══ Items Gacha — sabotage & défense (du plus cher au moins cher) ═══
+    {"id": "shield",      "nom": "🛡️ Bouclier",        "prix": 600, "description": "Protège du Sceau et Malédiction pendant 30 min"},
+    {"id": "freeze",      "nom": "🧊 Sceau des Ombres", "prix": 500, "description": "Bloque le claim d'un joueur 10 secondes (1x/jour)", "daily": True},
+    {"id": "curse",       "nom": "⏳ Malédiction",       "prix": 400, "description": "+5 min sur le claim d'un joueur (1x/jour)", "daily": True},
+    {"id": "double_xp",   "nom": "⚡ Double XP (1h)",   "prix": 300, "description": "Double ton XP pendant 1 heure !"},
 ]
 
 shop_roles = {}  # {item_id: role_id}
@@ -5125,6 +5141,22 @@ rarity_boost = {}      # {uid: rolls_restants_avec_boost}
 daily_item_usage = defaultdict(lambda: defaultdict(float))  # {uid: {item_id: last_use_timestamp}}
 
 # Probabilités gacha
+RARETE_EMOJI = {
+    "Mythique":   "🔴",
+    "Légendaire": "🟠",
+    "Épique":     "🟣",
+    "Rare":       "🔵",
+    "Commun":     "⚪",
+}
+
+RARETE_COULEURS = {
+    "Mythique":   0xe74c3c,
+    "Légendaire": 0xe67e22,
+    "Épique":     0x9b59b6,
+    "Rare":       0x3498db,
+    "Commun":     0x95a5a6,
+}
+
 GACHA_RATES = {
     "Mythique":   1,     # ~0.01%
     "Légendaire": 50,    # ~0.5%
@@ -6778,6 +6810,225 @@ async def sondage_cmd(ctx, *, question: str = None):
         pass
 
 # ─── .kick avec motif en MP ──────────────────────────────────
+
+
+# ============================================================
+#  🎭 SYSTÈME AUTOROLE
+# ============================================================
+
+autorole_panels = {}   # {guild_id: [{message_id, channel_id, roles: [{emoji, role_id, label}], image}]}
+AUTOROLE_FILE = "autorole_config.json"
+
+def save_autorole():
+    try:
+        with open(AUTOROLE_FILE, "w") as f:
+            import json as _json
+            _json.dump(autorole_panels, f)
+    except:
+        pass
+
+def load_autorole():
+    global autorole_panels
+    try:
+        import json as _json
+        with open(AUTOROLE_FILE, "r") as f:
+            autorole_panels = _json.load(f)
+    except:
+        autorole_panels = {}
+
+@bot.command(name="autorole")
+@commands.has_permissions(administrator=True)
+async def autorole_cmd(ctx, *, args: str = None):
+    """Crée un panel autorole — .autorole help"""
+    if not args or args == "help":
+        embed = discord.Embed(
+            title="🎭 Système Autorole",
+            description=(
+                "**Créer un panel autorole interactif avec réactions**\n\n"
+                "**Étape 1 — Créer le panel :**\n"
+                "`.autorole create <titre> | <description>`\n"
+                "*Ex: `.autorole create Choisis ton rôle | Réagis pour obtenir un rôle !`*\n\n"
+                "**Étape 2 — Ajouter des rôles :**\n"
+                "`.autorole add <message_id> <emoji> @role <label>`\n"
+                "*Ex: `.autorole add 123456789 🎬 @Kdrama Fan Drama`*\n\n"
+                "**Étape 3 — Ajouter une image (optionnel) :**\n"
+                "`.autorole image <message_id> <url>`\n\n"
+                "**Supprimer un panel :**\n"
+                "`.autorole delete <message_id>`\n\n"
+                "**Voir les panels actifs :**\n"
+                "`.autorole list`"
+            ),
+            color=0x9b59b6
+        )
+        return await ctx.send(embed=embed)
+
+    parts = args.split(" ", 1)
+    sub = parts[0].lower()
+
+    # ── Créer un panel ──
+    if sub == "create":
+        if len(parts) < 2 or "|" not in parts[1]:
+            return await ctx.send("❌ Usage : `.autorole create <titre> | <description>`")
+        titre, desc = parts[1].split("|", 1)
+        embed = discord.Embed(
+            title=titre.strip(),
+            description=desc.strip(),
+            color=0x9b59b6
+        )
+        embed.set_footer(text="Réagis avec les emojis ci-dessous pour obtenir un rôle !")
+        msg = await ctx.send(embed=embed)
+        guild_id = str(ctx.guild.id)
+        if guild_id not in autorole_panels:
+            autorole_panels[guild_id] = []
+        autorole_panels[guild_id].append({
+            "message_id": str(msg.id),
+            "channel_id": str(ctx.channel.id),
+            "roles": [],
+            "image": None
+        })
+        save_autorole()
+        await ctx.send(f"✅ Panel créé ! ID du message : `{msg.id}`\nAjoute des rôles avec `.autorole add {msg.id} <emoji> @role <label>`", delete_after=15)
+
+    # ── Ajouter un rôle ──
+    elif sub == "add":
+        sub_parts = parts[1].split(" ", 3) if len(parts) > 1 else []
+        if len(sub_parts) < 3:
+            return await ctx.send("❌ Usage : `.autorole add <message_id> <emoji> @role [label]`")
+        msg_id = sub_parts[0]
+        emoji = sub_parts[1]
+        role_mention = sub_parts[2]
+        label = sub_parts[3] if len(sub_parts) > 3 else ""
+        # Trouver le rôle
+        role = None
+        if ctx.message.role_mentions:
+            role = ctx.message.role_mentions[0]
+        else:
+            role_id = role_mention.strip("<@&>")
+            if role_id.isdigit():
+                role = ctx.guild.get_role(int(role_id))
+        if not role:
+            return await ctx.send("❌ Rôle introuvable ! Mentionne le rôle avec @")
+        # Trouver le panel
+        guild_id = str(ctx.guild.id)
+        panel = None
+        for p in autorole_panels.get(guild_id, []):
+            if p["message_id"] == msg_id:
+                panel = p
+                break
+        if not panel:
+            return await ctx.send("❌ Panel introuvable ! Vérifie l'ID du message.")
+        # Ajouter le rôle au panel
+        panel["roles"].append({"emoji": emoji, "role_id": str(role.id), "label": label or role.name})
+        save_autorole()
+        # Modifier l'embed
+        try:
+            channel = ctx.guild.get_channel(int(panel["channel_id"]))
+            msg = await channel.fetch_message(int(msg_id))
+            embed = msg.embeds[0]
+            roles_text = "\n".join([f"{r['emoji']} — **{r['label']}**" for r in panel["roles"]])
+            embed.clear_fields()
+            embed.add_field(name="Rôles disponibles", value=roles_text, inline=False)
+            await msg.edit(embed=embed)
+            await msg.add_reaction(emoji)
+        except Exception as e:
+            print(f"Autorole add error: {e}")
+        await ctx.send(f"✅ Rôle **{role.name}** ajouté avec l'emoji {emoji} !", delete_after=5)
+
+    # ── Ajouter une image ──
+    elif sub == "image":
+        sub_parts = parts[1].split(" ", 1) if len(parts) > 1 else []
+        if len(sub_parts) < 2:
+            return await ctx.send("❌ Usage : `.autorole image <message_id> <url>`")
+        msg_id, url = sub_parts[0], sub_parts[1]
+        guild_id = str(ctx.guild.id)
+        for p in autorole_panels.get(guild_id, []):
+            if p["message_id"] == msg_id:
+                p["image"] = url
+                save_autorole()
+                try:
+                    channel = ctx.guild.get_channel(int(p["channel_id"]))
+                    msg = await channel.fetch_message(int(msg_id))
+                    embed = msg.embeds[0]
+                    embed.set_image(url=url)
+                    await msg.edit(embed=embed)
+                    await ctx.send("✅ Image ajoutée au panel !", delete_after=5)
+                except Exception as e:
+                    await ctx.send(f"❌ Erreur : {e}")
+                return
+        await ctx.send("❌ Panel introuvable !")
+
+    # ── Supprimer un panel ──
+    elif sub == "delete":
+        msg_id = parts[1].strip() if len(parts) > 1 else ""
+        guild_id = str(ctx.guild.id)
+        panels = autorole_panels.get(guild_id, [])
+        new_panels = [p for p in panels if p["message_id"] != msg_id]
+        if len(new_panels) == len(panels):
+            return await ctx.send("❌ Panel introuvable !")
+        autorole_panels[guild_id] = new_panels
+        save_autorole()
+        await ctx.send("✅ Panel supprimé !")
+
+    # ── Lister les panels ──
+    elif sub == "list":
+        guild_id = str(ctx.guild.id)
+        panels = autorole_panels.get(guild_id, [])
+        if not panels:
+            return await ctx.send("❌ Aucun panel autorole configuré !")
+        desc = ""
+        for p in panels:
+            channel = ctx.guild.get_channel(int(p["channel_id"]))
+            chan_name = channel.mention if channel else "salon supprimé"
+            roles_count = len(p["roles"])
+            desc += f"📌 Message `{p['message_id']}` dans {chan_name} — {roles_count} rôle(s)\n"
+        embed = discord.Embed(title="🎭 Panels Autorole actifs", description=desc, color=0x9b59b6)
+        await ctx.send(embed=embed)
+
+@bot.event
+async def on_raw_reaction_add(payload):
+    if payload.user_id == bot.user.id:
+        return
+    guild_id = str(payload.guild_id)
+    msg_id = str(payload.message_id)
+    emoji = str(payload.emoji)
+    for p in autorole_panels.get(guild_id, []):
+        if p["message_id"] == msg_id:
+            for r in p["roles"]:
+                if r["emoji"] == emoji:
+                    guild = bot.get_guild(payload.guild_id)
+                    if not guild:
+                        return
+                    member = guild.get_member(payload.user_id)
+                    role = guild.get_role(int(r["role_id"]))
+                    if member and role:
+                        try:
+                            await member.add_roles(role)
+                        except:
+                            pass
+                    return
+
+@bot.event
+async def on_raw_reaction_remove(payload):
+    if payload.user_id == bot.user.id:
+        return
+    guild_id = str(payload.guild_id)
+    msg_id = str(payload.message_id)
+    emoji = str(payload.emoji)
+    for p in autorole_panels.get(guild_id, []):
+        if p["message_id"] == msg_id:
+            for r in p["roles"]:
+                if r["emoji"] == emoji:
+                    guild = bot.get_guild(payload.guild_id)
+                    if not guild:
+                        return
+                    member = guild.get_member(payload.user_id)
+                    role = guild.get_role(int(r["role_id"]))
+                    if member and role:
+                        try:
+                            await member.remove_roles(role)
+                        except:
+                            pass
+                    return
 
 
 # ============================================================
