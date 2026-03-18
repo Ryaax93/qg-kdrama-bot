@@ -2989,21 +2989,6 @@ SORTIES = [
     {"titre": "Jujutsu Kaisen S3", "type": "✨ Animé", "date": "2026", "plateforme": "Crunchyroll"},
 ]
 
-@bot.command(name="sorties")
-async def sorties_cmd(ctx):
-    """Affiche le calendrier des prochaines sorties dramas/animés"""
-    embed = discord.Embed(
-        title="📅 Prochaines Sorties — Dramas & Animés",
-        color=0xff6b9d
-    )
-    for s in SORTIES:
-        embed.add_field(
-            name=f"{s['type']} — {s['titre']}",
-            value=f"📆 {s['date']} • 📺 {s['plateforme']}",
-            inline=False
-        )
-    embed.set_footer(text="💡 Liste mise à jour manuellement — .help pour toutes les commandes")
-    await ctx.send(embed=embed)
 
 # ============================================================
 #  DEVINE LE PERSONNAGE
@@ -3430,31 +3415,6 @@ async def banque_cmd(ctx, action: str = None, montant: int = None):
 # ============================================================
 #  SONDAGES
 # ============================================================
-@bot.command(name="sondage")
-async def sondage_cmd(ctx, question: str = None, *choix):
-    """
-    .sondage "Question ?" Option1 Option2 Option3
-    Ex: .sondage "Quel drama ce soir ?" Goblin Vincenzo Signal
-    """
-    if not question:
-        return await ctx.send('❌ Usage: `.sondage "Question?" choix1 choix2 choix3`')
-    if len(choix) < 2:
-        return await ctx.send("❌ Donne au moins 2 choix !")
-    if len(choix) > 9:
-        return await ctx.send("❌ Maximum 9 choix !")
-
-    numeros = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣"]
-    description = "\n".join([f"{numeros[i]} {c}" for i, c in enumerate(choix)])
-
-    embed = discord.Embed(
-        title=f"📊 {question}",
-        description=description,
-        color=0x5865F2
-    )
-    embed.set_footer(text=f"Sondage lancé par {ctx.author.display_name}")
-    msg = await ctx.send(embed=embed)
-    for i in range(len(choix)):
-        await msg.add_reaction(numeros[i])
 
 # ============================================================
 #  GIVEAWAY
@@ -6502,9 +6462,9 @@ async def unlock_cmd(ctx, salon: discord.TextChannel = None):
     await channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
     await ctx.send(f"🔓 {channel.mention} est maintenant déverrouillé !")
 
-@bot.command(name="clear", aliases=["purge"])
+@bot.command(name="sup", aliases=["supprimer"])
 @commands.has_permissions(manage_messages=True)
-async def clear_cmd(ctx, nombre: str = "10"):
+async def sup_cmd(ctx, nombre: str = "10"):
     """Supprime des messages — .clear <nombre> ou .clear all"""
     if nombre.lower() == "all":
         deleted = await ctx.channel.purge(limit=None)
@@ -6517,7 +6477,7 @@ async def clear_cmd(ctx, nombre: str = "10"):
             deleted = await ctx.channel.purge(limit=n + 1)
             await ctx.send(f"🗑️ {len(deleted)-1} messages supprimés !", delete_after=3)
         except ValueError:
-            await ctx.send("❌ Utilise `.clear <nombre>` ou `.clear all`")
+            await ctx.send("❌ Utilise `.sup <nombre>` ou `.sup all`")
 
 @bot.command(name="voler", aliases=["steal"])
 async def voler_cmd(ctx, emoji_str: str = None):
