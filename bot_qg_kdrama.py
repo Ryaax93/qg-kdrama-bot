@@ -1540,6 +1540,15 @@ async def ban(ctx, member: discord.Member, *, reason="Aucune raison fournie"):
 @bot.command()
 @commands.has_permissions(kick_members=True)
 async def kick(ctx, member: discord.Member, *, reason="Aucune raison fournie"):
+    try:
+        embed_mp = discord.Embed(
+            title=f"👢 Tu as été expulsé de **{ctx.guild.name}**",
+            description=f"📋 **Raison :** {reason}\n👮 **Par :** {ctx.author.display_name}",
+            color=0xe74c3c
+        )
+        await member.send(embed=embed_mp)
+    except:
+        pass
     await member.kick(reason=reason)
     await ctx.send(embed=discord.Embed(description=f"👢 **{member}** kické. Raison : {reason}", color=0xe67e22))
 
@@ -6687,39 +6696,3 @@ async def sondage_cmd(ctx, *, question: str = None):
         pass
 
 # ─── .kick avec motif en MP ──────────────────────────────────
-
-@bot.command(name="kick")
-@commands.has_permissions(kick_members=True)
-async def kick_cmd(ctx, membre: discord.Member = None, *, raison: str = "Aucune raison précisée"):
-    """Kick un membre — .kick @membre <raison>"""
-    if not membre:
-        return await ctx.send("❌ Mentionne un membre !")
-    if membre == ctx.author:
-        return await ctx.send("❌ Tu peux pas te kick toi-même !")
-    # MP au membre kické
-    try:
-        embed_mp = discord.Embed(
-            title=f"👢 Tu as été expulsé de **{ctx.guild.name}**",
-            description=f"📋 **Raison :** {raison}\n👮 **Par :** {ctx.author.display_name}",
-            color=0xe74c3c
-        )
-        await membre.send(embed=embed_mp)
-    except:
-        pass
-    await membre.kick(reason=f"{raison} | Par {ctx.author}")
-    await ctx.send(embed=discord.Embed(
-        description=f"👢 **{membre.display_name}** a été expulsé du serveur.\n📋 Raison : {raison}",
-        color=0xe74c3c
-    ))
-
-
-import traceback, time
-while True:
-    try:
-        bot.run(TOKEN)
-    except Exception as e:
-        print(f"❌ CRASH BOT: {e}")
-        traceback.print_exc()
-        print("🔄 Redémarrage dans 5 secondes...")
-        time.sleep(5)
-
