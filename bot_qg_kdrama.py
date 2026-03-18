@@ -6479,7 +6479,7 @@ async def sup_cmd(ctx, nombre: str = "10"):
         except ValueError:
             await ctx.send("❌ Utilise `.sup <nombre>` ou `.sup all`")
 
-@bot.command(name="voler", aliases=["steal"])
+@bot.command(name="voler")
 async def voler_cmd(ctx, emoji_str: str = None):
     """Vole un emoji d'un autre serveur — .voler <emoji>"""
     if not emoji_str:
