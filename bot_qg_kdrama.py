@@ -6479,28 +6479,6 @@ async def sup_cmd(ctx, nombre: str = "10"):
         except ValueError:
             await ctx.send("❌ Utilise `.sup <nombre>` ou `.sup all`")
 
-@bot.command(name="voler")
-async def voler_cmd(ctx, emoji_str: str = None):
-    """Vole un emoji d'un autre serveur — .voler <emoji>"""
-    if not emoji_str:
-        return await ctx.send("❌ Utilise : `.voler <emoji>` — Copie-colle l'emoji depuis un autre serveur")
-    import re as _re
-    match = _re.search(r'<(a?):(\w+):(\d+)>', emoji_str)
-    if not match:
-        return await ctx.send("❌ Emoji custom introuvable ! Envoie directement l'emoji d'un autre serveur.")
-    animated, name, emoji_id = match.group(1), match.group(2), match.group(3)
-    ext = "gif" if animated else "png"
-    url = f"https://cdn.discordapp.com/emojis/{emoji_id}.{ext}"
-    try:
-        import urllib.request as _ur
-        data = _ur.urlopen(url, timeout=5).read()
-        new_emoji = await ctx.guild.create_custom_emoji(name=name, image=data)
-        await ctx.send(f"✅ Emoji **:{name}:** ajouté ! {new_emoji}")
-    except discord.Forbidden:
-        await ctx.send("❌ Je n'ai pas la permission d'ajouter des emojis !")
-    except Exception as e:
-        await ctx.send(f"❌ Erreur : {e}")
-
 # ─── Commandes animés/dramas/quotes (réparées) ───────────────
 
 ANIME_RECS = [
@@ -6743,4 +6721,4 @@ while True:
         print(f"❌ CRASH BOT: {e}")
         traceback.print_exc()
         print("🔄 Redémarrage dans 5 secondes...")
-        time.sleep(5)
+        time.sleep(5) 
