@@ -207,16 +207,43 @@ ANIME_ALIASES = {
     "kingdom": [],
 }
 
+def normalize_str(s: str) -> str:
+    """Normalise une chaîne : minuscules, sans accents, sans ponctuation"""
+    import unicodedata, re as _re
+    s = s.lower().strip()
+    # Supprimer les accents
+    s = unicodedata.normalize('NFD', s)
+    s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
+    # Supprimer ponctuation sauf tirets
+    s = _re.sub(r"[^\w\s-]", "", s)
+    # Espaces multiples
+    s = _re.sub(r"\s+", " ", s).strip()
+    return s
+
 def check_answer(reponse: str, correct: str) -> bool:
-    """Vérifie si la réponse est correcte — accepte alias FR/EN/JP"""
-    reponse = reponse.lower().strip()
-    correct = correct.lower().strip()
-    if reponse == correct:
+    """Vérifie si la réponse est correcte — tolère accents, ponctuation, abréviations"""
+    rep_raw = reponse.lower().strip()
+    cor_raw = correct.lower().strip()
+    if rep_raw == cor_raw:
         return True
+    # Normalisation accents/ponctuation
+    rep_n = normalize_str(reponse)
+    cor_n = normalize_str(correct)
+    if rep_n == cor_n:
+        return True
+    # Réponse contenue dans la bonne (ou inverse) pour réponses partielles
+    if rep_n and cor_n and (rep_n in cor_n or cor_n in rep_n):
+        # Éviter faux positifs trop courts
+        if len(rep_n) >= 3:
+            return True
     # Chercher dans les alias
     for canonical, aliases in ANIME_ALIASES.items():
-        groupe = [canonical] + aliases
-        if correct in groupe and reponse in groupe:
+        groupe = [normalize_str(x) for x in [canonical] + aliases]
+        if normalize_str(correct) in groupe and normalize_str(reponse) in groupe:
+            return True
+    # Accepter réponses multiples séparées par / ou |
+    for alt in correct.split("/"):
+        if normalize_str(reponse) == normalize_str(alt.strip()):
             return True
     return False
 
@@ -236,7 +263,6 @@ QUIZ_KDRAMA = [
     {"q": "Quel drama raconte l'histoire d'une héritière tombant en Corée du Nord ?", "a": "crash landing on you"},
     {"q": "Dans Descendants of the Sun, quel est le métier du personnage principal ?", "a": "soldat"},
     {"q": "Dans Hospital Playlist, combien d'amis médecins forment le groupe principal ?", "a": "5"},
-    {"q": "Quel drama coréen met en scène des joueurs forcés à participer à des jeux mortels pour de l'argent ?", "a": "squid game"},
     {"q": "Dans Signal, quel objet permet aux personnages de communiquer à travers le temps ?", "a": "talkie walkie"},
     {"q": "Dans Weightlifting Fairy Kim Bok-joo, quel sport pratique l'héroïne ?", "a": "haltérophilie"},
     {"q": "Quel acteur joue dans Crash Landing on You et Descendants of the Sun ?", "a": "hyun bin"},
@@ -246,11 +272,38 @@ QUIZ_KDRAMA = [
     {"q": "Dans Business Proposal, comment les deux personnages principaux se rencontrent-ils ?", "a": "blind date"},
     {"q": "Dans Twenty-Five Twenty-One, quel sport pratique l'héroïne ?", "a": "escrime"},
     {"q": "Dans Extraordinary Attorney Woo, de quelle condition est atteinte l'héroïne ?", "a": "autisme"},
+    {"q": "Dans quel drama Song Hye-kyo joue une femme qui se venge après son divorce ?", "a": "the glory"},
+    {"q": "Dans Juvenile Justice, quel est le métier de la protagoniste ?", "a": "juge"},
+    {"q": "Dans Hometown Cha-Cha-Cha, dans quelle ville se passe l'histoire ?", "a": "gongjin"},
+    {"q": "Dans My Mister, quel acteur joue le personnage principal masculin ?", "a": "lee sun-kyun"},
+    {"q": "Dans Arthdal Chronicles, quel est le nom de la tribu principale ?", "a": "igutu"},
+    {"q": "Dans Start-Up, comment s'appelle la startup que crée l'héroïne ?", "a": "samsan tech"},
+    {"q": "Dans Move to Heaven, que fait le personnage principal comme métier ?", "a": "trauma cleaner"},
+    {"q": "Dans Sweet Home, qu'est-ce que les humains deviennent ?", "a": "monstres"},
+    {"q": "Dans Hellbound, qui mène une organisation religieuse appelée La Nouvelle Vérité ?", "a": "jung jin-soo"},
+    {"q": "Dans Mr. Sunshine, dans quelle période historique se déroule le drama ?", "a": "joseon"},
+    {"q": "Quel drama met en scène un système de simulation de vie passée ?", "a": "black mirror/be right back"},
+    {"q": "Dans Pinocchio, quel est le syndrome éponyme dans le drama ?", "a": "hoquet quand on ment"},
+    {"q": "Dans Reply 1994, comment s'appelle le personnage principal féminin ?", "a": "sung na-jung"},
+    {"q": "Dans Nine: Nine Time Travels, combien de voyages dans le temps sont possibles ?", "a": "9"},
+    {"q": "Dans The World of the Married, quel est le métier de l'héroïne ?", "a": "médecin"},
+    {"q": "Dans Flower of Evil, quelle est la double vie du mari ?", "a": "tueur en série"},
+    {"q": "Dans 'Voice', quel est le numéro d'urgence coréen ?", "a": "112"},
+    {"q": "Dans When the Camellia Blooms, comment s'appelle le bar de l'héroïne ?", "a": "camellia"},
+    {"q": "Dans D.P., que signifie D.P. ?", "a": "deserter pursuit"},
+    {"q": "Dans Reborn Rich, en quelle année le protagoniste se réincarne-t-il ?", "a": "1987"},
+    {"q": "Dans All of Us Are Dead, où se passe le drama ?", "a": "lycée"},
+    {"q": "Dans Crash Course in Romance, quel est le métier de l'héroïne ?", "a": "restauratrice"},
+    {"q": "Dans Doctor Slump, quel est le point commun des deux protagonistes ?", "a": "burnout"},
+    {"q": "Dans Queen of Tears, quelle est la famille riche du drama ?", "a": "queens group"},
+    {"q": "Dans My Demon, qui est le démon ?", "a": "do hyeok-nu"},
+    {"q": "Dans Mask Girl, quel est le complexe principal de l'héroïne ?", "a": "son apparence physique"},
 ]
 
 QUIZ_ANIME = [
     {"q": "Quel est le vrai nom de Light Yagami dans Death Note ?", "a": "light yagami"},
-    {"q": "Dans Demon Slayer, quelle est la technique signature de Tanjiro ?", "a": "respiration de l'eau"},
+    {"q": "Dans Demon Slayer, quelle est la technique signature de Tanjiro avec l'eau ?", "a": "respiration de l'eau"},
+    {"q": "Dans Demon Slayer, comment s'appelle la technique du Soleil de Tanjiro ?", "a": "hinokami kagura/danse du feu"},
     {"q": "Quel animé se passe dans le monde des Titans derrière des murs ?", "a": "attack on titan"},
     {"q": "Comment s'appelle le démon que Tanjiro affronte comme boss final dans Demon Slayer ?", "a": "muzan"},
     {"q": "Dans One Piece, quel est le fruit du diable de Luffy ?", "a": "gomu gomu"},
@@ -258,32 +311,80 @@ QUIZ_ANIME = [
     {"q": "Dans Your Lie in April, de quel instrument joue Kousei ?", "a": "piano"},
     {"q": "Combien de titans primordiaux existent dans Attack on Titan ?", "a": "9"},
     {"q": "Dans FMA Brotherhood, quel est l'équivalent sacrifié par Ed pour ramener Alphonse ?", "a": "son bras"},
-    {"q": "Combien de membres compte l'équipe de volleyball de Karasuno dans Haikyuu ?", "a": "12"},
     {"q": "Dans Naruto, quel est le nom du renard à 9 queues scellé en Naruto ?", "a": "kurama"},
-    {"q": "Dans One Piece, combien de membres compte l'équipage de Luffy au départ ?", "a": "3"},
-    {"q": "Dans Jujutsu Kaisen, quel est le rang de Gojo Satoru ?", "a": "spécial de classe 1"},
+    {"q": "Dans Jujutsu Kaisen, quel est le rang de Gojo Satoru ?", "a": "special de classe 1"},
     {"q": "Dans Attack on Titan, quel est le nom du titan de Eren au début ?", "a": "titan assaillant"},
     {"q": "Dans Demon Slayer, quelle est la couleur des yeux de Nezuko ?", "a": "rose"},
     {"q": "Dans Hunter x Hunter, quelle est la technique de Killua qui utilise l'électricité ?", "a": "godspeed"},
     {"q": "Dans Dragon Ball Z, sur quelle planète Goku est-il né ?", "a": "vegeta"},
-    {"q": "Dans Sword Art Online, comment s'appelle le jeu de réalité virtuelle du début ?", "a": "sword art online"},
     {"q": "Dans My Hero Academia, quel est le vrai nom du Quirk de Deku ?", "a": "one for all"},
     {"q": "Dans Tokyo Ghoul, que devient Ken Kaneki après une opération ?", "a": "demi-ghoul"},
     {"q": "Dans Black Clover, quelle magie possède Asta contrairement aux autres ?", "a": "aucune"},
     {"q": "Dans Solo Leveling, quel est le rang initial de Sung Jin-Woo ?", "a": "e"},
-    {"q": "Dans Code Geass, quel pouvoir possède Lelouch ?", "a": "géass"},
-    {"q": "Dans Vinland Saga, quel est le nom du père de Thorfinn ?", "a": "thors"},
+    {"q": "Dans Code Geass, quel pouvoir possède Lelouch ?", "a": "geass"},
     {"q": "Dans Re:Zero, comment s'appelle le pouvoir de Subaru ?", "a": "retour par la mort"},
-    {"q": "Dans Fullmetal Alchemist, quel est le principe fondamental de l'alchimie ?", "a": "échange équivalent"},
-    {"q": "Dans One Piece, quel est le surnom de Zoro ?", "a": "chasseur de pirates"},
+    {"q": "Dans Fullmetal Alchemist, quel est le principe fondamental de l'alchimie ?", "a": "echange equivalent"},
     {"q": "Dans Naruto, quelle est la technique ultime de Naruto ?", "a": "rasengan"},
     {"q": "Dans Death Note, comment s'appelle le shinigami qui donne le Death Note à Light ?", "a": "ryuk"},
-    {"q": "Dans Haikyuu, quel est le poste de Hinata ?", "a": "attaquant"},
     {"q": "Dans Demon Slayer, combien y a-t-il de Piliers ?", "a": "9"},
     {"q": "Dans Jujutsu Kaisen, quelle malédiction est scellée dans Yuji ?", "a": "sukuna"},
-    {"q": "Dans Hunter x Hunter, que veut trouver Gon comme objectif principal ?", "a": "son père"},
+    {"q": "Dans Hunter x Hunter, que veut trouver Gon comme objectif principal ?", "a": "son pere"},
     {"q": "Dans My Hero Academia, quel est le vrai nom d'All Might ?", "a": "toshinori yagi"},
-    {"q": "Dans Attack on Titan, quel est le nom du Survey Corps en japonais ?", "a": "shingeki no kyojin"},
+    {"q": "Dans quel animé voit-on des personnages utiliser des respirations pour combattre des démons ?", "a": "demon slayer"},
+    {"q": "Dans One Punch Man, pourquoi Saitama est-il si fort ?", "a": "entrainement intensif"},
+    {"q": "Dans Naruto, quel est le groupe de méchants principaux ?", "a": "akatsuki"},
+    {"q": "Dans Bleach, comment s'appelle l'épée de Ichigo ?", "a": "zangetsu"},
+    {"q": "Dans Dragon Ball, quel est le niveau de puissance légendaire d'un Saiyan ?", "a": "super saiyan"},
+    {"q": "Dans One Piece, comment s'appelle l'équipage de Luffy ?", "a": "chapeau de paille"},
+    {"q": "Dans Naruto, qui est le sensei de l'équipe 7 ?", "a": "kakashi"},
+    {"q": "Dans Jujutsu Kaisen, quelle est la technique de domaine de Gojo ?", "a": "infinity/infini"},
+    {"q": "Dans Attack on Titan, quel est le nom du mur extérieur ?", "a": "maria"},
+    {"q": "Dans Demon Slayer, quel Pilier est le mari de Aoi ?", "a": "tengen uzui"},
+    {"q": "Dans Fullmetal Alchemist, comment s'appelle le pays principal ?", "a": "amestris"},
+    {"q": "Dans Hunter x Hunter, quel est le nom de l'organisation des chasseurs ?", "a": "association des chasseurs"},
+    {"q": "Dans My Hero Academia, comment s'appelle l'école de héros ?", "a": "ua"},
+    {"q": "Dans Sword Art Online, quel est l'ID de Kirito dans le jeu ?", "a": "kirito"},
+    {"q": "Dans Dragon Ball Z, qui est le rival principal de Goku ?", "a": "vegeta"},
+    {"q": "Dans Bleach, qu'est-ce qu'un Bankai ?", "a": "liberation finale du zanpakuto"},
+    {"q": "Dans Tokyo Ghoul, dans quel arrondissement de Tokyo se passe l'histoire ?", "a": "20ème"},
+    {"q": "Dans One Piece, comment s'appelle le monde sous-marin de poissons-hommes ?", "a": "fishman island"},
+    {"q": "Dans Naruto, quel est l'œil légendaire des Uchiha ?", "a": "sharingan"},
+    {"q": "Dans Demon Slayer, quelle est la couleur de la respiration de Rengoku ?", "a": "flamme/rouge"},
+    {"q": "Dans JJK, comment s'appelle l'école de Yuji ?", "a": "tokyo jujutsu high"},
+    {"q": "Dans AoT, qui est le commandant du Survey Corps ?", "a": "erwin"},
+    {"q": "Dans Black Clover, comment s'appelle le grimoire à 5 feuilles d'Asta ?", "a": "grimoire de la magie antimagie"},
+    {"q": "Dans HxH, comment s'appelle la capacité de manipulation d'énergie ?", "a": "nen"},
+    {"q": "Dans Overlord, quel niveau maximum possède Ainz ?", "a": "100"},
+    {"q": "Dans Re:Zero, comment s'appelle la grande spirit de glace ?", "a": "emilia"},
+    {"q": "Dans Vinland Saga, quel est le nom du mentor de Thorfinn ?", "a": "askeladd"},
+    {"q": "Dans Mob Psycho 100, quel est le vrai prénom de Mob ?", "a": "shigeo"},
+    {"q": "Dans Code Geass, quel est le nom du mecha de Lelouch ?", "a": "lancelot"},
+    {"q": "Dans Berserk, comment s'appelle l'épée géante de Guts ?", "a": "dragonslayer"},
+    {"q": "Dans Solo Leveling, comment s'appelle le système qui guide Jin-Woo ?", "a": "system"},
+    {"q": "Dans Kimetsu no Yaiba, comment se nomme l'organisation des tueurs de démons ?", "a": "demon slayer corps"},
+    {"q": "Dans Steins;Gate, que signifie El Psy Kongroo ?", "a": "rien/phrase inventee"},
+    {"q": "Dans Cowboy Bebop, comment s'appelle le vaisseau des chasseurs de primes ?", "a": "bebop"},
+    {"q": "Dans Parasyte, dans quelle partie du corps Migi s'est-il installé ?", "a": "main droite"},
+    {"q": "Dans Made in Abyss, comment s'appelle l'abîme géant ?", "a": "the abyss"},
+    {"q": "Dans Vinland Saga, de quel pays est originaire Thorfinn ?", "a": "islande"},
+    {"q": "Dans Gintama, comment s'appelle le sabre en bois de Gintoki ?", "a": "bokuto"},
+    {"q": "Dans Fate, quel est le vrai nom de Saber ?", "a": "artoria/arturia"},
+    {"q": "Dans Tower of God, quel surnom a Bam ?", "a": "black turtle/vingt-cinquième bam"},
+    {"q": "Dans Chainsaw Man, quelle est la forme finale de Makima ?", "a": "control devil"},
+    {"q": "Dans Bungo Stray Dogs, quelle est l'organisation criminelle principale ?", "a": "la guilde du port"},
+    {"q": "Dans Assassination Classroom, comment s'appelle la classe des personnages principaux ?", "a": "classe 3-e"},
+    {"q": "Dans Rurouni Kenshin, quelle est la technique ultime de Kenshin ?", "a": "amakakeru ryu no hirameki"},
+    {"q": "Dans Spirited Away, comment s'appelle le patron des bains ?", "a": "yubaba"},
+    {"q": "Dans Fullmetal Alchemist, comment s'appellent les créatures homunculi ?", "a": "homunculi"},
+    {"q": "Dans Naruto, combien de queues a le démon de Killer Bee ?", "a": "8"},
+    {"q": "Dans One Piece, quel est le fruit du diable de Ace ?", "a": "mera mera"},
+    {"q": "Dans Dragon Ball, comment s'appelle la technique d'énergie signature de Goku ?", "a": "kamehameha"},
+    {"q": "Dans My Hero Academia, quelle est la capacité de Hawks ?", "a": "fierce wings/plumes"},
+    {"q": "Dans Demon Slayer, qui est le Pilier du Vent ?", "a": "sanemi"},
+    {"q": "Dans JJK, comment s'appelle la technique des 10 ombres de Megumi ?", "a": "dix ombres"},
+    {"q": "Dans Black Clover, quel est le titre du chef des Magic Knights ?", "a": "magic emperor/roi des mages"},
+    {"q": "Dans HxH, quel est le vrai nom de Killua ?", "a": "killua zoldyck"},
+    {"q": "Dans Overlord, comment s'appelle la guilde d'Ainz ?", "a": "ainz ooal gown"},
 ]
 
 QUIZ_GAMING = [
@@ -293,26 +394,41 @@ QUIZ_GAMING = [
     {"q": "Dans League of Legends, comment s'appelle la tour centrale à détruire ?", "a": "nexus"},
     {"q": "Dans Minecraft, quel matériau est le plus résistant ?", "a": "netherite"},
     {"q": "Quel est le nom du dragon final dans Skyrim ?", "a": "alduin"},
-    {"q": "Dans Genshin Impact, quel élément représente Zhongli ?", "a": "géo"},
-    {"q": "Dans Hollow Knight, comment s'appelle le royaume des insectes ?", "a": "hallownest"},
+    {"q": "Dans Genshin Impact, quel élément représente Zhongli ?", "a": "geo"},
     {"q": "Dans Fortnite, combien de joueurs participent à une partie Battle Royale standard ?", "a": "100"},
     {"q": "Dans GTA V, combien de personnages jouables y a-t-il ?", "a": "3"},
-    {"q": "Dans Among Us, comment s'appelle le lieu central du vaisseau ?", "a": "cafétéria"},
     {"q": "Dans Pokémon, quelle est l'évolution finale de Salamèche ?", "a": "dracaufeu"},
-    {"q": "Dans Call of Duty Warzone, dans quelle ville se déroule la carte principale de départ ?", "a": "verdansk"},
-    {"q": "Dans FIFA, comment s'appelle le mode avec des cartes de joueurs à collectionner ?", "a": "ultimate team"},
     {"q": "Dans Zelda Breath of the Wild, quel est le nom du château principal ?", "a": "hyrule"},
     {"q": "Dans Dark Souls, comment s'appelle le boss final du premier jeu ?", "a": "gwyn"},
     {"q": "Dans Overwatch, quel est le rôle principal de Mercy ?", "a": "support"},
     {"q": "Dans Apex Legends, combien de joueurs composent une équipe standard ?", "a": "3"},
     {"q": "Dans Red Dead Redemption 2, quel est le nom du gang principal ?", "a": "van der linde"},
     {"q": "Dans Cyberpunk 2077, dans quelle ville futuriste se passe le jeu ?", "a": "night city"},
+    {"q": "Dans Hollow Knight, comment s'appelle le royaume des insectes ?", "a": "hallownest"},
+    {"q": "Dans FIFA, comment s'appelle le mode avec des cartes de joueurs à collectionner ?", "a": "ultimate team"},
+    {"q": "Dans Call of Duty, comment s'appelle la carte Battle Royale principale de Warzone ?", "a": "verdansk"},
+    {"q": "Dans Among Us, comment s'appelle le lieu central du vaisseau ?", "a": "cafeteria"},
+    {"q": "Dans Genshin Impact, quel est le nom du protagoniste masculin par défaut ?", "a": "aether"},
+    {"q": "Dans Pokémon Rouge/Bleu, quel est le premier Pokémon du Pokédex ?", "a": "bulbizarre"},
+    {"q": "Dans Super Mario, comment s'appelle la princesse que Mario sauve toujours ?", "a": "peach"},
+    {"q": "Dans Fortnite, comment s'appelle la zone qui rétrécit ?", "a": "tempete/storm"},
+    {"q": "Dans Minecraft, comment s'appelle le boss final ?", "a": "ender dragon"},
+    {"q": "Dans League of Legends, comment s'appelle la rivière qui divise la carte ?", "a": "riviere"},
+    {"q": "Dans Valorant, quel agent peut se téléporter ?", "a": "jett/omen/yoru"},
+    {"q": "Dans GTA San Andreas, comment s'appelle le personnage principal ?", "a": "cj/carl johnson"},
+    {"q": "Dans Dark Souls 3, comment s'appelle le boss final secret ?", "a": "soul of cinder"},
+    {"q": "Dans Zelda Ocarina of Time, comment s'appelle la fée de Link ?", "a": "navi"},
+    {"q": "Dans Pokémon, comment s'appelle le champion de la ligue à Kanto ?", "a": "blue/gary"},
+    {"q": "Dans Elden Ring, comment s'appelle la déesse de l'Anneau unique ?", "a": "marika"},
+    {"q": "Dans Genshin, quel personnage est le Archon de l'eau ?", "a": "focalors/furina"},
+    {"q": "Dans FIFA 23, quelle est la note du meilleur joueur ?", "a": "91"},
+    {"q": "Dans Apex Legends, quel est le personnage de légende avec une barrière de bouclier ?", "a": "gibraltar"},
 ]
 
 QUIZ_CULTURE = [
-    {"q": "Quelle est la capitale de la Corée du Sud ?", "a": "séoul"},
+    {"q": "Quelle est la capitale de la Corée du Sud ?", "a": "seoul"},
     {"q": "En quelle année a eu lieu la Révolution française ?", "a": "1789"},
-    {"q": "Qui a peint la Joconde ?", "a": "léonard de vinci"},
+    {"q": "Qui a peint la Joconde ?", "a": "leonard de vinci"},
     {"q": "Quelle planète est la plus proche du Soleil ?", "a": "mercure"},
     {"q": "Combien de côtés a un hexagone ?", "a": "6"},
     {"q": "Quel est le plus grand océan du monde ?", "a": "pacifique"},
@@ -329,7 +445,22 @@ QUIZ_CULTURE = [
     {"q": "Quelle est la montagne la plus haute du monde ?", "a": "everest"},
     {"q": "Dans quel pays se trouve la Grande Muraille ?", "a": "chine"},
     {"q": "Combien de continents y a-t-il sur Terre ?", "a": "7"},
-    {"q": "Qui a écrit Harry Potter ?", "a": "j.k. rowling"},
+    {"q": "Qui a écrit Harry Potter ?", "a": "jk rowling"},
+    {"q": "Quelle est la capitale de l'Australie ?", "a": "canberra"},
+    {"q": "Quel est le plus petit pays du monde ?", "a": "vatican"},
+    {"q": "En quelle année a eu lieu la Seconde Guerre mondiale ?", "a": "1939"},
+    {"q": "Qui a peint La Nuit étoilée ?", "a": "van gogh"},
+    {"q": "Quelle est la formule chimique de l'eau ?", "a": "h2o"},
+    {"q": "Quel est le pays le plus peuplé du monde ?", "a": "inde"},
+    {"q": "Combien de notes y a-t-il dans une octave ?", "a": "8"},
+    {"q": "Quelle est la vitesse de la lumière (arrondie) ?", "a": "300000 km/s"},
+    {"q": "Qui a écrit L'Odyssée ?", "a": "homere"},
+    {"q": "Quelle est la devise de la France ?", "a": "liberte egalite fraternite"},
+    {"q": "Quel est le fleuve le plus long du monde ?", "a": "nil/amazone"},
+    {"q": "En quelle année a été fondée la compagnie Apple ?", "a": "1976"},
+    {"q": "Qui a inventé la relativité générale ?", "a": "einstein"},
+    {"q": "Quel est le pays avec le plus de volcans actifs ?", "a": "indonesie"},
+    {"q": "Dans quelle ville se trouve le Colisée ?", "a": "rome"},
 ]
 
 
@@ -1042,28 +1173,34 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
             return m.channel == ctx.channel and m.author.id in player_ids and not m.author.bot
 
         answered = False
-        try:
-            msg = await bot.wait_for("message", check=check_duel, timeout=20)
-            if ctx.channel.id not in quiz_duels:
+        end_time = asyncio.get_event_loop().time() + 20
+        while not answered:
+            remaining = end_time - asyncio.get_event_loop().time()
+            if remaining <= 0:
+                await ctx.send(embed=discord.Embed(
+                    description=f"⏰ Temps écoulé ! La réponse était : **{q['a']}**",
+                    color=0x95a5a6
+                ))
                 break
-            if msg.content.lower().strip() == q["a"]:
-                quiz_duels[ctx.channel.id]["players"][msg.author.id]["score"] += 1
-                score = quiz_duels[ctx.channel.id]["players"][msg.author.id]["score"]
+            try:
+                msg = await bot.wait_for("message", check=check_duel, timeout=remaining)
+                if ctx.channel.id not in quiz_duels:
+                    break
+                if check_answer(msg.content, q["a"]):
+                    quiz_duels[ctx.channel.id]["players"][msg.author.id]["score"] += 1
+                    score = quiz_duels[ctx.channel.id]["players"][msg.author.id]["score"]
+                    await ctx.send(embed=discord.Embed(
+                        description=f"✅ **{msg.author.display_name}** a trouvé ! ({score} pt{'s' if score > 1 else ''})",
+                        color=0x2ecc71
+                    ))
+                    answered = True
+                # Mauvaise réponse → on continue à écouter les autres
+            except asyncio.TimeoutError:
                 await ctx.send(embed=discord.Embed(
-                    description=f"✅ **{msg.author.display_name}** a trouvé ! ({score} pt{'s' if score > 1 else ''})",
-                    color=0x2ecc71
+                    description=f"⏰ Temps écoulé ! La réponse était : **{q['a']}**",
+                    color=0x95a5a6
                 ))
-                answered = True
-            else:
-                await ctx.send(embed=discord.Embed(
-                    description=f"❌ **{msg.author.display_name}** — Mauvaise réponse ! La réponse était : **{q['a']}**",
-                    color=0xe74c3c
-                ))
-        except asyncio.TimeoutError:
-            await ctx.send(embed=discord.Embed(
-                description=f"⏰ Temps écoulé ! La réponse était : **{q['a']}**",
-                color=0x95a5a6
-            ))
+                break
 
         await asyncio.sleep(2)
 
@@ -2967,10 +3104,16 @@ async def pendu_cmd(ctx):
         return await ctx.send("🎮 Une partie de pendu est déjà en cours !")
 
     mot = random.choice(PENDU_MOTS)
+    # Révéler la première lettre
+    trouve_init = ["_" if c != " " else " " for c in mot]
+    premiere = mot[0]
+    for i, c in enumerate(mot):
+        if c == premiere:
+            trouve_init[i] = c
     active_pendu[ctx.channel.id] = {
         "mot": mot,
-        "trouve": ["_" if c != " " else " " for c in mot],
-        "lettres": [],
+        "trouve": trouve_init,
+        "lettres": [premiere],
         "erreurs": 0,
         "max_erreurs": 6
     }
@@ -2978,12 +3121,25 @@ async def pendu_cmd(ctx):
     await ctx.send(embed=_pendu_embed(active_pendu[ctx.channel.id]))
 
     def check(m):
-        return m.channel == ctx.channel and not m.author.bot and len(m.content) == 1 and m.content.isalpha()
+        return (
+            m.channel == ctx.channel and not m.author.bot and
+            (len(m.content) == 1 and m.content.isalpha() or m.content.lower() == "skip")
+        )
 
     while ctx.channel.id in active_pendu:
         game = active_pendu[ctx.channel.id]
         try:
             msg = await bot.wait_for("message", check=check, timeout=60)
+            # Skip
+            if msg.content.lower() == "skip":
+                mot_cache = game["mot"]
+                active_pendu.pop(ctx.channel.id, None)
+                await ctx.send(embed=discord.Embed(
+                    description=f"⏭️ Mot passé ! C'était **{mot_cache.upper()}**\nTape `.pendu` pour rejouer !",
+
+                    color=0x95a5a6
+                ))
+                return
             lettre = msg.content.lower()
             if lettre in game["lettres"]:
                 await ctx.send(f"⚠️ La lettre **{lettre}** a déjà été proposée !", delete_after=3)
@@ -3077,11 +3233,35 @@ async def shop_cmd(ctx):
     )
     uid = str(ctx.author.id)
     solde = economy_data[uid]["coins"]
-    for item in SHOP_ITEMS:
+    # Trier du plus cher au moins cher
+    items_sorted = sorted(SHOP_ITEMS, key=lambda x: x["prix"], reverse=True)
+    # Catégories
+    roles_items  = [i for i in items_sorted if i["id"] in ("vip","drama_king","otaku","gamer_pro","shadow","pillier")]
+    boosts_items = [i for i in items_sorted if i["id"] in ("double_xp","rolls_10","claim_20","claim_15","claim_10","reset_claim")]
+    gacha_items  = [i for i in items_sorted if i["id"] in ("freeze","curse","shield","boost_rarete")]
+
+    embed.add_field(name="─── 🎭 RÔLES EXCLUSIFS ───", value="​", inline=False)
+    for item in roles_items:
         dispo = "✅" if solde >= item["prix"] else "❌"
         embed.add_field(
             name=f"{item['nom']} — {item['prix']} pièces {dispo}",
-            value=f"{item['description']}\nAcheter : `.acheter {item['id']}`",
+            value=f"{item['description']}\n`.acheter {item['id']}`",
+            inline=False
+        )
+    embed.add_field(name="─── ⚡ BOOSTS & ROLLS ───", value="​", inline=False)
+    for item in boosts_items:
+        dispo = "✅" if solde >= item["prix"] else "❌"
+        embed.add_field(
+            name=f"{item['nom']} — {item['prix']} pièces {dispo}",
+            value=f"{item['description']}\n`.acheter {item['id']}`",
+            inline=False
+        )
+    embed.add_field(name="─── 🎴 ITEMS GACHA (sabotage & défense) ───", value="​", inline=False)
+    for item in gacha_items:
+        dispo = "✅" if solde >= item["prix"] else "❌"
+        embed.add_field(
+            name=f"{item['nom']} — {item['prix']} pièces {dispo}",
+            value=f"{item['description']}\n`.acheter {item['id']}`",
             inline=False
         )
     embed.set_footer(text=f"💰 Ton solde : {solde} pièces")
@@ -4676,6 +4856,203 @@ async def pokestop(ctx):
 
 
 # ============================================================
+#  🃏 BASE DE DONNÉES CARTES GACHA
+# ============================================================
+ANIME_CARDS_DB = {
+    # ── NARUTO ──────────────────────────────────────────────
+    "naruto":    {"nom":"Naruto Uzumaki",  "serie":"Naruto",          "rarete":"Légendaire", "emoji":"🍥", "pv":220,"attaque":90,"defense":70,"image":"https://i.imgur.com/fUsTAs3.jpg","attaques":[{"nom":"Rasengan","emoji":"🌀","degats":45,"desc": "Frappe spirale"},{"nom":"Kage Bunshin","emoji":"👥","degats":35,"desc": "Clones"},{"nom":"Neuf Queues","emoji":"🦊","degats":60,"desc": "Puissance ultime"}],"faiblesse":"⚡","resistance":"🔥"},
+    "sasuke":    {"nom":"Sasuke Uchiha",   "serie":"Naruto",          "rarete":"Légendaire", "emoji":"⚡", "pv":200,"attaque":95,"defense":75,"image":"https://i.imgur.com/2S8HWaq.jpg","attaques":[{"nom":"Chidori","emoji":"⚡","degats":50,"desc": "Foudre"},{"nom":"Sharingan","emoji":"👁️","degats":30,"desc": "Copie"},{"nom":"Amaterasu","emoji":"🔥","degats":65,"desc": "Flammes noires"}],"faiblesse":"💧","resistance":"⚡"},
+    "sakura":    {"nom":"Sakura Haruno",   "serie":"Naruto",          "rarete":"Rare",       "emoji":"🌸", "pv":180,"attaque":75,"defense":85,"image":"https://i.imgur.com/OlSv1D1.jpg","attaques":[{"nom":"Frappe","emoji":"👊","degats":40,"desc": "Coup de poing"},{"nom":"Soin","emoji":"💚","degats":0,"desc": "Guérison"},{"nom":"Cent Frappe","emoji":"💥","degats":55,"desc": "Destruction"}],"faiblesse":"⚡","resistance":"🌸"},
+    "kurapika":  {"nom":"Kurapika",        "serie":"HunterxHunter",   "rarete":"Légendaire",     "emoji":"🔗", "pv":195,"attaque":88,"defense":72,"image":"https://i.imgur.com/HNfrNAo.jpg","attaques":[{"nom":"Chaînes","emoji":"🔗","degats":45,"desc": "Emprisonne"},{"nom":"Jugement","emoji":"⚖️","degats":55,"desc": "Exécution"},{"nom":"Vol Cœur","emoji":"❤️","degats":70,"desc": "Fatal sur araignée"}],"faiblesse":"🔥","resistance":"🔗"},
+    "shikamaru": {"nom":"Shikamaru Nara",  "serie":"Naruto",          "rarete":"Épique",       "emoji":"🦌", "pv":175,"attaque":70,"defense":80,"image":"https://i.imgur.com/P8VrZXS.jpg","attaques":[{"nom":"Kagemane","emoji":"🌑","degats":35,"desc": "Immobilise"},{"nom":"Ombre","emoji":"🌒","degats":45,"desc": "Contrôle"},{"nom":"Ombre Étreinte","emoji":"💀","degats":55,"desc": "Fatal"}],"faiblesse":"🔥","resistance":"🌑"},
+    "obito":     {"nom":"Obito Uchiha",    "serie":"Naruto",          "rarete":"Rare",   "emoji":"👁️", "pv":230,"attaque":100,"defense":90,"image":"https://i.imgur.com/9DMerh1.jpg","attaques":[{"nom":"Kamui","emoji":"🌀","degats":60,"desc": "Intangibilité"},{"nom":"Sharingan","emoji":"👁️","degats":45,"desc": "Illusion"},{"nom":"Dix Queues","emoji":"🐉","degats":80,"desc": "Dévastateur"}],"faiblesse":"💧","resistance":"👁️"},
+    # ── DEMON SLAYER ────────────────────────────────────────
+    "inosuke":   {"nom":"Inosuke Hashibira","serie":"Demon Slayer",   "rarete":"Épique",       "emoji":"🐗", "pv":215,"attaque":90,"defense":65,"image":"https://i.imgur.com/At5236C.jpg","attaques":[{"nom":"Bête","emoji":"🐗","degats":50,"desc": "Respiration bête"},{"nom":"Poignard","emoji":"🗡️","degats":40,"desc": "Double lame"},{"nom":"Frenésie","emoji":"💢","degats":60,"desc": "Attaque sauvage"}],"faiblesse":"⚡","resistance":"🐗"},
+    "nobara":    {"nom":"Nobara Kugisaki", "serie":"Jujutsu Kaisen",  "rarete":"Épique",       "emoji":"🔨", "pv":185,"attaque":82,"defense":68,"image":"https://i.imgur.com/UAfmEnA.jpg","attaques":[{"nom":"Clou Résonance","emoji":"🔨","degats":45,"desc": "Cloue l'ennemi"},{"nom":"Paille Poupée","emoji":"🪆","degats":55,"desc": "Vaudou"},{"nom":"Explosion","emoji":"💥","degats":65,"desc": "Détonation"}],"faiblesse":"🌊","resistance":"🔨"},
+    # ── JUJUTSU KAISEN ──────────────────────────────────────
+    # ── ONE PIECE ────────────────────────────────────────────
+    "usopp":     {"nom":"Usopp",           "serie":"One Piece",       "rarete":"Commun",     "emoji":"🎯", "pv":170,"attaque":72,"defense":60,"image":"https://i.imgur.com/0kobHRe.jpg","attaques":[{"nom":"Sarbacane","emoji":"🎯","degats":35,"desc": "Précision"},{"nom":"Pop Green","emoji":"🌿","degats":40,"desc": "Plante explosive"},{"nom":"Sogeking","emoji":"⭐","degats":50,"desc": "Sniper légendaire"}],"faiblesse":"🔥","resistance":"🎯"},
+    # ── SWORD ART ONLINE ─────────────────────────────────────
+    "asuna":     {"nom":"Asuna Yuuki",     "serie":"SAO",             "rarete":"Légendaire", "emoji":"⚡", "pv":200,"attaque":93,"defense":76,"image":"https://i.imgur.com/qAWf8kO.jpg","attaques":[{"nom":"Linear","emoji":"⚡","degats":55,"desc": "Frappe éclair"},{"nom":"Lambent Light","emoji":"💛","degats":65,"desc": "Épée lumineuse"},{"nom":"Mother's Rosario","emoji":"🌹","degats":80,"desc": "Combo ultime"}],"faiblesse":"🔥","resistance":"⚡"},
+    # ── DARLING IN THE FRANXX ────────────────────────────────
+    "zerotwo":   {"nom":"Zero Two",        "serie":"Darling in the FranXX","rarete":"Mythique","emoji":"💗","pv":235,"attaque":102,"defense":80,"image":"https://i.imgur.com/z8RKZDk.jpg","attaques":[{"nom":"Strelizia","emoji":"🌺","degats":70,"desc": "Frappe pilote"},{"nom":"Griffes","emoji":"💅","degats":50,"desc": "Lacère"},{"nom":"Apus","emoji":"💗","degats":90,"desc": "Forme ultime"}],"faiblesse":"💧","resistance":"💗"},
+    # ── GHOST IN THE SHELL ───────────────────────────────────
+    "motoko":    {"nom":"Motoko Kusanagi", "serie":"Ghost in the Shell","rarete":"Épique",   "emoji":"🤖", "pv":200,"attaque":90,"defense":85,"image":"https://i.imgur.com/sKV6DLP.jpg","attaques":[{"nom":"Hack","emoji":"💻","degats":45,"desc": "Piratage"},{"nom":"Tachikoma","emoji":"🦾","degats":55,"desc": "Appui tactique"},{"nom":"Ghost","emoji":"👻","degats":65,"desc": "Invisibilité"}],"faiblesse":"⚡","resistance":"🤖"},
+    # ── SPY X FAMILY ─────────────────────────────────────────
+    "anya":      {"nom":"Anya Forger",     "serie":"Spy x Family",    "rarete":"Rare",       "emoji":"🌟", "pv":160,"attaque":65,"defense":70,"image":"https://i.imgur.com/AN18DVZ.jpg","attaques":[{"nom":"Télépathe","emoji":"🧠","degats":30,"desc": "Lit les pensées"},{"nom":"Heh","emoji":"😏","degats":40,"desc": "Sourire dévastateur"},{"nom":"Secret","emoji":"🌟","degats":50,"desc": "Pouvoir caché"}],"faiblesse":"🔥","resistance":"🧠"},
+    "yor":       {"nom":"Yor Forger",      "serie":"Spy x Family",    "rarete":"Épique",     "emoji":"🌹", "pv":210,"attaque":94,"defense":78,"image":"https://i.imgur.com/zyzDBqB.jpg","attaques":[{"nom":"Épine","emoji":"🌹","degats":55,"desc": "Assassine"},{"nom":"Coup","emoji":"👊","degats":45,"desc": "Force surhumaine"},{"nom":"Thorn Princess","emoji":"🩸","degats":70,"desc": "Mode assassin"}],"faiblesse":"⚡","resistance":"🌹"},
+    # ── FAIRY TAIL ───────────────────────────────────────────
+    "natsu":     {"nom":"Natsu Dragneel",  "serie":"Fairy Tail",      "rarete":"Légendaire", "emoji":"🔥", "pv":220,"attaque":96,"defense":72,"image":"https://i.imgur.com/3My9M8G.jpg","attaques":[{"nom":"Roar du Dragon","emoji":"🔥","degats":60,"desc": "Souffle de feu"},{"nom":"Dragon Force","emoji":"🐉","degats":80,"desc": "Forme draconique"},{"nom":"Etherious","emoji":"💀","degats":95,"desc": "Démon ultime"}],"faiblesse":"💧","resistance":"🔥"},
+    "lucy":      {"nom":"Lucy Heartfilia", "serie":"Fairy Tail",      "rarete":"Rare",       "emoji":"⭐", "pv":180,"attaque":76,"defense":74,"image":"https://i.imgur.com/MzIPqLA.jpg","attaques":[{"nom":"Invocation","emoji":"⭐","degats":45,"desc": "Esprits stellaires"},{"nom":"Aquarius","emoji":"💧","degats":55,"desc": "Vague destructrice"},{"nom":"Stardress","emoji":"✨","degats":65,"desc": "Fusion cosmique"}],"faiblesse":"🔥","resistance":"💧"},
+    "laxus":     {"nom":"Laxus Dreyar",   "serie":"Fairy Tail",      "rarete":"Légendaire",     "emoji":"⚡", "pv":215,"attaque":97,"defense":80,"image":"https://i.imgur.com/R7pPgj2.jpg","attaques":[{"nom":"Tonnerre","emoji":"⚡","degats":60,"desc": "Frappe électrique"},{"nom":"Dragon Foudre","emoji":"🌩️","degats":75,"desc": "Dragon électrique"},{"nom":"Hell's Core","emoji":"💥","degats":85,"desc": "Destruction totale"}],"faiblesse":"🌊","resistance":"⚡"},
+    # ── BLEACH ───────────────────────────────────────────────
+    "aizen":     {"nom":"Sosuke Aizen",    "serie":"Bleach",          "rarete":"Mythique",   "emoji":"🦋", "pv":245,"attaque":108,"defense":95,"image":"https://i.imgur.com/rtSGfrn.jpg","attaques":[{"nom":"Kyoka Suigetsu","emoji":"🪞","degats":75,"desc": "Illusion parfaite"},{"nom":"Transcendance","emoji":"🦋","degats":90,"desc": "Au-delà du shinigami"},{"nom":"Hogyoku","emoji":"💎","degats":105,"desc": "Pouvoir absolu"}],"faiblesse":"💀","resistance":"🦋"},
+    "kenpachi":  {"nom":"Kenpachi Zaraki", "serie":"Bleach",          "rarete":"Légendaire", "emoji":"⚔️", "pv":240,"attaque":105,"defense":75,"image":"https://i.imgur.com/NbnX1cV.jpg","attaques":[{"nom":"Slash","emoji":"⚔️","degats":65,"desc": "Coupe brute"},{"nom":"Nozarashi","emoji":"🪓","degats":80,"desc": "Shikai brutal"},{"nom":"Bankai","emoji":"💥","degats":95,"desc": "Berserker"}],"faiblesse":"🌀","resistance":"⚔️"},
+    "ulquiorra": {"nom":"Ulquiorra Cifer", "serie":"Bleach",          "rarete":"Légendaire",     "emoji":"🖤", "pv":210,"attaque":96,"defense":88,"image":"https://i.imgur.com/TymaPDb.jpg","attaques":[{"nom":"Cero","emoji":"🖤","degats":60,"desc": "Rayon néant"},{"nom":"Lanza","emoji":"💚","degats":75,"desc": "Lance du tonnerre"},{"nom":"Segunda","emoji":"🦇","degats":90,"desc": "Résurrection 2ème"}],"faiblesse":"💛","resistance":"🖤"},
+    "yhwach":    {"nom":"Yhwach",          "serie":"Bleach",          "rarete":"Légendaire",   "emoji":"👑", "pv":255,"attaque":115,"defense":100,"image":"https://i.imgur.com/UR1i6Tb.jpg","attaques":[{"nom":"Almighty","emoji":"👑","degats":100,"desc": "Voit tout"},{"nom":"Sankt Bogen","emoji":"🏹","degats":80,"desc": "Arc sacré"},{"nom":"Auswählen","emoji":"☠️","degats":110,"desc": "Sélection divine"}],"faiblesse":"💀","resistance":"👑"},
+    # ── DRAGON BALL ──────────────────────────────────────────
+    "krillin":   {"nom":"Krillin",         "serie":"Dragon Ball Z",   "rarete":"Commun",     "emoji":"😊", "pv":175,"attaque":70,"defense":72,"image":"https://i.imgur.com/bXQogaK.jpg","attaques":[{"nom":"Destructo Disc","emoji":"💿","degats":45,"desc": "Disque tranchant"},{"nom":"Kamehameha","emoji":"🌊","degats":35,"desc": "Version mini"},{"nom":"Kienzan","emoji":"⭕","degats":50,"desc": "Tranche tout"}],"faiblesse":"🟡","resistance":"💿"},
+    # ── ATTACK ON TITAN ──────────────────────────────────────
+    # ── MHA ──────────────────────────────────────────────────
+    # ── DEATH NOTE ───────────────────────────────────────────
+    "light":     {"nom":"Light Yagami",    "serie":"Death Note",      "rarete":"Légendaire", "emoji":"📓", "pv":175,"attaque":85,"defense":90,"image":"https://i.imgur.com/pKi0RvA.jpg","attaques":[{"nom":"Death Note","emoji":"📓","degats":80,"desc": "Écrit le nom"},{"nom":"Kira","emoji":"👁️","degats":65,"desc": "Jugement divin"},{"nom":"Stratégie","emoji":"♟️","degats":55,"desc": "Manipulation"}],"faiblesse":"🔍","resistance":"📓"},
+    "l":         {"nom":"L Lawliet",       "serie":"Death Note",      "rarete":"Légendaire", "emoji":"🍬", "pv":170,"attaque":82,"defense":88,"image":"https://i.imgur.com/mh0S7OP.jpg","attaques":[{"nom":"Déduction","emoji":"🔍","degats":70,"desc": "Logique implacable"},{"nom":"Piège","emoji":"🪤","degats":60,"desc": "Tend un piège"},{"nom":"Justice","emoji":"⚖️","degats":75,"desc": "Révèle la vérité"}],"faiblesse":"📓","resistance":"🔍"},
+    # ── STEINS GATE ──────────────────────────────────────────
+    "okabe":     {"nom":"Rintaro Okabe",   "serie":"Steins;Gate",     "rarete":"Rare",     "emoji":"📡", "pv":180,"attaque":75,"defense":80,"image":"https://i.imgur.com/h8AR8Xt.jpg","attaques":[{"nom":"SERN","emoji":"📡","degats":45,"desc": "Manipulation temps"},{"nom":"Reading Steiner","emoji":"🌀","degats":55,"desc": "Sauts temporels"},{"nom":"El Psy Kongroo","emoji":"🧪","degats":65,"desc": "Science folle"}],"faiblesse":"💔","resistance":"📡"},
+    "kurisu":    {"nom":"Kurisu Makise",   "serie":"Steins;Gate",     "rarete":"Épique",     "emoji":"🧪", "pv":175,"attaque":78,"defense":82,"image":"https://i.imgur.com/3n57wKG.jpg","attaques":[{"nom":"Théorie","emoji":"🧪","degats":50,"desc": "Intelligence pure"},{"nom":"PhDs","emoji":"📚","degats":40,"desc": "Savoir absolu"},{"nom":"Temps","emoji":"⏰","degats":65,"desc": "Maîtrise temporelle"}],"faiblesse":"💔","resistance":"🧪"},
+    # ── COWBOY BEBOP ─────────────────────────────────────────
+    "spike":     {"nom":"Spike Spiegel",   "serie":"Cowboy Bebop",    "rarete":"Légendaire", "emoji":"🚀", "pv":200,"attaque":91,"defense":76,"image":"https://i.imgur.com/gV63xoo.jpg","attaques":[{"nom":"Jeet Kune Do","emoji":"🥊","degats":55,"desc": "Arts martiaux"},{"nom":"Beretta","emoji":"🔫","degats":60,"desc": "Pistolero"},{"nom":"Dragon","emoji":"🐉","degats":75,"desc": "Technique secrète"}],"faiblesse":"💔","resistance":"🚀"},
+    "faye":      {"nom":"Faye Valentine",  "serie":"Cowboy Bebop",    "rarete":"Épique",       "emoji":"💜", "pv":185,"attaque":82,"defense":70,"image":"https://i.imgur.com/1i8e1kK.jpg","attaques":[{"nom":"Pistolet","emoji":"🔫","degats":45,"desc": "Tir précis"},{"nom":"Séduction","emoji":"💜","degats":35,"desc": "Déstabilise"},{"nom":"Tir Rapide","emoji":"⚡","degats":55,"desc": "Rafale"}],"faiblesse":"🚀","resistance":"💜"},
+    # ── VIOLET EVERGARDEN ────────────────────────────────────
+    "violet":    {"nom":"Violet Evergarden","serie":"Violet Evergarden","rarete":"Épique",   "emoji":"💌", "pv":190,"attaque":86,"defense":80,"image":"https://i.imgur.com/q3rwJ3M.jpg","attaques":[{"nom":"Lames","emoji":"⚔️","degats":55,"desc": "Combat militaire"},{"nom":"Lettre","emoji":"💌","degats":40,"desc": "Émotion intense"},{"nom":"Soldat","emoji":"🪖","degats":70,"desc": "Instinct guerrier"}],"faiblesse":"💔","resistance":"💌"},
+    # ── OVERLORD ─────────────────────────────────────────────
+    "ainz":      {"nom":"Ainz Ooal Gown",  "serie":"Overlord",        "rarete":"Mythique",   "emoji":"💀", "pv":250,"attaque":112,"defense":98,"image":"https://i.imgur.com/fgV5T6r.jpg","attaques":[{"nom":"Grasp Heart","emoji":"💀","degats":90,"desc": "Stop cardiaque"},{"nom":"Fallen Down","emoji":"☠️","degats":100,"desc": "Annihilation"},{"nom":"True Death","emoji":"💀","degats":115,"desc": "Mort absolue"}],"faiblesse":"✨","resistance":"💀"},
+    "albedo":    {"nom":"Albedo",           "serie":"Overlord",        "rarete":"Épique", "emoji":"🖤", "pv":220,"attaque":95,"defense":95,"image":"https://i.imgur.com/XBoMVup.jpg","attaques":[{"nom":"Bouclier","emoji":"🛡️","degats":50,"desc": "Défense ultime"},{"nom":"Frappe","emoji":"💥","degats":65,"desc": "Force démoniaque"},{"nom":"Valkyrie","emoji":"🖤","degats":80,"desc": "Mode combat"}],"faiblesse":"✨","resistance":"🖤"},
+    # ── RE:ZERO ───────────────────────────────────────────────
+    "subaru":    {"nom":"Subaru Natsuki",   "serie":"Re:Zero",         "rarete":"Épique",       "emoji":"💙", "pv":185,"attaque":72,"defense":70,"image":"https://i.imgur.com/hq5JhSO.jpg","attaques":[{"nom":"Retour","emoji":"⏪","degats":40,"desc": "Recommence"},{"nom":"Ombre","emoji":"🌑","degats":50,"desc": "Pouvoirs noirs"},{"nom":"Dévotion","emoji":"💙","degats":60,"desc": "Volonté pure"}],"faiblesse":"💔","resistance":"💙"},
+    "emilia":    {"nom":"Emilia",           "serie":"Re:Zero",         "rarete":"Épique",     "emoji":"❄️", "pv":195,"attaque":85,"defense":78,"image":"https://i.imgur.com/gTrkjMj.jpg","attaques":[{"nom":"Glace","emoji":"❄️","degats":55,"desc": "Magie de glace"},{"nom":"Gel","emoji":"🧊","degats":65,"desc": "Congèle tout"},{"nom":"Barrière","emoji":"🛡️","degats":45,"desc": "Protection glacée"}],"faiblesse":"🔥","resistance":"❄️"},
+    # ── BERSERK ──────────────────────────────────────────────
+    "guts":      {"nom":"Guts",            "serie":"Berserk",         "rarete":"Légendaire",   "emoji":"⚫", "pv":245,"attaque":108,"defense":85,"image":"https://i.imgur.com/PgjWnwG.jpg","attaques":[{"nom":"Dragonslayer","emoji":"⚫","degats":85,"desc": "Épée géante"},{"nom":"Berserker","emoji":"🐺","degats":100,"desc": "Armure berserker"},{"nom":"Canonnade","emoji":"💥","degats":75,"desc": "Bras canon"}],"faiblesse":"💀","resistance":"⚫"},
+    "griffith":  {"nom":"Griffith",        "serie":"Berserk",         "rarete":"Mythique",   "emoji":"🦅", "pv":240,"attaque":106,"defense":92,"image":"https://i.imgur.com/2pJDLG5.jpg","attaques":[{"nom":"Femto","emoji":"🦅","degats":90,"desc": "Apôtre divin"},{"nom":"Causalité","emoji":"🌑","degats":80,"desc": "Destin inévitable"},{"nom":"Godhand","emoji":"☠️","degats":105,"desc": "Dieu de la chair"}],"faiblesse":"⚫","resistance":"🦅"},
+    # ── SPY X FAMILY / MOB PSYCHO / AUTRES ───────────────────
+    "mob":       {"nom":"Shigeo Kageyama", "serie":"Mob Psycho 100",  "rarete":"Mythique",   "emoji":"🔮", "pv":235,"attaque":107,"defense":88,"image":"https://i.imgur.com/twihMkj.jpg","attaques":[{"nom":"100%","emoji":"🔮","degats":95,"desc": "Débordement psychique"},{"nom":"Télékinésie","emoji":"🌀","degats":65,"desc": "Manipulation objet"},{"nom":"???%","emoji":"💥","degats":115,"desc": "Au-delà de tout"}],"faiblesse":"💔","resistance":"🔮"},
+    "reigen":    {"nom":"Reigen Arataka",  "serie":"Mob Psycho 100",  "rarete":"Rare",       "emoji":"👔", "pv":170,"attaque":68,"defense":85,"image":"https://i.imgur.com/8E78wJD.jpg","attaques":[{"nom":"Salt Splash","emoji":"🧂","degats":35,"desc": "Exorcise à sel"},{"nom":"Massage","emoji":"✋","degats":25,"desc": "Décontracte"},{"nom":"Arnaque","emoji":"👔","degats":45,"desc": "Trompe l'adversaire"}],"faiblesse":"🔮","resistance":"👔"},
+    # ── MELIODAS / SEVEN DEADLY SINS ─────────────────────────
+    "meliodas":  {"nom":"Meliodas",        "serie":"Seven Deadly Sins","rarete":"Mythique",  "emoji":"🐉", "pv":245,"attaque":110,"defense":90,"image":"https://i.imgur.com/zkxcN5n.jpg","attaques":[{"nom":"Full Counter","emoji":"🔄","degats":80,"desc": "Renvoie les attaques"},{"nom":"Revenge Counter","emoji":"💥","degats":95,"desc": "Accumulé x10"},{"nom":"Demon King","emoji":"🐉","degats":110,"desc": "Mode roi démon"}],"faiblesse":"✨","resistance":"🐉"},
+    "escanor":   {"nom":"Escanor",         "serie":"Seven Deadly Sins","rarete":"Mythique",  "emoji":"☀️", "pv":240,"attaque":115,"defense":80,"image":"https://i.imgur.com/ob5Fqky.jpg","attaques":[{"nom":"Pride","emoji":"☀️","degats":95,"desc": "Orgueil solaire"},{"nom":"The One","emoji":"👑","degats":115,"desc": "Forme ultime"},{"nom":"Sunshine","emoji":"🌞","degats":85,"desc": "Chaleur divine"}],"faiblesse":"🌙","resistance":"☀️"},
+    "ban":       {"nom":"Ban",             "serie":"Seven Deadly Sins","rarete":"Légendaire","emoji":"🍺", "pv":999,"attaque":88,"defense":999,"image":"https://i.imgur.com/37tOayw.jpg","attaques":[{"nom":"Vol","emoji":"🤏","degats":55,"desc": "Vole les stats"},{"nom":"Fox Hunt","emoji":"🦊","degats":70,"desc": "Frappe multiple"},{"nom":"Zero Sign","emoji":"∞","degats":80,"desc": "Immortalité parfaite"}],"faiblesse":"💔","resistance":"⚔️"},
+    "arthur_ks": {"nom":"Arthur Pendragon","serie":"Seven Deadly Sins","rarete":"Légendaire","emoji":"🗡️", "pv":215,"attaque":98,"defense":85,"image":"https://i.imgur.com/drRQ5hX.jpg","attaques":[{"nom":"Excalibur","emoji":"🗡️","degats":70,"desc": "Épée sacrée"},{"nom":"Chaos","emoji":"🌀","degats":85,"desc": "Pouvoir du chaos"},{"nom":"Roi Chaos","emoji":"👑","degats":95,"desc": "Maître du chaos"}],"faiblesse":"💀","resistance":"🗡️"},
+    # ── TOWER OF GOD ─────────────────────────────────────────
+    "bam":       {"nom":"Twenty-Fifth Bam","serie":"Tower of God",    "rarete":"Légendaire",   "emoji":"🕯️", "pv":240,"attaque":104,"defense":86,"image":"https://i.imgur.com/43t3sLi.jpg","attaques":[{"nom":"Shinsu","emoji":"🕯️","degats":70,"desc": "Contrôle shinsu"},{"nom":"Baam","emoji":"⚡","degats":85,"desc": "Pouvoir irrégulier"},{"nom":"Thorn","emoji":"🌑","degats":100,"desc": "Fragment d'épine"}],"faiblesse":"🌊","resistance":"🕯️"},
+    "white":     {"nom":"White (Arlen)",   "serie":"Tower of God",    "rarete":"Épique",     "emoji":"🤍", "pv":205,"attaque":95,"defense":80,"image":"https://i.imgur.com/oxHxTsI.jpg","attaques":[{"nom":"Fantôme","emoji":"🤍","degats":60,"desc": "Attaque spectrale"},{"nom":"Âme","emoji":"👻","degats":70,"desc": "Dévore l'âme"},{"nom":"Blade","emoji":"🗡️","degats":80,"desc": "Lame blanche"}],"faiblesse":"🕯️","resistance":"🤍"},
+    # ── VINLAND SAGA ─────────────────────────────────────────
+    "thorkell":  {"nom":"Thorkell",        "serie":"Vinland Saga",    "rarete":"Légendaire", "emoji":"🪓", "pv":235,"attaque":102,"defense":78,"image":"https://i.imgur.com/NPh93gb.jpg","attaques":[{"nom":"Hache","emoji":"🪓","degats":70,"desc": "Frappe titanesque"},{"nom":"Lancer","emoji":"🎯","degats":60,"desc": "Javeline précise"},{"nom":"Berserker","emoji":"💢","degats":85,"desc": "Rage viking"}],"faiblesse":"🏹","resistance":"🪓"},
+    "thorfinn":  {"nom":"Thorfinn",        "serie":"Vinland Saga",    "rarete":"Légendaire",     "emoji":"🗡️", "pv":200,"attaque":92,"defense":74,"image":"https://i.imgur.com/2S8HWaq.jpg","attaques":[{"nom":"Dague","emoji":"🗡️","degats":50,"desc": "Double dague"},{"nom":"Fantôme","emoji":"💨","degats":65,"desc": "Vitesse fantôme"},{"nom":"Askeladd","emoji":"⚔️","degats":75,"desc": "Héritage"}],"faiblesse":"🪓","resistance":"🗡️"},
+    # ── FULLMETAL ALCHEMIST ──────────────────────────────────
+    "edward":    {"nom":"Edward Elric",    "serie":"FMA Brotherhood", "rarete":"Épique", "emoji":"⚗️", "pv":205,"attaque":90,"defense":80,"image":"https://i.imgur.com/2S8HWaq.jpg","attaques":[{"nom":"Alchimie","emoji":"⚗️","degats":55,"desc": "Transmutation"},{"nom":"Lance","emoji":"🗡️","degats":65,"desc": "Bras alchimique"},{"nom":"Frappe","emoji":"💪","degats":75,"desc": "Poing automail"}],"faiblesse":"💧","resistance":"⚗️"},
+    "alphonse":  {"nom":"Alphonse Elric",  "serie":"FMA Brotherhood", "rarete":"Épique",     "emoji":"🛡️", "pv":220,"attaque":85,"defense":95,"image":"https://i.imgur.com/2S8HWaq.jpg","attaques":[{"nom":"Armure","emoji":"🛡️","degats":50,"desc": "Frappe d'armure"},{"nom":"Alchimie","emoji":"⚗️","degats":60,"desc": "Transmutation"},{"nom":"Flamme","emoji":"🔥","degats":70,"desc": "Alchimie de feu"}],"faiblesse":"⚡","resistance":"🛡️"},
+    "roy":       {"nom":"Roy Mustang",     "serie":"FMA Brotherhood", "rarete":"Épique", "emoji":"🔥", "pv":195,"attaque":97,"defense":78,"image":"https://i.imgur.com/2S8HWaq.jpg","attaques":[{"nom":"Inferno","emoji":"🔥","degats":70,"desc": "Alchimie de feu"},{"nom":"Flamme","emoji":"🔥","degats":55,"desc": "Claquement de doigts"},{"nom":"Soleil","emoji":"☀️","degats":80,"desc": "Chaleur infernale"}],"faiblesse":"💧","resistance":"🔥"},
+    # ── BAKI ─────────────────────────────────────────────────
+    "baki":      {"nom":"Baki Hanma",      "serie":"Baki",            "rarete":"Légendaire", "emoji":"💪", "pv":220,"attaque":98,"defense":80,"image":"https://i.imgur.com/6kAHdw4.jpg","attaques":[{"nom":"Coordinatrice","emoji":"💪","degats":65,"desc": "Force brute"},{"nom":"Imitateur","emoji":"🦈","degats":75,"desc": "Copie n'importe quoi"},{"nom":"Tremblement","emoji":"💥","degats":85,"desc": "Frappe vibratoire"}],"faiblesse":"🔮","resistance":"💪"},
+    "yujiro":    {"nom":"Yujiro Hanma",    "serie":"Baki",            "rarete":"Mythique",   "emoji":"👹", "pv":255,"attaque":120,"defense":95,"image":"https://i.imgur.com/q7nhyXN.jpg","attaques":[{"nom":"Démon","emoji":"👹","degats":100,"desc": "Dos démoniaque"},{"nom":"Coordinatrice","emoji":"💪","degats":85,"desc": "Force absolue"},{"nom":"Ogre","emoji":"☠️","degats":115,"desc": "L'être le plus fort"}],"faiblesse":"💔","resistance":"👹"},
+    # ── HUNTER X HUNTER (AUTRES) ─────────────────────────────
+    "meruem":    {"nom":"Meruem",          "serie":"HunterxHunter",   "rarete":"Mythique",   "emoji":"♟️", "pv":250,"attaque":118,"defense":100,"image":"https://i.imgur.com/ajOXRt1.jpg","attaques":[{"nom":"Hakai","emoji":"♟️","degats":95,"desc": "Destruction pure"},{"nom":"Absorption","emoji":"🍽️","degats":80,"desc": "Vole les pouvoirs"},{"nom":"Rose","emoji":"☠️","degats":110,"desc": "Après Rose"}],"faiblesse":"🌹","resistance":"♟️"},
+    # ── HELLSING ─────────────────────────────────────────────
+    "alucard":   {"nom":"Alucard",         "serie":"Hellsing",        "rarete":"Mythique",   "emoji":"🧛", "pv":999,"attaque":116,"defense":999,"image":"https://i.imgur.com/EoRtG4W.jpg","attaques":[{"nom":"Restriction 0","emoji":"🧛","degats":100,"desc": "Légion d'âmes"},{"nom":"Hell","emoji":"🩸","degats":85,"desc": "Régénération"},{"nom":"Alucard Mode","emoji":"☠️","degats":115,"desc": "Vrai vampire"}],"faiblesse":"✝️","resistance":"🩸"},
+    # ── GINTAMA ──────────────────────────────────────────────
+    "gintoki":   {"nom":"Gintoki Sakata",  "serie":"Gintama",         "rarete":"Légendaire", "emoji":"🍬", "pv":210,"attaque":95,"defense":82,"image":"https://i.imgur.com/pKHhZQx.jpg","attaques":[{"nom":"Bokuto","emoji":"🪵","degats":55,"desc": "Sabre en bois"},{"nom":"Shiroyasha","emoji":"⚪","degats":80,"desc": "Démon blanc"},{"nom":"Benizakura","emoji":"🌸","degats":90,"desc": "Sabre démon"}],"faiblesse":"💧","resistance":"⚪"},
+    # ── PARASYTE ─────────────────────────────────────────────
+    "shinichi_p":{"nom":"Shinichi Izumi",  "serie":"Parasyte",        "rarete":"Épique",     "emoji":"🧠", "pv":195,"attaque":88,"defense":82,"image":"https://i.imgur.com/U71h4AQ.jpg","attaques":[{"nom":"Migi","emoji":"🧠","degats":60,"desc": "Parasite droit"},{"nom":"Régénération","emoji":"💚","degats":45,"desc": "Se régénère"},{"nom":"Sens","emoji":"👁️","degats":70,"desc": "Sens surhumains"}],"faiblesse":"🔥","resistance":"🧠"},
+    # ── MADE IN ABYSS ────────────────────────────────────────
+    "reg":       {"nom":"Reg",             "serie":"Made in Abyss",   "rarete":"Épique",     "emoji":"🤖", "pv":200,"attaque":90,"defense":88,"image":"https://i.imgur.com/UGyjNna.jpg","attaques":[{"nom":"Incinerator","emoji":"🔆","degats":85,"desc": "Laser dévastateur"},{"nom":"Bras","emoji":"🦾","degats":55,"desc": "Extension bras"},{"nom":"Forge","emoji":"🔥","degats":70,"desc": "Chaleur intense"}],"faiblesse":"💧","resistance":"🤖"},
+    # ── FATE ─────────────────────────────────────────────────
+    "saber":     {"nom":"Saber (Artoria)", "serie":"Fate",            "rarete":"Légendaire",   "emoji":"⚔️", "pv":225,"attaque":103,"defense":90,"image":"https://i.imgur.com/ntmap4C.jpg","attaques":[{"nom":"Excalibur","emoji":"✨","degats":90,"desc": "Épée du roi"},{"nom":"Caliburn","emoji":"⚔️","degats":75,"desc": "Épée sacrée"},{"nom":"Rhongomyniad","emoji":"🏹","degats":85,"desc": "Lance de lumière"}],"faiblesse":"🌑","resistance":"⚔️"},
+    "gilgamesh": {"nom":"Gilgamesh",       "serie":"Fate",            "rarete":"Légendaire",   "emoji":"👑", "pv":235,"attaque":112,"defense":88,"image":"https://i.imgur.com/I1Ee0CF.jpg","attaques":[{"nom":"Gate of Babylon","emoji":"🔶","degats":95,"desc": "Trésor du roi"},{"nom":"Ea","emoji":"🌍","degats":110,"desc": "Brise le monde"},{"nom":"Enkidu","emoji":"🔗","degats":80,"desc": "Chaîne divine"}],"faiblesse":"💚","resistance":"👑"},
+    # ── DETECTIVE CONAN ──────────────────────────────────────
+    "conan":     {"nom":"Shinichi Kudo",   "serie":"Detective Conan", "rarete":"Rare",       "emoji":"🔍", "pv":170,"attaque":75,"defense":80,"image":"https://i.imgur.com/OeZ10pT.jpg","attaques":[{"nom":"Déduction","emoji":"🔍","degats":55,"desc": "Résout tout"},{"nom":"Chaussure","emoji":"👟","degats":45,"desc": "Tir de précision"},{"nom":"Révèle","emoji":"💡","degats":65,"desc": "Démonte l'adversaire"}],"faiblesse":"📓","resistance":"🔍"},
+    # ── KUROKO NO BASKET ─────────────────────────────────────
+    "kuroko":    {"nom":"Tetsuya Kuroko",  "serie":"Kuroko no Basket","rarete":"Rare",       "emoji":"🏀", "pv":165,"attaque":70,"defense":75,"image":"https://i.imgur.com/MdR5ne3.jpg","attaques":[{"nom":"Passe Fantôme","emoji":"👻","degats":35,"desc": "Invisible"},{"nom":"Ignite Pass","emoji":"🏀","degats":45,"desc": "Passe furtive"},{"nom":"Meteor Drive","emoji":"⭐","degats":55,"desc": "Smash fantôme"}],"faiblesse":"👁️","resistance":"👻"},
+    # ── KAITO KID ────────────────────────────────────────────
+    "kaito":     {"nom":"Kaito Kid",       "serie":"Magic Kaito",     "rarete":"Rare",       "emoji":"🃏", "pv":175,"attaque":76,"defense":78,"image":"https://i.imgur.com/3kzs82L.jpg","attaques":[{"nom":"Illusion","emoji":"🃏","degats":45,"desc": "Trompe l'adversaire"},{"nom":"Cartes","emoji":"🎴","degats":40,"desc": "Cartes tranchantes"},{"nom":"Disparition","emoji":"💨","degats":55,"desc": "Échappe à tout"}],"faiblesse":"🔍","resistance":"🃏"},
+    # ── KILLER BEE ───────────────────────────────────────────
+    "killerbee": {"nom":"Killer Bee",      "serie":"Naruto",          "rarete":"Épique",     "emoji":"🐝", "pv":215,"attaque":94,"defense":80,"image":"https://i.imgur.com/xWtK4by.jpg","attaques":[{"nom":"Gyuki","emoji":"🐙","degats":70,"desc": "Huit queues"},{"nom":"Raps","emoji":"🎤","degats":40,"desc": "Choc sonore"},{"nom":"Jinchuriki","emoji":"🐝","degats":85,"desc": "Transformation"}],"faiblesse":"⚡","resistance":"🐝"},
+    # ── NARUTO ENCORE ────────────────────────────────────────
+    "minato":    {"nom":"Minato Namikaze", "serie":"Naruto",          "rarete":"Légendaire",   "emoji":"⚡", "pv":215,"attaque":106,"defense":85,"image":"https://i.imgur.com/2S8HWaq.jpg","attaques":[{"nom":"Rasengan","emoji":"🌀","degats":70,"desc": "Père du Rasengan"},{"nom":"Hiraishin","emoji":"⚡","degats":85,"desc": "Vol du Dieu"},{"nom":"Sceau","emoji":"✍️","degats":95,"desc": "Sacrifie tout"}],"faiblesse":"💧","resistance":"⚡"},
+    # ── YAO HUI / MANHWA ─────────────────────────────────────
+    "yama":      {"nom":"Yama (GoH)",      "serie":"God of High School","rarete":"Mythique",  "emoji":"🐯","pv":245,"attaque":111,"defense":88,"image":"https://i.imgur.com/p420qv7.jpg","attaques":[{"nom":"Tiger","emoji":"🐯","degats":85,"desc": "Arts martiaux"},{"nom":"Borrowed Power","emoji":"⚡","degats":95,"desc": "Pouvoir emprunté"},{"nom":"True Form","emoji":"💥","degats":110,"desc": "Forme vraie"}],"faiblesse":"🌊","resistance":"🐯"},
+    "jinmori":   {"nom":"Jin Mo-Ri",       "serie":"God of High School","rarete":"Mythique",  "emoji":"🌪️","pv":248,"attaque":113,"defense":90,"image":"https://i.imgur.com/IwpTyww.jpg","attaques":[{"nom":"Hwi Chul","emoji":"🌪️","degats":80,"desc": "Tourbillon"},{"nom":"Mimicry","emoji":"🐒","degats":90,"desc": "Copie Goku"},{"nom":"Sun Wukong","emoji":"☁️","degats":110,"desc": "Roi singe"}],"faiblesse":"💀","resistance":"🌪️"},
+    # ── KENSHIRO ─────────────────────────────────────────────
+    "kenshiro":  {"nom":"Kenshiro",        "serie":"Hokuto no Ken",   "rarete":"Mythique",   "emoji":"☠️", "pv":240,"attaque":115,"defense":88,"image":"https://i.imgur.com/5QlIuRx.jpg","attaques":[{"nom":"Hokuto Shinken","emoji":"☠️","degats":95,"desc": "Tu es déjà mort"},{"nom":"Points Vitaux","emoji":"💢","degats":80,"desc": "Pression fatale"},{"nom":"Ryuken","emoji":"⭐","degats":110,"desc": "Étoile du Nord"}],"faiblesse":"🌊","resistance":"☠️"},
+    # ── NOELLE ───────────────────────────────────────────────
+    "noelle":    {"nom":"Noelle Silva",    "serie":"Black Clover",    "rarete":"Épique",     "emoji":"💧", "pv":200,"attaque":87,"defense":80,"image":"https://i.imgur.com/IE0nG9f.jpg","attaques":[{"nom":"Sea Dragon","emoji":"🐉","degats":65,"desc": "Dragon d'eau"},{"nom":"Bouclier","emoji":"💧","degats":45,"desc": "Mur aquatique"},{"nom":"Valkyrie","emoji":"⚔️","degats":80,"desc": "Armure de guerre"}],"faiblesse":"⚡","resistance":"💧"},
+    # ── NARUTO (nouveaux) ────────────────────────────────────
+    "itachi":    {"nom":"Itachi Uchiha",   "serie":"Naruto",          "rarete":"Légendaire",   "emoji":"🔴", "pv":225,"attaque":105,"defense":90,"image":"https://i.imgur.com/UIA8L7u.jpg","attaques":[{"nom":"Tsukuyomi","emoji":"🔴","degats":85,"desc": "Illusion infernale"},{"nom":"Amaterasu","emoji":"🔥","degats":75,"desc": "Flammes noires"},{"nom":"Susanoo","emoji":"🛡️","degats":95,"desc": "Armure divine"}],"faiblesse":"💧","resistance":"🔴"},
+    "kakashi":   {"nom":"Kakashi Hatake",  "serie":"Naruto",          "rarete":"Légendaire", "emoji":"⚡", "pv":205,"attaque":96,"defense":85,"image":"https://i.imgur.com/XcHGLHb.jpg","attaques":[{"nom":"Chidori","emoji":"⚡","degats":65,"desc": "Mille oiseaux"},{"nom":"Sharingan","emoji":"👁️","degats":50,"desc": "Œil copieur"},{"nom":"Kamui","emoji":"🌀","degats":80,"desc": "Dimension autre"}],"faiblesse":"💧","resistance":"⚡"},
+    "madara":    {"nom":"Madara Uchiha",   "serie":"Naruto",          "rarete":"Légendaire",   "emoji":"👁️", "pv":250,"attaque":115,"defense":95,"image":"https://i.imgur.com/FYEJwwH.jpg","attaques":[{"nom":"Meteore","emoji":"☄️","degats":100,"desc": "Fait tomber des meteores"},{"nom":"Susanoo","emoji":"⚔️","degats":90,"desc": "Guerrier colossal"},{"nom":"Edo Tensei","emoji":"💀","degats":110,"desc": "Immortel"}],"faiblesse":"💧","resistance":"👁️"},
+    "kaguya":    {"nom":"Kaguya Otsutsuki","serie":"Naruto",          "rarete":"Mythique",   "emoji":"🌸", "pv":255,"attaque":118,"defense":100,"image":"https://i.imgur.com/6E9Q66v.jpg","attaques":[{"nom":"Ash Bones","emoji":"🦴","degats":100,"desc": "Os qui tuent"},{"nom":"Portail","emoji":"🌀","degats":90,"desc": "Dimension de cendres"},{"nom":"Omnipotence","emoji":"🌸","degats":115,"desc": "Chakra originel"}],"faiblesse":"⚡","resistance":"🌸"},
+    # ── BLEACH (nouveaux) ────────────────────────────────────
+    "ichigo":    {"nom":"Ichigo Kurosaki", "serie":"Bleach",          "rarete":"Légendaire",   "emoji":"🌙", "pv":235,"attaque":103,"defense":85,"image":"https://i.imgur.com/tGmGlBB.jpg","attaques":[{"nom":"Getsuga Tensho","emoji":"🌙","degats":70,"desc": "Lune tranchante"},{"nom":"Bankai","emoji":"💀","degats":85,"desc": "Tensa Zangetsu"},{"nom":"Final Getsuga","emoji":"☠️","degats":100,"desc": "Forme finale"}],"faiblesse":"🔥","resistance":"🌙"},
+    # ── ATTACK ON TITAN (nouveaux) ────────────────────────────
+    "levi":      {"nom":"Levi Ackerman",   "serie":"Attack on Titan", "rarete":"Légendaire",   "emoji":"⚔️", "pv":205,"attaque":105,"defense":80,"image":"https://i.imgur.com/cvXCIWl.jpg","attaques":[{"nom":"Tourbillon","emoji":"🌪️","degats":80,"desc": "Spin légendaire"},{"nom":"Lame","emoji":"⚔️","degats":60,"desc": "Précision absolue"},{"nom":"Ackerman","emoji":"💢","degats":95,"desc": "Pouvoir du clan"}],"faiblesse":"💥","resistance":"⚔️"},
+    "eren":      {"nom":"Eren Yeager",     "serie":"Attack on Titan", "rarete":"Légendaire", "emoji":"🔑", "pv":225,"attaque":97,"defense":78,"image":"https://i.imgur.com/BE73Bud.jpg","attaques":[{"nom":"Titan","emoji":"👣","degats":65,"desc": "Transformation"},{"nom":"Rumbling","emoji":"🌍","degats":90,"desc": "Grondement"},{"nom":"Fondateur","emoji":"🔑","degats":100,"desc": "Titan fondateur"}],"faiblesse":"⚡","resistance":"🔑"},
+    "erwin":     {"nom":"Erwin Smith",     "serie":"Attack on Titan", "rarete":"Épique",     "emoji":"🦅", "pv":190,"attaque":80,"defense":82,"image":"https://i.imgur.com/jV3h5SB.jpg","attaques":[{"nom":"Charge","emoji":"🦅","degats":55,"desc": "Charge héroïque"},{"nom":"Tactique","emoji":"♟️","degats":65,"desc": "Stratège brillant"},{"nom":"Sacrifice","emoji":"💀","degats":75,"desc": "Tout pour l'humanité"}],"faiblesse":"💥","resistance":"🦅"},
+    "mikasa":    {"nom":"Mikasa Ackerman", "serie":"Attack on Titan", "rarete":"Légendaire", "emoji":"❤️", "pv":210,"attaque":100,"defense":82,"image":"https://i.imgur.com/vwLKjUw.jpg","attaques":[{"nom":"Lame","emoji":"⚔️","degats":65,"desc": "Précision"},{"nom":"Ackerman","emoji":"💢","degats":80,"desc": "Pouvoir clan"},{"nom":"Protection","emoji":"❤️","degats":70,"desc": "Protège Eren"}],"faiblesse":"💥","resistance":"❤️"},
+    # ── DEMON SLAYER (nouveaux) ──────────────────────────────
+    "tanjiro":   {"nom":"Tanjiro Kamado",  "serie":"Demon Slayer",    "rarete":"Légendaire",     "emoji":"🔥", "pv":205,"attaque":88,"defense":75,"image":"https://i.imgur.com/RmLMZaP.jpg","attaques":[{"nom":"Soleil Hinokami","emoji":"☀️","degats":60,"desc": "Respiration solaire"},{"nom":"Eau","emoji":"💧","degats":40,"desc": "Respiration eau"},{"nom":"Danse Flamme","emoji":"🔥","degats":55,"desc": "Danse ignée"}],"faiblesse":"🌊","resistance":"🔥"},
+    "zenitsu":   {"nom":"Zenitsu Agatsuma","serie":"Demon Slayer",    "rarete":"Épique",       "emoji":"⚡", "pv":185,"attaque":86,"defense":65,"image":"https://i.imgur.com/xBnRNSv.jpg","attaques":[{"nom":"Tonnerre","emoji":"⚡","degats":60,"desc": "Respiration foudre"},{"nom":"Godspeed","emoji":"💨","degats":75,"desc": "Vitesse éclair"},{"nom":"Thunderclap","emoji":"🌩️","degats":85,"desc": "Coup unique"}],"faiblesse":"🌊","resistance":"⚡"},
+    "nezuko":    {"nom":"Nezuko Kamado",   "serie":"Demon Slayer",    "rarete":"Épique",     "emoji":"🩷", "pv":200,"attaque":85,"defense":78,"image":"https://i.imgur.com/n9kTXuX.jpg","attaques":[{"nom":"Sang Explosion","emoji":"🩸","degats":65,"desc": "Flammes roses"},{"nom":"Démon","emoji":"👹","degats":55,"desc": "Transformation"},{"nom":"Soleil","emoji":"☀️","degats":75,"desc": "Résiste au soleil"}],"faiblesse":"🌊","resistance":"🩷"},
+    "tengen":    {"nom":"Tengen Uzui",     "serie":"Demon Slayer",    "rarete":"Légendaire",     "emoji":"💥", "pv":210,"attaque":93,"defense":77,"image":"https://i.imgur.com/Mv099qN.jpg","attaques":[{"nom":"Son","emoji":"🎵","degats":60,"desc": "Respiration son"},{"nom":"Explosion","emoji":"💥","degats":75,"desc": "Détonation"},{"nom":"Flamboyant","emoji":"✨","degats":80,"desc": "Spectaculaire"}],"faiblesse":"🌊","resistance":"💥"},
+    "muichiro":  {"nom":"Muichiro Tokito", "serie":"Demon Slayer",    "rarete":"Légendaire",     "emoji":"🌫️", "pv":195,"attaque":91,"defense":76,"image":"https://i.imgur.com/C9Q0GcG.jpg","attaques":[{"nom":"Brume","emoji":"🌫️","degats":60,"desc": "Respiration brume"},{"nom":"Brume 7","emoji":"🌊","degats":70,"desc": "7ème forme"},{"nom":"Démon","emoji":"💀","degats":80,"desc": "Marque du démon"}],"faiblesse":"🔥","resistance":"🌫️"},
+    "giyu":      {"nom":"Giyu Tomioka",    "serie":"Demon Slayer",    "rarete":"Légendaire", "emoji":"💧", "pv":215,"attaque":97,"defense":83,"image":"https://i.imgur.com/oWIcMrV.jpg","attaques":[{"nom":"Eau 11","emoji":"💧","degats":70,"desc": "Onzième forme"},{"nom":"Calme","emoji":"🌊","degats":60,"desc": "Eau tranquille"},{"nom":"Pilier","emoji":"⚔️","degats":85,"desc": "Force de pilier"}],"faiblesse":"⚡","resistance":"💧"},
+    "rengoku":   {"nom":"Kyojuro Rengoku", "serie":"Demon Slayer",    "rarete":"Légendaire", "emoji":"🔥", "pv":218,"attaque":99,"defense":80,"image":"https://i.imgur.com/utlCuQn.jpg","attaques":[{"nom":"Flamme 9","emoji":"🔥","degats":75,"desc": "Neuvième forme"},{"nom":"Pillier Feu","emoji":"🔥","degats":85,"desc": "Force du pilier feu"},{"nom":"Ardeur","emoji":"💪","degats":70,"desc": "Cœur enflammé"}],"faiblesse":"💧","resistance":"🔥"},
+    "sanemi":    {"nom":"Sanemi Shinazugawa","serie":"Demon Slayer",  "rarete":"Légendaire", "emoji":"🌬️", "pv":212,"attaque":98,"defense":79,"image":"https://i.imgur.com/fHuqIaF.jpg","attaques":[{"nom":"Vent","emoji":"🌬️","degats":70,"desc": "Respiration vent"},{"nom":"Cyclone","emoji":"🌪️","degats":80,"desc": "Rafale"},{"nom":"Sang Rare","emoji":"🩸","degats":85,"desc": "Sang qui attire"}],"faiblesse":"🔥","resistance":"🌬️"},
+    "akaza":     {"nom":"Akaza",           "serie":"Demon Slayer",    "rarete":"Légendaire",     "emoji":"🩸", "pv":220,"attaque":102,"defense":85,"image":"https://i.imgur.com/s3SbBSM.jpg","attaques":[{"nom":"Destruction","emoji":"💥","degats":75,"desc": "Style de combat"},{"nom":"Régén","emoji":"💚","degats":50,"desc": "Se régénère"},{"nom":"Lune 3","emoji":"🌙","degats":90,"desc": "Lune supérieure 3"}],"faiblesse":"☀️","resistance":"🩸"},
+    # ── JJK (nouveaux) ──────────────────────────────────────
+    "gojo":      {"nom":"Satoru Gojo",     "serie":"Jujutsu Kaisen",  "rarete":"Mythique",   "emoji":"♾️", "pv":250,"attaque":110,"defense":100,"image":"https://i.imgur.com/7n8Gmn3.jpg","attaques":[{"nom":"Infini","emoji":"♾️","degats":70,"desc": "Barrière infinie"},{"nom":"Hollow Purple","emoji":"💜","degats":90,"desc": "Destructeur"},{"nom":"Domaine","emoji":"🌐","degats":100,"desc": "Sure Hit"}],"faiblesse":"💀","resistance":"♾️"},
+    "sukuna":    {"nom":"Ryomen Sukuna",   "serie":"Jujutsu Kaisen",  "rarete":"Mythique",   "emoji":"☠️", "pv":255,"attaque":118,"defense":95,"image":"https://i.imgur.com/UbB1tmt.jpg","attaques":[{"nom":"Dismantle","emoji":"✂️","degats":90,"desc": "Coupe tout"},{"nom":"Malédiction","emoji":"☠️","degats":100,"desc": "Énergie maudite"},{"nom":"Domaine","emoji":"🌑","degats":115,"desc": "Boucherie"}],"faiblesse":"♾️","resistance":"☠️"},
+    "yuji":      {"nom":"Yuji Itadori",    "serie":"Jujutsu Kaisen",  "rarete":"Épique",     "emoji":"👊", "pv":220,"attaque":92,"defense":80,"image":"https://i.imgur.com/wxIT2y4.jpg","attaques":[{"nom":"Divergent Fist","emoji":"👊","degats":55,"desc": "Double impact"},{"nom":"Black Flash","emoji":"⚫","degats":70,"desc": "Distorsion maudite"},{"nom":"Sukuna","emoji":"☠️","degats":85,"desc": "Roi des malédictions"}],"faiblesse":"♾️","resistance":"👊"},
+    "megumi":    {"nom":"Megumi Fushiguro","serie":"Jujutsu Kaisen",  "rarete":"Épique",     "emoji":"🐕", "pv":200,"attaque":88,"defense":82,"image":"https://i.imgur.com/1HX2ImD.jpg","attaques":[{"nom":"Shikigami","emoji":"🐕","degats":60,"desc": "Invoque des bêtes"},{"nom":"Mahoraga","emoji":"☯️","degats":90,"desc": "Shikigami ultime"},{"nom":"Dix Ombres","emoji":"🌑","degats":75,"desc": "Technique des ombres"}],"faiblesse":"🔥","resistance":"🌑"},
+    # ── ONE PIECE (nouveaux) ─────────────────────────────────
+    "luffy":     {"nom":"Monkey D. Luffy", "serie":"One Piece",       "rarete":"Légendaire",   "emoji":"👒", "pv":240,"attaque":105,"defense":85,"image":"https://i.imgur.com/WaXKIPM.jpg","attaques":[{"nom":"Gear 5","emoji":"☁️","degats":80,"desc": "Nika libéré"},{"nom":"Gomu Gomu","emoji":"👊","degats":50,"desc": "Poing élastique"},{"nom":"Red Roc","emoji":"🔥","degats":70,"desc": "Frappe embrasée"}],"faiblesse":"⚡","resistance":"👊"},
+    "zoro":      {"nom":"Roronoa Zoro",    "serie":"One Piece",       "rarete":"Légendaire", "emoji":"⚔️", "pv":215,"attaque":98,"defense":82,"image":"https://i.imgur.com/Nr66sRV.jpg","attaques":[{"nom":"Asura","emoji":"👹","degats":75,"desc": "Neuf lames"},{"nom":"Hiryu Kaen","emoji":"🔥","degats":60,"desc": "Dragon de feu"},{"nom":"Enma","emoji":"⚔️","degats":85,"desc": "Lame du roi"}],"faiblesse":"💧","resistance":"⚔️"},
+    "mihawk":    {"nom":"Dracule Mihawk",  "serie":"One Piece",       "rarete":"Légendaire",   "emoji":"🗡️", "pv":225,"attaque":110,"defense":88,"image":"https://i.imgur.com/pB4lYTn.jpg","attaques":[{"nom":"Slash","emoji":"🗡️","degats":80,"desc": "Coupe l'air"},{"nom":"Yoru","emoji":"🌑","degats":95,"desc": "Épée noire"},{"nom":"Croix","emoji":"✝️","degats":100,"desc": "Croix du jugement"}],"faiblesse":"💥","resistance":"🗡️"},
+    "kaido":     {"nom":"Kaido",           "serie":"One Piece",       "rarete":"Mythique",   "emoji":"🐲", "pv":260,"attaque":116,"defense":100,"image":"https://i.imgur.com/Q76UJEX.jpg","attaques":[{"nom":"Thunder Bagua","emoji":"🌩️","degats":100,"desc": "Frappe de masse"},{"nom":"Dragon","emoji":"🐲","degats":110,"desc": "Transformation dragon"},{"nom":"Haoshoku","emoji":"👑","degats":115,"desc": "Haki des rois"}],"faiblesse":"⚡","resistance":"🐲"},
+    "shanks":    {"nom":"Shanks",          "serie":"One Piece",       "rarete":"Mythique",   "emoji":"🍶", "pv":245,"attaque":114,"defense":95,"image":"https://i.imgur.com/BkCK51H.jpg","attaques":[{"nom":"Haki","emoji":"👑","degats":90,"desc": "Haki des rois"},{"nom":"Griffe","emoji":"⚔️","degats":80,"desc": "Cicatrice de Shanks"},{"nom":"Ittoryu","emoji":"🗡️","degats":100,"desc": "Style une lame"}],"faiblesse":"💀","resistance":"🍶"},
+    # ── DRAGON BALL (nouveaux) ───────────────────────────────
+    "goku":      {"nom":"Son Goku",        "serie":"Dragon Ball",     "rarete":"Mythique",   "emoji":"🟡", "pv":250,"attaque":110,"defense":90,"image":"https://i.imgur.com/YbSpxzS.jpg","attaques":[{"nom":"Kamehameha","emoji":"🌊","degats":75,"desc": "Vague d'énergie"},{"nom":"Ultra Instinct","emoji":"🟡","degats":95,"desc": "Instinct supérieur"},{"nom":"Spirit Bomb","emoji":"☀️","degats":110,"desc": "Bombe du Génie"}],"faiblesse":"💀","resistance":"🟡"},
+    "vegeta":    {"nom":"Vegeta",          "serie":"Dragon Ball",     "rarete":"Mythique", "emoji":"👑", "pv":230,"attaque":100,"defense":88,"image":"https://i.imgur.com/ld1LPss.jpg","attaques":[{"nom":"Big Bang","emoji":"💥","degats":70,"desc": "Explosion ultime"},{"nom":"Galick Gun","emoji":"💜","degats":60,"desc": "Rayon violet"},{"nom":"Ultra Ego","emoji":"👑","degats":90,"desc": "Ego transcendé"}],"faiblesse":"🟡","resistance":"👑"},
+    "frieza":    {"nom":"Frieza",          "serie":"Dragon Ball",     "rarete":"Mythique",   "emoji":"❄️", "pv":240,"attaque":108,"defense":92,"image":"https://i.imgur.com/qIelqUS.jpg","attaques":[{"nom":"Death Beam","emoji":"❄️","degats":80,"desc": "Rayon mortel"},{"nom":"Black Frieza","emoji":"🖤","degats":110,"desc": "Forme ultime"},{"nom":"Supernova","emoji":"💫","degats":95,"desc": "Étoile de mort"}],"faiblesse":"🟡","resistance":"❄️"},
+    "beerus":    {"nom":"Beerus",          "serie":"Dragon Ball Super","rarete":"Mythique",  "emoji":"🌌", "pv":255,"attaque":120,"defense":100,"image":"https://i.imgur.com/qlJdPS6.jpg","attaques":[{"nom":"Hakai","emoji":"💥","degats":100,"desc": "Destruction pure"},{"nom":"Sphere","emoji":"🌌","degats":110,"desc": "Sphère de destruction"},{"nom":"Dieu","emoji":"✨","degats":120,"desc": "Dieu de la destruction"}],"faiblesse":"💀","resistance":"🌌"},
+    # ── MHA (nouveaux) ──────────────────────────────────────
+    "allmight":  {"nom":"All Might",       "serie":"My Hero Academia","rarete":"Mythique",   "emoji":"💪", "pv":240,"attaque":112,"defense":88,"image":"https://i.imgur.com/5YVOpkT.jpg","attaques":[{"nom":"Detroit Smash","emoji":"💪","degats":90,"desc": "Frappe dévastatrice"},{"nom":"Carolina Smash","emoji":"💥","degats":80,"desc": "Croisée"},{"nom":"United States Smash","emoji":"🌍","degats":110,"desc": "Ultime"}],"faiblesse":"💀","resistance":"💪"},
+    "deku":      {"nom":"Izuku Midoriya",  "serie":"My Hero Academia","rarete":"Légendaire",     "emoji":"💚", "pv":210,"attaque":90,"defense":75,"image":"https://i.imgur.com/aKjpPQs.jpg","attaques":[{"nom":"Detroit Smash","emoji":"💚","degats":60,"desc": "100% One for All"},{"nom":"Shoot Style","emoji":"🦵","degats":50,"desc": "Frappe de pied"},{"nom":"Float","emoji":"🌊","degats":70,"desc": "Full Cowl"}],"faiblesse":"🔥","resistance":"💚"},
+    "bakugo":    {"nom":"Katsuki Bakugo",  "serie":"My Hero Academia","rarete":"Légendaire", "emoji":"💥", "pv":215,"attaque":100,"defense":76,"image":"https://i.imgur.com/jlLDh3h.jpg","attaques":[{"nom":"Explosion","emoji":"💥","degats":70,"desc": "Nitroglycérine"},{"nom":"Howitzer","emoji":"🌀","degats":85,"desc": "Tornado explosive"},{"nom":"AP Shot","emoji":"🔫","degats":75,"desc": "Tir ciblé"}],"faiblesse":"💧","resistance":"💥"},
+    "shigaraki": {"nom":"Shigaraki Tomura","serie":"My Hero Academia","rarete":"Légendaire",   "emoji":"🖐️", "pv":235,"attaque":106,"defense":82,"image":"https://i.imgur.com/464ERG7.jpg","attaques":[{"nom":"Désintégration","emoji":"🖐️","degats":90,"desc": "Touche = mort"},{"nom":"AFO","emoji":"☠️","degats":105,"desc": "Pouvoir volé"},{"nom":"Decay","emoji":"💀","degats":95,"desc": "Tout se désagrège"}],"faiblesse":"💧","resistance":"🖐️"},
+    # ── CODE GEASS ───────────────────────────────────────────
+    "lelouch":   {"nom":"Lelouch vi Britannia","serie":"Code Geass",  "rarete":"Mythique", "emoji":"♟️", "pv":180,"attaque":85,"defense":82,"image":"https://i.imgur.com/T0AqdVz.jpg","attaques":[{"nom":"Geass","emoji":"👁️","degats":75,"desc": "Ordre absolu"},{"nom":"Tactique","emoji":"♟️","degats":60,"desc": "Génie militaire"},{"nom":"Zéro","emoji":"🃏","degats":80,"desc": "Masque de Zéro"}],"faiblesse":"💀","resistance":"♟️"},
+    "suzaku":    {"nom":"Suzaku Kururugi",  "serie":"Code Geass",    "rarete":"Épique",     "emoji":"🌸", "pv":205,"attaque":93,"defense":80,"image":"https://i.imgur.com/b5cVGjx.jpg","attaques":[{"nom":"Lancelot","emoji":"🤖","degats":65,"desc": "Knightmare Frame"},{"nom":"Hadron","emoji":"💛","degats":75,"desc": "Canon hadron"},{"nom":"Geas","emoji":"🌸","degats":80,"desc": "Vivre pour ordonner"}],"faiblesse":"♟️","resistance":"🌸"},
+    # ── SOLO LEVELING ────────────────────────────────────────
+    "jinwoo":    {"nom":"Sung Jin-Woo",    "serie":"Solo Leveling",   "rarete":"Mythique",   "emoji":"🗡️", "pv":248,"attaque":115,"defense":95,"image":"https://i.imgur.com/cytYnaz.jpg","attaques":[{"nom":"Ombre","emoji":"🌑","degats":90,"desc": "Armée des ombres"},{"nom":"Dague","emoji":"🗡️","degats":80,"desc": "Lame d'ombre"},{"nom":"Monarque","emoji":"👑","degats":110,"desc": "Monarque des ombres"}],"faiblesse":"✨","resistance":"🗡️"},
+    # ── BLACK CLOVER ─────────────────────────────────────────
+    "asta":      {"nom":"Asta",            "serie":"Black Clover",    "rarete":"Épique", "emoji":"⚫", "pv":220,"attaque":97,"defense":80,"image":"https://i.imgur.com/zxT2yys.jpg","attaques":[{"nom":"Anti-Magie","emoji":"⚫","degats":75,"desc": "Annule la magie"},{"nom":"Black Divider","emoji":"🗡️","degats":85,"desc": "Coupe tout"},{"nom":"Démon","emoji":"👹","degats":95,"desc": "Fusion démoniaque"}],"faiblesse":"🔥","resistance":"⚫"},
+    "yuno":      {"nom":"Yuno",            "serie":"Black Clover",    "rarete":"Épique",     "emoji":"🍀", "pv":210,"attaque":94,"defense":80,"image":"https://i.imgur.com/R9lnjWa.jpg","attaques":[{"nom":"Vent","emoji":"🍀","degats":65,"desc": "Magie du vent"},{"nom":"Spirit Dive","emoji":"🌪️","degats":80,"desc": "Fusion avec Sylph"},{"nom":"Étoile","emoji":"⭐","degats":85,"desc": "Magie d'étoile"}],"faiblesse":"🔥","resistance":"🍀"},
+    "yami":      {"nom":"Yami Sukehiro",   "serie":"Black Clover",    "rarete":"Épique", "emoji":"🌑", "pv":218,"attaque":102,"defense":83,"image":"https://i.imgur.com/H5UTEEg.jpg","attaques":[{"nom":"Dark Magic","emoji":"🌑","degats":75,"desc": "Magie des ténèbres"},{"nom":"Kata","emoji":"⚔️","degats":65,"desc": "Style sabre"},{"nom":"Dimension Slash","emoji":"💀","degats":90,"desc": "Coupe la dimension"}],"faiblesse":"✨","resistance":"🌑"},
+    # ── HXH (nouveaux) ──────────────────────────────────────
+    "gon":       {"nom":"Gon Freecss",     "serie":"HunterxHunter",   "rarete":"Légendaire",     "emoji":"🌿", "pv":210,"attaque":85,"defense":70,"image":"https://i.imgur.com/JEAkcm9.jpg","attaques":[{"nom":"Jajanken","emoji":"✊","degats":50,"desc": "Papier/Pierre/Ciseaux"},{"nom":"Adult Gon","emoji":"💥","degats":100,"desc": "Forme adulte"},{"nom":"Jan Ken","emoji":"💪","degats":65,"desc": "Combo"}],"faiblesse":"⚡","resistance":"🌿"},
+    "killua":    {"nom":"Killua Zoldyck",  "serie":"HunterxHunter",   "rarete":"Légendaire", "emoji":"⚡", "pv":205,"attaque":92,"defense":78,"image":"https://i.imgur.com/T0BJceE.jpg","attaques":[{"nom":"Godspeed","emoji":"⚡","degats":55,"desc": "Vitesse ultime"},{"nom":"Griffes","emoji":"🗡️","degats":40,"desc": "Lacère"},{"nom":"Éclair","emoji":"🌩️","degats":65,"desc": "Décharge"}],"faiblesse":"🌊","resistance":"⚡"},
+    "hisoka":    {"nom":"Hisoka Morow",    "serie":"HunterxHunter",   "rarete":"Légendaire", "emoji":"🃏", "pv":215,"attaque":99,"defense":82,"image":"https://i.imgur.com/AdQSiCd.jpg","attaques":[{"nom":"Bungee Gum","emoji":"🎈","degats":65,"desc": "Gomme élastique"},{"nom":"Carte","emoji":"🃏","degats":55,"desc": "Cartes tranchantes"},{"nom":"Transmission","emoji":"⚡","degats":80,"desc": "Élasticité"}],"faiblesse":"💧","resistance":"🃏"},
+    # ── FAIRY TAIL (Erza) ────────────────────────────────────
+    "erza":      {"nom":"Erza Scarlet",    "serie":"Fairy Tail",      "rarete":"Légendaire", "emoji":"⚔️", "pv":218,"attaque":100,"defense":88,"image":"https://i.imgur.com/VGa6MhQ.jpg","attaques":[{"nom":"Armure","emoji":"🛡️","degats":65,"desc": "Changement d'armure"},{"nom":"Titania","emoji":"👸","degats":80,"desc": "Reine des fées"},{"nom":"Nakagami","emoji":"✨","degats":95,"desc": "Armure mythique"}],"faiblesse":"⚡","resistance":"⚔️"},
+    # ── RUROUNI KENSHIN ──────────────────────────────────────
+    "kenshin":   {"nom":"Kenshin Himura",  "serie":"Rurouni Kenshin", "rarete":"Légendaire", "emoji":"🌸", "pv":205,"attaque":97,"defense":80,"image":"https://i.imgur.com/6pVtY0C.jpg","attaques":[{"nom":"Battoujutsu","emoji":"🌸","degats":70,"desc": "Dégainage éclair"},{"nom":"Amakakeru","emoji":"⚡","degats":85,"desc": "Vol d'oiseau céleste"},{"nom":"Hiten Mitsurugi","emoji":"💨","degats":90,"desc": "Style céleste"}],"faiblesse":"💀","resistance":"🌸"},
+    # ── TENSEI SHITARA SLIME ─────────────────────────────────
+    "rimuru":    {"nom":"Rimuru Tempest",  "serie":"That Time I Got Reincarnated as a Slime","rarete":"Mythique","emoji":"💧","pv":245,"attaque":108,"defense":96,"image":"https://i.imgur.com/2kqDGwW.jpg","attaques":[{"nom":"Prédateur","emoji":"💧","degats":85,"desc": "Avale et copie"},{"nom":"Tempête","emoji":"🌪️","degats":95,"desc": "Magie ultime"},{"nom":"Dieu","emoji":"✨","degats":110,"desc": "Forme divine"}],"faiblesse":"💀","resistance":"💧"},
+    # ── SAO (Kirito) ─────────────────────────────────────────
+    "kirito":    {"nom":"Kirito",          "serie":"SAO",             "rarete":"Légendaire", "emoji":"⚔️", "pv":210,"attaque":95,"defense":80,"image":"https://i.imgur.com/I2OwE8u.jpg","attaques":[{"nom":"Double Lame","emoji":"⚔️","degats":65,"desc": "Deux épées"},{"nom":"Star Burst","emoji":"⭐","degats":80,"desc": "Frappe stellaire"},{"nom":"Underworld","emoji":"🌑","degats":90,"desc": "Chevalier intégral"}],"faiblesse":"💧","resistance":"⚔️"},
+    # ── TOKYO GHOUL ──────────────────────────────────────────
+    "kaneki":    {"nom":"Ken Kaneki",      "serie":"Tokyo Ghoul",     "rarete":"Légendaire",   "emoji":"🕷️", "pv":235,"attaque":104,"defense":88,"image":"https://i.imgur.com/PSZyDlw.jpg","attaques":[{"nom":"Kagune","emoji":"🕷️","degats":75,"desc": "Lames de kagune"},{"nom":"Roi Noir","emoji":"🖤","degats":90,"desc": "Transformation"},{"nom":"Dragon","emoji":"🐉","degats":105,"desc": "Forme dragon"}],"faiblesse":"☠️","resistance":"🕷️"},
+    "rize":      {"nom":"Rize Kamishiro",  "serie":"Tokyo Ghoul",     "rarete":"Épique",     "emoji":"🌸", "pv":205,"attaque":96,"defense":80,"image":"https://i.imgur.com/qAhrKOO.jpg","attaques":[{"nom":"Kagune","emoji":"🌸","degats":70,"desc": "Multiples tentacules"},{"nom":"Ghoul","emoji":"👹","degats":80,"desc": "Puissance gourmet"},{"nom":"Prédateur","emoji":"🩸","degats":85,"desc": "Appétit sans fin"}],"faiblesse":"☠️","resistance":"🌸"},
+    "arima":     {"nom":"Kishou Arima",    "serie":"Tokyo Ghoul",     "rarete":"Légendaire",   "emoji":"⚔️", "pv":228,"attaque":111,"defense":93,"image":"https://i.imgur.com/GEsZ3uD.jpg","attaques":[{"nom":"IXA","emoji":"⚔️","degats":85,"desc": "Quinque lame"},{"nom":"Yukimura","emoji":"🌸","degats":75,"desc": "Mille coups"},{"nom":"Owl","emoji":"🦉","degats":100,"desc": "Arima le Faucheur"}],"faiblesse":"💔","resistance":"⚔️"},
+    # ── MAGIC EMPEROR (manhwa) ───────────────────────────────
+    "zhuofan":   {"nom":"Zhuo Fan",        "serie":"Magic Emperor",   "rarete":"Mythique",   "emoji":"🌑", "pv":245,"attaque":112,"defense":90,"image":"https://i.imgur.com/gqEyuY0.jpg","attaques":[{"nom":"Démon","emoji":"🌑","degats":90,"desc": "Arts démoniaques"},{"nom":"Magie Noire","emoji":"🖤","degats":100,"desc": "Puissance obscure"},{"nom":"Empereur","emoji":"👑","degats":110,"desc": "Pouvoir impérial"}],"faiblesse":"✨","resistance":"🌑"},
+    "yelin":     {"nom":"Ye Lin",          "serie":"Magic Emperor",   "rarete":"Épique", "emoji":"⚡", "pv":215,"attaque":98,"defense":83,"image":"https://i.imgur.com/Ml8v5UX.jpg","attaques":[{"nom":"Foudre","emoji":"⚡","degats":70,"desc": "Magie éclair"},{"nom":"Tempête","emoji":"🌩️","degats":80,"desc": "Orage magique"},{"nom":"Dragon","emoji":"🐉","degats":88,"desc": "Dragon de foudre"}],"faiblesse":"🌊","resistance":"⚡"},
+
+    # ── NARUTO (persos secondaires) ─────────────────────────
+    "rocklee":   {"nom":"Rock Lee",        "serie":"Naruto",          "rarete":"Épique",     "emoji":"🥊", "pv":195,"attaque":90,"defense":72,"image":"https://i.imgur.com/wzxlb6H.jpg","attaques":[{"nom":"Lotus Primaire","emoji":"🥊","degats":65,"desc": "Vitesse foudroyante"},{"nom":"Lotus Éblouissant","emoji":"💥","degats":80,"desc": "Poids retirés"},{"nom":"Coup de Pied","emoji":"🦵","degats":55,"desc": "Précision absolue"}],"faiblesse":"⚡","resistance":"🥊"},
+    "konohamaru":{"nom":"Konohamaru Sarutobi","serie":"Naruto",       "rarete":"Rare",       "emoji":"🎭", "pv":175,"attaque":72,"defense":65,"image":"https://i.imgur.com/3VJ5ob5.jpg","attaques":[{"nom":"Rasengan","emoji":"🌀","degats":45,"desc": "Imite son sensei"},{"nom":"Sexy no Jutsu","emoji":"😏","degats":25,"desc": "Déstabilise"},{"nom":"Shuriken","emoji":"🌟","degats":40,"desc": "Précision"}],"faiblesse":"🔥","resistance":"🎭"},
+    "kiba":       {"nom":"Kiba Inuzuka",   "serie":"Naruto",          "rarete":"Rare",       "emoji":"🐕", "pv":178,"attaque":74,"defense":66,"image":"https://i.imgur.com/ZBBmXG0.jpg","attaques":[{"nom":"Gatsuga","emoji":"🐕","degats":45,"desc": "Fang over Fang"},{"nom":"Akamaru","emoji":"🦴","degats":35,"desc": "Duo avec Akamaru"},{"nom":"Fang Fang","emoji":"💨","degats":50,"desc": "Tornade"}],"faiblesse":"⚡","resistance":"🐕"},
+    "tenten":     {"nom":"Tenten",         "serie":"Naruto",          "rarete":"Commun",     "emoji":"📦", "pv":165,"attaque":68,"defense":62,"image":"https://i.imgur.com/f0TTVWk.jpg","attaques":[{"nom":"Armes","emoji":"📦","degats":38,"desc": "Lance des armes"},{"nom":"Kama","emoji":"⚔️","degats":30,"desc": "Faucille"},{"nom":"Bansho","emoji":"💫","degats":42,"desc": "Toutes les armes"}],"faiblesse":"🔥","resistance":"📦"},
+    "sai":        {"nom":"Sai",            "serie":"Naruto",          "rarete":"Rare",       "emoji":"🖌️", "pv":172,"attaque":73,"defense":68,"image":"https://i.imgur.com/f1b1Kkd.jpg","attaques":[{"nom":"Dessin","emoji":"🖌️","degats":42,"desc": "Invoque des créatures"},{"nom":"Tigre","emoji":"🐯","degats":50,"desc": "Tigre d'encre"},{"nom":"Corde","emoji":"🪢","degats":38,"desc": "Immobilise"}],"faiblesse":"🔥","resistance":"🖌️"},
+    # ── MHA (persos secondaires) ─────────────────────────────
+    "presentmic":{"nom":"Present Mic",     "serie":"My Hero Academia","rarete":"Commun",     "emoji":"🎤", "pv":162,"attaque":65,"defense":60,"image":"https://i.imgur.com/5RdHtX8.jpg","attaques":[{"nom":"Cri","emoji":"🎤","degats":35,"desc": "Son dévastateur"},{"nom":"Amplification","emoji":"🔊","degats":45,"desc": "Volume max"},{"nom":"Son","emoji":"🌊","degats":38,"desc": "Onde sonique"}],"faiblesse":"🌀","resistance":"🎤"},
+    # ── BLACK CLOVER (persos) ────────────────────────────────
+    "luck":       {"nom":"Luck Voltia",    "serie":"Black Clover",    "rarete":"Épique",     "emoji":"⚡", "pv":190,"attaque":88,"defense":70,"image":"https://i.imgur.com/iubOOO7.jpg","attaques":[{"nom":"Foudre","emoji":"⚡","degats":60,"desc": "Vitesse électrique"},{"nom":"Éclair","emoji":"🌩️","degats":70,"desc": "Frappe multiple"},{"nom":"Rune","emoji":"✨","degats":75,"desc": "Runes de foudre"}],"faiblesse":"🌊","resistance":"⚡"},
+    # ── DBZ (persos secondaires) ─────────────────────────────
+    "yamcha":     {"nom":"Yamcha",         "serie":"Dragon Ball Z",   "rarete":"Commun",     "emoji":"🐺", "pv":160,"attaque":62,"defense":58,"image":"https://i.imgur.com/PAKAiXr.jpg","attaques":[{"nom":"Wolf Fang","emoji":"🐺","degats":32,"desc": "Poing du loup"},{"nom":"Kamehameha","emoji":"💫","degats":28,"desc": "Version faible"},{"nom":"Blitz","emoji":"⚡","degats":35,"desc": "Frappe rapide"}],"faiblesse":"🟡","resistance":"🐺"},
+
+}
+
+# ============================================================
 #  🎰 GACHA — Système style Mudae
 # ============================================================
 
@@ -5997,7 +6374,407 @@ async def on_command_error(ctx, error):
     traceback.print_exc()
 
 # ============================================================
-print("🚀 Démarrage du bot...")
+#  🆕 NOUVELLES COMMANDES
+# ============================================================
+
+# Stockage snipe
+snipe_data = {}  # {channel_id: {"content": str, "author": str, "avatar": str}}
+
+@bot.event
+async def on_message_delete(message):
+    if message.author.bot or not message.content:
+        return
+    snipe_data[message.channel.id] = {
+        "content": message.content,
+        "author":  message.author.display_name,
+        "avatar":  str(message.author.display_avatar.url),
+    }
+
+@bot.command(name="snipe")
+async def snipe_cmd(ctx):
+    """Affiche le dernier message supprimé — .snipe"""
+    data = snipe_data.get(ctx.channel.id)
+    if not data:
+        return await ctx.send("❌ Aucun message supprimé récemment dans ce salon !")
+    embed = discord.Embed(
+        description=data["content"],
+        color=0xe74c3c
+    )
+    embed.set_author(name=data["author"], icon_url=data["avatar"])
+    embed.set_footer(text="💀 Message supprimé")
+    await ctx.send(embed=embed)
+
+@bot.command(name="avatar", aliases=["av", "pp"])
+async def avatar_cmd(ctx, membre: discord.Member = None):
+    """Affiche l'avatar d'un membre — .avatar @membre"""
+    cible = membre or ctx.author
+    embed = discord.Embed(
+        title=f"🖼️ Avatar de {cible.display_name}",
+        color=0x9b59b6
+    )
+    embed.set_image(url=cible.display_avatar.url)
+    await ctx.send(embed=embed)
+
+@bot.command(name="choisir", aliases=["pick","winner"])
+async def choisir_cmd(ctx, message_id: str = None):
+    """Choisit un gagnant aléatoire parmi les réactions d'un message — .choisir <message_id>"""
+    if not message_id or not message_id.isdigit():
+        return await ctx.send("❌ Utilise : `.choisir <ID du message>`\nCopie l'ID du message en faisant clic droit → Copier l'ID")
+    try:
+        msg = await ctx.channel.fetch_message(int(message_id))
+    except:
+        return await ctx.send("❌ Message introuvable dans ce salon !")
+    if not msg.reactions:
+        return await ctx.send("❌ Ce message n'a aucune réaction !")
+    # Récupérer tous les membres qui ont réagi
+    participants = set()
+    for reaction in msg.reactions:
+        async for user in reaction.users():
+            if not user.bot:
+                participants.add(user)
+    if not participants:
+        return await ctx.send("❌ Aucun participant trouvé !")
+    gagnant = random.choice(list(participants))
+    embed = discord.Embed(
+        title="🎉 Gagnant tiré au sort !",
+        description=f"**{gagnant.mention}** remporte le tirage ! 🏆\n*Parmi {len(participants)} participant(s)*",
+        color=0xf1c40f
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name="warn")
+@commands.has_permissions(manage_messages=True)
+async def warn_cmd(ctx, membre: discord.Member = None, *, raison: str = "Aucune raison précisée"):
+    """Avertit un membre — .warn @membre <raison>"""
+    if not membre:
+        return await ctx.send("❌ Mentionne un membre ! Ex: `.warn @membre comportement irrespectueux`")
+    if membre.bot:
+        return await ctx.send("❌ On peut pas avertir un bot !")
+    embed_mp = discord.Embed(
+        title="⚠️ Avertissement",
+        description=(
+            f"Tu as reçu un avertissement sur **{ctx.guild.name}**\n\n"
+            f"📋 **Raison :** {raison}\n"
+            f"👮 **Par :** {ctx.author.display_name}"
+        ),
+        color=0xff6600
+    )
+    try:
+        await membre.send(embed=embed_mp)
+        mp_sent = "✅ MP envoyé"
+    except:
+        mp_sent = "❌ MP impossible (MPs fermés)"
+    embed_pub = discord.Embed(
+        description=f"⚠️ **{membre.mention}** a été averti\n📋 Raison : {raison}\n{mp_sent}",
+        color=0xff6600
+    )
+    await ctx.send(embed=embed_pub)
+
+@bot.command(name="slowmode", aliases=["slow"])
+@commands.has_permissions(manage_channels=True)
+async def slowmode_cmd(ctx, secondes: int = 0):
+    """Active le slowmode — .slowmode <secondes> (0 = désactiver)"""
+    if secondes < 0 or secondes > 21600:
+        return await ctx.send("❌ Entre 0 et 21600 secondes !")
+    await ctx.channel.edit(slowmode_delay=secondes)
+    if secondes == 0:
+        await ctx.send("✅ Slowmode désactivé !")
+    else:
+        await ctx.send(f"✅ Slowmode activé : **{secondes} secondes** entre chaque message")
+
+@bot.command(name="lock")
+@commands.has_permissions(manage_channels=True)
+async def lock_cmd(ctx, salon: discord.TextChannel = None):
+    """Verrouille un salon — .lock [#salon]"""
+    channel = salon or ctx.channel
+    overwrite = channel.overwrites_for(ctx.guild.default_role)
+    overwrite.send_messages = False
+    await channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
+    await ctx.send(f"🔒 {channel.mention} est maintenant verrouillé !")
+
+@bot.command(name="unlock")
+@commands.has_permissions(manage_channels=True)
+async def unlock_cmd(ctx, salon: discord.TextChannel = None):
+    """Déverrouille un salon — .unlock [#salon]"""
+    channel = salon or ctx.channel
+    overwrite = channel.overwrites_for(ctx.guild.default_role)
+    overwrite.send_messages = None
+    await channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
+    await ctx.send(f"🔓 {channel.mention} est maintenant déverrouillé !")
+
+@bot.command(name="clear", aliases=["purge"])
+@commands.has_permissions(manage_messages=True)
+async def clear_cmd(ctx, nombre: str = "10"):
+    """Supprime des messages — .clear <nombre> ou .clear all"""
+    if nombre.lower() == "all":
+        deleted = await ctx.channel.purge(limit=None)
+        await ctx.send(f"🗑️ {len(deleted)} messages supprimés !", delete_after=3)
+    else:
+        try:
+            n = int(nombre)
+            if n < 1 or n > 1000:
+                return await ctx.send("❌ Entre 1 et 1000 messages !")
+            deleted = await ctx.channel.purge(limit=n + 1)
+            await ctx.send(f"🗑️ {len(deleted)-1} messages supprimés !", delete_after=3)
+        except ValueError:
+            await ctx.send("❌ Utilise `.clear <nombre>` ou `.clear all`")
+
+@bot.command(name="voler", aliases=["steal"])
+async def voler_cmd(ctx, emoji_str: str = None):
+    """Vole un emoji d'un autre serveur — .voler <emoji>"""
+    if not emoji_str:
+        return await ctx.send("❌ Utilise : `.voler <emoji>` — Copie-colle l'emoji depuis un autre serveur")
+    import re as _re
+    match = _re.search(r'<(a?):(\w+):(\d+)>', emoji_str)
+    if not match:
+        return await ctx.send("❌ Emoji custom introuvable ! Envoie directement l'emoji d'un autre serveur.")
+    animated, name, emoji_id = match.group(1), match.group(2), match.group(3)
+    ext = "gif" if animated else "png"
+    url = f"https://cdn.discordapp.com/emojis/{emoji_id}.{ext}"
+    try:
+        import urllib.request as _ur
+        data = _ur.urlopen(url, timeout=5).read()
+        new_emoji = await ctx.guild.create_custom_emoji(name=name, image=data)
+        await ctx.send(f"✅ Emoji **:{name}:** ajouté ! {new_emoji}")
+    except discord.Forbidden:
+        await ctx.send("❌ Je n'ai pas la permission d'ajouter des emojis !")
+    except Exception as e:
+        await ctx.send(f"❌ Erreur : {e}")
+
+# ─── Commandes animés/dramas/quotes (réparées) ───────────────
+
+ANIME_RECS = [
+    ("Vinland Saga", "⚔️", "Viking épique — trahison, vengeance et rédemption"),
+    ("Mushishi", "🍄", "Contemplatif et poétique — esprits de la nature"),
+    ("Ping Pong The Animation", "🏓", "Sport animé le plus unique jamais fait"),
+    ("Planetes", "🚀", "Hard SF — éboueurs de l'espace"),
+    ("Paranoia Agent", "😰", "Thriller psychologique surréaliste de Satoshi Kon"),
+    ("Tatami Galaxy", "🌀", "Boucle temporelle et choix de vie"),
+    ("Kaiji", "🎲", "Survie et jeux d'argent — tension maximale"),
+    ("Legend of the Galactic Heroes", "🌌", "Space opera politique légendaire"),
+    ("Monster", "🎭", "Thriller psychologique — médecin vs serial killer"),
+    ("Nana", "🎸", "Drame musical adulte et émouvant"),
+    ("Fruits Basket", "🌸", "Romance et trauma — magnifiquement écrit"),
+    ("Toradora", "🐉", "Romance scolaire — tsundere iconique"),
+    ("Clannad After Story", "💙", "Larmoyant et magnifique — grandir ensemble"),
+]
+
+DRAMA_RECS = [
+    ("My Mister", "🏙️", "Le drama le plus poignant de la décennie"),
+    ("Reply 1988", "📼", "Nostalgie pure — amitié et famille"),
+    ("Misaeng", "💼", "Drama de bureau le plus réaliste"),
+    ("Signal", "📻", "Thriller temporel haletant"),
+    ("Flower of Evil", "🌹", "Thriller conjugal → impossible de lâcher"),
+    ("The World of the Married", "💔", "Drame de vengeance intense"),
+    ("Move to Heaven", "📦", "Drama qui te brise le cœur mais te reconstruit"),
+    ("Our Blues", "🌊", "Anthologie des vies ordinaires de Jeju"),
+    ("Beyond Evil", "🔍", "Thriller policier — meilleur duo de l'année"),
+    ("Juvenile Justice", "⚖️", "Crimes de mineurs — très sombre mais brillant"),
+]
+
+ANIMEQUOTES = [
+    ("*« Les humains forts ne sont pas ceux qui ne pleurent pas — ce sont ceux qui pleurent et se relèvent. »*", "Monkey D. Luffy — One Piece 🏴‍☠️"),
+    ("*« Si tu ne te bats pas, tu ne peux pas gagner. »*", "Eren Yeager — Attack on Titan ⚔️"),
+    ("*« La douleur nous permet de grandir. »*", "Pain — Naruto 🌀"),
+    ("*« Un seul coup suffit. »*", "Saitama — One Punch Man 👊"),
+    ("*« Le chemin vers le sommet n'a pas de raccourcis. »*", "Rock Lee — Naruto 🔥"),
+    ("*« Je ne reculerai jamais et je ne regretterai rien. »*", "Naruto Uzumaki — Naruto 🍥"),
+    ("*« Peu importe combien tu es blessé, redresse-toi. »*", "Izuku Midoriya — MHA 💚"),
+    ("*« Deviens si fort que personne ne puisse te briser. »*", "Vegeta — Dragon Ball Z 👑"),
+    ("*« Ceux qui abandonnent leurs amis sont pire que des ordures. »*", "Kakashi — Naruto ⚡"),
+    ("*« Je protègerai ceux que j'aime, quoi qu'il arrive. »*", "Tanjiro — Demon Slayer 🔥"),
+    ("*« Le destin n'est pas écrit à l'avance. »*", "Lelouch — Code Geass ♟️"),
+    ("*« Si tu trouves quelque chose de précieux, bats-toi pour le garder. »*", "Gojo Satoru — JJK ♾️"),
+    ("*« Être le plus fort ne suffit pas. Tu dois avoir une raison de te battre. »*", "Levi Ackerman — AoT ⚔️"),
+]
+
+QUOTES_KDRAMA = [
+    ("*« Même si tu oublies tout, je me souviendrai pour deux. »*", "Goblin 🕯️"),
+    ("*« L'amour n'est pas une faiblesse, c'est ta plus grande force. »*", "Crash Landing on You 🪂"),
+    ("*« Les gens ne changent pas. Mais les circonstances, si. »*", "My Mister 🏙️"),
+    ("*« On ne choisit pas d'où on vient, mais on choisit où on va. »*", "Itaewon Class 🍺"),
+    ("*« Même dans les ténèbres, une petite lumière suffit. »*", "Kingdom 👑"),
+    ("*« Le passé ne peut pas être changé, mais le futur, lui, t'appartient. »*", "Signal 📻"),
+    ("*« Aimer quelqu'un, c'est lui donner le pouvoir de te briser. »*", "The World of the Married 💔"),
+    ("*« Parfois, disparaître est la meilleure façon de protéger ceux qu'on aime. »*", "Reply 1988 📼"),
+]
+
+@bot.command(name="animerec", aliases=["anirec"])
+async def animerec_cmd(ctx):
+    """Recommande un animé aléatoire — .animerec"""
+    titre, emoji, desc = random.choice(ANIME_RECS)
+    embed = discord.Embed(
+        title=f"{emoji} Recommandation Animé",
+        description=f"## {titre}\n{desc}",
+        color=0x9b59b6
+    )
+    embed.set_footer(text="Tape .animerec pour une autre reco !")
+    await ctx.send(embed=embed)
+
+@bot.command(name="dramarec")
+async def dramarec_cmd(ctx):
+    """Recommande un drama aléatoire — .dramarec"""
+    titre, emoji, desc = random.choice(DRAMA_RECS)
+    embed = discord.Embed(
+        title=f"{emoji} Recommandation Kdrama",
+        description=f"## {titre}\n{desc}",
+        color=0xff6b9d
+    )
+    embed.set_footer(text="Tape .dramarec pour une autre reco !")
+    await ctx.send(embed=embed)
+
+@bot.command(name="animequote", aliases=["aquote"])
+async def animequote_cmd(ctx):
+    """Citation d'animé aléatoire — .animequote"""
+    texte, auteur = random.choice(ANIMEQUOTES)
+    embed = discord.Embed(
+        description=f"{texte}\n\n— *{auteur}*",
+        color=0x9b59b6
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name="quote")
+async def quote_cmd(ctx):
+    """Citation aléatoire animé ou kdrama — .quote"""
+    all_quotes = [(t, f"Animé — {a}") for t, a in ANIMEQUOTES] + [(t, f"Kdrama — {a}") for t, a in QUOTES_KDRAMA]
+    texte, source = random.choice(all_quotes)
+    embed = discord.Embed(
+        description=f"{texte}\n\n— *{source}*",
+        color=0xf1c40f
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name="anime")
+async def anime_cmd(ctx, *, titre: str = None):
+    """Infos sur un animé — .anime <titre>"""
+    if not titre:
+        return await ctx.send("❌ Utilise : `.anime <titre>` — Ex: `.anime attack on titan`")
+    embed = discord.Embed(
+        title=f"🔍 Recherche : {titre}",
+        description=f"Pour des infos complètes sur **{titre}**, consulte :\n🌐 [MyAnimeList](https://myanimelist.net/search/all?q={titre.replace(' ','+')})\n📺 [Anilist](https://anilist.co/search/anime?search={titre.replace(' ','+')})",
+        color=0x9b59b6
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name="drama")
+async def drama_cmd(ctx, *, titre: str = None):
+    """Infos sur un drama — .drama <titre>"""
+    if not titre:
+        return await ctx.send("❌ Utilise : `.drama <titre>` — Ex: `.drama goblin`")
+    embed = discord.Embed(
+        title=f"🔍 Recherche : {titre}",
+        description=f"Pour des infos complètes sur **{titre}**, consulte :\n🌐 [MDL](https://mydramalist.com/search?q={titre.replace(' ','+')})\n🎬 [Viki](https://www.viki.com/explore?q={titre.replace(' ','+')})",
+        color=0xff6b9d
+    )
+    await ctx.send(embed=embed)
+
+# ─── Sorties (à venir uniquement, séparées) ──────────────────
+
+@bot.command(name="sorties")
+async def sorties_cmd(ctx):
+    """Affiche les prochaines sorties dramas & animés — .sorties"""
+    animes = [s for s in SORTIES if "Animé" in s["type"]]
+    kdramas = [s for s in SORTIES if "Kdrama" in s["type"] or "drama" in s["type"].lower()]
+    embed = discord.Embed(
+        title="📅 Prochaines Sorties",
+        color=0xff6b9d
+    )
+    if animes:
+        embed.add_field(
+            name="✨ ANIMÉS",
+            value="\n".join(f"**{s['titre']}** — {s['date']} • {s['plateforme']}" for s in animes),
+            inline=False
+        )
+    if kdramas:
+        embed.add_field(
+            name="🎬 KDRAMAS",
+            value="\n".join(f"**{s['titre']}** — {s['date']} • {s['plateforme']}" for s in kdramas),
+            inline=False
+        )
+    embed.set_footer(text="💡 Liste mise à jour manuellement")
+    await ctx.send(embed=embed)
+
+# ─── Système d'invitations ───────────────────────────────────
+
+invite_tracker = {}  # {invited_user_id: inviter_user_id}
+invite_counts  = defaultdict(int)  # {inviter_user_id: count}
+guild_invites  = {}  # cache des invitations
+
+@bot.event
+async def on_ready_invites():
+    for guild in bot.guilds:
+        try:
+            guild_invites[guild.id] = {inv.code: inv.uses for inv in await guild.invites()}
+        except:
+            pass
+
+@bot.event
+async def on_invite_create(invite):
+    if invite.guild:
+        if invite.guild.id not in guild_invites:
+            guild_invites[invite.guild.id] = {}
+        guild_invites[invite.guild.id][invite.code] = invite.uses or 0
+
+@bot.command(name="invitations", aliases=["invites","inv"])
+async def invitations_cmd(ctx, membre: discord.Member = None):
+    """Voir le nombre d'invitations — .invitations [@membre]"""
+    cible = membre or ctx.author
+    count = invite_counts[str(cible.id)]
+    embed = discord.Embed(
+        description=f"🔗 **{cible.display_name}** a invité **{count}** membre(s) sur le serveur !",
+        color=0x2ecc71
+    )
+    await ctx.send(embed=embed)
+
+# ─── Sondage simplifié ───────────────────────────────────────
+
+@bot.command(name="sondage", aliases=["poll"])
+async def sondage_cmd(ctx, *, question: str = None):
+    """Crée un sondage rapide — .sondage <question>"""
+    if not question:
+        return await ctx.send("❌ Utilise : `.sondage <ta question>`\nEx: `.sondage Demon Slayer ou JJK ?`")
+    embed = discord.Embed(
+        title="📊 Sondage",
+        description=f"**{question}**",
+        color=0x3498db
+    )
+    embed.set_footer(text=f"Sondage de {ctx.author.display_name}")
+    msg = await ctx.send(embed=embed)
+    await msg.add_reaction("✅")
+    await msg.add_reaction("❌")
+    await msg.add_reaction("🤷")
+    try:
+        await ctx.message.delete()
+    except:
+        pass
+
+# ─── .kick avec motif en MP ──────────────────────────────────
+
+@bot.command(name="kick")
+@commands.has_permissions(kick_members=True)
+async def kick_cmd(ctx, membre: discord.Member = None, *, raison: str = "Aucune raison précisée"):
+    """Kick un membre — .kick @membre <raison>"""
+    if not membre:
+        return await ctx.send("❌ Mentionne un membre !")
+    if membre == ctx.author:
+        return await ctx.send("❌ Tu peux pas te kick toi-même !")
+    # MP au membre kické
+    try:
+        embed_mp = discord.Embed(
+            title=f"👢 Tu as été expulsé de **{ctx.guild.name}**",
+            description=f"📋 **Raison :** {raison}\n👮 **Par :** {ctx.author.display_name}",
+            color=0xe74c3c
+        )
+        await membre.send(embed=embed_mp)
+    except:
+        pass
+    await membre.kick(reason=f"{raison} | Par {ctx.author}")
+    await ctx.send(embed=discord.Embed(
+        description=f"👢 **{membre.display_name}** a été expulsé du serveur.\n📋 Raison : {raison}",
+        color=0xe74c3c
+    ))
+
+
 import traceback, time
 while True:
     try:
