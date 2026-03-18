@@ -6696,3 +6696,16 @@ async def sondage_cmd(ctx, *, question: str = None):
         pass
 
 # ─── .kick avec motif en MP ──────────────────────────────────
+
+
+# ============================================================
+print("🚀 Démarrage du bot...")
+import traceback, time
+while True:
+    try:
+        bot.run(TOKEN)
+    except Exception as e:
+        print(f"❌ CRASH BOT: {e}")
+        traceback.print_exc()
+        print("🔄 Redémarrage dans 5 secondes...")
+        time.sleep(5) 
