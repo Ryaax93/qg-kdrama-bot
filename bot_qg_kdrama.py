@@ -896,6 +896,8 @@ async def setimage_cmd(ctx, perso: str = None, url: str = None):
     if not perso or not url:
         return await ctx.send("❌ Usage : `.setimage <perso> <url imgur>`\nEx: `.setimage naruto https://i.imgur.com/xxx.jpg`")
 
+    # Nettoyer l'URL des caractères parasites Discord (__, **, <>, espaces)
+    url = url.strip().strip("_").strip("*").strip("<").strip(">").strip()
     if not url.startswith("https://i.imgur.com/"):
         return await ctx.send("❌ Utilise uniquement des liens **imgur** ! (https://i.imgur.com/...)")
 
@@ -3277,25 +3279,34 @@ def _pendu_embed(game):
 #  BOUTIQUE
 # ============================================================
 SHOP_ITEMS = [
-    # ═══ Rôles exclusifs (du plus cher au moins cher) ═══
-    {"id": "shadow",     "nom": "🌑 Monarque des Ombres",  "prix": 3000, "description": "Le rôle le plus rare du serveur — prestige absolu"},
-    {"id": "pillier",    "nom": "🔥 Pillier du Soleil",    "prix": 2000, "description": "Rôle légendaire des membres les plus actifs"},
-    {"id": "drama_king", "nom": "👑 Roi des Malédictions", "prix": 1500, "description": "Le titre ultime façon Jujutsu Kaisen"},
-    {"id": "otaku",      "nom": "🌀 Oeil de Dieu",         "prix": 1200, "description": "Rôle exclusif des vrais connaisseurs d'animé"},
-    {"id": "vip",        "nom": "💎 Rang S — VIP",         "prix": 1000, "description": "Le rang des élus — accès exclusif aux salons VIP"},
-    {"id": "gamer_pro",  "nom": "⚔️ Chasseur National",   "prix": 800,  "description": "Le rang des meilleurs gamers du QG"},
-    # ═══ Boosts & Gacha (du plus cher au moins cher) ═══
-    {"id": "claim_10",    "nom": "⚡ Claim 10 min",   "prix": 3000, "description": "Réduit le claim reset à 10 min (permanent)"},
-    {"id": "boost_rarete","nom": "🎯 Boost Rareté",   "prix": 1500, "description": "↑↑ chances Épique/Légendaire/Mythique pour 5 rolls (1x/jour)", "daily": True},
-    {"id": "claim_15",    "nom": "⚡ Claim 15 min",   "prix": 1500, "description": "Réduit le claim reset à 15 min (permanent)"},
-    {"id": "reset_claim", "nom": "🔄 Reset Claim",    "prix": 1200, "description": "Reset ton claim cooldown immédiatement"},
-    {"id": "claim_20",    "nom": "⚡ Claim 20 min",   "prix": 800,  "description": "Réduit le claim reset à 20 min (permanent)"},
-    {"id": "rolls_10",    "nom": "🎰 +10 Rolls Gacha","prix": 600,  "description": "+10 rolls gacha instantanément !"},
-    # ═══ Items Gacha — sabotage & défense (du plus cher au moins cher) ═══
-    {"id": "shield",      "nom": "🛡️ Bouclier",        "prix": 600, "description": "Protège du Sceau et Malédiction pendant 30 min"},
-    {"id": "freeze",      "nom": "🧊 Sceau des Ombres", "prix": 500, "description": "Bloque le claim d'un joueur 10 secondes (1x/jour)", "daily": True},
-    {"id": "curse",       "nom": "⏳ Malédiction",       "prix": 400, "description": "+5 min sur le claim d'un joueur (1x/jour)", "daily": True},
-    {"id": "double_xp",   "nom": "⚡ Double XP (1h)",   "prix": 300, "description": "Double ton XP pendant 1 heure !"},
+    # ═══ RÔLES EXCLUSIFS (du plus cher au moins cher) ═══
+    {"id": "shadow",       "nom": "🌑 Monarque des Ombres",  "prix": 3000, "cat": "role",  "description": "Le rôle le plus rare du serveur — prestige absolu"},
+    {"id": "pillier",      "nom": "🔥 Pillier du Soleil",    "prix": 2000, "cat": "role",  "description": "Rôle légendaire des membres les plus actifs"},
+    {"id": "drama_king",   "nom": "👑 Roi des Malédictions", "prix": 1500, "cat": "role",  "description": "Le titre ultime façon Jujutsu Kaisen"},
+    {"id": "otaku",        "nom": "🌀 Oeil de Dieu",         "prix": 1200, "cat": "role",  "description": "Rôle exclusif des vrais connaisseurs d'animé"},
+    {"id": "vip",          "nom": "💎 Rang S — VIP",         "prix": 1000, "cat": "role",  "description": "Le rang des élus — accès exclusif aux salons VIP"},
+    {"id": "gamer_pro",    "nom": "⚔️ Chasseur National",   "prix": 800,  "cat": "role",  "description": "Le rang des meilleurs gamers du QG"},
+    # ═══ BOOSTS & ROLLS (du plus cher au moins cher) ═══
+    {"id": "claim_10",     "nom": "⚡ Claim 10 min",         "prix": 3000, "cat": "boost", "description": "Réduit le claim reset à 10 min (permanent)"},
+    {"id": "boost_rarete", "nom": "🎯 Boost Rareté",         "prix": 1500, "cat": "boost", "description": "↑↑ chances Épique/Légendaire/Mythique pour 5 rolls (1x/jour)", "daily": True},
+    {"id": "claim_15",     "nom": "⚡ Claim 15 min",         "prix": 1500, "cat": "boost", "description": "Réduit le claim reset à 15 min (permanent)"},
+    {"id": "claim_20",     "nom": "⚡ Claim 20 min",         "prix": 800,  "cat": "boost", "description": "Réduit le claim reset à 20 min (permanent)"},
+    {"id": "rolls_5",      "nom": "🎰 +5 Rolls Gacha",       "prix": 700,  "cat": "boost", "description": "+5 rolls gacha instantanément !"},
+    {"id": "double_xp",    "nom": "⚡ Double XP (1h)",       "prix": 300,  "cat": "boost", "description": "Double ton XP pendant 1 heure !"},
+    # ═══ ITEMS PVP — SABOTAGE & DÉFENSE (du plus cher au moins cher) ═══
+    {"id": "bombe_gacha",  "nom": "💣 Bombe Gacha",          "prix": 8000, "cat": "pvp",   "description": "Force un joueur à perdre sa dernière carte claimée 💀"},
+    {"id": "protection",   "nom": "🌟 Protection Divine",    "prix": 5000, "cat": "pvp",   "description": "Immunité totale contre tout sabotage pendant 2h"},
+    {"id": "cadenas",      "nom": "🔒 Cadenas",              "prix": 4000, "cat": "pvp",   "description": "Empêche un joueur de claim pendant 30 min"},
+    {"id": "amulette",     "nom": "🪬 Amulette",             "prix": 2500, "cat": "pvp",   "description": "Renvoie tout sabotage sur l'attaquant pendant 20 min"},
+    {"id": "cadeau",       "nom": "🎁 Cadeau Mystère",       "prix": 900,  "cat": "pvp",   "description": "Reçois une carte aléatoire Rare ou supérieure 🎲"},
+    {"id": "fantome",      "nom": "👻 Fantôme",              "prix": 800,  "cat": "pvp",   "description": "Rend une carte aléatoire d'un joueur invisible 30 min"},
+    {"id": "malediction",  "nom": "🎭 Malédiction Rare",     "prix": 700,  "cat": "pvp",   "description": "Force le prochain tirage d'un joueur à être Commun (2x/jour, 1x/joueur)", "daily": True},
+    {"id": "oracle",       "nom": "🔮 Oracle",               "prix": 499,  "cat": "pvp",   "description": "Une carte mystère a 1/5 chance de drop dans les 3 prochains tirages !"},
+    {"id": "vol_roll",     "nom": "🎯 Vol de Roll",          "prix": 500,  "cat": "pvp",   "description": "Vole 1 roll à un joueur ciblé (max 3x sur le même joueur)"},
+    {"id": "double_rien",  "nom": "🎰 Double ou Rien",       "prix": 200,  "cat": "pvp",   "description": "Double tes rolls ou les perds tous ! (max 4 rolls restants)"},
+    {"id": "shield",       "nom": "🛡️ Bouclier",            "prix": 600,  "cat": "pvp",   "description": "Protège du Sceau et Malédiction pendant 30 min"},
+    {"id": "freeze",       "nom": "🧊 Sceau des Ombres",     "prix": 500,  "cat": "pvp",   "description": "Bloque le claim d'un joueur 10 secondes (1x/jour)", "daily": True},
+    {"id": "curse",        "nom": "⏳ Malédiction Claim",    "prix": 400,  "cat": "pvp",   "description": "+5 min sur le claim d'un joueur (1x/jour)", "daily": True},
 ]
 
 shop_roles = {}  # {item_id: role_id}
@@ -3318,12 +3329,10 @@ async def shop_cmd(ctx):
     )
     uid = str(ctx.author.id)
     solde = economy_data[uid]["coins"]
-    # Trier du plus cher au moins cher
-    items_sorted = sorted(SHOP_ITEMS, key=lambda x: x["prix"], reverse=True)
-    # Catégories
-    roles_items  = [i for i in items_sorted if i["id"] in ("vip","drama_king","otaku","gamer_pro","shadow","pillier")]
-    boosts_items = [i for i in items_sorted if i["id"] in ("double_xp","rolls_10","claim_20","claim_15","claim_10","reset_claim")]
-    gacha_items  = [i for i in items_sorted if i["id"] in ("freeze","curse","shield","boost_rarete")]
+    # Trier du plus cher au moins cher par catégorie
+    roles_items  = sorted([i for i in SHOP_ITEMS if i.get("cat") == "role"],  key=lambda x: x["prix"], reverse=True)
+    boosts_items = sorted([i for i in SHOP_ITEMS if i.get("cat") == "boost"], key=lambda x: x["prix"], reverse=True)
+    gacha_items  = sorted([i for i in SHOP_ITEMS if i.get("cat") == "pvp"],   key=lambda x: x["prix"], reverse=True)
 
     embed.add_field(name="─── 🎭 RÔLES EXCLUSIFS ───", value="​", inline=False)
     for item in roles_items:
@@ -3373,38 +3382,160 @@ async def acheter_cmd(ctx, item_id: str = None):
             color=0xe74c3c
         ))
 
+    import time as _time
+    now_t = _time.time()
+
+    # ── Vérif daily ──────────────────────────────────────────
+    if item.get("daily"):
+        last = daily_item_usage[uid].get(item["id"], 0)
+        if now_t - last < 86400:
+            reste = int((86400 - (now_t - last)) // 3600)
+            return await ctx.send(f"⏳ Cet item est limité 1x/jour ! Disponible dans **{reste}h**.")
+
     economy_data[uid]["coins"] -= item["prix"]
+    if item.get("daily"):
+        daily_item_usage[uid][item["id"]] = now_t
 
-    # Double XP
-    if item["id"] == "double_xp":
-        import time
-        double_xp_users[ctx.author.id] = time.time() + 3600
+    iid = item["id"]
+
+    # ── Double XP ────────────────────────────────────────────
+    if iid == "double_xp":
+        double_xp_users[ctx.author.id] = now_t + 3600
         return await ctx.send(embed=discord.Embed(
-            description=f"⚡ {ctx.author.mention} a activé le **Double XP** pendant 1 heure ! Chatte pour en profiter 🎉",
-            color=0x2ecc71
-        ))
+            description=f"⚡ {ctx.author.mention} a activé le **Double XP** pendant 1h ! 🎉",
+            color=0x2ecc71))
 
-    # Rôles
-    role_names = {
-        "vip": "⭐ VIP",
-        "drama_king": "👑 Drama King",
-        "otaku": "🌀 Oeil de Dieu",
-        "gamer_pro": "⚔️ Chasseur National",
-        "shadow": "🌑 Monarque des Ombres",
-        "pillier": "🔥 Pillier du Soleil",
-    }
-    role_name = role_names.get(item["id"])
-    if role_name:
-        role = discord.utils.get(ctx.guild.roles, name=role_name)
+    # ── Rôles ────────────────────────────────────────────────
+    role_names = {"vip":"⭐ VIP","drama_king":"👑 Drama King","otaku":"🌀 Oeil de Dieu",
+                  "gamer_pro":"⚔️ Chasseur National","shadow":"🌑 Monarque des Ombres","pillier":"🔥 Pillier du Soleil"}
+    if iid in role_names:
+        role = discord.utils.get(ctx.guild.roles, name=role_names[iid])
         if not role:
-            role = await ctx.guild.create_role(name=role_name, reason=f"Boutique QG — achat par {ctx.author.display_name}")
+            role = await ctx.guild.create_role(name=role_names[iid], reason=f"Boutique QG")
         await ctx.author.add_roles(role)
+        return await ctx.send(embed=discord.Embed(
+            description=f"✅ {ctx.author.mention} a obtenu le rôle **{role_names[iid]}** ! 🎉",
+            color=0x2ecc71))
+
+    # ── Boosts rolls ─────────────────────────────────────────
+    if iid == "rolls_5":
+        roll_data[uid]["rolls"] = min(roll_data[uid]["rolls"] + 5, ROLLS_MAX + 5)
+        return await ctx.send(embed=discord.Embed(
+            description=f"🎰 {ctx.author.mention} a obtenu **+5 rolls** ! ({roll_data[uid]['rolls']} restants)",
+            color=0x2ecc71))
+
+    # ── Boost rareté ─────────────────────────────────────────
+    if iid == "boost_rarete":
+        rarity_boost[uid] = 5
+        return await ctx.send(embed=discord.Embed(
+            description=f"🎯 {ctx.author.mention} **Boost Rareté** actif pour les 5 prochains rolls ! ↑↑",
+            color=0x9b59b6))
+
+    # ── Claim timers ─────────────────────────────────────────
+    if iid in ("claim_10","claim_15","claim_20"):
+        mins_map = {"claim_10":10,"claim_15":15,"claim_20":20}
+        claim_reduction[uid] = max(claim_reduction[uid], CLAIM_COOLDOWN_MINUTES - mins_map[iid])
+        return await ctx.send(embed=discord.Embed(
+            description=f"⚡ {ctx.author.mention} Claim réduit à **{mins_map[iid]} min** (permanent) !",
+            color=0x2ecc71))
+
+    # ── Protection Divine ─────────────────────────────────────
+    if iid == "protection":
+        shield_active[uid] = now_t + 7200  # 2h
+        return await ctx.send(embed=discord.Embed(
+            description=f"🌟 {ctx.author.mention} **Protection Divine** active pendant **2h** ! Immunité totale.",
+            color=0xf1c40f))
+
+    # ── Amulette ─────────────────────────────────────────────
+    if iid == "amulette":
+        if not hasattr(bot, 'amulette_active'):
+            bot.amulette_active = {}
+        bot.amulette_active[uid] = now_t + 1200  # 20 min
+        return await ctx.send(embed=discord.Embed(
+            description=f"🪬 {ctx.author.mention} **Amulette** active pendant **20 min** ! Tout sabotage sera renvoyé sur l'attaquant.",
+            color=0x9b59b6))
+
+    # ── Bouclier ─────────────────────────────────────────────
+    if iid == "shield":
+        shield_active[uid] = now_t + 1800
+        return await ctx.send(embed=discord.Embed(
+            description=f"🛡️ {ctx.author.mention} **Bouclier** actif pendant **30 min** !",
+            color=0x3498db))
+
+    # ── Double ou Rien ────────────────────────────────────────
+    if iid == "double_rien":
+        rolls_left = roll_data[uid]["rolls"]
+        if rolls_left > 4:
+            economy_data[uid]["coins"] += item["prix"]  # remboursement
+            return await ctx.send(f"❌ Tu as encore **{rolls_left} rolls** ! Double ou Rien c'est pour quand t'as **4 rolls ou moins** !")
+        if random.random() < 0.5:
+            roll_data[uid]["rolls"] = min(rolls_left * 2, ROLLS_MAX)
+            return await ctx.send(embed=discord.Embed(
+                description=f"🎰 {ctx.author.mention} **DOUBLE !** Tu passes de {rolls_left} à **{roll_data[uid]['rolls']} rolls** ! 🍀",
+                color=0x2ecc71))
+        else:
+            roll_data[uid]["rolls"] = 0
+            return await ctx.send(embed=discord.Embed(
+                description=f"🎰 {ctx.author.mention} **RIEN !** Tu perds tes {rolls_left} rolls... 😢",
+                color=0xe74c3c))
+
+    # ── Oracle ────────────────────────────────────────────────
+    if iid == "oracle":
+        available = [k for k in ANIME_CARDS_DB if k not in claimed_cards]
+        if not available:
+            economy_data[uid]["coins"] += item["prix"]
+            return await ctx.send("❌ Toutes les cartes sont déjà claimées !")
+        oracle_card = random.choice(available)
+        if not hasattr(bot, 'oracle_active'):
+            bot.oracle_active = {}
+        bot.oracle_active["card"] = oracle_card
+        bot.oracle_active["rolls_left"] = 3
+        bot.oracle_active["chance"] = 0.2  # 1/5
+        c_oracle = ANIME_CARDS_DB[oracle_card]
+        salon = ctx.guild.get_channel(SALON_GACHA_ID) if SALON_GACHA_ID else ctx.channel
+        embed_oracle = discord.Embed(
+            title="🔮 L'Oracle a parlé...",
+            description=f"Une carte mystérieuse rôde dans les prochains tirages !\n*Elle a 1 chance sur 5 de tomber dans les **3 prochains rolls** du serveur...*\n\n**Soyez prêts à claim !** ⚡",
+            color=0x9b59b6
+        )
+        await (salon or ctx.channel).send(embed=embed_oracle)
+        return
+
+    # ── Cadeau Mystère ─────────────────────────────────────────
+    if iid == "cadeau":
+        rare_plus = [k for k in ANIME_CARDS_DB if ANIME_CARDS_DB[k]["rarete"] in ("Rare","Épique","Légendaire","Mythique") and k not in claimed_cards]
+        if not rare_plus:
+            economy_data[uid]["coins"] += item["prix"]
+            return await ctx.send("❌ Plus de cartes disponibles Rare+ !")
+        card_key = random.choice(rare_plus)
+        claimed_cards[card_key] = uid
+        gacha_collections[uid][card_key] = {"fusion": 0}
+        c_gift = ANIME_CARDS_DB[card_key]
+        r_emoji = RARETE_EMOJI.get(c_gift["rarete"], "🔵")
+        embed_gift = discord.Embed(
+            title="🎁 Cadeau Mystère !",
+            description=f"{ctx.author.mention} a reçu **{c_gift['nom']}** {r_emoji} **{c_gift['rarete']}** !",
+            color=RARETE_COULEURS.get(c_gift["rarete"], 0x95a5a6)
+        )
+        if c_gift.get("image"):
+            embed_gift.set_thumbnail(url=c_gift["image"])
+        return await ctx.send(embed=embed_gift)
+
+    # ── Items PvP (nécessitent .utiliser @joueur) ─────────────
+    if iid in ("freeze","curse","cadenas","bombe_gacha","fantome","malediction","vol_roll"):
+        if not hasattr(bot, 'pending_items'):
+            bot.pending_items = {}
+        if uid not in bot.pending_items:
+            bot.pending_items[uid] = {}
+        bot.pending_items[uid][iid] = now_t
+        return await ctx.send(embed=discord.Embed(
+            description=f"✅ {ctx.author.mention} a acheté **{item['nom']}** !\nUtilise `.utiliser {iid} @joueur` pour l'activer ! ⚡",
+            color=0xf39c12))
 
     await ctx.send(embed=discord.Embed(
         title="🛒 Achat réussi !",
         description=f"✅ {ctx.author.mention} a acheté **{item['nom']}** pour **{item['prix']} pièces** ! 🎉",
-        color=0x2ecc71
-    ))
+        color=0x2ecc71))
 
 # ============================================================
 #  VOL DE PIÈCES
@@ -5932,7 +6063,10 @@ async def send_salon_embed(channel, t):
             "`.fusionner <perso>` `.fus` — Booster une carte avec des tokens ⭐\n"
             "`.wishlist add <perso>` `.wl add` — Ajouter un perso à ta wishlist\n"
             "`.wishlist` `.wl` — Voir ta wishlist (max 10 persos)\n"
-            "`.setimage <perso> <url>` — Changer l'image de **ta** carte"
+            "`.setimage <perso> <url>` — Changer l'image de **ta** carte\n"
+        "`.gachagive @membre <perso>` — Offrir une de tes cartes\n"
+        "`.gachatrade @membre <ta carte> <sa carte>` — Proposer un échange\n"
+        "`.gacharesetall` — Reset total du gacha (admin)"
         ), inline=False)
         embed1.set_footer(text="📖 Lis les autres embeds pour les règles, raretés et items boutique !")
         await channel.send(embed=embed1)
@@ -6470,37 +6604,139 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
 # ============================================================
 @bot.command(name="utiliser")
 async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None):
-    """Utilise un item offensif sur un joueur — .utiliser freeze @joueur"""
+    """Utilise un item offensif sur un joueur — .utiliser <item> @joueur"""
     import time as _time
     if not item_type or not cible:
-        return await ctx.send("❌ Usage : `.utiliser freeze @joueur` ou `.utiliser curse @joueur`")
+        return await ctx.send("❌ Usage : `.utiliser <item> @joueur`\nItems : `freeze` `curse` `cadenas` `bombe_gacha` `fantome` `malediction` `vol_roll`")
 
+    uid = str(ctx.author.id)
     uid_cible = str(cible.id)
     now_ts = _time.time()
+    itype = item_type.lower()
 
-    # Vérif bouclier
-    if uid_cible in shield_active and shield_active[uid_cible] > now_ts:
-        restant = int(shield_active[uid_cible] - now_ts)
-        return await ctx.send(f"🛡️ **{cible.display_name}** est protégé par un bouclier ! (**{restant}s** restants)")
+    # Vérif que le joueur a bien l'item
+    pending = getattr(bot, 'pending_items', {})
+    if itype not in ("freeze","curse") and (uid not in pending or itype not in pending.get(uid,{})):
+        return await ctx.send(f"❌ Tu n'as pas l'item `{itype}` ! Achète-le en boutique avec `.acheter {itype}`")
 
-    if item_type.lower() == "freeze":
-        claim_freeze[uid_cible] = now_ts + 10   # 10 secondes
-        embed = discord.Embed(
-            title="🧊 Sceau des Ombres activé !",
-            description=f"**{cible.mention}** ne peut plus claimer de cartes pendant **10 secondes** ! 😈",
-            color=0x3498db
-        )
-        await ctx.send(embed=embed)
-    elif item_type.lower() == "curse":
-        claim_curse[uid_cible] = now_ts + 300  # +5 min ajoutés au claim cooldown
-        embed = discord.Embed(
-            title="⏳ Malédiction activée !",
-            description=f"**{cible.mention}** a +5 min sur son claim cooldown ! 😈",
+    # Vérif amulette sur la cible
+    amulette = getattr(bot, 'amulette_active', {})
+    if uid_cible in amulette and amulette[uid_cible] > now_ts:
+        # Renvoyer sur l'attaquant
+        if uid in pending and itype in pending[uid]:
+            del pending[uid][itype]
+        return await ctx.send(embed=discord.Embed(
+            title="🪬 Amulette activée !",
+            description=f"**{cible.display_name}** est protégé par une **Amulette** ! Le sabotage se retourne contre **{ctx.author.mention}** ! 😈",
             color=0x9b59b6
-        )
-        await ctx.send(embed=embed)
+        ))
+
+    # Vérif protection divine
+    if uid_cible in shield_active and shield_active[uid_cible] > now_ts:
+        if uid in pending and itype in pending[uid]:
+            del pending[uid][itype]
+        restant = int((shield_active[uid_cible] - now_ts) // 60)
+        return await ctx.send(f"🌟 **{cible.display_name}** est sous **Protection Divine** ! ({restant} min restantes)")
+
+    # Vérif bouclier basique
+    if itype in ("freeze","curse") and uid_cible in shield_active and shield_active[uid_cible] > now_ts:
+        return await ctx.send(f"🛡️ **{cible.display_name}** est protégé par un bouclier !")
+
+    # Consommer l'item
+    if uid in pending and itype in pending.get(uid,{}):
+        del pending[uid][itype]
+
+    # ── FREEZE ───────────────────────────────────────────────
+    if itype == "freeze":
+        claim_freeze[uid_cible] = now_ts + 10
+        await ctx.send(embed=discord.Embed(title="🧊 Sceau des Ombres !",
+            description=f"**{cible.mention}** ne peut plus claim pendant **10 secondes** ! 😈", color=0x3498db))
+
+    # ── CURSE ────────────────────────────────────────────────
+    elif itype == "curse":
+        claim_curse[uid_cible] = now_ts + 300
+        await ctx.send(embed=discord.Embed(title="⏳ Malédiction !",
+            description=f"**{cible.mention}** a +5 min sur son claim cooldown ! 😈", color=0x9b59b6))
+
+    # ── CADENAS ──────────────────────────────────────────────
+    elif itype == "cadenas":
+        claim_freeze[uid_cible] = now_ts + 1800  # 30 min
+        await ctx.send(embed=discord.Embed(title="🔒 Cadenas !",
+            description=f"**{cible.mention}** ne peut plus claim pendant **30 minutes** ! 🔒", color=0xe74c3c))
+
+    # ── BOMBE GACHA ──────────────────────────────────────────
+    elif itype == "bombe_gacha":
+        # Trouver la dernière carte claimée par la cible
+        cible_cards = [k for k,v in claimed_cards.items() if v == uid_cible]
+        if not cible_cards:
+            return await ctx.send(f"❌ **{cible.display_name}** n'a aucune carte claimée !")
+        # Prendre la dernière
+        lost_key = cible_cards[-1]
+        lost_card = ANIME_CARDS_DB[lost_key]
+        del claimed_cards[lost_key]
+        if uid_cible in gacha_collections and lost_key in gacha_collections[uid_cible]:
+            del gacha_collections[uid_cible][lost_key]
+        r_emoji = RARETE_EMOJI.get(lost_card["rarete"], "🔵")
+        await ctx.send(embed=discord.Embed(title="💣 Bombe Gacha !",
+            description=f"**{cible.mention}** perd sa carte **{lost_card['nom']}** {r_emoji} ! 💥\n*Envoyée dans le néant...*",
+            color=0xe74c3c))
+        # Notifier la victime en MP
+        try:
+            await cible.send(embed=discord.Embed(
+                description=f"💣 **{ctx.author.display_name}** t'a posé une Bombe Gacha ! Tu as perdu **{lost_card['nom']}** {r_emoji} !",
+                color=0xe74c3c))
+        except: pass
+
+    # ── FANTÔME ───────────────────────────────────────────────
+    elif itype == "fantome":
+        cible_cards = [k for k,v in claimed_cards.items() if v == uid_cible]
+        if not cible_cards:
+            return await ctx.send(f"❌ **{cible.display_name}** n'a aucune carte !")
+        ghost_key = random.choice(cible_cards)
+        ghost_card = ANIME_CARDS_DB[ghost_key]
+        if not hasattr(bot, 'ghost_cards'):
+            bot.ghost_cards = {}
+        bot.ghost_cards[f"{uid_cible}_{ghost_key}"] = now_ts + 1800  # 30 min
+        await ctx.send(embed=discord.Embed(title="👻 Fantôme !",
+            description=f"Une carte de **{cible.mention}** devient invisible pendant **30 min** ! 👻",
+            color=0x9b59b6))
+
+    # ── MALÉDICTION RARE ──────────────────────────────────────
+    elif itype == "malediction":
+        # Vérif 1x par joueur par jour
+        if not hasattr(bot, 'malediction_targets'):
+            bot.malediction_targets = {}
+        today = int(now_ts // 86400)
+        key_mal = f"{uid}_{uid_cible}_{today}"
+        if key_mal in bot.malediction_targets:
+            return await ctx.send(f"❌ Tu as déjà maudit **{cible.display_name}** aujourd'hui !")
+        bot.malediction_targets[key_mal] = True
+        if not hasattr(bot, 'malediction_active'):
+            bot.malediction_active = {}
+        bot.malediction_active[uid_cible] = now_ts + 3600  # 1h
+        await ctx.send(embed=discord.Embed(title="🎭 Malédiction Rare !",
+            description=f"**{cible.mention}** ne tirera que des cartes **Communes** lors de son prochain roll ! 😈",
+            color=0x9b59b6))
+
+    # ── VOL DE ROLL ───────────────────────────────────────────
+    elif itype == "vol_roll":
+        if not hasattr(bot, 'vol_roll_counts'):
+            bot.vol_roll_counts = {}
+        count_key = f"{uid}_{uid_cible}"
+        current = bot.vol_roll_counts.get(count_key, 0)
+        if current >= 3:
+            return await ctx.send(f"❌ Tu as déjà volé **3 rolls** à **{cible.display_name}** ! (limite atteinte)")
+        if roll_data[uid_cible]["rolls"] <= 0:
+            return await ctx.send(f"❌ **{cible.display_name}** n'a plus de rolls à voler !")
+        roll_data[uid_cible]["rolls"] = max(0, roll_data[uid_cible]["rolls"] - 1)
+        roll_data[uid]["rolls"] = min(roll_data[uid]["rolls"] + 1, ROLLS_MAX + 5)
+        bot.vol_roll_counts[count_key] = current + 1
+        await ctx.send(embed=discord.Embed(title="🎯 Vol de Roll !",
+            description=f"**{ctx.author.mention}** vole 1 roll à **{cible.mention}** ! ({current+1}/3 vols sur ce joueur)",
+            color=0xf39c12))
+
     else:
-        await ctx.send("❌ Item inconnu ! Utilise `freeze` ou `curse`")
+        await ctx.send(f"❌ Item `{itype}` inconnu !")
 
 # ============================================================
 #  GESTION GLOBALE DES ERREURS — anti-crash
@@ -7106,6 +7342,201 @@ async def on_raw_reaction_remove(payload):
                         except:
                             pass
                     return
+
+
+# ── gachagive ─────────────────────────────────────────────────────
+@bot.command(name="gachagive", aliases=["gcgive","cardgive"])
+async def gachagive_cmd(ctx, membre: discord.Member = None, *, perso: str = None):
+    """Donne une de tes cartes à un membre — .gachagive @membre <perso>"""
+    if SALON_GACHA_ID and ctx.channel.id != SALON_GACHA_ID:
+        salon = ctx.guild.get_channel(SALON_GACHA_ID)
+        mention = salon.mention if salon else "le salon gacha"
+        return await ctx.send(f"🎰 Cette commande c'est dans {mention} !", delete_after=5)
+    if not membre or not perso:
+        return await ctx.send("❌ Usage : `.gachagive @membre <perso>`\nEx: `.gachagive @Ryaax naruto`")
+    if membre == ctx.author:
+        return await ctx.send("❌ Tu peux pas te donner une carte à toi-même !")
+    if membre.bot:
+        return await ctx.send("❌ Tu peux pas donner une carte à un bot !")
+
+    uid = str(ctx.author.id)
+    key = perso.lower().strip().replace(" ", "")
+    if key not in ANIME_CARDS_DB:
+        matches = [k for k in ANIME_CARDS_DB if perso.lower() in ANIME_CARDS_DB[k]["nom"].lower()]
+        if not matches:
+            return await ctx.send(f"❌ Personnage `{perso}` introuvable !")
+        key = matches[0]
+
+    c = ANIME_CARDS_DB[key]
+    if claimed_cards.get(key) != uid:
+        return await ctx.send(f"❌ Tu ne possèdes pas **{c['nom']}** !")
+
+    target_uid = str(membre.id)
+    # Transférer
+    claimed_cards[key] = target_uid
+    if uid in gacha_collections and key in gacha_collections[uid]:
+        del gacha_collections[uid][key]
+    gacha_collections[target_uid][key] = {"fusion": 0}
+
+    rarete_emoji = RARETE_EMOJI.get(c["rarete"], "🔵")
+    couleur = RARETE_COULEURS.get(c["rarete"], 0x95a5a6)
+    embed = discord.Embed(
+        title="🎁 Carte offerte !",
+        description=f"{ctx.author.mention} a offert **{c['nom']}** {rarete_emoji} à {membre.mention} !",
+        color=couleur
+    )
+    if c.get("image"):
+        embed.set_thumbnail(url=c["image"])
+    await ctx.send(embed=embed)
+
+# ── gachatrade ─────────────────────────────────────────────────────
+@bot.command(name="gachatrade", aliases=["gctrade","cardtrade"])
+async def gachatrade_cmd(ctx, membre: discord.Member = None, ma_carte: str = None, *, sa_carte: str = None):
+    """Propose un échange de carte — .gachatrade @membre <ma carte> <sa carte>"""
+    if SALON_GACHA_ID and ctx.channel.id != SALON_GACHA_ID:
+        salon = ctx.guild.get_channel(SALON_GACHA_ID)
+        mention = salon.mention if salon else "le salon gacha"
+        return await ctx.send(f"🎰 Cette commande c'est dans {mention} !", delete_after=5)
+    if not membre or not ma_carte or not sa_carte:
+        return await ctx.send("❌ Usage : `.gachatrade @membre <ta carte> <sa carte>`\nEx: `.gachatrade @Ryaax naruto gojo`")
+    if membre == ctx.author:
+        return await ctx.send("❌ Tu peux pas trader avec toi-même !")
+    if membre.bot:
+        return await ctx.send("❌ Tu peux pas trader avec un bot !")
+
+    uid = str(ctx.author.id)
+    target_uid = str(membre.id)
+
+    # Trouver ma carte
+    key1 = ma_carte.lower().strip().replace(" ", "")
+    if key1 not in ANIME_CARDS_DB:
+        matches = [k for k in ANIME_CARDS_DB if ma_carte.lower() in ANIME_CARDS_DB[k]["nom"].lower()]
+        if not matches:
+            return await ctx.send(f"❌ Carte `{ma_carte}` introuvable !")
+        key1 = matches[0]
+
+    # Trouver sa carte
+    key2 = sa_carte.lower().strip().replace(" ", "")
+    if key2 not in ANIME_CARDS_DB:
+        matches = [k for k in ANIME_CARDS_DB if sa_carte.lower() in ANIME_CARDS_DB[k]["nom"].lower()]
+        if not matches:
+            return await ctx.send(f"❌ Carte `{sa_carte}` introuvable !")
+        key2 = matches[0]
+
+    c1 = ANIME_CARDS_DB[key1]
+    c2 = ANIME_CARDS_DB[key2]
+
+    if claimed_cards.get(key1) != uid:
+        return await ctx.send(f"❌ Tu ne possèdes pas **{c1['nom']}** !")
+    if claimed_cards.get(key2) != target_uid:
+        return await ctx.send(f"❌ **{membre.display_name}** ne possède pas **{c2['nom']}** !")
+
+    r1 = RARETE_EMOJI.get(c1["rarete"], "🔵")
+    r2 = RARETE_EMOJI.get(c2["rarete"], "🔵")
+
+    embed = discord.Embed(
+        title="🔄 Proposition d'échange !",
+        description=(
+            f"{ctx.author.mention} propose à {membre.mention} :\n\n"
+            f"**{c1['nom']}** {r1} ↔️ **{c2['nom']}** {r2}\n\n"
+            f"{membre.mention} — réponds ✅ pour accepter ou ❌ pour refuser !"
+        ),
+        color=0xf1c40f
+    )
+    msg = await ctx.send(embed=embed)
+    await msg.add_reaction("✅")
+    await msg.add_reaction("❌")
+
+    def check(reaction, user):
+        return user.id == membre.id and reaction.message.id == msg.id and str(reaction.emoji) in ["✅","❌"]
+
+    try:
+        reaction, user = await bot.wait_for("reaction_add", timeout=60.0, check=check)
+        if str(reaction.emoji) == "✅":
+            # Effectuer l'échange
+            claimed_cards[key1] = target_uid
+            claimed_cards[key2] = uid
+            if uid in gacha_collections:
+                gacha_collections[uid].pop(key1, None)
+                gacha_collections[uid][key2] = {"fusion": 0}
+            if target_uid in gacha_collections:
+                gacha_collections[target_uid].pop(key2, None)
+                gacha_collections[target_uid][key1] = {"fusion": 0}
+            embed_ok = discord.Embed(
+                title="✅ Échange effectué !",
+                description=f"**{c1['nom']}** {r1} ↔️ **{c2['nom']}** {r2}\nL'échange a bien eu lieu !",
+                color=0x2ecc71
+            )
+            await msg.edit(embed=embed_ok)
+            try: await msg.clear_reactions()
+            except: pass
+        else:
+            embed_no = discord.Embed(
+                description=f"❌ **{membre.display_name}** a refusé l'échange.",
+                color=0xe74c3c
+            )
+            await msg.edit(embed=embed_no)
+            try: await msg.clear_reactions()
+            except: pass
+    except asyncio.TimeoutError:
+        embed_to = discord.Embed(
+            description="⏰ Échange expiré — pas de réponse dans les 60 secondes.",
+            color=0x95a5a6
+        )
+        await msg.edit(embed=embed_to)
+        try: await msg.clear_reactions()
+        except: pass
+
+# ── gacharesetall ──────────────────────────────────────────────────
+@bot.command(name="gacharesetall")
+@commands.has_permissions(administrator=True)
+async def gacharesetall_cmd(ctx):
+    """Remet le gacha à zéro — admin only — .gacharesetall"""
+    embed = discord.Embed(
+        title="⚠️ RESET TOTAL DU GACHA",
+        description=(
+            "Tu es sur le point de **tout remettre à zéro** :\n"
+            "• Toutes les cartes claimées perdues\n"
+            "• Toutes les collections effacées\n"
+            "• Tous les niveaux de fusion réinitialisés\n"
+            "• Tous les rolls réinitialisés\n\n"
+            "Réagis ✅ pour confirmer ou ❌ pour annuler."
+        ),
+        color=0xe74c3c
+    )
+    msg = await ctx.send(embed=embed)
+    await msg.add_reaction("✅")
+    await msg.add_reaction("❌")
+
+    def check(reaction, user):
+        return user == ctx.author and reaction.message.id == msg.id and str(reaction.emoji) in ["✅","❌"]
+
+    try:
+        reaction, user = await bot.wait_for("reaction_add", timeout=30.0, check=check)
+        if str(reaction.emoji) == "✅":
+            claimed_cards.clear()
+            gacha_collections.clear()
+            fusion_levels.clear()
+            roll_data.clear()
+            claim_cooldown.clear()
+            claim_reduction.clear()
+            gacha_wishlist.clear()
+            rarity_boost.clear()
+            collection_order.clear()
+            embed_ok = discord.Embed(
+                title="✅ Gacha remis à zéro !",
+                description="Toutes les cartes, collections et données gacha ont été réinitialisées.\nLe jeu repart de zéro !",
+                color=0x2ecc71
+            )
+            await msg.edit(embed=embed_ok)
+        else:
+            await msg.edit(embed=discord.Embed(description="❌ Reset annulé.", color=0x95a5a6))
+        try: await msg.clear_reactions()
+        except: pass
+    except asyncio.TimeoutError:
+        await msg.edit(embed=discord.Embed(description="⏰ Reset annulé — timeout.", color=0x95a5a6))
+        try: await msg.clear_reactions()
+        except: pass
 
 
 # ============================================================
