@@ -6144,31 +6144,22 @@ async def send_salon_embed(channel, t):
 
         # Embed 4 — Items boutique liés au gacha
         embed4 = discord.Embed(
-            title="🛒 Items Boutique — Pouvoirs Gacha",
-            description="Ces items s'achètent avec `.acheter <id>` en boutique et impactent directement le gacha !",
+            title="🛒 Items Boutique — Pouvoirs Gacha & PvP",
+            description="Ces items s'achètent avec `.acheter <id>` et impactent le gacha !",
             color=0xf39c12
         )
-        embed4.add_field(name="🚀 Boosts offensifs", value=(
-            "🎰 **+10 Rolls** `rolls_10` — **600p**\n"
-            "→ Ajoute instantanément 10 rolls à ton compteur\n\n"
-            "🎯 **Boost Rareté** `boost_rarete` — **1500p** *(1x/jour)*\n"
-            "→ Tes 5 prochains rolls ont des taux de rareté boostés !\n\n"
-            "🔄 **Reset Claim** `reset_claim` — **1200p**\n"
-            "→ Annule ton cooldown claim instantanément"
+        embed4.add_field(name="⚡ Boosts", value=(
+            "`rolls_5` — 🎰 **+5 Rolls** → **700p**\n"
+            "`boost_rarete` — 🎯 **Boost Rareté** *(1x/jour)* → **1500p**\n"
+            "`claim_20/15/10` — ⚡ **Claim réduit** *(permanent)* → **800/1500/3000p**"
         ), inline=False)
-        embed4.add_field(name="⚡ Réduction cooldown claim *(permanents)*", value=(
-            "⚡ **Claim en 20 min** `claim_20` — **800p**\n"
-            "⚡ **Claim en 15 min** `claim_15` — **1500p**\n"
-            "⚡ **Claim en 10 min** `claim_10` — **3000p**\n"
-            "→ Réduit définitivement ton temps d'attente entre chaque claim"
-        ), inline=False)
-        embed4.add_field(name="⚔️ Items PvP — Sabote tes adversaires !", value=(
-            "🧊 **Sceau des Ombres** `freeze` — **500p** *(1x/jour)*\n"
-            "→ `.utiliser freeze @joueur` — **bloque son claim pendant 10 secondes** après un tirage !\n\n"
-            "⏳ **Malédiction** `curse` — **400p** *(1x/jour)*\n"
-            "→ `.utiliser curse @joueur` — **ajoute 5 min** à son cooldown claim\n\n"
-            "🛡️ **Bouclier** `shield` — **600p**\n"
-            "→ Te protège du Sceau et de la Malédiction pendant **30 minutes**"
+        embed4.add_field(name="⚔️ Items PvP", value=(
+            "`bombe_gacha` — 💣 **8000p** • `cadenas` — 🔒 **4000p**\n"
+            "`amulette` — 🪬 **2500p** • `cadeau` — 🎁 **900p**\n"
+            "`fantome` — 👻 **800p** • `malediction` — 🎭 **700p**\n"
+            "`vol_roll` — 🎯 **500p** • `oracle` — 🔮 **499p**\n"
+            "`shield` — 🛡️ **600p** • `double_rien` — 🎰 **200p**\n"
+            "→ `.utiliser <item> @joueur` pour activer !"
         ), inline=False)
         embed4.set_footer(text="💰 Gagne des pièces avec .daily • .quiz • .boss • .duel • .arene")
         await channel.send(embed=embed4)
@@ -6214,51 +6205,44 @@ async def send_salon_embed(channel, t):
     elif t == "boutique":
         embed1 = discord.Embed(
             title="🛒 Boutique — QG Kdrama",
-            description=(
-                "Dépense tes pièces pour des avantages exclusifs !\n"
-                "Rôles, boosts gacha, items offensifs... tout est là 💰"
-            ),
+            description="Dépense tes pièces pour des avantages exclusifs !\nTape `.shop` pour voir les prix et acheter 💰",
             color=0xf39c12
         )
         embed1.add_field(name="💡 Comment acheter ?", value=(
-            "`.shop` — Voir tous les items & prix\n"
+            "`.shop` — Voir tous les items & prix *(3 pages : ◀️ ▶️)*\n"
             "`.acheter <id>` — Acheter un item *(ex: `.acheter vip`)*\n"
+            "`.utiliser <item> @joueur` — Utiliser un item PvP\n"
             "`.balance` — Voir ton solde de pièces"
         ), inline=False)
-        embed1.add_field(name="👑 Rôles exclusifs", value=(
-            "`vip` — 💎 **Rang S VIP** → **1000p**\n"
+        embed1.add_field(name="🎭 Rôles Exclusifs", value=(
+            "`shadow` — 🌑 **Monarque des Ombres** → **3000p**\n"
+            "`pillier` — 🔥 **Pillier du Soleil** → **2000p**\n"
             "`drama_king` — 👑 **Roi des Malédictions** → **1500p**\n"
-            "`oeil_dieu` — 🌀 **Oeil de Dieu** → **1200p**\n"
-            "`chasseur` — ⚔️ **Chasseur National** → **800p**\n"
-            "`monarque` — 🌑 **Monarque des Ombres** → **3000p**\n"
-            "`pilier` — 🔥 **Pillier du Soleil** → **2000p**\n\n"
-            "*Ces rôles sont visibles par tout le serveur — affiche ton statut !*"
+            "`otaku` — 🌀 **Oeil de Dieu** → **1200p**\n"
+            "`vip` — 💎 **Rang S VIP** → **1000p**\n"
+            "`gamer_pro` — ⚔️ **Chasseur National** → **800p**"
         ), inline=False)
-        embed1.add_field(name="🎰 Boosts Gacha", value=(
-            "`rolls_10` — 🎲 **+10 Rolls instantanés** → **600p**\n"
-            "→ Utilise immédiatement 10 rolls supplémentaires\n\n"
+        embed1.add_field(name="⚡ Boosts & Rolls", value=(
+            "`claim_10` — ⚡ **Claim 10 min** *(permanent)* → **3000p**\n"
             "`boost_rarete` — 🎯 **Boost Rareté** *(1x/jour)* → **1500p**\n"
-            "→ Tes 5 prochains rolls ont des taux boostés (Mythique passe à 1.5% !)\n\n"
-            "`reset_claim` — 🔄 **Reset Claim instantané** → **1200p**\n"
-            "→ Supprime ton cooldown de claim immédiatement"
+            "`claim_15` — ⚡ **Claim 15 min** *(permanent)* → **1500p**\n"
+            "`claim_20` — ⚡ **Claim 20 min** *(permanent)* → **800p**\n"
+            "`rolls_5` — 🎰 **+5 Rolls** → **700p**\n"
+            "`double_xp` — ⚡ **Double XP 1h** → **300p**"
         ), inline=False)
-        embed1.add_field(name="⚡ Réduction cooldown claim *(permanents)*", value=(
-            "`claim_20` — **Claim en 20 min** → **800p**\n"
-            "`claim_15` — **Claim en 15 min** → **1500p**\n"
-            "`claim_10` — **Claim en 10 min** → **3000p**\n\n"
-            "*Une fois acheté, actif pour toujours sur ce serveur !*"
-        ), inline=False)
-        embed1.add_field(name="⚔️ Items PvP — Sabote tes adversaires !", value=(
-            "`freeze` — 🧊 **Sceau des Ombres** *(1x/jour)* → **500p**\n"
-            "→ `.utiliser freeze @joueur` — bloque son claim **10 secondes** après un drop\n\n"
-            "`curse` — ⏳ **Malédiction** *(1x/jour)* → **400p**\n"
-            "→ `.utiliser curse @joueur` — ajoute **+5 min** à son cooldown claim\n\n"
-            "`shield` — 🛡️ **Bouclier** → **600p**\n"
-            "→ Te protège du Sceau ET de la Malédiction pendant **30 minutes**"
-        ), inline=False)
-        embed1.add_field(name="🎯 XP", value=(
-            "`double_xp` — ⚡ **Double XP** pendant 1h → **300p**\n"
-            "→ Tous tes gains d'XP sont doublés pendant 1 heure !"
+        embed1.add_field(name="⚔️ Items PvP — Sabotage & Défense", value=(
+            "`bombe_gacha` — 💣 **Bombe Gacha** → **8000p** *(fait perdre une carte !)*\n"
+            "`protection` — 🌟 **Protection Divine** → **5000p** *(immunité 2h)*\n"
+            "`cadenas` — 🔒 **Cadenas** → **4000p** *(bloque claim 30min)*\n"
+            "`amulette` — 🪬 **Amulette** → **2500p** *(renvoie sabotage 20min)*\n"
+            "`cadeau` — 🎁 **Cadeau Mystère** → **900p** *(carte Rare+)*\n"
+            "`fantome` — 👻 **Fantôme** → **800p** *(carte invisible 30min)*\n"
+            "`malediction` — 🎭 **Malédiction Rare** → **700p** *(prochain roll = Commun)*\n"
+            "`vol_roll` — 🎯 **Vol de Roll** → **500p** *(max 3x/joueur)*\n"
+            "`oracle` — 🔮 **Oracle** → **499p** *(1/5 chance de drop en 3 rolls)*\n"
+            "`shield` — 🛡️ **Bouclier** → **600p** *(protège 30min)*\n"
+            "`freeze` — 🧊 **Sceau Ombres** → **500p** *(bloque claim 10s)*\n"
+            "`double_rien` — 🎰 **Double ou Rien** → **200p** *(≤4 rolls requis)*"
         ), inline=False)
         embed1.set_footer(text="💰 Gagne des pièces : .daily • .quiz • .boss • .duel • .arene • .slot")
         await channel.send(embed=embed1)
