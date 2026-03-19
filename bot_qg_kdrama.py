@@ -3317,49 +3317,61 @@ voice_join_time = {}  # {user_id: join_timestamp}
 
 @bot.command(name="shop")
 async def shop_cmd(ctx):
-    """Affiche la boutique du QG"""
+    """Affiche la boutique du QG — 3 pages ◀️ ▶️"""
     if SALON_BOUTIQUE_ID and ctx.channel.id != SALON_BOUTIQUE_ID:
         salon = ctx.guild.get_channel(SALON_BOUTIQUE_ID)
         mention = salon.mention if salon else "le salon boutique"
         return await ctx.send(f"🛒 La boutique c'est dans {mention} !", delete_after=5)
-    embed = discord.Embed(
-        title="🛒 Boutique du QG Kdrama",
-        description="Dépense tes pièces pour des rôles et bonus exclusifs !",
-        color=0xf1c40f
-    )
+
     uid = str(ctx.author.id)
     solde = economy_data[uid]["coins"]
-    # Trier du plus cher au moins cher par catégorie
+
     roles_items  = sorted([i for i in SHOP_ITEMS if i.get("cat") == "role"],  key=lambda x: x["prix"], reverse=True)
     boosts_items = sorted([i for i in SHOP_ITEMS if i.get("cat") == "boost"], key=lambda x: x["prix"], reverse=True)
-    gacha_items  = sorted([i for i in SHOP_ITEMS if i.get("cat") == "pvp"],   key=lambda x: x["prix"], reverse=True)
+    pvp_items    = sorted([i for i in SHOP_ITEMS if i.get("cat") == "pvp"],   key=lambda x: x["prix"], reverse=True)
 
-    embed.add_field(name="─── 🎭 RÔLES EXCLUSIFS ───", value="​", inline=False)
-    for item in roles_items:
-        dispo = "✅" if solde >= item["prix"] else "❌"
-        embed.add_field(
-            name=f"{item['nom']} — {item['prix']} pièces {dispo}",
-            value=f"{item['description']}\n`.acheter {item['id']}`",
-            inline=False
+    def make_page(title, emoji, items, page_num, total_pages):
+        embed = discord.Embed(
+            title=f"🛒 Boutique — {emoji} {title}",
+            description="\n".join([
+                f"**{item['nom']}** — **{item['prix']}** pièces {'✅' if solde >= item['prix'] else '❌'}\n"
+                f"*{item['description']}*\n"
+                f"`.acheter {item['id']}`"
+                for item in items
+            ]),
+            color=0xf1c40f
         )
-    embed.add_field(name="─── ⚡ BOOSTS & ROLLS ───", value="​", inline=False)
-    for item in boosts_items:
-        dispo = "✅" if solde >= item["prix"] else "❌"
-        embed.add_field(
-            name=f"{item['nom']} — {item['prix']} pièces {dispo}",
-            value=f"{item['description']}\n`.acheter {item['id']}`",
-            inline=False
-        )
-    embed.add_field(name="─── 🎴 ITEMS GACHA (sabotage & défense) ───", value="​", inline=False)
-    for item in gacha_items:
-        dispo = "✅" if solde >= item["prix"] else "❌"
-        embed.add_field(
-            name=f"{item['nom']} — {item['prix']} pièces {dispo}",
-            value=f"{item['description']}\n`.acheter {item['id']}`",
-            inline=False
-        )
-    embed.set_footer(text=f"💰 Ton solde : {solde} pièces")
-    await ctx.send(embed=embed)
+        embed.set_footer(text=f"💰 Solde : {solde} pièces • Page {page_num}/{total_pages}")
+        return embed
+
+    pages = [
+        make_page("Rôles Exclusifs",    "🎭", roles_items,  1, 3),
+        make_page("Boosts & Rolls",     "⚡", boosts_items, 2, 3),
+        make_page("Items PvP",          "⚔️", pvp_items,   3, 3),
+    ]
+
+    index = [0]
+    msg = await ctx.send(embed=pages[0])
+    await msg.add_reaction("◀️")
+    await msg.add_reaction("▶️")
+
+    def check(reaction, user):
+        return user == ctx.author and reaction.message.id == msg.id and str(reaction.emoji) in ["◀️","▶️"]
+
+    while True:
+        try:
+            reaction, user = await bot.wait_for("reaction_add", timeout=60.0, check=check)
+            if str(reaction.emoji) == "▶️":
+                index[0] = (index[0] + 1) % len(pages)
+            else:
+                index[0] = (index[0] - 1) % len(pages)
+            await msg.edit(embed=pages[index[0]])
+            try: await msg.remove_reaction(reaction.emoji, user)
+            except: pass
+        except asyncio.TimeoutError:
+            try: await msg.clear_reactions()
+            except: pass
+            break
 
 @bot.command(name="acheter")
 async def acheter_cmd(ctx, item_id: str = None):
