@@ -1536,78 +1536,6 @@ async def meme(ctx):
 # ============================================================
 #  ERREURS
 # ============================================================
-@bot.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.MissingPermissions):
-        await ctx.send("❌ Permission refusée.")
-    elif isinstance(error, commands.MemberNotFound):
-        await ctx.send("❌ Membre introuvable.")
-    elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send(f"❌ Argument manquant. Tape `.help` pour voir les commandes.")
-    elif isinstance(error, commands.CommandNotFound):
-        pass
-    else:
-        await ctx.send(f"❌ Erreur : `{error}`")
-
-# ============================================================
-#  🐺 LOUP GAROU — Système complet
-# ============================================================
-
-# Rôles disponibles et leurs descriptions
-LG_ROLES = {
-    "Loup Garou":     {"emoji": "🐺", "team": "loups",    "count": 0, "desc": "Chaque nuit, élimine un villageois avec les autres loups."},
-    "Villageois":     {"emoji": "👨‍🌾", "team": "village",  "count": 0, "desc": "Pas de pouvoir spécial, mais ton vote compte !"},
-    "Voyante":        {"emoji": "🔮", "team": "village",  "count": 0, "desc": "Chaque nuit, découvre le rôle d'un joueur."},
-    "Sorcière":       {"emoji": "🧙‍♀️", "team": "village",  "count": 0, "desc": "Une potion de vie et une potion de mort à utiliser une fois chacune."},
-    "Chasseur":       {"emoji": "🏹", "team": "village",  "count": 0, "desc": "Quand tu meurs, tu peux emporter quelqu'un avec toi."},
-    "Cupidon":        {"emoji": "💘", "team": "village",  "count": 0, "desc": "La première nuit, lie deux joueurs en amoureux. Ils meurent ensemble."},
-    "Petite Fille":   {"emoji": "👧", "team": "village",  "count": 0, "desc": "Peut espionner les loups la nuit, mais risque d'être tuée si repérée."},
-    "Loup Blanc":     {"emoji": "🤍🐺", "team": "loup_blanc","count": 0, "desc": "Loup solitaire ! Une nuit sur deux, peut tuer un loup garou."},
-}
-
-# Composition par nombre de joueurs
-LG_COMPOS = {
-    5:  ["Loup Garou", "Voyante", "Villageois", "Villageois", "Villageois"],
-    6:  ["Loup Garou", "Voyante", "Sorcière", "Villageois", "Villageois", "Villageois"],
-    7:  ["Loup Garou", "Loup Garou", "Voyante", "Sorcière", "Villageois", "Villageois", "Villageois"],
-    8:  ["Loup Garou", "Loup Garou", "Voyante", "Sorcière", "Chasseur", "Villageois", "Villageois", "Villageois"],
-    9:  ["Loup Garou", "Loup Garou", "Voyante", "Sorcière", "Chasseur", "Cupidon", "Villageois", "Villageois", "Villageois"],
-    10: ["Loup Garou", "Loup Garou", "Loup Garou", "Voyante", "Sorcière", "Chasseur", "Cupidon", "Villageois", "Villageois", "Villageois"],
-    12: ["Loup Garou", "Loup Garou", "Loup Garou", "Voyante", "Sorcière", "Chasseur", "Cupidon", "Petite Fille", "Loup Blanc", "Villageois", "Villageois", "Villageois"],
-}
-
-# Stockage des parties en cours  {guild_id: game_state}
-lg_games = {}
-
-def lg_get_compo(n):
-    """Retourne la compo la plus proche pour n joueurs"""
-    available = sorted(LG_COMPOS.keys())
-    best = available[0]
-    for k in available:
-        if k <= n:
-            best = k
-    compo = LG_COMPOS[best].copy()
-    # Compléter avec des Villageois si besoin
-    while len(compo) < n:
-        compo.append("Villageois")
-    return compo[:n]
-
-def lg_check_win(game):
-    """Vérifie si une équipe a gagné. Retourne (True, message) ou (False, None)"""
-    alive = [p for p in game["players"].values() if p["alive"]]
-    wolves = [p for p in alive if p["role"] in ["Loup Garou", "Loup Blanc"]]
-    villagers = [p for p in alive if p["role"] not in ["Loup Garou", "Loup Blanc"]]
-
-    if len(wolves) == 0:
-        return True, "🎉 **Le Village a gagné !** Tous les loups sont éliminés ! 👨‍🌾"
-    if len(wolves) >= len(villagers):
-        return True, "🐺 **Les Loups ont gagné !** Ils sont en supériorité ! Bonne nuit village..."
-    # Loup Blanc seul ?
-    if len(alive) == 1 and alive[0]["role"] == "Loup Blanc":
-        return True, "🤍 **Le Loup Blanc a gagné !** Il est le dernier survivant !"
-    return False, None
-
-# ---- Commandes Loup Garou ----
 
 @bot.command(name="lg")
 async def loup_garou_help(ctx):
@@ -2372,6 +2300,22 @@ async def on_raw_reaction_add(payload):
             role = guild.get_role(data["role_id"])
             if role:
                 await member.add_roles(role)
+
+    # ── Autorole panels ──────────────────────────────────────
+    guild_id = str(payload.guild_id)
+    msg_id = str(payload.message_id)
+    emoji = str(payload.emoji)
+    for p in autorole_panels.get(guild_id, []):
+        if p["message_id"] == msg_id:
+            for r in p["roles"]:
+                if r["emoji"] == emoji:
+                    role = guild.get_role(int(r["role_id"]))
+                    if member and role:
+                        try:
+                            await member.add_roles(role)
+                        except:
+                            pass
+                    return
 
 @bot.event
 async def on_raw_reaction_remove(payload):
@@ -7320,51 +7264,9 @@ async def autorole_cmd(ctx, *, args: str = None):
         embed = discord.Embed(title="🎭 Panels Autorole actifs", description=desc, color=0x9b59b6)
         await ctx.send(embed=embed)
 
-@bot.event
-async def on_raw_reaction_add(payload):
-    if payload.user_id == bot.user.id:
-        return
-    guild_id = str(payload.guild_id)
-    msg_id = str(payload.message_id)
-    emoji = str(payload.emoji)
-    for p in autorole_panels.get(guild_id, []):
-        if p["message_id"] == msg_id:
-            for r in p["roles"]:
-                if r["emoji"] == emoji:
-                    guild = bot.get_guild(payload.guild_id)
-                    if not guild:
-                        return
-                    member = guild.get_member(payload.user_id)
-                    role = guild.get_role(int(r["role_id"]))
-                    if member and role:
-                        try:
-                            await member.add_roles(role)
-                        except:
-                            pass
-                    return
+# autorole géré dans on_raw_reaction_add principal
 
-@bot.event
-async def on_raw_reaction_remove(payload):
-    if payload.user_id == bot.user.id:
-        return
-    guild_id = str(payload.guild_id)
-    msg_id = str(payload.message_id)
-    emoji = str(payload.emoji)
-    for p in autorole_panels.get(guild_id, []):
-        if p["message_id"] == msg_id:
-            for r in p["roles"]:
-                if r["emoji"] == emoji:
-                    guild = bot.get_guild(payload.guild_id)
-                    if not guild:
-                        return
-                    member = guild.get_member(payload.user_id)
-                    role = guild.get_role(int(r["role_id"]))
-                    if member and role:
-                        try:
-                            await member.remove_roles(role)
-                        except:
-                            pass
-                    return
+# autorole remove géré dans on_raw_reaction_remove principal
 
 
 # ── gachagive ─────────────────────────────────────────────────────
