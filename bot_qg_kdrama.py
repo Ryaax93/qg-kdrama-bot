@@ -646,6 +646,11 @@ async def help_cmd(ctx, categorie: str = None):
         "`.setimage <perso> <url>` — Change l'image de ta carte\n"
         "*Uniquement si tu possèdes la carte !*"
     ), inline=False)
+    p2.add_field(name="🎁 Admin Gacha", value=(
+        "`.givecard @joueur <perso>` — Donner une carte (admin)\n"
+        "`.removecard @joueur <perso>` — Retirer une carte (admin)\n"
+        "`.gacharesetall` — Reset total du gacha (admin)"
+    ), inline=False)
     p2.set_footer(text="Page 3/8 • QG Kdrama 🌸")
     pages.append(p2)
 
@@ -781,10 +786,7 @@ async def help_cmd(ctx, categorie: str = None):
         "`.lock [#salon]` — Verrouiller un salon\n"
         "`.unlock [#salon]` — Déverrouiller un salon"
     ), inline=False)
-    p7.add_field(name="🎁 Cartes", value=(
-        "`.givecard @joueur <perso>` — Donner une carte\n"
-        "`.removecard @joueur <perso>` — Retirer une carte"
-    ), inline=False)
+
     p7.add_field(name="📌 Salons — `.setsalon <type>`", value=(
         "`bienvenue` 🎌 • `aurevoir` 💔 • `boost` 💎\n"
         "`gacha` 🎰 • `boutique` 🛒 • `casino` 🎲\n"
@@ -3780,6 +3782,15 @@ async def check_anniversaires():
 @bot.event
 async def on_ready():
     check_anniversaires.start()
+    # Démarrer les tasks d'events
+    if not spawn_coffre.is_running():
+        spawn_coffre.start()
+    if not nuit_de_chasse.is_running():
+        nuit_de_chasse.start()
+    if not invasion_demons.is_running():
+        invasion_demons.start()
+    if not marche_noir_task.is_running():
+        marche_noir_task.start()
     await bot.change_presence(
         activity=discord.Activity(type=discord.ActivityType.watching, name="🎬 Kdrama • .help")
     )
@@ -5526,6 +5537,10 @@ async def ga_cmd(ctx):
 
             if key not in gacha_collections[claimer_uid]:
                 gacha_collections[claimer_uid][key] = {"fusion": 0}
+
+            # Message public de claim
+            rarete_emoji_pub = RARETE_EMOJI.get(c["rarete"], "🔵")
+            await ctx.send(f"🎴 **{claimer.display_name}** vient de claim **{c['nom']}** {rarete_emoji_pub} !")
 
             # Mettre à jour l'embed
             level = fusion_levels[claimer_uid][key]
@@ -7968,10 +7983,6 @@ print("🚀 Démarrage du bot...")
 import traceback, time
 while True:
     try:
-        spawn_coffre.start()
-        nuit_de_chasse.start()
-        invasion_demons.start()
-        marche_noir_task.start()
         bot.run(TOKEN)
     except Exception as e:
         print(f"❌ CRASH BOT: {e}")
