@@ -8354,6 +8354,7 @@ async def declencher_jackpot_explosion(guild, channel):
 @tasks.loop(hours=24)
 async def invasion_samedi():
     import datetime as _dt
+    if not SALON_EVENT_ID: return
     now = _dt.datetime.now()
     if now.weekday() != 5 or now.hour != 23:  # 5 = samedi
         return
@@ -8547,6 +8548,7 @@ async def imposteur_task():
 async def lancer_coffre_planifie():
     global event_en_cours
     import time as _t
+    if not SALON_EVENT_ID: return
     event_en_cours = True
     for guild in bot.guilds:
         try:
@@ -8570,6 +8572,7 @@ async def lancer_coffre_planifie():
 
 async def lancer_nuit_casino():
     global event_en_cours, casino_boost_actif
+    if not SALON_EVENT_ID: return
     event_en_cours = True
     casino_boost_actif = True
     for guild in bot.guilds:
@@ -8594,11 +8597,15 @@ async def lancer_nuit_casino():
 async def lancer_carte_mystere():
     global event_en_cours
     import time as _t
+    if not SALON_EVENT_ID and not SALON_GACHA_ID:
+        return  # Pas de salon configuré, on annule
     event_en_cours = True
     for guild in bot.guilds:
         try:
             channel_event = get_event_channel(guild)
-            channel_gacha = guild.get_channel(SALON_GACHA_ID) if SALON_GACHA_ID else channel_event
+            channel_gacha = guild.get_channel(SALON_GACHA_ID) if SALON_GACHA_ID else None
+            if not channel_event or not channel_gacha:
+                continue  # Salons pas configurés sur ce serveur
             role = get_gacha_role(guild)
             mention = role.mention if role else ""
             if not channel_event: continue
@@ -8620,7 +8627,7 @@ async def lancer_carte_mystere():
                     description="**??? ATK • ??? DEF • ??? PV**\n\n*Claim pour révéler !*\n\nRéagis ❤️ pour claim !",
                     color=0x2c3e50
                 )
-                embed_carte.set_image(url="https://i.imgur.com/placeholder.jpg")
+                embed_carte.set_image(url="https://i.imgur.com/JzbTwwD.jpg")
                 embed_carte.set_footer(text="⚡ Disponible 5 minutes seulement !")
                 msg = await (channel_gacha or channel_event).send(embed=embed_carte)
                 await msg.add_reaction("❤️")
@@ -8679,6 +8686,7 @@ async def lancer_carte_mystere():
 
 async def lancer_double_xp_event():
     global event_en_cours, double_xp_event_actif
+    if not SALON_EVENT_ID: return
     event_en_cours = True
     double_xp_event_actif = True
     for guild in bot.guilds:
@@ -8701,6 +8709,7 @@ async def lancer_double_xp_event():
 
 async def lancer_nuit_chasse_event():
     global event_en_cours, nuit_chasse_active
+    if not SALON_EVENT_ID: return
     event_en_cours = True
     nuit_chasse_active = True
     for guild in bot.guilds:
@@ -8904,6 +8913,7 @@ async def lancer_event_surprise():
 
 async def lancer_heure_maudite():
     global event_en_cours, heure_maudite_active
+    if not SALON_EVENT_ID: return
     event_en_cours = True
     heure_maudite_active = True
     for guild in bot.guilds:
