@@ -7597,12 +7597,12 @@ ANIMES_INVESTISSEMENT = [
 ]
 
 FACTIONS = {
-    "akatsuki":      {"emoji": "🔴", "nom": "Akatsuki",          "serie": "Naruto"},
-    "surveycorps":   {"emoji": "⚔️", "nom": "Survey Corps",      "serie": "AoT"},
-    "strawhat":      {"emoji": "🏴‍☠️", "nom": "Straw Hat Pirates", "serie": "One Piece"},
-    "phantomtroupe": {"emoji": "🕷️", "nom": "Phantom Troupe",    "serie": "HxH"},
-    "gotei13":       {"emoji": "🌸", "nom": "Gotei 13",           "serie": "Bleach"},
-    "ua":            {"emoji": "💚", "nom": "U.A. High",           "serie": "MHA"},
+    "akatsuki":      {"emoji": "<:Rougeakatsuki:1484620623652061337>", "nom": "Akatsuki",                      "serie": "Naruto"},
+    "surveycorps":   {"emoji": "<:Blancbataillondexploration:1484620708641505360>", "nom": "Bataillon d'Exploration", "serie": "AoT"},
+    "strawhat":      {"emoji": "<:Blancmugiwara:1484620802677538816>", "nom": "Équipage du Chapeau de Paille", "serie": "One Piece"},
+    "phantomtroupe": {"emoji": "🕷️", "nom": "Phantom Troupe",         "serie": "HxH"},
+    "gotei13":       {"emoji": "🌸", "nom": "Gotei 13",                "serie": "Bleach"},
+    "ua":            {"emoji": "🍃", "nom": "Lycée U.A.",              "serie": "MHA"},
 }
 
 BOSS_INVASIONS = [
