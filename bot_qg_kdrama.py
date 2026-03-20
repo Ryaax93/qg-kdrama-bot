@@ -654,6 +654,13 @@ async def help_cmd(ctx, categorie: str = None):
 
     p7 = discord.Embed(title="🎰 Admin Gacha", description="⚠️ Réservé aux **administrateurs**", color=0x9b59b6)
     p7.add_field(name="🎁 Gestion Cartes", value="`.givecard @joueur <perso>` — Donner une carte\n`.removecard @joueur <perso>` — Retirer une carte\n`.gacharesetall` — Reset total du gacha (⚠️ irréversible)", inline=False)
+    p7.add_field(name="💰 Gestion Économie & XP", value=(
+        "`.givepieces @joueur <montant>` — Donner des pièces\n"
+        "`.retirerpieces @joueur <montant>` — Retirer des pièces\n"
+        "`.givexp @joueur <montant>` — Donner de l'XP\n"
+        "`.retirerxp @joueur <montant>` — Retirer de l'XP\n"
+        "`.resetall` — Reset total pièces + XP + gacha ⚠️"
+    ), inline=False)
     p7.add_field(name="🎰 Gestion Rolls", value="`.setrollreset <heures>` — Changer la fréquence de recharge des rolls", inline=False)
     p7.set_footer(text="Page 8/9 • QG Kdrama 🌸")
     pages.append(p7)
@@ -8894,6 +8901,174 @@ async def lancer_imposteur():
                 await msg.delete()
         except Exception as e:
             print(f"Imposteur error: {e}")
+
+
+# ============================================================
+#  🔧 COMMANDES ADMIN — GESTION ÉCONOMIE & XP
+# ============================================================
+
+@bot.command(name="givepieces", aliases=["addpieces", "donnerpieces"])
+@commands.has_permissions(administrator=True)
+async def givepieces_cmd(ctx, membre: discord.Member = None, montant: int = None):
+    """Donne des pièces à un membre — .givepieces @joueur <montant>"""
+    if not membre or not montant:
+        return await ctx.send("❌ Usage : `.givepieces @joueur <montant>`")
+    if montant <= 0:
+        return await ctx.send("❌ Le montant doit être positif !")
+    uid = str(membre.id)
+    economy_data[uid]["coins"] += montant
+    embed = discord.Embed(
+        title="💰 Pièces attribuées",
+        description=f"**+{montant:,} pièces** donnés à {membre.mention}\nNouveau solde : **{economy_data[uid]['coins']:,} pièces**",
+        color=0x2ecc71
+    )
+    embed.set_footer(text=f"Action effectuée par {ctx.author.display_name}")
+    await ctx.send(embed=embed)
+
+@bot.command(name="retirerpieces", aliases=["removepieces", "deduirepieces"])
+@commands.has_permissions(administrator=True)
+async def retirerpieces_cmd(ctx, membre: discord.Member = None, montant: int = None):
+    """Retire des pièces à un membre — .retirerpieces @joueur <montant>"""
+    if not membre or not montant:
+        return await ctx.send("❌ Usage : `.retirerpieces @joueur <montant>`")
+    if montant <= 0:
+        return await ctx.send("❌ Le montant doit être positif !")
+    uid = str(membre.id)
+    avant = economy_data[uid]["coins"]
+    economy_data[uid]["coins"] = max(0, economy_data[uid]["coins"] - montant)
+    retire = avant - economy_data[uid]["coins"]
+    embed = discord.Embed(
+        title="💸 Pièces retirées",
+        description=f"**-{retire:,} pièces** retirés à {membre.mention}\nNouveau solde : **{economy_data[uid]['coins']:,} pièces**",
+        color=0xe74c3c
+    )
+    embed.set_footer(text=f"Action effectuée par {ctx.author.display_name}")
+    await ctx.send(embed=embed)
+
+@bot.command(name="givexp", aliases=["addxp", "donnerxp"])
+@commands.has_permissions(administrator=True)
+async def givexp_cmd(ctx, membre: discord.Member = None, montant: int = None):
+    """Donne de l'XP à un membre — .givexp @joueur <montant>"""
+    if not membre or not montant:
+        return await ctx.send("❌ Usage : `.givexp @joueur <montant>`")
+    if montant <= 0:
+        return await ctx.send("❌ Le montant doit être positif !")
+    uid = str(membre.id)
+    xp_data[uid]["xp"] += montant
+    # Vérifier level up
+    needed = xp_data[uid]["level"] * 100
+    levels_gained = 0
+    while xp_data[uid]["xp"] >= needed:
+        xp_data[uid]["level"] += 1
+        xp_data[uid]["xp"] -= needed
+        needed = xp_data[uid]["level"] * 100
+        levels_gained += 1
+    embed = discord.Embed(
+        title="⭐ XP attribué",
+        description=(
+            f"**+{montant:,} XP** donnés à {membre.mention}\n"
+            f"Niveau actuel : **{xp_data[uid]['level']}**\n"
+            f"XP actuel : **{xp_data[uid]['xp']}/{xp_data[uid]['level']*100}**"
+            + (f"\n🎉 **+{levels_gained} niveau(x) gagné(s) !**" if levels_gained else "")
+        ),
+        color=0xf1c40f
+    )
+    embed.set_footer(text=f"Action effectuée par {ctx.author.display_name}")
+    await ctx.send(embed=embed)
+
+@bot.command(name="retirerxp", aliases=["removexp", "deduirexp"])
+@commands.has_permissions(administrator=True)
+async def retirerxp_cmd(ctx, membre: discord.Member = None, montant: int = None):
+    """Retire de l'XP à un membre — .retirerxp @joueur <montant>"""
+    if not membre or not montant:
+        return await ctx.send("❌ Usage : `.retirerxp @joueur <montant>`")
+    if montant <= 0:
+        return await ctx.send("❌ Le montant doit être positif !")
+    uid = str(membre.id)
+    avant_xp = xp_data[uid]["xp"]
+    avant_lvl = xp_data[uid]["level"]
+    xp_data[uid]["xp"] = max(0, xp_data[uid]["xp"] - montant)
+    embed = discord.Embed(
+        title="📉 XP retiré",
+        description=(
+            f"**-{montant:,} XP** retirés à {membre.mention}\n"
+            f"Niveau actuel : **{xp_data[uid]['level']}**\n"
+            f"XP actuel : **{xp_data[uid]['xp']}/{xp_data[uid]['level']*100}**"
+        ),
+        color=0xe74c3c
+    )
+    embed.set_footer(text=f"Action effectuée par {ctx.author.display_name}")
+    await ctx.send(embed=embed)
+
+@bot.command(name="resetall", aliases=["fullreset"])
+@commands.has_permissions(administrator=True)
+async def resetall_cmd(ctx):
+    """Reset complet — XP, pièces et gacha — .resetall"""
+    embed_confirm = discord.Embed(
+        title="⚠️ RESET TOTAL",
+        description=(
+            "Tu es sur le point de **tout reset** :\n\n"
+            "💰 Toutes les pièces → 0\n"
+            "⭐ Tous les niveaux XP → 0\n"
+            "🎴 Toutes les cartes gacha → libérées\n\n"
+            "**Cette action est irréversible !**\n"
+            "Réagis ✅ pour confirmer ou ❌ pour annuler."
+        ),
+        color=0xe74c3c
+    )
+    msg = await ctx.send(embed=embed_confirm)
+    await msg.add_reaction("✅")
+    await msg.add_reaction("❌")
+
+    def check(reaction, user):
+        return user == ctx.author and reaction.message.id == msg.id and str(reaction.emoji) in ["✅", "❌"]
+
+    try:
+        reaction, user = await bot.wait_for("reaction_add", timeout=30.0, check=check)
+        if str(reaction.emoji) == "❌":
+            await msg.edit(embed=discord.Embed(description="❌ Reset annulé.", color=0x95a5a6))
+            await msg.clear_reactions()
+            return
+
+        # Reset pièces
+        for uid in economy_data:
+            economy_data[uid]["coins"] = 0
+            economy_data[uid]["bank"] = 0
+
+        # Reset XP
+        for uid in xp_data:
+            xp_data[uid]["xp"] = 0
+            xp_data[uid]["level"] = 1
+
+        # Reset gacha
+        claimed_cards.clear()
+        gacha_collections.clear()
+        fusion_levels.clear()
+        cartes_favorites.clear()
+        trade_history.clear()
+
+        # Reset points amélio
+        points_amelio.clear()
+        arena_stats.clear()
+
+        embed_done = discord.Embed(
+            title="✅ Reset total effectué",
+            description=(
+                "Tout a été remis à zéro :\n\n"
+                "💰 Pièces → **0**\n"
+                "⭐ Niveaux → **1**\n"
+                "🎴 Cartes → **libérées**\n"
+                "📊 Stats arène → **reset**"
+            ),
+            color=0x2ecc71
+        )
+        embed_done.set_footer(text=f"Reset effectué par {ctx.author.display_name}")
+        await msg.edit(embed=embed_done)
+        await msg.clear_reactions()
+
+    except asyncio.TimeoutError:
+        await msg.edit(embed=discord.Embed(description="⏰ Confirmation expirée — reset annulé.", color=0x95a5a6))
+        await msg.clear_reactions()
 
 
 print("🚀 Démarrage du bot...")
