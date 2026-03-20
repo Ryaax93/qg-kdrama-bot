@@ -122,8 +122,8 @@ def charger_salons():
         SALON_REGLEMENT_ID = data.get("SALON_REGLEMENT_ID")
         ROLE_MEMBRE_NAME   = data.get("ROLE_MEMBRE_NAME", "Membre")
         global REGLEMENT_ROLE_ID
-        REGLEMENT_ROLE_ID  = data.get("REGLEMENT_ROLE_ID")
-        REGLEMENT_MSG_ID   = data.get("REGLEMENT_MSG_ID")
+        REGLEMENT_ROLE_ID  = int(data["REGLEMENT_ROLE_ID"]) if data.get("REGLEMENT_ROLE_ID") else None
+        REGLEMENT_MSG_ID   = int(data["REGLEMENT_MSG_ID"]) if data.get("REGLEMENT_MSG_ID") else None
         print("[Config] Salons chargés depuis salons_config.json ✅")
     except Exception as e:
         print(f"[Config] Erreur chargement : {e}")
@@ -2348,19 +2348,22 @@ async def on_raw_reaction_add(payload):
         return
 
     # ── Règlement : ✅ → donne le rôle Membre ───────────────
-    if SALON_REGLEMENT_ID and payload.channel_id == SALON_REGLEMENT_ID and str(payload.emoji) == "✅":
-        # Chercher le rôle par ID (fiable) puis par nom (fallback)
-        role = guild.get_role(REGLEMENT_ROLE_ID) if REGLEMENT_ROLE_ID else None
-        if not role:
-            role = discord.utils.get(guild.roles, name=ROLE_MEMBRE_NAME)
-        if role and role not in member.roles:
-            try:
-                await member.add_roles(role, reason="Règlement accepté ✅")
-            except discord.Forbidden:
-                pass
-        elif not role:
-            # Log si le rôle est introuvable
-            print(f"⚠️ Règlement: rôle introuvable (ID={REGLEMENT_ROLE_ID}, nom={ROLE_MEMBRE_NAME})")
+    if SALON_REGLEMENT_ID and payload.channel_id == SALON_REGLEMENT_ID:
+        msg_ok = (REGLEMENT_MSG_ID is None) or (payload.message_id == int(REGLEMENT_MSG_ID))
+        if msg_ok and str(payload.emoji) == "✅":
+            role = guild.get_role(int(REGLEMENT_ROLE_ID)) if REGLEMENT_ROLE_ID else None
+            if not role:
+                role = discord.utils.get(guild.roles, name=ROLE_MEMBRE_NAME)
+            if role and role not in member.roles:
+                try:
+                    await member.add_roles(role, reason="Règlement accepté ✅")
+                    print(f"✅ Rôle {role.name} donné à {member.display_name}")
+                except discord.Forbidden:
+                    print(f"❌ Pas la permission de donner le rôle {role.name}")
+                except Exception as e:
+                    print(f"❌ Erreur règlement: {e}")
+            elif not role:
+                print(f"⚠️ Règlement: rôle introuvable (ID={REGLEMENT_ROLE_ID}, nom={ROLE_MEMBRE_NAME})")
 
     # ── Reaction roles classiques ────────────────────────────
     if payload.message_id in reaction_roles:
