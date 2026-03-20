@@ -55,7 +55,8 @@ TIERS = [
 SALON_LEVELUP_ID = None   # Met l'ID du salon level up ici
 SALON_CASINO_ID = None    # Met l'ID du salon casino ici
 SALON_GACHA_ID = None     # Met l'ID du salon gacha ici
-SALON_EVENT_ID = None     # Salon pour les events (invasions, nuit de chasse, coffres, marché noir)
+SALON_EVENT_ID = None     # Salon pour les events
+SALON_GUIDE_ID = None      # Salon pour le guide (invasions, nuit de chasse, coffres, marché noir)
 SALON_BOUTIQUE_ID = None  # Met l'ID du salon boutique ici
 SALON_COMBAT_ID = None    # Met l'ID du salon pokebattle ici
 SALON_DUEL_ID = None      # Met l'ID du salon duel/pvp ici
@@ -77,6 +78,7 @@ def sauvegarder_salons():
         "SALON_CASINO_ID":    SALON_CASINO_ID,
         "SALON_GACHA_ID":     SALON_GACHA_ID,
             "SALON_EVENT_ID":     SALON_EVENT_ID,
+            "SALON_GUIDE_ID":      SALON_GUIDE_ID,
         "SALON_BOUTIQUE_ID":  SALON_BOUTIQUE_ID,
         "SALON_COMBAT_ID":    SALON_COMBAT_ID,
         "SALON_DUEL_ID":      SALON_DUEL_ID,
@@ -97,7 +99,7 @@ def sauvegarder_salons():
 
 def charger_salons():
     """Charge les IDs de salons depuis le fichier JSON au démarrage"""
-    global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_EVENT_ID
+    global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_EVENT_ID, SALON_GUIDE_ID
     global SALON_COMBAT_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID
     global SALON_BOOST_ID, SALON_HOF_ID, SALON_REGLEMENT_ID, ROLE_MEMBRE_NAME, REGLEMENT_ROLE_ID, REGLEMENT_MSG_ID
     if not os.path.exists(CONFIG_FILE):
@@ -109,6 +111,7 @@ def charger_salons():
         SALON_CASINO_ID    = data.get("SALON_CASINO_ID")
         SALON_GACHA_ID     = data.get("SALON_GACHA_ID")
         SALON_EVENT_ID     = data.get("SALON_EVENT_ID")
+        SALON_GUIDE_ID     = data.get("SALON_GUIDE_ID")
         SALON_BOUTIQUE_ID  = data.get("SALON_BOUTIQUE_ID")
         SALON_COMBAT_ID    = data.get("SALON_COMBAT_ID")
         SALON_DUEL_ID      = data.get("SALON_DUEL_ID")
@@ -6525,7 +6528,7 @@ async def send_salon_embed(channel, t):
 @commands.has_permissions(administrator=True)
 async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
     """Configure ou désactive un salon — .setsalon casino | .setsalon reglement @Role"""
-    global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_EVENT_ID
+    global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_EVENT_ID, SALON_GUIDE_ID
     global SALON_COMBAT_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID
     global SALON_BOOST_ID, SALON_HOF_ID, SALON_REGLEMENT_ID, ROLE_MEMBRE_NAME, REGLEMENT_ROLE_ID
 
@@ -6541,6 +6544,8 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
         "boost":      ("SALON_BOOST_ID",      "boost"),
         "halloffame": ("SALON_HOF_ID",        "hall of fame"),
         "reglement":  ("SALON_REGLEMENT_ID",  "règlement"),
+        "event":      ("SALON_EVENT_ID",      "events"),
+        "guide":      ("SALON_GUIDE_ID",      "guide"),
     }
 
     if not type_salon or type_salon.lower() not in TYPES:
@@ -6580,7 +6585,7 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
     current = vals.get(var_name)
 
     def set_var(vname, value):
-        global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_EVENT_ID
+        global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_EVENT_ID, SALON_GUIDE_ID
         global SALON_COMBAT_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID
         global SALON_BOOST_ID, SALON_HOF_ID
         if vname == "SALON_LEVELUP_ID":    SALON_LEVELUP_ID    = value
