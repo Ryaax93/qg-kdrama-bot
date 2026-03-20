@@ -2313,24 +2313,54 @@ async def on_raw_reaction_add(payload):
                     if member and role:
                         try:
                             await member.add_roles(role)
+                            # Message temporaire visible uniquement par le membre
+                            channel = guild.get_channel(payload.channel_id)
+                            if channel:
+                                msg = await channel.send(
+                                    f"{member.mention} ✅ Le rôle **{role.name}** t'a été attribué !",
+                                    delete_after=4
+                                )
                         except:
                             pass
                     return
 
 @bot.event
 async def on_raw_reaction_remove(payload):
-    if payload.message_id not in reaction_roles:
-        return
-    data = reaction_roles[payload.message_id]
-    if str(payload.emoji) != data["emoji"]:
+    if payload.user_id == bot.user.id:
         return
     guild = bot.get_guild(payload.guild_id)
     if not guild:
         return
-    role = guild.get_role(data["role_id"])
     member = guild.get_member(payload.user_id)
-    if role and member:
-        await member.remove_roles(role)
+    if not member:
+        return
+
+    # ── Reaction roles classiques ────────────────────────────
+    if payload.message_id in reaction_roles:
+        data = reaction_roles[payload.message_id]
+        if str(payload.emoji) == data["emoji"]:
+            role = guild.get_role(data["role_id"])
+            if role and member:
+                try:
+                    await member.remove_roles(role)
+                except:
+                    pass
+
+    # ── Autorole panels ──────────────────────────────────────
+    guild_id = str(payload.guild_id)
+    msg_id = str(payload.message_id)
+    emoji = str(payload.emoji)
+    for p in autorole_panels.get(guild_id, []):
+        if p["message_id"] == msg_id:
+            for r in p["roles"]:
+                if r["emoji"] == emoji:
+                    role = guild.get_role(int(r["role_id"]))
+                    if member and role:
+                        try:
+                            await member.remove_roles(role)
+                        except:
+                            pass
+                    return
 
 # ============================================================
 #  ANTI-SPAM INTELLIGENT
