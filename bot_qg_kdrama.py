@@ -686,65 +686,54 @@ async def help_cmd(ctx, categorie: str = None):
 
     # Page 4 — Économie
     p4 = discord.Embed(title="💰 Économie & Récompenses", color=0xf39c12)
-    p4.add_field(name="💵 Pièces", value=(
-        "`.daily` — 150-300 pièces + 1 roll gacha ⏳ 24h\n"
+    p4.add_field(name="💵 Pièces & Farm", value=(
+        "`.daily` — 100-200 pièces + 1 roll (24h)\n"
+        "`.travailler` — 50-150 pièces selon le job (4h)\n"
+        "`.braquage @joueur` — Vol risqué 30% succès (6h)\n"
         "`.balance [@joueur]` — Voir ton solde\n"
-        "`.pay @joueur <montant>` — Envoyer des pièces\n"
-        "`.steal @joueur` — Vol (45% réussite, cooldown 1h)"
+        "`.pay @joueur <montant>` — Envoyer des pièces"
     ), inline=False)
-    p4.add_field(name="🏦 Banque", value=(
-        "`.banque depot <montant>` — Déposer\n"
+    p4.add_field(name="📈 Investissement & Missions", value=(
+        "`.investir <animé> <montant>` — Investis sur un animé récent\n"
+        "`.retourinvest` — Récupérer le retour d'investissement\n"
+        "`.missions` — Missions journalières avec récompenses"
+    ), inline=False)
+    p4.add_field(name="🏦 Banque & Casino", value=(
+        "`.banque depot <montant>` — Déposer (intérêts +10%/24h)\n"
         "`.banque retrait` — Retirer + intérêts\n"
-        "`.banque solde` — Voir le solde\n"
-        "📈 Intérêts : +5% toutes les 24h !"
+        "`.slot [mise]` — Slot machine (salon casino)"
     ), inline=False)
-    p4.add_field(name="🎰 Casino", value=(
-        "`.slot [mise]` — Slot machine\n"
-        "Min 10p • Max 500p • Salon casino uniquement !"
-    ), inline=False)
-    p4.add_field(name="🛒 Boutique", value=(
-        "`.shop` — Voir tous les items\n"
+    p4.add_field(name="🛒 Boutique & PvP", value=(
+        "`.shop` — Voir tous les items (3 pages ◀️▶️)\n"
         "`.acheter <id>` — Acheter un item\n"
-        "`.utiliser freeze @joueur` — Sceau des Ombres 🧊\n"
-        "`.utiliser curse @joueur` — Malédiction ⏳"
+        "`.utiliser <item> @joueur` — Utiliser un item PvP\n"
+        "`.marcheacheter <perso>` — Marché Noir 🕶️"
     ), inline=False)
-    p4.add_field(name="💡 Sources de pièces", value=(
-        "`.daily` • Quiz • Arène • Duel • Boss"
-    ), inline=False)
-    p4.set_footer(text="Page 5/8 • QG Kdrama 🌸")
+    p4.set_footer(text="Page 5/9 • QG Kdrama 🌸")
     pages.append(p4)
 
-    # Page 5 — Progression
-    p5 = discord.Embed(title="📊 Progression — XP & Niveaux", color=0xf1c40f)
-    p5.add_field(name="Commandes", value=(
+    p5 = discord.Embed(title="📊 Progression, Factions & Events", color=0xf1c40f)
+    p5.add_field(name="📈 XP & Niveaux", value=(
         "`.rank [@joueur]` — Ton niveau, XP et titre\n"
-        "`.leaderboard` — Top 10 membres les plus actifs"
+        "`.leaderboard` — Top 10 membres les plus actifs\n"
+        "`.liga` — Classement Elo mensuel (gains via `.arene`)"
     ), inline=False)
-    p5.add_field(name="📈 Gagner de l'XP", value=(
-        "• Chatter → 2-5 XP/message\n"
-        "• Gagner un quiz → +30 XP\n"
-        "• Gagner une arène → +40 XP\n"
-        "• Tuer un boss → +50 XP\n"
-        "• Claimer une carte → +20 XP"
+    p5.add_field(name="⚔️ Factions", value=(
+        "`.faction` — Voir les factions disponibles\n"
+        "`.faction rejoindre <id>` — Rejoindre une faction\n"
+        "`.faction info` — Ta faction & réputation\n"
+        "`.faction classement` — Classement des factions\n"
+        "*Factions : akatsuki • surveycorps • strawhat • phantomtroupe • gotei13 • ua*"
     ), inline=False)
-    p5.add_field(name="🏆 Titres", value=(
-        "Niv.1 🌱 Académicien Débutant\n"
-        "Niv.5 ⚔️ Chasseur Rang E\n"
-        "Niv.10 🗡️ Chasseur Rang D\n"
-        "Niv.15 💥 Chasseur Rang C\n"
-        "Niv.20 🔥 Chasseur Rang B\n"
-        "Niv.25 ⚡ Chasseur Rang A\n"
-        "Niv.30 💎 Chasseur Rang S\n"
-        "Niv.40 👑 Pillier du QG\n"
-        "Niv.50 🌀 Maître des Arts Martiaux\n"
-        "Niv.60 ☠️ Lune Supérieure\n"
-        "Niv.75 🐉 Roi des Malédictions\n"
-        "Niv.99 🌟 Monarque des Ombres"
+    p5.add_field(name="🎪 Events Automatiques", value=(
+        "📦 **Coffre** — Apparaît aléatoirement → `.ouvrir`\n"
+        "🌙 **Nuit de Chasse** — Taux Mythique x2 pendant 2h\n"
+        "⚠️ **Invasion** — Boss attaque le serveur → `.attaquerboss`\n"
+        "🕶️ **Marché Noir** — Cartes rares en vente → `.marcheacheter`"
     ), inline=False)
-    p5.set_footer(text="Page 6/8 • QG Kdrama 🌸")
+    p5.set_footer(text="Page 6/9 • QG Kdrama 🌸")
     pages.append(p5)
 
-    # Page 6 — Social & Fun
     p6 = discord.Embed(title="💬 Social & Fun", color=0xff6b9d)
     p6.add_field(name="💍 Mariage", value=(
         "`.marier @joueur` — Demande en mariage\n"
@@ -7536,10 +7525,453 @@ async def gacharesetall_cmd(ctx):
 
 
 # ============================================================
+# ============================================================
+#  💰 ÉCONOMIE AVANCÉE & NOUVELLES FEATURES
+# ============================================================
+
+import random as _random
+
+travailler_cd = {}
+braquage_cd = {}
+investissements = {}
+missions_data = {}
+liga_data = {}
+faction_data = {}
+faction_rep = {}
+marche_noir_actif = {}
+invasion_active = {}
+coffre_actif = {}
+nuit_chasse_active = False
+
+JOBS = [
+    ("🍜 Cuisinier chez Sanji", 80, 150),
+    ("⚔️ Entraîneur au Survey Corps", 60, 120),
+    ("🃏 Dealer de cartes gacha", 90, 140),
+    ("🔮 Oracle du QG", 70, 130),
+    ("📺 Critique d'animé", 50, 100),
+    ("🎯 Chasseur de primes", 100, 160),
+    ("🍥 Vendeur de ramen", 60, 110),
+    ("🐸 Apprenti de Jiraiya", 85, 145),
+]
+
+ANIMES_INVESTISSEMENT = [
+    "Demon Slayer S3", "Jujutsu Kaisen S3", "One Piece",
+    "Solo Leveling S2", "Chainsaw Man S3", "Bleach TYBW",
+    "Dandadan S2", "Kaiju No.8 S2", "Blue Lock S3",
+    "Black Clover Film", "Naruto Next Gen", "Vinland Saga S3",
+]
+
+FACTIONS = {
+    "akatsuki":      {"emoji": "🔴", "nom": "Akatsuki",          "serie": "Naruto"},
+    "surveycorps":   {"emoji": "⚔️", "nom": "Survey Corps",      "serie": "AoT"},
+    "strawhat":      {"emoji": "🏴‍☠️", "nom": "Straw Hat Pirates", "serie": "One Piece"},
+    "phantomtroupe": {"emoji": "🕷️", "nom": "Phantom Troupe",    "serie": "HxH"},
+    "gotei13":       {"emoji": "🌸", "nom": "Gotei 13",           "serie": "Bleach"},
+    "ua":            {"emoji": "💚", "nom": "U.A. High",           "serie": "MHA"},
+}
+
+BOSS_INVASIONS = [
+    {"nom": "Muzan Kibutsuji", "emoji": "🌙", "pv": 5000, "serie": "Demon Slayer", "image": "https://i.imgur.com/amD1hXZ.jpg"},
+    {"nom": "Sosuke Aizen",    "emoji": "🦋", "pv": 4500, "serie": "Bleach",       "image": "https://i.imgur.com/rtSGfrn.jpg"},
+    {"nom": "Madara Uchiha",   "emoji": "👁️", "pv": 6000, "serie": "Naruto",       "image": "https://i.imgur.com/FYEJwwH.jpg"},
+    {"nom": "All For One",     "emoji": "☠️", "pv": 4000, "serie": "MHA",          "image": "https://i.imgur.com/qtpXAdm.jpg"},
+    {"nom": "Yhwach",          "emoji": "👑", "pv": 5500, "serie": "Bleach",        "image": "https://i.imgur.com/UR1i6Tb.jpg"},
+    {"nom": "Meruem",          "emoji": "♟️", "pv": 4800, "serie": "HxH",           "image": "https://i.imgur.com/ajOXRt1.jpg"},
+]
+
+# ── .travailler ──────────────────────────────────────────────
+@bot.command(name="travailler", aliases=["work", "boulot"])
+async def travailler_cmd(ctx):
+    """Travaille pour gagner des pièces — .travailler (cooldown 4h)"""
+    import time as _t
+    uid = str(ctx.author.id)
+    now = _t.time()
+    if now - travailler_cd.get(uid, 0) < 14400:
+        reste = int((14400 - (now - travailler_cd[uid])) // 60)
+        h, m = reste // 60, reste % 60
+        return await ctx.send(embed=discord.Embed(description=f"😴 Épuisé ! Retravailler dans **{h}h{m:02d}min**", color=0x95a5a6))
+    job, mn, mx = _random.choice(JOBS)
+    gain = _random.randint(mn, mx)
+    economy_data[uid]["coins"] += gain
+    travailler_cd[uid] = now
+    await ctx.send(embed=discord.Embed(title=f"💼 {job}", description=f"{ctx.author.mention} gagne **{gain} pièces** ! 💰\n*Prochain travail dans 4h*", color=0x2ecc71))
+
+# ── .braquage ─────────────────────────────────────────────────
+@bot.command(name="braquage", aliases=["rob"])
+async def braquage_cmd(ctx, cible: discord.Member = None):
+    """Tente un braquage — .braquage @joueur"""
+    import time as _t
+    if not cible:
+        return await ctx.send("❌ Mentionne quelqu'un ! Ex: `.braquage @joueur`")
+    if cible == ctx.author:
+        return await ctx.send("❌ Tu peux pas te braquer toi-même 😂")
+    uid = str(ctx.author.id)
+    uid_c = str(cible.id)
+    now = _t.time()
+    if now - braquage_cd.get(uid, 0) < 21600:
+        reste = int((21600 - (now - braquage_cd[uid])) // 60)
+        return await ctx.send(f"⏳ Attends encore **{reste} min** avant de braquer !")
+    cible_coins = economy_data[uid_c]["coins"]
+    if cible_coins < 200:
+        return await ctx.send(f"💸 **{cible.display_name}** est trop pauvre (moins de 200 pièces) !")
+    braquage_cd[uid] = now
+    if _random.random() < 0.30:
+        vol = _random.randint(int(cible_coins * 0.20), int(cible_coins * 0.40))
+        economy_data[uid]["coins"] += vol
+        economy_data[uid_c]["coins"] -= vol
+        await ctx.send(embed=discord.Embed(title="🦹 Braquage réussi !", description=f"{ctx.author.mention} a braqué **{vol} pièces** à {cible.mention} ! 💰", color=0x2ecc71))
+        try:
+            await cible.send(f"🚨 **{ctx.author.display_name}** t'a braqué **{vol} pièces** !")
+        except:
+            pass
+    else:
+        amende = min(_random.randint(100, 300), economy_data[uid]["coins"])
+        economy_data[uid]["coins"] -= amende
+        economy_data[uid_c]["coins"] += amende
+        await ctx.send(embed=discord.Embed(title="🚔 Braquage raté !", description=f"{ctx.author.mention} s'est fait attraper ! Amende : **{amende} pièces** 😂", color=0xe74c3c))
+
+# ── .investir ─────────────────────────────────────────────────
+@bot.command(name="investir", aliases=["invest"])
+async def investir_cmd(ctx, *, args: str = None):
+    """Investis sur un animé récent — .investir <animé> <montant>"""
+    import time as _t
+    uid = str(ctx.author.id)
+    if not args:
+        liste = "\n".join([f"• `{a}`" for a in ANIMES_INVESTISSEMENT])
+        return await ctx.send(embed=discord.Embed(title="📈 Animés disponibles", description=f"**Usage :** `.investir One Piece 500`\n\n{liste}", color=0x3498db))
+    parts = args.rsplit(" ", 1)
+    if len(parts) < 2 or not parts[1].isdigit():
+        return await ctx.send("❌ Usage : `.investir <animé> <montant>`\nEx: `.investir One Piece 500`")
+    serie, montant = parts[0].strip(), int(parts[1])
+    match = next((a for a in ANIMES_INVESTISSEMENT if serie.lower() in a.lower()), None)
+    if not match:
+        return await ctx.send(f"❌ **{serie}** pas dans la liste ! Tape `.investir` pour voir les animés.")
+    if economy_data[uid]["coins"] < montant:
+        return await ctx.send(f"❌ Pas assez de pièces ! Solde : **{economy_data[uid]['coins']}**")
+    if montant < 100 or montant > 5000:
+        return await ctx.send("❌ Investissement : min **100p**, max **5000p** !")
+    economy_data[uid]["coins"] -= montant
+    if uid not in investissements:
+        investissements[uid] = {}
+    investissements[uid][match] = {"montant": montant, "timestamp": _t.time()}
+    await ctx.send(embed=discord.Embed(title="📈 Investissement placé !", description=f"{ctx.author.mention} investit **{montant} pièces** sur **{match}** !\n*Si ça trend dans les 48h → jusqu'à **x3** le retour !*", color=0x3498db))
+
+@bot.command(name="retourinvest", aliases=["rinvest"])
+async def retourinvest_cmd(ctx):
+    """Récupère le retour — .retourinvest"""
+    import time as _t
+    uid = str(ctx.author.id)
+    invests = investissements.get(uid, {})
+    if not invests:
+        return await ctx.send("❌ Aucun investissement actif ! Utilise `.investir` pour commencer.")
+    now, total, resultats, to_remove = _t.time(), 0, [], []
+    for serie, data in invests.items():
+        if now - data["timestamp"] < 3600:
+            resultats.append(f"⏳ **{serie}** — résultats dans {int((3600-(now-data['timestamp']))//60)} min")
+            continue
+        if _random.random() < 0.40:
+            mult = round(_random.uniform(1.5, 3.0), 1)
+            retour = int(data["montant"] * mult)
+            total += retour
+            resultats.append(f"📈 **{serie}** — TREND ! x{mult} → **+{retour} pièces** 🔥")
+        else:
+            resultats.append(f"📉 **{serie}** — Pas de trend... **-{data['montant']} pièces** 💸")
+        to_remove.append(serie)
+    for s in to_remove:
+        del investissements[uid][s]
+    if total > 0:
+        economy_data[uid]["coins"] += total
+    embed = discord.Embed(title="📊 Résultats d'investissement", description="\n".join(resultats) if resultats else "Aucun résultat.", color=0x2ecc71 if total > 0 else 0xe74c3c)
+    if total > 0:
+        embed.set_footer(text=f"💰 Total gagné : +{total} pièces !")
+    await ctx.send(embed=embed)
+
+# ── .missions ─────────────────────────────────────────────────
+@bot.command(name="missions", aliases=["mission"])
+async def missions_cmd(ctx):
+    """Voir tes missions journalières — .missions"""
+    import time as _t
+    uid = str(ctx.author.id)
+    today = int(_t.time() // 86400)
+    if uid not in missions_data or missions_data[uid].get("jour") != today:
+        missions_data[uid] = {
+            "jour": today,
+            "missions": [
+                {"id": "quiz5",    "desc": "Réponds correctement à 5 quiz",  "objectif": 5,  "progres": 0, "recompense": 200, "done": False},
+                {"id": "duel3",    "desc": "Gagne 3 duels en arène",         "objectif": 3,  "progres": 0, "recompense": 300, "done": False},
+                {"id": "roll10",   "desc": "Tire 10 cartes gacha",           "objectif": 10, "progres": 0, "recompense": 150, "done": False},
+                {"id": "claim1",   "desc": "Claim 1 carte gacha",            "objectif": 1,  "progres": 0, "recompense": 250, "done": False},
+                {"id": "travail1", "desc": "Travaille 1 fois",               "objectif": 1,  "progres": 0, "recompense": 100, "done": False},
+            ]
+        }
+    missions = missions_data[uid]["missions"]
+    total_dispo = sum(m["recompense"] for m in missions if not m["done"])
+    desc = ""
+    for m in missions:
+        strike = "~~" if m["done"] else ""
+        status = "✅" if m["done"] else f"**{m['progres']}/{m['objectif']}**"
+        desc += f"{strike}{m['desc']} — **{m['recompense']}p** {status}{strike}\n"
+    embed = discord.Embed(title="📋 Missions Journalières", description=desc, color=0xf1c40f)
+    embed.set_footer(text=f"💰 Récompenses restantes : {total_dispo} pièces • Reset dans {24 - int((_t.time() % 86400) // 3600)}h")
+    await ctx.send(embed=embed)
+
+def update_mission(uid, mission_id, amount=1):
+    import time as _t
+    today = int(_t.time() // 86400)
+    if uid not in missions_data or missions_data[uid].get("jour") != today:
+        return
+    for m in missions_data[uid]["missions"]:
+        if m["id"] == mission_id and not m["done"]:
+            m["progres"] = min(m["progres"] + amount, m["objectif"])
+            if m["progres"] >= m["objectif"]:
+                m["done"] = True
+                economy_data[uid]["coins"] += m["recompense"]
+            break
+
+# ── .liga ─────────────────────────────────────────────────────
+@bot.command(name="liga", aliases=["elo", "classementliga"])
+async def liga_cmd(ctx):
+    """Classement Liga Elo mensuel — .liga"""
+    import datetime as _dt
+    saison = _dt.datetime.now().strftime("%Y-%m")
+    if not liga_data:
+        return await ctx.send(embed=discord.Embed(description="🏆 Aucune partie de Liga jouée !\nJoue en `.arene` pour gagner des points Elo !", color=0xf1c40f))
+    scores = [(uid, d) for uid, d in liga_data.items() if d.get("saison") == saison]
+    scores.sort(key=lambda x: x[1].get("elo", 1000), reverse=True)
+    medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+    desc = ""
+    for i, (uid, d) in enumerate(scores[:10]):
+        member = ctx.guild.get_member(int(uid))
+        name = member.display_name if member else f"<@{uid}>"
+        desc += f"{medals[i]} **{name}** — **{d.get('elo', 1000)} Elo** ({d.get('wins', 0)}V/{d.get('losses', 0)}D)\n"
+    embed = discord.Embed(title=f"🏆 Liga — Saison {saison}", description=desc or "Aucun joueur cette saison !", color=0xf1c40f)
+    embed.set_footer(text="Joue en .arene pour gagner des points Elo ! Reset en fin de mois 🔄")
+    await ctx.send(embed=embed)
+
+def update_liga(uid, victoire: bool):
+    import datetime as _dt, random as _r
+    saison = _dt.datetime.now().strftime("%Y-%m")
+    if uid not in liga_data or liga_data[uid].get("saison") != saison:
+        liga_data[uid] = {"elo": 1000, "wins": 0, "losses": 0, "saison": saison}
+    if victoire:
+        liga_data[uid]["elo"] += _r.randint(20, 35)
+        liga_data[uid]["wins"] += 1
+    else:
+        liga_data[uid]["elo"] = max(100, liga_data[uid]["elo"] - _r.randint(15, 25))
+        liga_data[uid]["losses"] += 1
+
+# ── .faction ──────────────────────────────────────────────────
+@bot.command(name="faction", aliases=["factions"])
+async def faction_cmd(ctx, action: str = None, *, nom: str = None):
+    """Rejoins une faction — .faction | .faction rejoindre <id> | .faction info | .faction classement"""
+    uid = str(ctx.author.id)
+    if not action or action.lower() in ["liste", "list"]:
+        desc = ""
+        for fid, fd in FACTIONS.items():
+            nb = sum(1 for u, f in faction_data.items() if f == fid)
+            desc += f"{fd['emoji']} **{fd['nom']}** (`{fid}`) — {nb} membres — *{fd['serie']}*\n"
+        embed = discord.Embed(title="⚔️ Factions du QG", description=desc, color=0x9b59b6)
+        embed.set_footer(text=".faction rejoindre <id> pour rejoindre !")
+        return await ctx.send(embed=embed)
+    if action.lower() in ["rejoindre", "join"]:
+        if not nom:
+            return await ctx.send("❌ Ex: `.faction rejoindre akatsuki`")
+        fid = nom.lower().strip().replace(" ", "")
+        if fid not in FACTIONS:
+            return await ctx.send(f"❌ Faction `{fid}` introuvable ! Tape `.faction` pour la liste.")
+        faction_data[uid] = fid
+        fd = FACTIONS[fid]
+        return await ctx.send(embed=discord.Embed(title=f"{fd['emoji']} Faction rejointe !", description=f"{ctx.author.mention} a rejoint **{fd['nom']}** !", color=0x2ecc71))
+    if action.lower() in ["info", "moi"]:
+        fid = faction_data.get(uid)
+        if not fid:
+            return await ctx.send("❌ T'as pas de faction ! `.faction rejoindre <id>`")
+        fd = FACTIONS[fid]
+        rep = faction_rep.get(uid, 0)
+        return await ctx.send(embed=discord.Embed(title=f"{fd['emoji']} Ta Faction", description=f"**Faction :** {fd['nom']}\n**Réputation :** {rep} pts\n**Série :** {fd['serie']}", color=0x9b59b6))
+    if action.lower() in ["classement", "top"]:
+        scores = {}
+        for u, fid in faction_data.items():
+            scores[fid] = scores.get(fid, 0) + faction_rep.get(u, 0)
+        if not scores:
+            return await ctx.send("❌ Aucune réputation de faction pour l'instant !")
+        sorted_f = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        desc = ""
+        for i, (fid, rep) in enumerate(sorted_f[:5]):
+            fd = FACTIONS.get(fid, {})
+            desc += f"{'🥇🥈🥉4️⃣5️⃣'.split()[min(i,4)]} {fd.get('emoji', '')} **{fd.get('nom', fid)}** — **{rep} pts**\n"
+        return await ctx.send(embed=discord.Embed(title="⚔️ Classement des Factions", description=desc, color=0x9b59b6))
+
+# ── .attaquerboss ─────────────────────────────────────────────
+@bot.command(name="attaquerboss", aliases=["ab", "attackboss"])
+async def attaquerboss_cmd(ctx):
+    """Attaque le boss envahisseur — .attaquerboss"""
+    import time as _t
+    gid = ctx.guild.id
+    if gid not in invasion_active or not invasion_active[gid].get("actif"):
+        return await ctx.send("❌ Aucune invasion en cours !", delete_after=5)
+    uid = str(ctx.author.id)
+    boss = invasion_active[gid]
+    now = _t.time()
+    last = boss["attaquants"].get(uid, {}).get("last", 0)
+    if now - last < 30:
+        return await ctx.send(f"⏳ Attends encore **{int(30-(now-last))}s** !", delete_after=5)
+    top_cards = [k for k, v in claimed_cards.items() if v == uid]
+    atk_bonus = sum(ANIME_CARDS_DB.get(k, {}).get("attaque", 50) for k in top_cards[:3])
+    degats = random.randint(100, 300) + atk_bonus // 10
+    if uid not in boss["attaquants"]:
+        boss["attaquants"][uid] = {"total": 0, "last": 0}
+    boss["attaquants"][uid]["total"] += degats
+    boss["attaquants"][uid]["last"] = now
+    boss["pv"] = max(0, boss["pv"] - degats)
+    pct = boss["pv"] / boss["max_pv"]
+    barre = "🟥" * int(pct * 10) + "⬛" * (10 - int(pct * 10))
+    if boss["pv"] <= 0:
+        boss["actif"] = False
+        recompense = random.randint(500, 1500)
+        economy_data[uid]["coins"] += recompense
+        faction_rep[uid] = faction_rep.get(uid, 0) + 50
+        for att_uid in boss["attaquants"]:
+            if att_uid != uid:
+                economy_data[att_uid]["coins"] += random.randint(50, 200)
+                faction_rep[att_uid] = faction_rep.get(att_uid, 0) + 10
+        embed = discord.Embed(title=f"💀 {boss['emoji']} {boss['nom']} vaincu !", description=f"**{ctx.author.mention}** a porté le coup fatal !\n🏆 **+{recompense} pièces** + **+50 rep faction** !", color=0x2ecc71)
+        await ctx.send(embed=embed)
+        del invasion_active[gid]
+    else:
+        await ctx.send(embed=discord.Embed(title=f"⚔️ {boss['emoji']} {boss['nom']}", description=f"{ctx.author.mention} inflige **{degats} dégâts** !\n{barre} **{boss['pv']:,}/{boss['max_pv']:,} PV**", color=0xe67e22))
+
+# ── .marcheacheter ────────────────────────────────────────────
+@bot.command(name="marcheacheter", aliases=["mnbuy"])
+async def marcheacheter_cmd(ctx, perso: str = None):
+    """Acheter au marché noir — .marcheacheter <perso>"""
+    import time as _t
+    if not perso:
+        if not marche_noir_actif:
+            return await ctx.send("❌ Le marché noir est fermé !")
+        desc = ""
+        for k, data in marche_noir_actif.items():
+            if data["expires"] > _t.time():
+                c = ANIME_CARDS_DB.get(k, {})
+                r = RARETE_EMOJI.get(c.get("rarete", ""), "🔵")
+                desc += f"{r} **{c.get('nom', k)}** — **{data['prix']:,} pièces** → `.marcheacheter {k}`\n"
+        return await ctx.send(embed=discord.Embed(title="🕶️ Marché Noir", description=desc or "Vide !", color=0x2c3e50))
+    uid = str(ctx.author.id)
+    key = perso.lower().strip()
+    if key not in marche_noir_actif:
+        return await ctx.send("❌ Cette carte n'est pas au marché noir !")
+    data = marche_noir_actif[key]
+    if data["expires"] < _t.time():
+        del marche_noir_actif[key]
+        return await ctx.send("❌ Cette offre a expiré !")
+    if key in claimed_cards:
+        return await ctx.send("❌ Cette carte a déjà été achetée !")
+    if economy_data[uid]["coins"] < data["prix"]:
+        return await ctx.send(f"❌ Il te manque **{data['prix'] - economy_data[uid]['coins']} pièces** !")
+    economy_data[uid]["coins"] -= data["prix"]
+    claimed_cards[key] = uid
+    gacha_collections[uid][key] = {"fusion": 0}
+    del marche_noir_actif[key]
+    c = ANIME_CARDS_DB[key]
+    r = RARETE_EMOJI.get(c["rarete"], "🔵")
+    embed = discord.Embed(title="🕶️ Achat au Marché Noir !", description=f"{ctx.author.mention} a acheté **{c['nom']}** {r} pour **{data['prix']:,} pièces** !", color=0x2c3e50)
+    if c.get("image"):
+        embed.set_thumbnail(url=c["image"])
+    await ctx.send(embed=embed)
+
+# ── Events automatiques ───────────────────────────────────────
+@tasks.loop(minutes=45)
+async def spawn_coffre():
+    import time as _t
+    for guild in bot.guilds:
+        try:
+            channel = guild.get_channel(SALON_GACHA_ID) if SALON_GACHA_ID else guild.system_channel
+            if not channel:
+                continue
+            gain = random.randint(150, 600)
+            coffre_actif[channel.id] = {"contenu": gain, "expires": _t.time() + 300}
+            embed = discord.Embed(title="📦 Un coffre mystérieux est apparu !", description=f"Tape `.ouvrir` rapidement pour récupérer les **{gain} pièces** !\n⏰ Disponible pendant **5 minutes** !", color=0xf1c40f)
+            await channel.send(embed=embed)
+        except:
+            pass
+
+@tasks.loop(hours=12)
+async def nuit_de_chasse():
+    global nuit_chasse_active
+    import time as _t
+    if random.random() > 0.15:
+        return
+    for guild in bot.guilds:
+        try:
+            channel = guild.get_channel(SALON_GACHA_ID) if SALON_GACHA_ID else guild.system_channel
+            if not channel:
+                continue
+            role_gacha = discord.utils.get(guild.roles, name="🎰 Gacha")
+            mention = role_gacha.mention if role_gacha else "@everyone"
+            nuit_chasse_active = True
+            embed = discord.Embed(title="🌙 NUIT DE CHASSE !", description=f"{mention}\n\n🔴 Les taux **Mythique** sont **DOUBLÉS** pendant **2 heures** !\nC'est le moment de roll ! 🎰", color=0x9b59b6)
+            await channel.send(embed=embed)
+            await asyncio.sleep(7200)
+            nuit_chasse_active = False
+            await channel.send(embed=discord.Embed(description="🌅 La **Nuit de Chasse** est terminée !", color=0x95a5a6))
+        except:
+            pass
+
+@tasks.loop(hours=6)
+async def invasion_demons():
+    if random.random() > 0.40:
+        return
+    for guild in bot.guilds:
+        try:
+            channel = guild.get_channel(SALON_GACHA_ID) if SALON_GACHA_ID else guild.system_channel
+            if not channel:
+                continue
+            boss = random.choice(BOSS_INVASIONS).copy()
+            invasion_active[guild.id] = {**boss, "max_pv": boss["pv"], "attaquants": {}, "actif": True}
+            embed = discord.Embed(title=f"⚠️ INVASION ! {boss['emoji']} {boss['nom']} attaque le QG !", description=f"**{boss['nom']}** de *{boss['serie']}* envahit le serveur !\n\n❤️ **PV :** {boss['pv']:,}\n\nTape `.attaquerboss` pour infliger des dégâts !\n*Coup final = récompense spéciale !*", color=0xe74c3c)
+            if boss.get("image"):
+                embed.set_thumbnail(url=boss["image"])
+            await channel.send("@everyone", embed=embed)
+        except:
+            pass
+
+@tasks.loop(hours=48)
+async def marche_noir_task():
+    import time as _t
+    if random.random() > 0.60:
+        return
+    for guild in bot.guilds:
+        try:
+            channel = guild.get_channel(SALON_BOUTIQUE_ID or SALON_GACHA_ID) if (SALON_BOUTIQUE_ID or SALON_GACHA_ID) else guild.system_channel
+            if not channel:
+                continue
+            candidates = [k for k in ANIME_CARDS_DB if ANIME_CARDS_DB[k]["rarete"] in ("Légendaire", "Mythique", "Épique") and k not in claimed_cards]
+            if len(candidates) < 3:
+                continue
+            cartes_mn = random.sample(candidates, 3)
+            marche_noir_actif.clear()
+            prix_map = {"Mythique": 8000, "Légendaire": 5000, "Épique": 3000}
+            desc = "🕶️ Le Marché Noir ouvre ses portes pour **24h** !\n\n"
+            for k in cartes_mn:
+                c = ANIME_CARDS_DB[k]
+                prix = prix_map.get(c["rarete"], 3000) + random.randint(500, 2000)
+                marche_noir_actif[k] = {"prix": prix, "expires": _t.time() + 86400}
+                r = RARETE_EMOJI.get(c["rarete"], "🔵")
+                desc += f"{r} **{c['nom']}** — **{prix:,} pièces** → `.marcheacheter {k}`\n"
+            embed = discord.Embed(title="🕶️ MARCHÉ NOIR", description=desc, color=0x2c3e50)
+            await channel.send(embed=embed)
+        except:
+            pass
+
+
 print("🚀 Démarrage du bot...")
 import traceback, time
 while True:
     try:
+        spawn_coffre.start()
+        nuit_de_chasse.start()
+        invasion_demons.start()
+        marche_noir_task.start()
         bot.run(TOKEN)
     except Exception as e:
         print(f"❌ CRASH BOT: {e}")
