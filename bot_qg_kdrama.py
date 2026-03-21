@@ -72,13 +72,13 @@ REGLEMENT_MSG_ID = None   # ID du message règlement (auto-rempli par setsalon)
 CONFIG_FILE = "salons_config.json"
 
 def sauvegarder_salons():
-    """Sauvegarde tous les IDs de salons dans un fichier JSON"""
+    """Sauvegarde la config dans le fichier JSON ET dans les variables d'environnement"""
     data = {
         "SALON_LEVELUP_ID":   SALON_LEVELUP_ID,
         "SALON_CASINO_ID":    SALON_CASINO_ID,
         "SALON_GACHA_ID":     SALON_GACHA_ID,
-            "SALON_EVENT_ID":     SALON_EVENT_ID,
-            "SALON_GUIDE_ID":      SALON_GUIDE_ID,
+        "SALON_EVENT_ID":     SALON_EVENT_ID,
+        "SALON_GUIDE_ID":     SALON_GUIDE_ID,
         "SALON_BOUTIQUE_ID":  SALON_BOUTIQUE_ID,
         "SALON_COMBAT_ID":    SALON_COMBAT_ID,
         "SALON_DUEL_ID":      SALON_DUEL_ID,
@@ -88,25 +88,65 @@ def sauvegarder_salons():
         "SALON_HOF_ID":       SALON_HOF_ID,
         "SALON_REGLEMENT_ID": SALON_REGLEMENT_ID,
         "ROLE_MEMBRE_NAME":   ROLE_MEMBRE_NAME,
-        "REGLEMENT_ROLE_ID":   REGLEMENT_ROLE_ID,
+        "REGLEMENT_ROLE_ID":  REGLEMENT_ROLE_ID,
         "REGLEMENT_MSG_ID":   REGLEMENT_MSG_ID,
+        "AUTOROLE_PANELS":    autorole_panels,
     }
+    # 1. Sauvegarde locale (fonctionne si le filesystem est persistant)
     try:
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(data, f)
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
     except Exception as e:
-        print(f"[Config] Erreur sauvegarde : {e}")
+        print(f"[Config] Erreur sauvegarde fichier : {e}")
+
+    # 2. Sauvegarde dans un fichier alternatif /tmp (plus stable sur certains hébergeurs)
+    try:
+        with open("/tmp/salons_config_backup.json", "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    except Exception as e:
+        print(f"[Config] Erreur sauvegarde /tmp : {e}")
 
 def charger_salons():
-    """Charge les IDs de salons depuis le fichier JSON au démarrage"""
+    """Charge la config — essaie plusieurs sources dans l'ordre"""
     global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_EVENT_ID, SALON_GUIDE_ID
     global SALON_COMBAT_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID
     global SALON_BOOST_ID, SALON_HOF_ID, SALON_REGLEMENT_ID, ROLE_MEMBRE_NAME, REGLEMENT_ROLE_ID, REGLEMENT_MSG_ID
-    if not os.path.exists(CONFIG_FILE):
+    global autorole_panels
+
+    data = None
+
+    # Source 1 : variables d'environnement Railway (les plus fiables)
+    env_config = os.environ.get("BOT_CONFIG")
+    if env_config:
+        try:
+            data = json.loads(env_config)
+            print("[Config] ✅ Chargé depuis BOT_CONFIG (env var Railway)")
+        except Exception as e:
+            print(f"[Config] Erreur env var : {e}")
+
+    # Source 2 : fichier local
+    if not data and os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            print("[Config] ✅ Chargé depuis salons_config.json")
+        except Exception as e:
+            print(f"[Config] Erreur fichier local : {e}")
+
+    # Source 3 : backup /tmp
+    if not data and os.path.exists("/tmp/salons_config_backup.json"):
+        try:
+            with open("/tmp/salons_config_backup.json", "r", encoding="utf-8") as f:
+                data = json.load(f)
+            print("[Config] ✅ Chargé depuis backup /tmp")
+        except Exception as e:
+            print(f"[Config] Erreur backup /tmp : {e}")
+
+    if not data:
+        print("[Config] ⚠️ Aucune config trouvée — utilisation des valeurs par défaut")
         return
+
     try:
-        with open(CONFIG_FILE, "r") as f:
-            data = json.load(f)
         SALON_LEVELUP_ID   = data.get("SALON_LEVELUP_ID")
         SALON_CASINO_ID    = data.get("SALON_CASINO_ID")
         SALON_GACHA_ID     = data.get("SALON_GACHA_ID")
@@ -124,9 +164,12 @@ def charger_salons():
         global REGLEMENT_ROLE_ID
         REGLEMENT_ROLE_ID  = int(data["REGLEMENT_ROLE_ID"]) if data.get("REGLEMENT_ROLE_ID") else None
         REGLEMENT_MSG_ID   = int(data["REGLEMENT_MSG_ID"]) if data.get("REGLEMENT_MSG_ID") else None
-        print("[Config] Salons chargés depuis salons_config.json ✅")
+        # Autorole panels
+        if data.get("AUTOROLE_PANELS"):
+            autorole_panels = data["AUTOROLE_PANELS"]
+        print("[Config] ✅ Salons et autorole chargés correctement")
     except Exception as e:
-        print(f"[Config] Erreur chargement : {e}")
+        print(f"[Config] Erreur application config : {e}")
 
 # Charger au démarrage
 charger_salons()
@@ -591,7 +634,7 @@ async def help_cmd(ctx, categorie: str = None):
         title="🌸 Akari — Bot du QG Kdrama",
         description="Utilise ◀️ ▶️ pour naviguer.\n\n**Préfixe : `.`**\n\n📌 **Catégories :**\n🎰 Gacha • ⚔️ Combats • 💰 Économie\n📊 Progression • 💬 Social • 🛡️ Modération\n🎪 Events • 🎭 Commandes Events • 🔧 Admin",
         color=0xff6b9d)
-    p0.set_footer(text="Page 1/9 • QG Kdrama 🌸")
+    p0.set_footer(text="Page 1/11 • QG Kdrama 🌸")
     pages.append(p0)
 
     p1 = discord.Embed(title="🎰 Gacha — Tirer & Claimer", color=0x9b59b6)
@@ -600,122 +643,224 @@ async def help_cmd(ctx, categorie: str = None):
     p1.add_field(name="⭐ Favoris & Wishlist", value="`.cartefav add/remove/voir <perso>` — Cartes favorites (max 3)\n`.wishlist add/remove <perso>` — Wishlist (ping si drop)\n`.wishlist` — Voir ta wishlist", inline=False)
     p1.add_field(name="🔄 Échanges", value="`.gachagive @joueur <perso>` — Offrir une carte\n`.gachatrade @joueur <c1> <c2>` — Proposer un échange\n`.tradeshistory` — Historique des échanges du serveur\n`.cardduel @joueur <carte>` — Duel de cartes ⚔️ (gagnant prend les deux !)", inline=False)
     p1.add_field(name="🖼️ Image & Fusion", value="`.setimage <perso> <url>` — Changer l\'image de ta carte\n`.fusionner <perso>` — Booster une carte avec des tokens", inline=False)
-    p1.set_footer(text="Page 2/9 • QG Kdrama 🌸")
+    p1.set_footer(text="Page 2/11 • QG Kdrama 🌸")
     pages.append(p1)
 
-    p2 = discord.Embed(title="⚔️ Combats, Boss & Events", color=0xe74c3c)
-    p2.add_field(name="🃏 Combats", value=(
-        "`.pokebattle @joueur` — Combat 3v3 avec tes cartes\n"
-        "`.arene @joueur` — Combat PvP tour par tour\n"
+    p2 = discord.Embed(title="⚔️ Combats & Jeux", color=0xe74c3c)
+    p2.add_field(name="🃏 Combat", value=(
+        "`.arene @joueur` — PvP tour par tour\n"
+        "`.pokebattle @joueur` — Combat 3v3 cartes\n"
+        "`.cardduel @joueur <carte>` — Duel, gagnant prend les 2 cartes\n"
         "`.liga` — Classement Elo mensuel\n"
-        "`.attaquerboss` — Attaquer le boss d\'invasion ⚠️"
+        "`.attaquerboss` — Attaquer le boss envahisseur"
     ), inline=False)
     p2.add_field(name="🎯 Quiz & Mini-Jeux", value=(
-        "`.quiz [thème]` — Quiz solo auto-enchaîné\n"
+        "`.quiz [thème]` — Quiz solo\n"
         "`.quizduel @joueur` — Duel 5 questions\n"
         "`.devine` — Devine le personnage\n"
         "`.rps <choix>` — Pierre Feuille Ciseaux\n"
         "`.slot [mise]` — Slot machine 🎰"
     ), inline=False)
-    p2.add_field(name="🎪 Events Spéciaux — .lancerevent <nom>", value=(
-        "`roue` 🎲 Roue de la Fortune\n"
-        "`proces` ⚖️ Procès du QG\n"
-        "`tournoi` ⚔️ Tournoi du QG\n"
-        "`mine` ⛏️ Mine d\'Or\n"
-        "`parminous` 🕵️ Parmi Nous\n"
-        "`encheres` ⚡ Enchères Interdites\n"
-        "`wanted` 🎴 Wanted\n"
-        "`voleur` 🌙 Voleur de Minuit\n"
-        "`magicien` 🎩 Le Magicien\n"
-        "`clown` 🤡 Le Clown"
-    ), inline=False)
-    p2.add_field(name="🎪 Events Spéciaux (suite)", value=(
-        "`canard` 🦆 Le Canard\n"
-        "`pacifiste` 🌈 Event Pacifiste\n"
-        "`oracle` 🔮 Oracle Maudit\n"
-        "`pacte` 🌑 Le Pacte\n"
-        "`losers` 🎪 Festival des Losers\n"
-        "`puzzle` 🧩 Puzzle Collectif\n"
-        "`vaguelegendaires` 🌊 Vague de Légendes\n"
-        "`bossfinal` 👾 Boss Final\n"
-        "`deathnote` 💀 Death Note\n"
-        "`alerterouge` 🔴 Alerte Rouge\n"
-        "`conquete` 🌍 Conquête du QG\n"
-        "`fausserumeur` 📰 Fausse Rumeur\n"
-        "`reve` 🌙 Rêve Collectif\n"
-        "`prophetie` 🌊 Prophétie Accomplie"
-    ), inline=False)
-    p2.set_footer(text="Page 3/9 • QG Kdrama 🌸")
+    p2.set_footer(text="Page 3/11 • QG Kdrama 🌸")
     pages.append(p2)
 
     p3 = discord.Embed(title="💰 Économie & Boutique", color=0xf39c12)
-    p3.add_field(name="💵 Gagner des pièces", value="`.daily` — 100-200 pièces (24h)\n`.travailler` — 50-150 pièces selon le job (4h)\n`.braquage @joueur` — Vol risqué 30% succès (6h)\n`.quiz` — 10-15 pièces par bonne réponse\n`.missions` — Missions journalières avec récompenses", inline=False)
-    p3.add_field(name="📈 Investissement", value="`.investir <animé> <montant>` — Investis sur un animé récent\n`.retourinvest` — Récupérer le retour d\'investissement\n`.balance [@joueur]` — Voir son solde\n`.pay @joueur <montant>` — Envoyer des pièces", inline=False)
-    p3.add_field(name="🏦 Banque & Casino", value="`.banque depot/retrait/solde` — Banque (+10% intérêts/24h)\n`.slot [mise]` — Slot machine (min 10p, max 500p)", inline=False)
-    p3.add_field(name="🛒 Boutique", value="`.shop` — Voir tous les items (3 pages ◀️▶️)\n`.acheter <id>` — Acheter un item\n`.utiliser <item> @joueur` — Utiliser un item PvP\n`.marcheacheter <perso>` — Marché Noir 🕶️", inline=False)
-    p3.set_footer(text="Page 4/9 • QG Kdrama 🌸")
+    p3.add_field(name="💵 Gagner des pièces", value=(
+        "`.daily` — 100-200p (24h)\n"
+        "`.travailler` — 50-150p (4h)\n"
+        "`.braquage @joueur` — Vol risqué 30% succès (6h)\n"
+        "`.missions` — Missions journalières\n"
+        "`.investir <animé> <montant>` — Investir\n"
+        "`.retourinvest` — Récupérer ses gains"
+    ), inline=False)
+    p3.add_field(name="🏦 Banque & Solde", value=(
+        "`.banque depot/retrait/solde` — Banque (+10%/24h)\n"
+        "`.balance [@joueur]` — Voir le solde\n"
+        "`.pay @joueur <montant>` — Envoyer des pièces\n"
+        "`.jackpot` — Voir la cagnotte communautaire"
+    ), inline=False)
+    p3.add_field(name="🛒 Boutique & PvP", value=(
+        "`.shop` — Voir les items (3 pages ◀️▶️)\n"
+        "`.acheter <id>` — Acheter un item\n"
+        "`.utiliser <item> @joueur` — Utiliser un item PvP\n"
+        "`.marcheacheter <perso>` — Marché Noir 🕶️"
+    ), inline=False)
+    p3.set_footer(text="Page 4/11 • QG Kdrama 🌸")
     pages.append(p3)
 
     p4 = discord.Embed(title="📊 Progression & Factions", color=0xf1c40f)
-    p4.add_field(name="📈 XP & Niveaux", value="`.rank [@joueur]` — Niveau, XP et titre\n`.leaderboard` — Top 10 membres les plus actifs\n`.ameliorer` — Booster ses stats d\'arène\n`.liga` — Classement Elo mensuel (via `.arene`)", inline=False)
-    p4.add_field(name="⚔️ Factions", value="`.faction` — Voir les factions disponibles\n`.faction rejoindre <id>` — Rejoindre une faction\n`.faction info` — Ta faction & réputation\n`.faction classement` — Classement des factions\n*Factions : akatsuki • surveycorps • strawhat • phantomtroupe • gotei13 • ua*", inline=False)
-    p4.add_field(name="🎪 Events Automatiques", value=(
-        "📦 **Coffre** (lun/mer/dim) → `.ouvrir` @here\n"
-        "🌙 **Nuit de Chasse** → Mythique x2 — 2h\n"
-        "⚠️ **Invasion** (samedi 23h fixe) → `.attaquerboss`\n"
-        "🕶️ **Marché Noir** → `.marcheacheter`\n"
-        "🎰 **Nuit Casino** → Slot x2\n"
-        "🌀 **Double XP** → XP x2 pendant 1h\n"
-        "🎴 **Carte Mystère** → claim en 5min (surprise !)\n"
-        "🌙 **Heure Maudite** → Épique x2 à 2h du mat\n"
-        "🎭 **Imposteur** → fausse carte 9999 ATK 😈\n"
-        "💸 **Jackpot** → `.jackpot` pour voir la cagnotte"
+    p4.add_field(name="📈 XP & Niveaux", value=(
+        "`.rank [@joueur]` — Niveau, XP et titre\n"
+        "`.leaderboard` — Top 10 membres\n"
+        "`.ameliorer` — Booster ses stats d\'arène\n"
+        "`.liga` — Classement Elo mensuel"
     ), inline=False)
-    p4.add_field(name="📆 Events Mensuels", value=(
-        "🃏 **Draft de Cartes** → 3 cartes Épique gratuites\n"
-        "🏴‍☠️ **Guerre de Factions** → boss géant, faction gagnante = 500p\n"
-        "🎪 **Event Surprise** → annonce 1h avant sans dévoiler\n"
-        "💸 **Jackpot Communautaire** → cagnotte 1500p redistribuée"
+    p4.add_field(name="⚔️ Factions", value=(
+        "`.faction` — Voir les factions\n"
+        "`.faction rejoindre <id>` — Rejoindre\n"
+        "`.faction info` — Ta faction & réputation\n"
+        "`.faction classement` — Classement factions"
     ), inline=False)
-    p4.set_footer(text="Page 5/9 • QG Kdrama 🌸")
+    p4.set_footer(text="Page 5/11 • QG Kdrama 🌸")
     pages.append(p4)
 
     p5 = discord.Embed(title="💬 Social & Fun", color=0xff6b9d)
-    p5.add_field(name="💍 Mariage & Social", value="`.marier @joueur` — Demande en mariage\n`.divorcer` — Divorce 💔\n`.anniversaire JJ/MM` — Enregistrer ton anniv\n`.giveaway <durée> <prix>` — Giveaway (admin)", inline=False)
-    p5.add_field(name="😄 Fun", value="`.roast [@joueur]` — Vanne façon Kdrama\n`.compliment [@joueur]` — Compliment stylé\n`.8ball <question>` — Boule magique\n`.meme` — Meme aléatoire 😂", inline=False)
-    p5.add_field(name="🎬 Contenu", value="`.drama <titre>` — Infos sur un drama\n`.anime <titre>` — Infos sur un animé\n`.dramarec` / `.animerec` — Recommandation aléatoire\n`.quote` / `.animequote` — Citation\n`.sorties` — Prochaines sorties", inline=False)
-    p5.set_footer(text="Page 6/9 • QG Kdrama 🌸")
+    p5.add_field(name="💍 Social", value=(
+        "`.marier @joueur` — Demande en mariage\n"
+        "`.divorcer` — Divorce 💔\n"
+        "`.anniversaire JJ/MM` — Enregistrer anniv\n"
+        "`.giveaway <durée> <prix>` — Giveaway (admin)"
+    ), inline=False)
+    p5.add_field(name="😄 Fun", value=(
+        "`.roast [@joueur]` — Vanne façon Kdrama\n"
+        "`.compliment [@joueur]` — Compliment stylé\n"
+        "`.8ball <question>` — Boule magique\n"
+        "`.meme` — Meme aléatoire 😂"
+    ), inline=False)
+    p5.add_field(name="🎬 Contenu", value=(
+        "`.drama <titre>` — Infos drama\n"
+        "`.anime <titre>` — Infos animé\n"
+        "`.dramarec` / `.animerec` — Recommandation\n"
+        "`.quote` / `.animequote` — Citation\n"
+        "`.sorties` — Prochaines sorties"
+    ), inline=False)
+    p5.set_footer(text="Page 6/11 • QG Kdrama 🌸")
     pages.append(p5)
 
-    p6 = discord.Embed(title="🛡️ Modération & Configuration", description="⚠️ Réservé aux **administrateurs**", color=0xe74c3c)
-    p6.add_field(name="⚔️ Sanctions", value="`.ban @joueur [raison]`\n`.kick @joueur [raison]`\n`.warn @joueur [raison]`\n`.mute @joueur [minutes]`\n`.unmute @joueur`", inline=False)
-    p6.add_field(name="🔧 Gestion Salon", value="`.clear [nombre]` / `.clear all`\n`.slowmode [secondes]`\n`.lock [#salon]` / `.unlock [#salon]`", inline=False)
-    p6.add_field(name="🎭 Autorole", value="`.autorole create <titre> | <desc>`\n`.autorole add <msg_id> <emoji> @role`\n`.autorole image <msg_id> <url>`\n`.autorole delete/list`", inline=False)
-    p6.add_field(name="📌 Salons — `.setsalon <type>`", value="`gacha` • `boutique` • `casino` • `event` • `guide`\n`levelup` • `combat` • `bienvenue` • `aurevoir`\n`boost` • `halloffame` • `reglement @Role`", inline=False)
-    p6.set_footer(text="Page 7/9 • QG Kdrama 🌸")
+    p6 = discord.Embed(title="🎪 Events Automatiques", color=0x3498db)
+    p6.add_field(name="📅 Hebdomadaires", value=(
+        "📦 **Coffre** lun/mer/dim → `.ouvrir` *(@here)*\n"
+        "⚠️ **Invasion Boss** samedi 23h → `.attaquerboss`\n"
+        "🌙 **Nuit de Chasse** → Mythique x2 — 2h *(@gacha)*\n"
+        "🎰 **Nuit Casino** → Slot x2 — 1h\n"
+        "🌀 **Double XP** → XP x2 — 1h *(@everyone)*\n"
+        "🎴 **Carte Mystère** ven/sam/dim → bonne ou troll ?\n"
+        "🌙 **Heure Maudite** → 2h du mat, Épique x2\n"
+        "🎭 **Imposteur du Gacha** → fausse carte 9999 ATK 😈"
+    ), inline=False)
+    p6.add_field(name="📆 Mensuels", value=(
+        "🃏 **Draft de Cartes** → 3 cartes Épique gratuites\n"
+        "🏴‍☠️ **Guerre des Factions** → boss géant\n"
+        "🎪 **Event Surprise** → annonce 1h avant *(@everyone)*\n"
+        "💸 **Jackpot Communautaire** → cagnotte 1500p\n"
+        "🔮 **Prophétie** → animé béni +10% stats arène *(@gacha)*"
+    ), inline=False)
+    p6.add_field(name="🏆 Classement Hebdo — Dimanche 20h", value=(
+        "Top 3 semaine (messages + vocal) *(@everyone)*\n"
+        "🥇 **+300p** • 🥈 **+200p** • 🥉 **+100p**"
+    ), inline=False)
+    p6.set_footer(text="Page 7/11 • QG Kdrama 🌸")
     pages.append(p6)
 
-    p7 = discord.Embed(title="🎭 Commandes des Events Interactifs", color=0x9b59b6)
-    p7.add_field(name="🕵️ Parmi Nous", value="`.eliminer @joueur` — Voler une carte (imposteur)\n`.voter @joueur` — Voter pour éliminer quelqu\'un", inline=False)
-    p7.add_field(name="⚡ Enchères & Mine", value="`.miser <montant>` — Miser dans les enchères\n`.miner` — Extraire des pépites (cooldown 2 min)", inline=False)
-    p7.add_field(name="🎴 Wanted & Death Note", value="`.chasser @joueur` — Capturer la cible Wanted\n`.ecrire @joueur` — Écrire dans le Death Note", inline=False)
-    p7.add_field(name="🎩 Magicien & Autres", value="`.sort <type> @joueur` — Lancer un sort (double/bloquer/troll)\n`.adopter` — Adopter le canard\n`.jedoute` — Signaler une fausse rumeur", inline=False)
-    p7.add_field(name="🏆 Rôles Gagnables", value="👑 **Champion du QG** — Tournoi\n🌙 **Roi de la Narration** — Rêve Collectif\n🎩 **Grand Magicien** — Event Magicien\n⚔️ **Roi de la Conquête** — Conquête *(perdable)*", inline=False)
-    p7.set_footer(text="Page 8/10 • QG Kdrama 🌸")
+    p7 = discord.Embed(title="🎭 Events Spéciaux — Liste", color=0x9b59b6)
+    p7.add_field(name="🎲 Chance & Hasard", value=(
+        "`roue` 🎲 Roue de la Fortune\n"
+        "`encheres` ⚡ Enchères Interdites\n"
+        "`mine` ⛏️ Mine d\'Or\n"
+        "`vaguelegendaires` 🌊 Vague de Légendes"
+    ), inline=True)
+    p7.add_field(name="🕵️ Social & Stratégie", value=(
+        "`parminous` 🕵️ Parmi Nous\n"
+        "`deathnote` 💀 Death Note\n"
+        "`magicien` 🎩 Le Magicien\n"
+        "`wanted` 🎴 Wanted\n"
+        "`voleur` 🌙 Voleur de Minuit\n"
+        "`pacte` 🌑 Le Pacte"
+    ), inline=True)
+    p7.add_field(name="⚔️ Compétition", value=(
+        "`tournoi` ⚔️ Tournoi du QG\n"
+        "`conquete` 🌍 Conquête du QG\n"
+        "`bossfinal` 👾 Boss Final\n"
+        "`puzzle` 🧩 Puzzle Collectif\n"
+        "`prophetie` 🌊 Prophétie Accomplie"
+    ), inline=True)
+    p7.add_field(name="🎭 Fun & Chaos", value=(
+        "`proces` ⚖️ Procès du QG\n"
+        "`clown` 🤡 Le Clown\n"
+        "`canard` 🦆 Le Canard\n"
+        "`fausserumeur` 📰 Fausse Rumeur\n"
+        "`alerterouge` 🔴 Alerte Rouge\n"
+        "`oracle` 🔮 Oracle Maudit\n"
+        "`reve` 🌙 Rêve Collectif\n"
+        "`losers` 🎪 Festival des Losers\n"
+        "`pacifiste` 🌈 Event Pacifiste"
+    ), inline=True)
+    p7.set_footer(text="Page 8/11 • QG Kdrama 🌸")
     pages.append(p7)
 
-    p8 = discord.Embed(title="🎰 Admin — Gacha & Économie", description="⚠️ Réservé aux **administrateurs**", color=0x9b59b6)
-    p8.add_field(name="🎁 Gestion Cartes", value="`.givecard @joueur <perso>` — Donner une carte\n`.removecard @joueur <perso>` — Retirer une carte\n`.gacharesetall` — Reset total du gacha ⚠️", inline=False)
-    p8.add_field(name="💰 Gestion Économie & XP", value="`.givepieces @joueur <montant>` — Donner des pièces\n`.retirerpieces @joueur <montant>` — Retirer des pièces\n`.givexp @joueur <montant>` — Donner de l\'XP\n`.retirerxp @joueur <montant>` — Retirer de l\'XP\n`.resetall` — Reset total ⚠️", inline=False)
-    p8.add_field(name="🎪 Events Admin", value="`.lancerevent <nom>` — Lancer un event manuellement\n`.lancerevent` — Voir la liste complète", inline=False)
-    p8.set_footer(text="Page 9/10 • QG Kdrama 🌸")
+    p8 = discord.Embed(title="🎮 Commandes des Events — Joueurs", color=0x9b59b6)
+    p8.add_field(name="🕵️ Parmi Nous", value=(
+        "`.eliminer @joueur` — Voler une carte *(imposteur)*\n"
+        "`.voter @joueur` — Voter pour éliminer quelqu\'un"
+    ), inline=False)
+    p8.add_field(name="⚡ Enchères & Mine", value=(
+        "`.miser <montant>` — Miser dans les enchères\n"
+        "`.miner` — Extraire des pépites *(cooldown 2 min)*"
+    ), inline=False)
+    p8.add_field(name="🎴 Wanted & Death Note", value=(
+        "`.chasser @joueur` — Capturer la cible Wanted\n"
+        "`.ecrire @joueur` — Écrire dans le Death Note *(porteur)*"
+    ), inline=False)
+    p8.add_field(name="🎩 Magicien & Divers", value=(
+        "`.sort <type> @joueur` — Lancer un sort *(double/bloquer/troll)*\n"
+        "`.adopter` — Adopter le canard 🦆\n"
+        "`.jedoute` — Signaler une fausse rumeur 📰"
+    ), inline=False)
+    p8.add_field(name="🏆 Rôles Gagnables", value=(
+        "👑 **Champion du QG** — Tournoi *(permanent)*\n"
+        "🌙 **Roi de la Narration** — Rêve Collectif *(permanent)*\n"
+        "🎩 **Grand Magicien** — Event Magicien *(permanent)*\n"
+        "⚔️ **Roi de la Conquête** — Conquête *(perdable)*\n"
+        "🤡 **Clown du QG** — Temporaire pendant l\'event"
+    ), inline=False)
+    p8.set_footer(text="Page 9/11 • QG Kdrama 🌸")
     pages.append(p8)
 
-    p9 = discord.Embed(title="🔧 Utilitaires", color=0x3498db)
-    p9.add_field(name="🖼️ Profil & Info", value="`.avatar [@membre]` — Afficher l\'avatar\n`.snipe` — Dernier message supprimé\n`.rank [@joueur]` — Niveau & XP\n`.invitations [@membre]` — Invitations", inline=False)
-    p9.add_field(name="🎲 Outils", value="`.choisir <ID message>` — Gagnant aléatoire parmi les réactions\n`.sondage <question>` — Créer un sondage\n`.8ball <question>` — Boule magique\n`.dice [faces]` — Lancer un dé\n`.topinvitations` — Classement invitations", inline=False)
-    p9.set_footer(text="Page 10/10 • QG Kdrama 🌸")
+    p9 = discord.Embed(title="🛡️ Modération & Configuration", description="⚠️ Réservé aux **administrateurs**", color=0xe74c3c)
+    p9.add_field(name="⚔️ Sanctions", value=(
+        "`.ban @joueur [raison]` — Bannir\n"
+        "`.kick @joueur [raison]` — Expulser\n"
+        "`.warn @joueur [raison]` — Avertir\n"
+        "`.mute @joueur [minutes]` — Mute\n"
+        "`.unmute @joueur` — Retirer le mute"
+    ), inline=False)
+    p9.add_field(name="🔧 Gestion Salon", value=(
+        "`.clear [nombre]` / `.clear all` — Supprimer messages\n"
+        "`.slowmode [secondes]` — Slowmode\n"
+        "`.lock` / `.unlock` — Verrouiller un salon"
+    ), inline=False)
+    p9.add_field(name="🎭 Autorole & Salons", value=(
+        "`.autorole create/add/image/delete/list`\n"
+        "`.setsalon <type>` — Configurer un salon\n"
+        "*Types : gacha • boutique • casino • event • guide*\n"
+        "*levelup • combat • bienvenue • aurevoir • boost*\n"
+        "*halloffame • reglement @Role*"
+    ), inline=False)
+    p9.set_footer(text="Page 10/11 • QG Kdrama 🌸")
     pages.append(p9)
+
+    p10 = discord.Embed(title="🎰 Admin — Gacha, Économie & Events", description="⚠️ Réservé aux **administrateurs**", color=0x9b59b6)
+    p10.add_field(name="🎁 Gestion Cartes", value=(
+        "`.givecard @joueur <perso>` — Donner une carte\n"
+        "`.removecard @joueur <perso>` — Retirer une carte\n"
+        "`.gacharesetall` — Reset total gacha ⚠️"
+    ), inline=False)
+    p10.add_field(name="💰 Gestion Économie & XP", value=(
+        "`.givepieces @joueur <montant>` — Donner des pièces\n"
+        "`.retirerpieces @joueur <montant>` — Retirer des pièces\n"
+        "`.givexp @joueur <montant>` — Donner de l\'XP\n"
+        "`.retirerxp @joueur <montant>` — Retirer de l\'XP\n"
+        "`.resetall` — Reset total pièces + XP + gacha ⚠️"
+    ), inline=False)
+    p10.add_field(name="🎪 Events Admin", value=(
+        "`.lancerevent <nom>` — Lancer un event manuellement\n"
+        "`.lancerevent` — Voir la liste complète des events\n\n"
+        "*Tous les events sont aussi déclenchés automatiquement*\n"
+        "*selon le planning hebdo et mensuel configuré !*"
+    ), inline=False)
+    p10.set_footer(text="Page 11/11 • QG Kdrama 🌸")
+    pages.append(p10)
+
 
     index = [0]
     msg = await ctx.send(embed=pages[0])
@@ -11716,6 +11861,60 @@ async def process_voleur(message):
         await victime.send("🌙 *Des pièces ont mystérieusement disparu de ton coffre cette nuit...*")
     except:
         pass
+
+
+@bot.command(name="saveconfig", aliases=["sauvegarder","backupconfig"])
+@commands.has_permissions(administrator=True)
+async def saveconfig_cmd(ctx):
+    """Génère la variable BOT_CONFIG à coller dans Railway — .saveconfig"""
+    import json as _json
+    data = {
+        "SALON_LEVELUP_ID":   SALON_LEVELUP_ID,
+        "SALON_CASINO_ID":    SALON_CASINO_ID,
+        "SALON_GACHA_ID":     SALON_GACHA_ID,
+        "SALON_EVENT_ID":     SALON_EVENT_ID,
+        "SALON_GUIDE_ID":     SALON_GUIDE_ID,
+        "SALON_BOUTIQUE_ID":  SALON_BOUTIQUE_ID,
+        "SALON_COMBAT_ID":    SALON_COMBAT_ID,
+        "SALON_DUEL_ID":      SALON_DUEL_ID,
+        "SALON_BIENVENUE_ID": SALON_BIENVENUE_ID,
+        "SALON_AUREVOIR_ID":  SALON_AUREVOIR_ID,
+        "SALON_BOOST_ID":     SALON_BOOST_ID,
+        "SALON_HOF_ID":       SALON_HOF_ID,
+        "SALON_REGLEMENT_ID": SALON_REGLEMENT_ID,
+        "ROLE_MEMBRE_NAME":   ROLE_MEMBRE_NAME,
+        "REGLEMENT_ROLE_ID":  REGLEMENT_ROLE_ID,
+        "REGLEMENT_MSG_ID":   REGLEMENT_MSG_ID,
+        "AUTOROLE_PANELS":    autorole_panels,
+    }
+    config_str = _json.dumps(data, ensure_ascii=False)
+
+    embed = discord.Embed(
+        title="💾 Sauvegarde de Configuration",
+        description=(
+            "**Comment rendre la config permanente sur Railway :**\n\n"
+            "1️⃣ Va sur **railway.app** → ton projet → **Variables**\n"
+            "2️⃣ Ajoute une variable :\n"
+            "**Nom :** `BOT_CONFIG`\n"
+            "**Valeur :** *(voir le message suivant)*\n\n"
+            "3️⃣ Redéploie — plus jamais besoin de refaire les `.setsalon` !\n\n"
+            "⚠️ Refais `.saveconfig` à chaque fois que tu modifies un salon !"
+        ),
+        color=0x2ecc71
+    )
+    await ctx.send(embed=embed)
+
+    # Envoyer la valeur en DM pour éviter de l'exposer dans le chat
+    try:
+        await ctx.author.send(
+            f"**Valeur de BOT_CONFIG à coller dans Railway :**\n"
+            f"```\n{config_str[:1900]}\n```"
+        )
+        if len(config_str) > 1900:
+            await ctx.author.send(f"```\n{config_str[1900:]}\n```")
+        await ctx.send("✅ La valeur a été envoyée en **DM** pour ne pas l'exposer ici !", delete_after=10)
+    except:
+        await ctx.send(f"❌ Impossible d'envoyer en DM — active tes DMs !", delete_after=10)
 
 
 print("🚀 Démarrage du bot...")
