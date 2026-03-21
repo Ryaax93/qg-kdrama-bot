@@ -72,7 +72,7 @@ REGLEMENT_MSG_ID = None   # ID du message règlement (auto-rempli par setsalon)
 CONFIG_FILE = "salons_config.json"
 
 def sauvegarder_salons():
-    """Sauvegarde la config dans le fichier JSON ET dans les variables d'environnement"""
+    """Sauvegarde tous les IDs de salons dans un fichier JSON"""
     data = {
         "SALON_LEVELUP_ID":   SALON_LEVELUP_ID,
         "SALON_CASINO_ID":    SALON_CASINO_ID,
@@ -90,63 +90,23 @@ def sauvegarder_salons():
         "ROLE_MEMBRE_NAME":   ROLE_MEMBRE_NAME,
         "REGLEMENT_ROLE_ID":  REGLEMENT_ROLE_ID,
         "REGLEMENT_MSG_ID":   REGLEMENT_MSG_ID,
-        "AUTOROLE_PANELS":    autorole_panels,
     }
-    # 1. Sauvegarde locale (fonctionne si le filesystem est persistant)
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
     except Exception as e:
-        print(f"[Config] Erreur sauvegarde fichier : {e}")
-
-    # 2. Sauvegarde dans un fichier alternatif /tmp (plus stable sur certains hébergeurs)
-    try:
-        with open("/tmp/salons_config_backup.json", "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-    except Exception as e:
-        print(f"[Config] Erreur sauvegarde /tmp : {e}")
+        print(f"[Config] Erreur sauvegarde : {e}")
 
 def charger_salons():
-    """Charge la config — essaie plusieurs sources dans l'ordre"""
+    """Charge les IDs de salons depuis le fichier JSON au démarrage"""
     global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_EVENT_ID, SALON_GUIDE_ID
     global SALON_COMBAT_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID
     global SALON_BOOST_ID, SALON_HOF_ID, SALON_REGLEMENT_ID, ROLE_MEMBRE_NAME, REGLEMENT_ROLE_ID, REGLEMENT_MSG_ID
-    global autorole_panels
-
-    data = None
-
-    # Source 1 : variables d'environnement Railway (les plus fiables)
-    env_config = os.environ.get("BOT_CONFIG")
-    if env_config:
-        try:
-            data = json.loads(env_config)
-            print("[Config] ✅ Chargé depuis BOT_CONFIG (env var Railway)")
-        except Exception as e:
-            print(f"[Config] Erreur env var : {e}")
-
-    # Source 2 : fichier local
-    if not data and os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            print("[Config] ✅ Chargé depuis salons_config.json")
-        except Exception as e:
-            print(f"[Config] Erreur fichier local : {e}")
-
-    # Source 3 : backup /tmp
-    if not data and os.path.exists("/tmp/salons_config_backup.json"):
-        try:
-            with open("/tmp/salons_config_backup.json", "r", encoding="utf-8") as f:
-                data = json.load(f)
-            print("[Config] ✅ Chargé depuis backup /tmp")
-        except Exception as e:
-            print(f"[Config] Erreur backup /tmp : {e}")
-
-    if not data:
-        print("[Config] ⚠️ Aucune config trouvée — utilisation des valeurs par défaut")
+    if not os.path.exists(CONFIG_FILE):
         return
-
     try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
         SALON_LEVELUP_ID   = data.get("SALON_LEVELUP_ID")
         SALON_CASINO_ID    = data.get("SALON_CASINO_ID")
         SALON_GACHA_ID     = data.get("SALON_GACHA_ID")
@@ -164,12 +124,9 @@ def charger_salons():
         global REGLEMENT_ROLE_ID
         REGLEMENT_ROLE_ID  = int(data["REGLEMENT_ROLE_ID"]) if data.get("REGLEMENT_ROLE_ID") else None
         REGLEMENT_MSG_ID   = int(data["REGLEMENT_MSG_ID"]) if data.get("REGLEMENT_MSG_ID") else None
-        # Autorole panels
-        if data.get("AUTOROLE_PANELS"):
-            autorole_panels = data["AUTOROLE_PANELS"]
-        print("[Config] ✅ Salons et autorole chargés correctement")
+        print("[Config] ✅ Salons chargés depuis salons_config.json")
     except Exception as e:
-        print(f"[Config] Erreur application config : {e}")
+        print(f"[Config] Erreur chargement : {e}")
 
 # Charger au démarrage
 charger_salons()
@@ -11863,60 +11820,6 @@ async def process_voleur(message):
         pass
 
 
-@bot.command(name="saveconfig", aliases=["sauvegarder","backupconfig"])
-@commands.has_permissions(administrator=True)
-async def saveconfig_cmd(ctx):
-    """Génère la variable BOT_CONFIG à coller dans Railway — .saveconfig"""
-    import json as _json
-    data = {
-        "SALON_LEVELUP_ID":   SALON_LEVELUP_ID,
-        "SALON_CASINO_ID":    SALON_CASINO_ID,
-        "SALON_GACHA_ID":     SALON_GACHA_ID,
-        "SALON_EVENT_ID":     SALON_EVENT_ID,
-        "SALON_GUIDE_ID":     SALON_GUIDE_ID,
-        "SALON_BOUTIQUE_ID":  SALON_BOUTIQUE_ID,
-        "SALON_COMBAT_ID":    SALON_COMBAT_ID,
-        "SALON_DUEL_ID":      SALON_DUEL_ID,
-        "SALON_BIENVENUE_ID": SALON_BIENVENUE_ID,
-        "SALON_AUREVOIR_ID":  SALON_AUREVOIR_ID,
-        "SALON_BOOST_ID":     SALON_BOOST_ID,
-        "SALON_HOF_ID":       SALON_HOF_ID,
-        "SALON_REGLEMENT_ID": SALON_REGLEMENT_ID,
-        "ROLE_MEMBRE_NAME":   ROLE_MEMBRE_NAME,
-        "REGLEMENT_ROLE_ID":  REGLEMENT_ROLE_ID,
-        "REGLEMENT_MSG_ID":   REGLEMENT_MSG_ID,
-        "AUTOROLE_PANELS":    autorole_panels,
-    }
-    config_str = _json.dumps(data, ensure_ascii=False)
-
-    embed = discord.Embed(
-        title="💾 Sauvegarde de Configuration",
-        description=(
-            "**Comment rendre la config permanente sur Railway :**\n\n"
-            "1️⃣ Va sur **railway.app** → ton projet → **Variables**\n"
-            "2️⃣ Ajoute une variable :\n"
-            "**Nom :** `BOT_CONFIG`\n"
-            "**Valeur :** *(voir le message suivant)*\n\n"
-            "3️⃣ Redéploie — plus jamais besoin de refaire les `.setsalon` !\n\n"
-            "⚠️ Refais `.saveconfig` à chaque fois que tu modifies un salon !"
-        ),
-        color=0x2ecc71
-    )
-    await ctx.send(embed=embed)
-
-    # Envoyer la valeur en DM pour éviter de l'exposer dans le chat
-    try:
-        await ctx.author.send(
-            f"**Valeur de BOT_CONFIG à coller dans Railway :**\n"
-            f"```\n{config_str[:1900]}\n```"
-        )
-        if len(config_str) > 1900:
-            await ctx.author.send(f"```\n{config_str[1900:]}\n```")
-        await ctx.send("✅ La valeur a été envoyée en **DM** pour ne pas l'exposer ici !", delete_after=10)
-    except:
-        await ctx.send(f"❌ Impossible d'envoyer en DM — active tes DMs !", delete_after=10)
-
-
 print("🚀 Démarrage du bot...")
 import traceback, time
 while True:
@@ -11926,4 +11829,5 @@ while True:
         print(f"❌ CRASH BOT: {e}")
         traceback.print_exc()
         print("🔄 Redémarrage dans 5 secondes...")
-        time.sleep(5) 
+        time.sleep(5)
+
