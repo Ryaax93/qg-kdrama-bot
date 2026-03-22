@@ -8715,11 +8715,15 @@ MESSAGES_RAGEBAIT = [
 ]
 
 # ── Helper : obtenir salon event ──────────────────────────────
-def get_event_channel(guild):
+def get_event_channel(guild, ctx=None):
     if SALON_EVENT_ID:
-        return guild.get_channel(SALON_EVENT_ID)
+        ch = guild.get_channel(SALON_EVENT_ID)
+        if ch: return ch
+    if ctx:
+        return ctx.channel
     if SALON_GACHA_ID:
-        return guild.get_channel(SALON_GACHA_ID)
+        ch = guild.get_channel(SALON_GACHA_ID)
+        if ch: return ch
     return guild.system_channel
 
 def get_gacha_role(guild):
@@ -8812,13 +8816,12 @@ async def declencher_jackpot_explosion(guild, channel):
 @tasks.loop(hours=24)
 async def invasion_samedi():
     import datetime as _dt
-    if not SALON_EVENT_ID: return
     now = _dt.datetime.now()
     if now.weekday() != 5 or now.hour != 23:  # 5 = samedi
         return
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel:
                 continue
             boss = _r.choice(BOSS_INVASIONS).copy()
@@ -8905,7 +8908,7 @@ async def prophetie_hebdo():
     serie_benie_fin = _t.time() + 604800  # 7 jours
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel:
                 continue
             role = get_gacha_role(guild)
@@ -9026,14 +9029,13 @@ async def imposteur_task():
 
 # ── Fonctions de lancement ────────────────────────────────────
 
-async def lancer_coffre_planifie():
+async def lancer_coffre_planifie(ctx=None):
     global event_en_cours
     import time as _t
-    if not SALON_EVENT_ID: return
     event_en_cours = True
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
             gain = _r.randint(200, 600)
             coffre_actif[channel.id] = {"contenu": gain, "expires": _t.time() + 300}
@@ -9051,14 +9053,13 @@ async def lancer_coffre_planifie():
             print(f"Coffre planifié error: {e}")
     event_en_cours = False
 
-async def lancer_nuit_casino():
+async def lancer_nuit_casino(ctx=None):
     global event_en_cours, casino_boost_actif
-    if not SALON_EVENT_ID: return
     event_en_cours = True
     casino_boost_actif = True
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             casino_ch = guild.get_channel(SALON_CASINO_ID) if SALON_CASINO_ID else None
             if not channel: continue
             embed = discord.Embed(
@@ -9075,7 +9076,7 @@ async def lancer_nuit_casino():
             print(f"Nuit casino error: {e}")
     event_en_cours = False
 
-async def lancer_carte_mystere():
+async def lancer_carte_mystere(ctx=None):
     global event_en_cours
     import time as _t
     if not SALON_EVENT_ID and not SALON_GACHA_ID:
@@ -9165,14 +9166,13 @@ async def lancer_carte_mystere():
             print(f"Carte mystère error: {e}")
     event_en_cours = False
 
-async def lancer_double_xp_event():
+async def lancer_double_xp_event(ctx=None):
     global event_en_cours, double_xp_event_actif
-    if not SALON_EVENT_ID: return
     event_en_cours = True
     double_xp_event_actif = True
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
             embed = discord.Embed(
                 title="🌀 EVENT DOUBLE XP !",
@@ -9188,14 +9188,13 @@ async def lancer_double_xp_event():
             print(f"Double XP event error: {e}")
     event_en_cours = False
 
-async def lancer_nuit_chasse_event():
+async def lancer_nuit_chasse_event(ctx=None):
     global event_en_cours, nuit_chasse_active
-    if not SALON_EVENT_ID: return
     event_en_cours = True
     nuit_chasse_active = True
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
             role = get_gacha_role(guild)
             mention = role.mention if role else ""
@@ -9212,7 +9211,7 @@ async def lancer_nuit_chasse_event():
             print(f"Nuit chasse error: {e}")
     event_en_cours = False
 
-async def lancer_marche_noir_event():
+async def lancer_marche_noir_event(ctx=None):
     global event_en_cours
     import time as _t
     event_en_cours = True
@@ -9248,7 +9247,7 @@ async def lancer_marche_noir_event():
             print(f"Marché noir error: {e}")
     event_en_cours = False
 
-async def lancer_jackpot():
+async def lancer_jackpot(ctx=None):
     global jackpot_actif, jackpot_cagnotte, jackpot_contributions
     import time as _t
     if _t.time() - jackpot_derniere_explosion < 2592000:  # 30 jours
@@ -9258,7 +9257,7 @@ async def lancer_jackpot():
     jackpot_contributions.clear()
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
             embed = discord.Embed(
                 title="💸 JACKPOT COMMUNAUTAIRE LANCÉ !",
@@ -9269,7 +9268,7 @@ async def lancer_jackpot():
         except Exception as e:
             print(f"Jackpot error: {e}")
 
-async def lancer_draft_cartes():
+async def lancer_draft_cartes(ctx=None):
     global event_en_cours
     event_en_cours = True
     for guild in bot.guilds:
@@ -9321,12 +9320,12 @@ async def lancer_draft_cartes():
             print(f"Draft cartes error: {e}")
     event_en_cours = False
 
-async def lancer_guerre_factions():
+async def lancer_guerre_factions(ctx=None):
     global event_en_cours
     event_en_cours = True
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
             boss = _r.choice(BOSS_INVASIONS).copy()
             pv_guerre = boss["pv"] * 3  # Boss géant x3
@@ -9372,13 +9371,13 @@ async def lancer_guerre_factions():
             print(f"Guerre factions error: {e}")
     event_en_cours = False
 
-async def lancer_event_surprise():
+async def lancer_event_surprise(ctx=None):
     global event_en_cours
     if event_en_cours:
         return
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
             embed_annonce = discord.Embed(
                 title="⚠️ EVENT SURPRISE",
@@ -9392,14 +9391,13 @@ async def lancer_event_surprise():
     events_possibles = [lancer_coffre_planifie, lancer_nuit_casino, lancer_carte_mystere, lancer_double_xp_event, lancer_nuit_chasse_event, lancer_draft_cartes]
     await _r.choice(events_possibles)()
 
-async def lancer_heure_maudite():
+async def lancer_heure_maudite(ctx=None):
     global event_en_cours, heure_maudite_active
-    if not SALON_EVENT_ID: return
     event_en_cours = True
     heure_maudite_active = True
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
             role = get_gacha_role(guild)
             mention = role.mention if role else ""
@@ -9416,7 +9414,7 @@ async def lancer_heure_maudite():
             print(f"Heure maudite error: {e}")
     event_en_cours = False
 
-async def lancer_imposteur():
+async def lancer_imposteur(ctx=None):
     for guild in bot.guilds:
         try:
             channel_gacha = guild.get_channel(SALON_GACHA_ID) if SALON_GACHA_ID else get_event_channel(guild)
@@ -9752,16 +9750,15 @@ async def lancerevent_cmd(ctx, nom: str = None):
         return await ctx.send("❌ Un event est déjà en cours ! Attends qu'il se termine.")
 
     await ctx.send(f"✅ Lancement de l'event **{nom}** !")
-    await events_dispo[nom.lower()]()
+    await events_dispo[nom.lower()](ctx=ctx)
 
 # ══════════════════════════════════════════════════════════════
 #  EVENTS — FONCTIONS
 # ══════════════════════════════════════════════════════════════
 
 # ── 🎲 ROUE DE LA FORTUNE ─────────────────────────────────────
-async def lancer_roue_fortune():
+async def lancer_roue_fortune(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     cases = [
@@ -9777,7 +9774,7 @@ async def lancer_roue_fortune():
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             roue_emojis = ["💰","🎰","🃏","⭐","💸","🔒","👁️","🎁"]
@@ -9864,14 +9861,13 @@ async def lancer_roue_fortune():
     event_en_cours = False
 
 # ── 🎭 PROCÈS DU QG ───────────────────────────────────────────
-async def lancer_proces():
+async def lancer_proces(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             membres_actifs = [m for m in guild.members if not m.bot and str(m.id) in economy_data]
@@ -9951,14 +9947,13 @@ async def lancer_proces():
     event_en_cours = False
 
 # ── ⚔️ TOURNOI DU QG ──────────────────────────────────────────
-async def lancer_tournoi():
+async def lancer_tournoi(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             # Annonce inscriptions
@@ -10096,14 +10091,13 @@ async def lancer_tournoi():
     event_en_cours = False
 
 # ── 💎 MINE D'OR ──────────────────────────────────────────────
-async def lancer_mine_or():
+async def lancer_mine_or(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             pepites_total = 500  # Pas trop broken
@@ -10178,14 +10172,13 @@ async def _finaliser_mine(guild, channel, data):
     await channel.send(embed=embed)
 
 # ── 🕵️ PARMI NOUS ─────────────────────────────────────────────
-async def lancer_parminous():
+async def lancer_parminous(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             membres_actifs = [m for m in guild.members if not m.bot and str(m.id) in economy_data]
@@ -10303,14 +10296,13 @@ async def lancer_parminous():
     event_en_cours = False
 
 # ── ⚡ ENCHÈRES INTERDITES ─────────────────────────────────────
-async def lancer_encheres():
+async def lancer_encheres(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             # Choisir une carte Légendaire disponible
@@ -10407,18 +10399,17 @@ async def lancer_encheres():
     event_en_cours = False
 
 # ── 🌙 VOLEUR DE MINUIT ────────────────────────────────────────
-async def lancer_voleur_minuit():
+async def lancer_voleur_minuit(ctx=None):
     global event_en_cours
     import datetime as _dt
     now = _dt.datetime.now()
     if not (23 <= now.hour or now.hour < 1):
         return  # Seulement entre 23h et 1h
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             membres = [m for m in guild.members if not m.bot and economy_data[str(m.id)]['coins'] > 0]
@@ -10474,14 +10465,13 @@ async def lancer_voleur_minuit():
     event_en_cours = False
 
 # ── 🎴 WANTED ─────────────────────────────────────────────────
-async def lancer_wanted():
+async def lancer_wanted(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             salon_wanted = await creer_salon_temp(guild, "🎴・wanted-qg")
@@ -10564,9 +10554,8 @@ async def lancer_wanted():
     event_en_cours = False
 
 # ── 📰 FAUSSE RUMEUR ──────────────────────────────────────────
-async def lancer_fausse_rumeur():
+async def lancer_fausse_rumeur(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     rumeurs = [
@@ -10579,7 +10568,7 @@ async def lancer_fausse_rumeur():
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             rumeur = _r.choice(rumeurs)
@@ -10615,9 +10604,8 @@ async def lancer_fausse_rumeur():
     event_en_cours = False
 
 # ── 🌙 RÊVE COLLECTIF ─────────────────────────────────────────
-async def lancer_reve_collectif():
+async def lancer_reve_collectif(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     reves = [
@@ -10630,7 +10618,7 @@ async def lancer_reve_collectif():
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             reve = _r.choice(reves)
@@ -10679,14 +10667,13 @@ async def lancer_reve_collectif():
     event_en_cours = False
 
 # ── 🎩 LE MAGICIEN ────────────────────────────────────────────
-async def lancer_magicien():
+async def lancer_magicien(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             membres = [m for m in guild.members if not m.bot]
@@ -10763,14 +10750,13 @@ async def lancer_magicien():
     event_en_cours = False
 
 # ── 🤡 LE CLOWN ───────────────────────────────────────────────
-async def lancer_clown():
+async def lancer_clown(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             membres = [m for m in guild.members if not m.bot]
@@ -10820,16 +10806,15 @@ async def lancer_clown():
     event_en_cours = False
 
 # ── 🦆 LE CANARD ──────────────────────────────────────────────
-async def lancer_canard():
+async def lancer_canard(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     humeurs = ["joyeux", "grognon", "généreux", "voleur", "mystérieux"]
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             humeur = _r.choice(humeurs)
@@ -10901,14 +10886,13 @@ async def lancer_canard():
     event_en_cours = False
 
 # ── 🌈 EVENT PACIFISTE ────────────────────────────────────────
-async def lancer_event_pacifiste():
+async def lancer_event_pacifiste(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             embed = discord.Embed(
@@ -10942,14 +10926,13 @@ async def lancer_event_pacifiste():
     event_en_cours = False
 
 # ── 🔮 ORACLE MAUDIT ──────────────────────────────────────────
-async def lancer_oracle_maudit():
+async def lancer_oracle_maudit(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             membres_actifs = [m for m in guild.members if not m.bot and str(m.id) in economy_data]
@@ -10991,14 +10974,13 @@ async def lancer_oracle_maudit():
     event_en_cours = False
 
 # ── 🌑 LE PACTE ───────────────────────────────────────────────
-async def lancer_pacte():
+async def lancer_pacte(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             membres = [m for m in guild.members if not m.bot and str(m.id) in economy_data]
@@ -11048,14 +11030,13 @@ async def lancer_pacte():
     event_en_cours = False
 
 # ── 🎪 FESTIVAL DES LOSERS ────────────────────────────────────
-async def lancer_festival_losers():
+async def lancer_festival_losers(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             eligibles = [
@@ -11116,14 +11097,13 @@ async def lancer_festival_losers():
     event_en_cours = False
 
 # ── 🧩 PUZZLE COLLECTIF ───────────────────────────────────────
-async def lancer_puzzle_collectif():
+async def lancer_puzzle_collectif(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             # Choisir une carte Épique
@@ -11213,9 +11193,8 @@ async def lancer_puzzle_collectif():
     event_en_cours = False
 
 # ── 🌊 VAGUE DE LÉGENDES ──────────────────────────────────────
-async def lancer_vague_legendaires():
+async def lancer_vague_legendaires(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     for guild in bot.guilds:
@@ -11307,9 +11286,8 @@ async def lancer_vague_legendaires():
     event_en_cours = False
 
 # ── 👾 BOSS FINAL AVEC PERSONNALITÉ ──────────────────────────
-async def lancer_boss_final():
+async def lancer_boss_final(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     repliques_moquerie = [
@@ -11335,7 +11313,7 @@ async def lancer_boss_final():
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             boss = _r.choice(BOSS_INVASIONS).copy()
@@ -11413,14 +11391,13 @@ async def lancer_boss_final():
     event_en_cours = False
 
 # ── 💀 DEATH NOTE DU QG ───────────────────────────────────────
-async def lancer_death_note():
+async def lancer_death_note(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             salon_dn = await creer_salon_temp(guild, "💀・death-note-qg")
@@ -11524,14 +11501,13 @@ async def lancer_death_note():
     event_en_cours = False
 
 # ── 🔴 ALERTE ROUGE ───────────────────────────────────────────
-async def lancer_alerte_rouge():
+async def lancer_alerte_rouge(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             # Silence total — juste un message rouge cryptique
@@ -11611,14 +11587,13 @@ async def lancer_alerte_rouge():
     event_en_cours = False
 
 # ── 🌍 CONQUÊTE DU QG ─────────────────────────────────────────
-async def lancer_conquete():
+async def lancer_conquete(ctx=None):
     global event_en_cours
-    if not SALON_EVENT_ID: return
     event_en_cours = True
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             salon_cqt = await creer_salon_temp(guild, "🌍・conquete-qg")
@@ -11740,7 +11715,7 @@ async def lancer_conquete():
     event_en_cours = False
 
 # ── 🌊 LA PROPHÉTIE S'ACCOMPLIT ───────────────────────────────
-async def lancer_prophetie_accomplie():
+async def lancer_prophetie_accomplie(ctx=None):
     global event_en_cours
     if not SALON_EVENT_ID or not serie_benie: return
     event_en_cours = True
@@ -11756,7 +11731,7 @@ async def lancer_prophetie_accomplie():
 
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild)
+            channel = get_event_channel(guild, ctx)
             if not channel: continue
 
             lore = lore_events.get(serie_benie, (
