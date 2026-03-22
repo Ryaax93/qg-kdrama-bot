@@ -690,10 +690,31 @@ async def help_cmd(ctx, categorie: str = None):
         "`.quizstop` — Arrêter le quiz en cours\n"
         "*Thèmes : kdrama • anime • gaming • culture • mix*"
     ), inline=False)
+    p3.add_field(name="🐺 Loup Garou", value=(
+        "`.lgcreate` — Créer une partie\n"
+        "`.lgjoin` — Rejoindre la partie\n"
+        "`.lgstart` — Lancer la partie *(hôte)*\n"
+        "`.lgvote @joueur` — Voter pour éliminer\n"
+        "`.lgnuit @cible` — Action nocturne\n"
+        "`.lgsorciere save/kill @cible` — Sorcière\n"
+        "`.lgstatus` — État de la partie\n"
+        "`.lgstop` — Arrêter la partie\n"
+        "`.lgroles` — Voir les rôles disponibles"
+    ), inline=False)
     p3.add_field(name="🎮 Mini-Jeux", value=(
         "`.devine` — Devine le personnage\n"
         "`.rps <choix>` — Pierre Feuille Ciseaux\n"
         "`.pendu` — Pendu animé/drama"
+    ), inline=False)
+    p3.add_field(name="🐺 Loup Garou", value=(
+        "`.lgcreate` — Créer une partie\n"
+        "`.lgjoin` — Rejoindre\n"
+        "`.lgstart` — Lancer *(hôte)*\n"
+        "`.lgvote @joueur` — Voter pour éliminer\n"
+        "`.lgnuit @cible` — Action nocturne\n"
+        "`.lgsorciere save/kill @cible` — Sorcière\n"
+        "`.lgstatus` — État de la partie\n"
+        "`.lgstop` — Arrêter la partie"
     ), inline=False)
     p3.set_footer(text="Page 4/11 • QG Kdrama 🌸")
     pages.append(p3)
@@ -8887,6 +8908,84 @@ async def planning_hebdo():
             await lancer_wanted()
         return
 
+    # Lundi 21h → Tournoi ou Mine d'Or
+    if weekday == 0 and hour == 21 and not event_en_cours:
+        if _r.random() < 0.5:
+            await lancer_tournoi()
+        else:
+            await lancer_mine_or()
+        return
+
+    # Mardi 21h → Enchères ou Fausse Rumeur
+    if weekday == 1 and hour == 21 and not event_en_cours:
+        if _r.random() < 0.5:
+            await lancer_encheres()
+        else:
+            await lancer_fausse_rumeur()
+        return
+
+    # Mercredi 22h → Rêve Collectif ou Magicien
+    if weekday == 2 and hour == 22 and not event_en_cours:
+        if _r.random() < 0.5:
+            await lancer_reve_collectif()
+        else:
+            await lancer_magicien()
+        return
+
+    # Jeudi 20h → Oracle Maudit ou Pacte
+    if weekday == 3 and hour == 20 and not event_en_cours:
+        if _r.random() < 0.5:
+            await lancer_oracle_maudit()
+        else:
+            await lancer_pacte()
+        return
+
+    # Vendredi 21h → Puzzle Collectif ou Festival des Losers
+    if weekday == 4 and hour == 21 and not event_en_cours:
+        if _r.random() < 0.5:
+            await lancer_puzzle_collectif()
+        else:
+            await lancer_festival_losers()
+        return
+
+    # Samedi 18h → Vague de Légendes ou Boss Final
+    if weekday == 5 and hour == 18 and not event_en_cours:
+        if _r.random() < 0.5:
+            await lancer_vague_legendaires()
+        else:
+            await lancer_boss_final()
+        return
+
+    # Samedi 20h → Death Note ou Conquête
+    if weekday == 5 and hour == 20 and not event_en_cours:
+        if _r.random() < 0.5:
+            await lancer_death_note()
+        else:
+            await lancer_conquete()
+        return
+
+    # Dimanche 19h → Colis Mystère (rare)
+    if weekday == 6 and hour == 19 and not event_en_cours:
+        if _r.random() < 0.4:
+            await lancer_colis_mystere()
+        return
+
+    # Dimanche 17h → Voleur de Minuit ou Event Pacifiste
+    if weekday == 6 and hour == 17 and not event_en_cours:
+        if _r.random() < 0.5:
+            await lancer_voleur_minuit()
+        else:
+            await lancer_event_pacifiste()
+        return
+
+    # Dimanche 21h → Alerte Rouge (rare) ou Prophétie
+    if weekday == 6 and hour == 21 and not event_en_cours:
+        if _r.random() < 0.3:
+            await lancer_alerte_rouge()
+        else:
+            await lancer_prophetie_accomplie()
+        return
+
     # Carte Mystère : ven/sam/dim → tirage aléatoire
     if weekday in (4, 5, 6) and hour == 18 and not event_en_cours:
         # Seulement 1 des 3 jours (aléatoire chaque semaine)
@@ -8909,6 +9008,85 @@ async def planning_hebdo():
         return
 
 # Mensuel : 1er du mois
+
+    # Lundi 21h → Tournoi ou Mine d'Or
+    if weekday == 0 and hour == 21 and not event_en_cours:
+        if _r.random() < 0.5:
+            await lancer_tournoi()
+        else:
+            await lancer_mine_or()
+        return
+
+    # Mardi 21h → Enchères ou Fausse Rumeur
+    if weekday == 1 and hour == 21 and not event_en_cours:
+        if _r.random() < 0.5:
+            await lancer_encheres()
+        else:
+            await lancer_fausse_rumeur()
+        return
+
+    # Mercredi 22h → Rêve Collectif ou Magicien
+    if weekday == 2 and hour == 22 and not event_en_cours:
+        if _r.random() < 0.5:
+            await lancer_reve_collectif()
+        else:
+            await lancer_magicien()
+        return
+
+    # Jeudi 20h → Oracle Maudit ou Pacte
+    if weekday == 3 and hour == 20 and not event_en_cours:
+        if _r.random() < 0.5:
+            await lancer_oracle_maudit()
+        else:
+            await lancer_pacte()
+        return
+
+    # Vendredi 21h → Puzzle Collectif ou Festival des Losers
+    if weekday == 4 and hour == 21 and not event_en_cours:
+        if _r.random() < 0.5:
+            await lancer_puzzle_collectif()
+        else:
+            await lancer_festival_losers()
+        return
+
+    # Samedi 18h → Vague de Légendes ou Boss Final
+    if weekday == 5 and hour == 18 and not event_en_cours:
+        if _r.random() < 0.5:
+            await lancer_vague_legendaires()
+        else:
+            await lancer_boss_final()
+        return
+
+    # Samedi 20h → Death Note ou Conquête
+    if weekday == 5 and hour == 20 and not event_en_cours:
+        if _r.random() < 0.5:
+            await lancer_death_note()
+        else:
+            await lancer_conquete()
+        return
+
+    # Dimanche 19h → Colis Mystère (rare)
+    if weekday == 6 and hour == 19 and not event_en_cours:
+        if _r.random() < 0.4:
+            await lancer_colis_mystere()
+        return
+
+    # Dimanche 17h → Voleur de Minuit ou Event Pacifiste
+    if weekday == 6 and hour == 17 and not event_en_cours:
+        if _r.random() < 0.5:
+            await lancer_voleur_minuit()
+        else:
+            await lancer_event_pacifiste()
+        return
+
+    # Dimanche 21h → Alerte Rouge (rare) ou Prophétie
+    if weekday == 6 and hour == 21 and not event_en_cours:
+        if _r.random() < 0.3:
+            await lancer_alerte_rouge()
+        else:
+            await lancer_prophetie_accomplie()
+        return
+
 @tasks.loop(hours=24)
 async def events_mensuels():
     import datetime as _dt
@@ -9534,6 +9712,7 @@ async def resetall_cmd(ctx):
 # ── Variables globales ────────────────────────────────────────
 tournoi_inscriptions = {}    # {guild_id: [user_id, ...]}
 parminous_game = {}          # {guild_id: {imposteur, victimes, cartes_volees, votes}}
+lg_games = {}                # {guild_id: game_data} — Loup Garou
 encheres_actives = {}        # {guild_id: {carte_key, mises: {uid: montant}, msg_id}}
 wanted_actif = {}            # {guild_id: {cible_id, prime, crimes, chasseurs}}
 mine_actif = {}              # {guild_id: {pepites, joueurs: {uid: total}, malédiction_pos}}
@@ -9642,6 +9821,7 @@ async def supprimer_salon_temp(salon, delai=7, guild=None, nom_event=""):
 async def lancerevent_cmd(ctx, nom: str = None):
     """Lance un event manuellement — .lancerevent <nom>"""
     events_dispo = {
+        # ── Events spéciaux ──
         "roue": lancer_roue_fortune,
         "proces": lancer_proces,
         "tournoi": lancer_tournoi,
@@ -9660,6 +9840,21 @@ async def lancerevent_cmd(ctx, nom: str = None):
         "pacte": lancer_pacte,
         "losers": lancer_festival_losers,
         "puzzle": lancer_puzzle_collectif,
+        # ── Events automatiques ──
+        "coffre": lancer_coffre_planifie,
+        "nuitcasino": lancer_nuit_casino,
+        "cartemystere": lancer_carte_mystere,
+        "doublexp": lancer_double_xp_event,
+        "nuitchasse": lancer_nuit_chasse_event,
+        "marchenoir": lancer_marche_noir_event,
+        "jackpot": lancer_jackpot,
+        "draft": lancer_draft_cartes,
+        "guerre": lancer_guerre_factions,
+        "surprise": lancer_event_surprise,
+        "heuremaudite": lancer_heure_maudite,
+        "imposteur": lancer_imposteur,
+        "classement": lancer_classement_hebdo,
+        "colis": lancer_colis_mystere,
         "vaguelegendaires": lancer_vague_legendaires,
         "bossfinal": lancer_boss_final,
         "deathnote": lancer_death_note,
@@ -9669,10 +9864,15 @@ async def lancerevent_cmd(ctx, nom: str = None):
     }
 
     if not nom:
-        liste = " • ".join(f"`{k}`" for k in events_dispo.keys())
+        tous = list(events_dispo.keys())
+        desc = (
+            "Tous les events sont **automatiques** selon le planning.\n"
+            "Les admins peuvent aussi en lancer un à tout moment.\n\n"
+            + " • ".join(f"`{k}`" for k in tous)
+        )
         return await ctx.send(embed=discord.Embed(
-            title="🎪 Events disponibles",
-            description=liste,
+            title="🎪 Events — `.lancerevent <nom>`",
+            description=desc,
             color=0x9b59b6
         ))
 
@@ -12083,6 +12283,154 @@ async def miser_cmd(ctx, montant: int = None):
     await ctx.send(f"✅ Mise de **{montant:,} pièces** enregistrée !", delete_after=5)
     try: await ctx.message.delete()
     except: pass
+
+
+async def lancer_classement_hebdo(ctx=None):
+    """Lance le classement hebdomadaire manuellement"""
+    for guild in bot.guilds:
+        try:
+            channel = get_event_channel(guild, ctx)
+            if not channel: continue
+            top = sorted(
+                [(uid, xp_data[uid]['xp']) for uid in xp_data if guild.get_member(int(uid))],
+                key=lambda x: x[1], reverse=True
+            )[:3]
+            if not top:
+                await channel.send("❌ Pas assez de données pour le classement !")
+                return
+            recompenses = [300, 200, 100]
+            medals = ["🥇", "🥈", "🥉"]
+            desc = "**🏆 TOP 3 DE LA SEMAINE**\n\n"
+            for i, (uid, xp) in enumerate(top):
+                member = guild.get_member(int(uid))
+                if member:
+                    economy_data[uid]['coins'] += recompenses[i]
+                    desc += f"{medals[i]} {member.mention} — **{xp} XP** → **+{recompenses[i]} pièces** !\n"
+            embed = discord.Embed(
+                title="🏆 CLASSEMENT HEBDOMADAIRE",
+                description=desc,
+                color=0xf1c40f
+            )
+            await channel.send("@everyone", embed=embed)
+        except Exception as e:
+            print(f"Classement hebdo error: {e}")
+
+
+# ── 🎁 COLIS MYSTÈRE ──────────────────────────────────────────
+async def lancer_colis_mystere(ctx=None):
+    global event_en_cours
+    event_en_cours = True
+    for guild in bot.guilds:
+        try:
+            channel = get_event_channel(guild, ctx)
+            if not channel: continue
+
+            # Contenu aléatoire — bon ou mauvais
+            contenus = [
+                {"type": "carte_legendaire", "desc": "une carte **Légendaire** 🟠", "positif": True},
+                {"type": "pieces_5000", "desc": "**5000 pièces** 💰", "positif": True},
+                {"type": "pieces_2000", "desc": "**2000 pièces** 💰", "positif": True},
+                {"type": "rolls_10", "desc": "**+10 rolls** bonus 🎰", "positif": True},
+                {"type": "malediction", "desc": "une **malédiction** — perd 50% de ses pièces 💀", "positif": False},
+                {"type": "vol_carte", "desc": "un **piège** — perd sa meilleure carte 😈", "positif": False},
+                {"type": "rien", "desc": "**rien du tout**... le colis était vide 📭", "positif": False},
+            ]
+            contenu = _r.choices(
+                contenus,
+                weights=[10, 20, 15, 10, 20, 15, 10],
+                k=1
+            )[0]
+
+            embed = discord.Embed(
+                title="🎁 UN COLIS MYSTÉRIEUX EST ARRIVÉ !",
+                description=(
+                    "```\n"
+                    "╔═══════════════════════════════╗\n"
+                    "║   📦  C O L I S   📦          ║\n"
+                    "║  ─────────────────────────  ║\n"
+                    "║   Contenu : ???               ║\n"
+                    "║   Expéditeur : Inconnu 👀     ║\n"
+                    "╚═══════════════════════════════╝\n"
+                    "```\n"
+                    "Un seul membre peut l\'ouvrir !\n"
+                    "Tape `.ouvrir` pour tenter ta chance...\n\n"
+                    "⚠️ **Personne sait ce qu\'il y a dedans — bon ou mauvais !**\n"
+                    "⏰ **2 minutes** avant qu\'il disparaisse !"
+                ),
+                color=0x9b59b6
+            )
+            msg = await channel.send("@here", embed=embed)
+
+            # Attendre que quelqu'un ouvre
+            def check_ouvrir(m):
+                return m.content.lower() in [".ouvrir", ".open"] and m.channel == channel and not m.author.bot
+
+            try:
+                rep = await bot.wait_for("message", timeout=120.0, check=check_ouvrir)
+                uid = str(rep.author.id)
+                member = rep.author
+
+                # Appliquer le contenu
+                if contenu["type"] == "carte_legendaire":
+                    legendaires = [k for k in ANIME_CARDS_DB if k not in claimed_cards and ANIME_CARDS_DB[k]["rarete"] == "Légendaire"]
+                    if legendaires:
+                        carte_key = _r.choice(legendaires)
+                        claimed_cards[carte_key] = uid
+                        gacha_collections[uid][carte_key] = {"fusion": 0}
+                        c = ANIME_CARDS_DB[carte_key]
+                        contenu["desc"] = f"la carte Légendaire **{c['emoji']} {c['nom']}** 🟠"
+
+                elif contenu["type"] == "pieces_5000":
+                    economy_data[uid]["coins"] += 5000
+
+                elif contenu["type"] == "pieces_2000":
+                    economy_data[uid]["coins"] += 2000
+
+                elif contenu["type"] == "rolls_10":
+                    gacha_cooldowns[uid] = max(0, gacha_cooldowns.get(uid, 0) - 10)
+
+                elif contenu["type"] == "malediction":
+                    economy_data[uid]["coins"] = int(economy_data[uid]["coins"] * 0.5)
+
+                elif contenu["type"] == "vol_carte":
+                    cartes = [k for k, v in claimed_cards.items() if v == uid]
+                    if cartes:
+                        pire = max(cartes, key=lambda k: ["Commun","Rare","Épique","Légendaire","Mythique"].index(ANIME_CARDS_DB.get(k,{}).get("rarete","Commun")))
+                        del claimed_cards[pire]
+                        if pire in gacha_collections.get(uid, {}):
+                            del gacha_collections[uid][pire]
+                        c = ANIME_CARDS_DB.get(pire, {})
+                        contenu["desc"] = f"un **piège** — **{c.get('nom','???')}** disparaît 😈"
+
+                couleur = 0x2ecc71 if contenu["positif"] else 0xe74c3c
+                emoji_result = "🎉" if contenu["positif"] else "💀"
+
+                embed_result = discord.Embed(
+                    title=f"{emoji_result} {member.display_name} ouvre le colis !",
+                    description=(
+                        "```\n"
+                        "╔═══════════════════════════════╗\n"
+                        f"║  {'🎁 BONNE SURPRISE !' if contenu['positif'] else '☠️ MAUVAISE SURPRISE !':^29}  ║\n"
+                        "╚═══════════════════════════════╝\n"
+                        "```\n"
+                        f"{member.mention} trouve {contenu['desc']} !"
+                    ),
+                    color=couleur
+                )
+                embed_result.set_thumbnail(url=member.display_avatar.url)
+                await msg.delete()
+                await channel.send(embed=embed_result)
+
+            except asyncio.TimeoutError:
+                await msg.delete()
+                await channel.send(embed=discord.Embed(
+                    description="📭 Le colis mystérieux repart sans avoir été ouvert... dommage !",
+                    color=0x95a5a6
+                ))
+
+        except Exception as e:
+            print(f"Colis mystère error: {e}")
+    event_en_cours = False
 
 
 print("🚀 Démarrage du bot...")
