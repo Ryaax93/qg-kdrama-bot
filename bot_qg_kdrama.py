@@ -1071,7 +1071,7 @@ THEME_LABELS = {
 }
 
 
-@bot.command()
+@bot.command(name="quiz", aliases=["q"])
 async def quiz(ctx, theme: str = "mix"):
     """Quiz solo en continu — .quiz [kdrama/anime/gaming/culture/mix]"""
     theme = theme.lower()
@@ -1318,7 +1318,7 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
 # ============================================================
 #  NIVEAUX / XP
 # ============================================================
-@bot.command()
+@bot.command(name="rank", aliases=["niveau","xp","profil"])
 async def rank(ctx, member: discord.Member = None):
     member = member or ctx.author
     uid = str(member.id)
@@ -1417,7 +1417,7 @@ async def ameliorer(ctx, stat: str = None):
 
 
 
-@bot.command()
+@bot.command(name="leaderboard", aliases=["top","classement","lb"])
 async def leaderboard(ctx):
     sorted_data = sorted(xp_data.items(), key=lambda x: (x[1]["level"], x[1]["xp"]), reverse=True)[:10]
     desc = ""
@@ -1440,7 +1440,7 @@ async def leaderboard(ctx):
 # ============================================================
 #  ÉCONOMIE
 # ============================================================
-@bot.command()
+@bot.command(name="daily", aliases=["journalier"])
 async def daily(ctx):
     """Pièces journalières + roll bonus gacha"""
     uid = str(ctx.author.id)
@@ -1476,7 +1476,7 @@ async def daily(ctx):
         color=0x2ecc71
     ))
 
-@bot.command()
+@bot.command(name="balance", aliases=["solde","pieces","coins"])
 async def balance(ctx, member: discord.Member = None):
     member = member or ctx.author
     coins = economy_data[str(member.id)]["coins"]
@@ -1485,7 +1485,7 @@ async def balance(ctx, member: discord.Member = None):
         color=0xf39c12
     ))
 
-@bot.command()
+@bot.command(name="pay", aliases=["donner","transfer"])
 async def pay(ctx, member: discord.Member, amount: int):
     uid = str(ctx.author.id)
     if economy_data[uid]["coins"] < amount:
@@ -1604,13 +1604,13 @@ async def close(ctx):
 # ============================================================
 #  MODÉRATION
 # ============================================================
-@bot.command()
+@bot.command(name="ban", aliases=["bannir"])
 @commands.has_permissions(ban_members=True)
 async def ban(ctx, member: discord.Member, *, reason="Aucune raison fournie"):
     await member.ban(reason=reason)
     await ctx.send(embed=discord.Embed(description=f"🔨 **{member}** banni. Raison : {reason}", color=0xe74c3c))
 
-@bot.command()
+@bot.command(name="kick", aliases=["expulser"])
 @commands.has_permissions(kick_members=True)
 async def kick(ctx, member: discord.Member, *, reason="Aucune raison fournie"):
     try:
@@ -1625,7 +1625,7 @@ async def kick(ctx, member: discord.Member, *, reason="Aucune raison fournie"):
     await member.kick(reason=reason)
     await ctx.send(embed=discord.Embed(description=f"👢 **{member}** kické. Raison : {reason}", color=0xe67e22))
 
-@bot.command()
+@bot.command(name="mute", aliases=["silence"])
 @commands.has_permissions(manage_roles=True)
 async def mute(ctx, member: discord.Member, duration: int = 10):
     role = discord.utils.get(ctx.guild.roles, name="Muted")
@@ -1638,7 +1638,7 @@ async def mute(ctx, member: discord.Member, duration: int = 10):
     await asyncio.sleep(duration * 60)
     await member.remove_roles(role)
 
-@bot.command()
+@bot.command(name="unmute", aliases=["unsilence"])
 @commands.has_permissions(manage_roles=True)
 async def unmute(ctx, member: discord.Member):
     role = discord.utils.get(ctx.guild.roles, name="Muted")
@@ -1668,7 +1668,7 @@ async def clear_cmd(ctx, nombre: str = "10"):
 # ============================================================
 #  FUN
 # ============================================================
-@bot.command()
+@bot.command(name="roast")
 async def roast(ctx, member: discord.Member = None):
     target = member or ctx.author
     await ctx.send(embed=discord.Embed(
@@ -1676,7 +1676,7 @@ async def roast(ctx, member: discord.Member = None):
         color=0xe74c3c
     ))
 
-@bot.command()
+@bot.command(name="compliment")
 async def compliment(ctx, member: discord.Member = None):
     compliments = [
         "Tu as le même charme que Lee Min-ho. Vraiment. 😍",
@@ -1704,7 +1704,7 @@ async def eight_ball(ctx, *, question):
         color=0x8e44ad
     ))
 
-@bot.command()
+@bot.command(name="rps", aliases=["chifoumi"])
 async def rps(ctx, choix: str):
     options = ["pierre", "feuille", "ciseaux"]
     choix = choix.lower()
@@ -1727,14 +1727,14 @@ async def rps(ctx, choix: str):
         color=color
     ))
 
-@bot.command()
+@bot.command(name="dice", aliases=["de","d6"])
 async def dice(ctx, faces: int = 6):
     await ctx.send(embed=discord.Embed(
         description=f"🎲 Tu lances un dé à {faces} faces... **{random.randint(1, faces)}** !",
         color=0xe67e22
     ))
 
-@bot.command()
+@bot.command(name="meme")
 async def meme(ctx):
     memes = [
         "https://i.imgflip.com/4t0m5.jpg",
@@ -12019,6 +12019,70 @@ async def setconquete_cmd(ctx, *channels: discord.TextChannel):
         description=desc,
         color=0x2ecc71
     ))
+
+
+@bot.command(name="ouvrir", aliases=["open","coffre"])
+async def ouvrir_cmd(ctx):
+    """Ouvrir un coffre actif — .ouvrir"""
+    import time as _t
+    uid = str(ctx.author.id)
+    channel_id = ctx.channel.id
+
+    # Chercher un coffre actif dans ce salon ou le salon event
+    coffre = coffre_actif.get(channel_id)
+    if not coffre:
+        # Chercher dans tous les salons actifs
+        for cid, c in list(coffre_actif.items()):
+            if c.get("expires", 0) > _t.time():
+                coffre = c
+                channel_id = cid
+                break
+
+    if not coffre:
+        return await ctx.send("❌ Pas de coffre actif en ce moment !", delete_after=5)
+
+    if coffre.get("expires", 0) < _t.time():
+        del coffre_actif[channel_id]
+        return await ctx.send("❌ Ce coffre a expiré !", delete_after=5)
+
+    if uid in coffre.get("ouvert_par", []):
+        return await ctx.send("❌ Tu as déjà ouvert ce coffre !", delete_after=5)
+
+    if "ouvert_par" not in coffre:
+        coffre["ouvert_par"] = []
+    coffre["ouvert_par"].append(uid)
+
+    gain = coffre["contenu"]
+    economy_data[uid]['coins'] += gain
+
+    embed = discord.Embed(
+        title="📦 Coffre Ouvert !",
+        description=f"{ctx.author.mention} ouvre le coffre et trouve **{gain} pièces** ! 💰",
+        color=0xf1c40f
+    )
+    await ctx.send(embed=embed)
+
+    # Supprimer le coffre après première ouverture
+    if channel_id in coffre_actif:
+        del coffre_actif[channel_id]
+    event_en_cours = False
+
+
+@bot.command(name="miser", aliases=["bid","enchere"])
+async def miser_cmd(ctx, montant: int = None):
+    """Miser dans les enchères — .miser <montant>"""
+    gid = ctx.guild.id
+    if gid not in encheres_actives or not encheres_actives[gid].get("actif"):
+        return await ctx.send("❌ Pas d'enchères actives !", delete_after=5)
+    if not montant or montant <= 0:
+        return await ctx.send("❌ Montant invalide !", delete_after=5)
+    uid = str(ctx.author.id)
+    if economy_data[uid]['coins'] < montant:
+        return await ctx.send(f"❌ Tu n'as pas assez de pièces ! Solde : **{economy_data[uid]['coins']:,}p**", delete_after=5)
+    encheres_actives[gid]["mises"][uid] = montant
+    await ctx.send(f"✅ Mise de **{montant:,} pièces** enregistrée !", delete_after=5)
+    try: await ctx.message.delete()
+    except: pass
 
 
 print("🚀 Démarrage du bot...")
