@@ -589,21 +589,28 @@ async def help_cmd(ctx, categorie: str = None):
 
     # ── Page 0 — Accueil ─────────────────────────────────
     p0 = discord.Embed(
-        title="🌸 Akari — Aide du QG Kdrama",
+        title="",
         description=(
-            "Utilise ◀️ ▶️ pour naviguer entre les pages\n\n"
-            "**Préfixe : `.`**\n\n"
             "```\n"
-            "Page  1 — 🎰 Gacha\n"
-            "Page  2 — 💰 Économie\n"
-            "Page  3 — ⚔️  Combats & Quiz\n"
-            "Page  4 — 📊 Progression & Factions\n"
-            "Page  5 — 🎪 Events Auto & Spéciaux\n"
-            "Page  6 — 🎮 Commandes Events Joueurs\n"
-            "Page  7 — 💬 Social & Fun\n"
-            "Page  8 — 🛡️  Modération (Admin)\n"
-            "Page  9 — 🔧 Gacha & Cartes (Admin)\n"
-            "Page 10 — ⚙️  Économie & Config (Admin)\n"
+            "╔══════════════════════════════════════╗\n"
+            "║                                      ║\n"
+            "║    🌸   A K A R I   B O T   🌸      ║\n"
+            "║         QG  Kdrama  —  Aide          ║\n"
+            "║                                      ║\n"
+            "╚══════════════════════════════════════╝\n"
+            "```\n"
+            "◀️ ▶️ pour naviguer • Préfixe : **`.`**\n\n"
+            "```\n"
+            "1  — 🎰  Gacha\n"
+            "2  — 💰  Économie\n"
+            "3  — ⚔️   Combats & Quiz\n"
+            "4  — 📊  Progression & Factions\n"
+            "5  — 🎪  Events Auto & Spéciaux\n"
+            "6  — 🎮  Commandes Events Joueurs\n"
+            "7  — 💬  Social & Fun\n"
+            "8  — 🛡️   Modération  [ admin ]\n"
+            "9  — 🔧  Gacha & Cartes  [ admin ]\n"
+            "10 — ⚙️   Économie & Config  [ admin ]\n"
             "```"
         ),
         color=0xff6b9d
@@ -826,9 +833,10 @@ async def help_cmd(ctx, categorie: str = None):
     ), inline=False)
     p9.add_field(name="✨ Créer & Modifier", value=(
         "`.addcard <nom> | <serie> | <rarete> | <emoji> | <url>`\n"
-        "*Crée une carte custom — stats auto selon rareté*\n\n"
-        "`.setimage <perso> <url>` — Changer l\'image\n"
-        "*Les admins peuvent modifier n\'importe quelle carte*"
+        "*Crée une carte custom — stats calculées auto*\n"
+        "*Ex : `.addcard Sensei | QG Kdrama | Mythique | 👑 | url`*\n\n"
+        "`.setimage <perso> <url>` — Changer l\'image d\'une carte\n"
+        "*Admins : modifiable sans posséder la carte*"
     ), inline=False)
     p9.add_field(name="📋 Raretés valides", value=(
         "`Commun` • `Rare` • `Épique` • `Légendaire` • `Mythique`"
@@ -847,7 +855,8 @@ async def help_cmd(ctx, categorie: str = None):
     ), inline=False)
     p10.add_field(name="🎪 Events", value=(
         "`.lancerevent <nom>` — Lancer un event manuellement\n"
-        "`.lancerevent` — Liste de tous les events disponibles\n\n"
+        "`.lancerevent` — Liste de tous les events disponibles\n"
+        "`.stopervent` — Arrêter l\'event en cours immédiatement\n\n"
         "`.setsalon <type>` — Configurer les salons\n"
         "*Types : gacha • boutique • casino • event • guide*\n"
         "*levelup • combat • bienvenue • aurevoir • boost*\n"
@@ -12238,6 +12247,77 @@ async def addcard_cmd(ctx, *, args: str = None):
     if url:
         embed.set_thumbnail(url=url)
     await ctx.send(embed=embed)
+
+
+@bot.command(name="stopervent", aliases=["stopevent", "arreterevent", "endevent"])
+@commands.has_permissions(administrator=True)
+async def stopervent_cmd(ctx):
+    """Arrête l'event en cours immédiatement — .stopervent"""
+    global event_en_cours, encheres_actives, parminous_game, mine_actif
+    global wanted_actif, clown_actif, canard_actif, magicien_actif
+    global death_note, conquete_zones, oracle_prophecies, pacte_actif
+    global puzzle_actif, vague_actif, double_xp_event_actif
+
+    if not event_en_cours:
+        return await ctx.send("❌ Aucun event en cours !", delete_after=5)
+
+    # Reset toutes les variables d'events
+    event_en_cours = False
+    double_xp_event_actif = False
+
+    # Nettoyer les données des events actifs
+    for gid in list(encheres_actives.keys()):
+        encheres_actives[gid]["actif"] = False
+        del encheres_actives[gid]
+    for gid in list(parminous_game.keys()):
+        parminous_game[gid]["actif"] = False
+        del parminous_game[gid]
+    for gid in list(mine_actif.keys()):
+        if isinstance(mine_actif[gid], dict):
+            mine_actif[gid]["finie"] = [True]
+        del mine_actif[gid]
+    for gid in list(wanted_actif.keys()):
+        del wanted_actif[gid]
+    for gid in list(clown_actif.keys()):
+        # Retirer le rôle clown
+        guild = bot.get_guild(gid)
+        if guild:
+            role = discord.utils.get(guild.roles, name="🤡 Clown du QG")
+            member = guild.get_member(int(clown_actif[gid]))
+            if role and member:
+                try:
+                    await member.remove_roles(role)
+                except:
+                    pass
+        del clown_actif[gid]
+    for gid in list(canard_actif.keys()):
+        del canard_actif[gid]
+    for gid in list(magicien_actif.keys()):
+        del magicien_actif[gid]
+    for gid in list(death_note.keys()):
+        del death_note[gid]
+    for gid in list(conquete_zones.keys()):
+        del conquete_zones[gid]
+    for gid in list(pacte_actif.keys()):
+        del pacte_actif[gid]
+    for gid in list(puzzle_actif.keys()):
+        del puzzle_actif[gid]
+    oracle_prophecies.clear()
+
+    # Annonce dans le salon event
+    channel = get_event_channel(ctx.guild)
+    if channel:
+        embed = discord.Embed(
+            title="🛑 Event Arrêté",
+            description="L'event en cours a été arrêté par un administrateur.",
+            color=0xe74c3c
+        )
+        await channel.send(embed=embed)
+
+    await ctx.send(embed=discord.Embed(
+        description="✅ Event arrêté ! Le serveur est de nouveau libre.",
+        color=0x2ecc71
+    ), delete_after=10)
 
 
 print("🚀 Démarrage du bot...")
