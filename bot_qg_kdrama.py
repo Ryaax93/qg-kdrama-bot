@@ -737,32 +737,33 @@ async def help_cmd(ctx, categorie: str = None):
     pages.append(p4)
 
     # ── Page 5 — Events ───────────────────────────────────
-    p5 = discord.Embed(title="🎪 Events — Auto & Spéciaux", color=0x3498db)
-    p5.add_field(name="📅 Events Hebdo *(automatiques)*", value=(
-        "📦 **Coffre** lun/mer/dim → `.ouvrir`\n"
-        "⚠️ **Invasion Boss** sam 23h → `.attaquerboss`\n"
-        "🌙 **Nuit de Chasse** → Mythique x2 — 2h\n"
-        "🎰 **Nuit Casino** → Slot x2 — 1h\n"
-        "🌀 **Double XP** → XP x2 — 1h\n"
-        "🎴 **Carte Mystère** ven/sam/dim\n"
-        "🌙 **Heure Maudite** → 2h du mat\n"
-        "🎭 **Imposteur du Gacha** → sam 15h"
+    p5 = discord.Embed(title="🎪 Events — Planning & Liste", color=0x3498db)
+    p5.add_field(name="📅 Hebdomadaires", value=(
+        "**Lundi** 9h 🔮 Prophétie • 18h 📦 Coffre • 20h 🎲 Event léger\n"
+        "**Mardi** 20h 🌙 Nuit Chasse OU 🕶️ Marché Noir\n"
+        "**Mercredi** 2h 🌙 Heure Maudite • 19h 🌀 Double XP *(sem. paires)* • 20h 📦 Coffre\n"
+        "**Jeudi** 20h 🎲 Event léger • 21h 🎰 Nuit Casino\n"
+        "**Vendredi** 18h 🎴 Carte Mystère • 20h 🔥 Gros Event\n"
+        "**Samedi** 15h 🎭 Imposteur • 18h 🎴 Carte Mystère • 20h 🔥 Gros Event • 23h ⚠️ Invasion\n"
+        "**Dimanche** 16h 📦 Coffre • 17h 🔥 Gros Event • 19h 🎁 Colis Mystère • 20h 🏆 Classement"
     ), inline=False)
-    p5.add_field(name="📆 Events Mensuels *(automatiques)*", value=(
-        "🃏 **Draft de Cartes** → 3 cartes Épique gratuites\n"
-        "🏴‍☠️ **Guerre des Factions** → boss géant\n"
-        "🎪 **Event Surprise** → annonce 1h avant\n"
-        "💸 **Jackpot** → cagnotte 1500p redistribuée\n"
-        "🔮 **Prophétie** → série bénie +10% arène"
+    p5.add_field(name="🔄 Rotation Gros Events Weekend", value=(
+        "⚔️ Tournoi • 💀 Death Note • 🌍 Conquête\n"
+        "⚡ Enchères • 🕵️ Parmi Nous • 🧩 Puzzle\n"
+        "*Change chaque semaine — jamais le même 2 semaines de suite !*"
     ), inline=False)
-    p5.add_field(name="🎭 Events Spéciaux *(admin : `.lancerevent <nom>`)*", value=(
-        "`tournoi` ⚔️  `parminous` 🕵️  `encheres` ⚡  `mine` ⛏️\n"
-        "`wanted` 🎴  `voleur` 🌙  `deathnote` 💀  `magicien` 🎩\n"
-        "`clown` 🤡  `canard` 🦆  `roue` 🎲  `proces` ⚖️\n"
-        "`oracle` 🔮  `pacte` 🌑  `losers` 🎪  `puzzle` 🧩\n"
-        "`vaguelegendaires` 🌊  `bossfinal` 👾  `alerterouge` 🔴\n"
-        "`conquete` 🌍  `fausserumeur` 📰  `reve` 🌙\n"
-        "`pacifiste` 🌈  `prophetie` 🌊"
+    p5.add_field(name="📆 Mensuels", value=(
+        "1er 💸 Jackpot • 8 🃏 Draft • 15 🏴‍☠️ Guerre + 👾 Boss\n"
+        "22 🎪 Surprise + 👾 Boss • Dernier ven. 🌊 Vague de Légendes"
+    ), inline=False)
+    p5.add_field(name="🎭 Events Lançables — `.lancerevent <nom>`", value=(
+        "`roue` `proces` `tournoi` `mine` `parminous` `fausserumeur`\n"
+        "`encheres` `voleur` `wanted` `reve` `magicien` `clown`\n"
+        "`corbeau` `pacifiste` `oracle` `pacte` `losers` `puzzle`\n"
+        "`vaguelegendaires` `bossfinal` `deathnote` `alerterouge`\n"
+        "`conquete` `prophetie` `colis` `coffre` `nuitcasino`\n"
+        "`cartemystere` `doublexp` `nuitchasse` `marchenoir`\n"
+        "`jackpot` `draft` `guerre` `heuremaudite` `classement`"
     ), inline=False)
     p5.set_footer(text="Page 6/11 • QG Kdrama 🌸")
     pages.append(p5)
@@ -782,18 +783,29 @@ async def help_cmd(ctx, categorie: str = None):
         "`.ecrire @joueur` — Écrire dans le Death Note"
     ), inline=True)
     p6.add_field(name="🎩 Magicien & Divers", value=(
-        "`.sort <type> @joueur` — Lancer un sort\n"
-        "*(double / bloquer / troll)*\n"
-        "`.adopter` — Adopter le canard 🦆\n"
-        "`.jedoute` — Signaler une fausse rumeur"
+        "`.sort <type> @joueur` — Lancer un sort *(double/bloquer/troll)*\n"
+        "`.jedoute` — Signaler une fausse rumeur\n"
+        "`.ouvrir` — Ouvrir un coffre ou colis"
+    ), inline=True)
+    p6.add_field(name="🦅 Corbeau", value=(
+        "`.adopter` — Adopter le corbeau\n"
+        "`.nourrir` — Nourrir *(améliore son humeur)*\n"
+        "`.caresser` — Caresser *(+XP en réserve)*\n"
+        "`.recup` — Récupérer pièces/XP/amélio"
     ), inline=True)
     p6.add_field(name="🏆 Rôles Gagnables", value=(
-        "👑 **Champion du QG** — Tournoi\n"
-        "🌙 **Roi de la Narration** — Rêve Collectif\n"
-        "🎩 **Grand Magicien** — Event Magicien\n"
+        "👑 **Champion du QG** — Tournoi *(permanent)*\n"
+        "🕵️ **Détective du QG** — Parmi Nous *(permanent)*\n"
+        "🧩 **Maître du Puzzle** — Puzzle *(permanent)*\n"
+        "🎯 **Chasseur de Primes N°1** — Wanted *(perdable)*\n"
         "⚔️ **Roi de la Conquête** — Conquête *(perdable)*\n"
+        "💰 **Baron des Enchères** — Enchères *(permanent)*\n"
+        "⚔️ **Pourfendeur de Boss** — Boss Final *(permanent)*\n"
+        "☠️ **Porteur du Destin** — Death Note *(permanent)*\n"
+        "🌙 **Roi de la Narration** — Rêve Collectif *(permanent)*\n"
+        "🎩 **Grand Magicien** — Magicien *(permanent)*\n"
         "🤡 **Clown du QG** — Temporaire"
-    ), inline=True)
+    ), inline=False)
     p6.set_footer(text="Page 7/11 • QG Kdrama 🌸")
     pages.append(p6)
 
@@ -8656,14 +8668,14 @@ MESSAGES_RAGEBAIT = [
 
 # ── Helper : obtenir salon event ──────────────────────────────
 def get_event_channel(guild, ctx=None):
+    # Priorité 1 : salon event configuré
     if SALON_EVENT_ID:
         ch = guild.get_channel(SALON_EVENT_ID)
         if ch: return ch
+    # Priorité 2 : salon où la commande a été tapée (lancerevent manuel)
     if ctx:
         return ctx.channel
-    if SALON_GACHA_ID:
-        ch = guild.get_channel(SALON_GACHA_ID)
-        if ch: return ch
+    # Priorité 3 : system channel — JAMAIS le salon gacha pour les events
     return guild.system_channel
 
 def get_gacha_role(guild):
@@ -8866,247 +8878,197 @@ async def prophetie_hebdo():
 # Planning hebdo aléatoire
 @tasks.loop(hours=24)
 async def planning_hebdo():
-    import datetime as _dt, time as _t
+    import datetime as _dt
     global event_en_cours
     now = _dt.datetime.now()
     hour = now.hour
     weekday = now.weekday()  # 0=lun, 1=mar... 6=dim
-
-    # Coffres : lun(14h), mer(20h), dim(16h)
-    coffre_schedule = {0: 14, 2: 20, 6: 16}
-    if weekday in coffre_schedule and hour == coffre_schedule[weekday]:
-        if not event_en_cours:
-            await lancer_coffre_planifie()
-        return
-
-    # Mardi 20h → Procès du QG ou Roue de la Fortune
-    if weekday == 1 and hour == 20 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_proces()
-        else:
-            await lancer_roue_fortune()
-        return
-
-    # Nuit Casino : jeudi 21h
-    if weekday == 3 and hour == 21 and not event_en_cours:
-        await lancer_nuit_casino()
-        return
-
-    # Mercredi 21h → Canard ou Clown
-    if weekday == 2 and hour == 21 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_canard()
-        else:
-            await lancer_clown()
-        return
-
-    # Vendredi 20h → Parmi Nous ou Wanted
-    if weekday == 4 and hour == 20 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_parminous()
-        else:
-            await lancer_wanted()
-        return
-
-    # Lundi 21h → Tournoi ou Mine d'Or
-    if weekday == 0 and hour == 21 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_tournoi()
-        else:
-            await lancer_mine_or()
-        return
-
-    # Mardi 21h → Enchères ou Fausse Rumeur
-    if weekday == 1 and hour == 21 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_encheres()
-        else:
-            await lancer_fausse_rumeur()
-        return
-
-    # Mercredi 22h → Rêve Collectif ou Magicien
-    if weekday == 2 and hour == 22 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_reve_collectif()
-        else:
-            await lancer_magicien()
-        return
-
-    # Jeudi 20h → Oracle Maudit ou Pacte
-    if weekday == 3 and hour == 20 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_oracle_maudit()
-        else:
-            await lancer_pacte()
-        return
-
-    # Vendredi 21h → Puzzle Collectif ou Festival des Losers
-    if weekday == 4 and hour == 21 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_puzzle_collectif()
-        else:
-            await lancer_festival_losers()
-        return
-
-    # Samedi 18h → Vague de Légendes ou Boss Final
-    if weekday == 5 and hour == 18 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_vague_legendaires()
-        else:
-            await lancer_boss_final()
-        return
-
-    # Samedi 20h → Death Note ou Conquête
-    if weekday == 5 and hour == 20 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_death_note()
-        else:
-            await lancer_conquete()
-        return
-
-    # Dimanche 19h → Colis Mystère (rare)
-    if weekday == 6 and hour == 19 and not event_en_cours:
-        if _r.random() < 0.4:
-            await lancer_colis_mystere()
-        return
-
-    # Dimanche 17h → Voleur de Minuit ou Event Pacifiste
-    if weekday == 6 and hour == 17 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_voleur_minuit()
-        else:
-            await lancer_event_pacifiste()
-        return
-
-    # Dimanche 21h → Alerte Rouge (rare) ou Prophétie
-    if weekday == 6 and hour == 21 and not event_en_cours:
-        if _r.random() < 0.3:
-            await lancer_alerte_rouge()
-        else:
-            await lancer_prophetie_accomplie()
-        return
-
-    # Carte Mystère : ven/sam/dim → tirage aléatoire
-    if weekday in (4, 5, 6) and hour == 18 and not event_en_cours:
-        # Seulement 1 des 3 jours (aléatoire chaque semaine)
-        if _r.random() < 0.33:
-            await lancer_carte_mystere()
-        return
-
-    # Double XP : toutes les 2 semaines, mercredi 19h
     semaine = now.isocalendar()[1]
-    if weekday == 2 and hour == 19 and semaine % 2 == 0 and not event_en_cours:
-        await lancer_double_xp_event()
+    today = now.date()
+
+    # ── ROTATION GROS EVENTS WEEKEND (6 events, jamais le même 2 semaines) ──
+    ROTATION_WEEKEND = [
+        lancer_tournoi,
+        lancer_death_note,
+        lancer_conquete,
+        lancer_encheres,
+        lancer_parminous,
+        lancer_puzzle_collectif,
+    ]
+    idx_ven = semaine % len(ROTATION_WEEKEND)
+    idx_sam = (semaine + 2) % len(ROTATION_WEEKEND)
+    idx_dim = (semaine + 4) % len(ROTATION_WEEKEND)
+    # S'assurer que les 3 sont différents
+    if idx_sam == idx_ven: idx_sam = (idx_sam + 1) % len(ROTATION_WEEKEND)
+    if idx_dim == idx_ven or idx_dim == idx_sam: idx_dim = (idx_dim + 1) % len(ROTATION_WEEKEND)
+
+    event_vendredi = ROTATION_WEEKEND[idx_ven]
+    event_samedi   = ROTATION_WEEKEND[idx_sam]
+    event_dimanche = ROTATION_WEEKEND[idx_dim]
+
+    # ── EVENTS LÉGERS ALÉATOIRES (jeudi soir + lundi soir) ──
+    EVENTS_LEGERS = [
+        lancer_proces, lancer_roue_fortune, lancer_fausse_rumeur,
+        lancer_oracle_maudit, lancer_clown, lancer_event_pacifiste,
+        lancer_pacte, lancer_voleur_minuit, lancer_magicien,
+        lancer_reve_collectif, lancer_festival_losers, lancer_mine_or,
+        lancer_wanted,
+    ]
+
+    # ══════════════════════════════════════════════════════════
+    # LUNDI
+    # ══════════════════════════════════════════════════════════
+    # Lundi 9h → Prophétie Hebdo
+    if weekday == 0 and hour == 9:
+        await lancer_prophetie_hebdo()
         return
 
-    # Nuit de Chasse OU Marché Noir : jeudi ou vendredi 22h (pas samedi)
-    if weekday in (3, 4) and hour == 22 and not event_en_cours:
+    # Lundi 18h → Coffre
+    if weekday == 0 and hour == 18 and not event_en_cours:
+        await lancer_coffre_planifie()
+        return
+
+    # Lundi 20h → Event léger aléatoire
+    if weekday == 0 and hour == 20 and not event_en_cours:
+        await _r.choice(EVENTS_LEGERS)()
+        return
+
+    # ══════════════════════════════════════════════════════════
+    # MARDI
+    # ══════════════════════════════════════════════════════════
+    # Mardi 20h → Nuit de Chasse OU Marché Noir (jamais ensemble)
+    if weekday == 1 and hour == 20 and not event_en_cours:
         if _r.random() < 0.5:
             await lancer_nuit_chasse_event()
         else:
             await lancer_marche_noir_event()
         return
 
-# Mensuel : 1er du mois
-
-    # Lundi 21h → Tournoi ou Mine d'Or
-    if weekday == 0 and hour == 21 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_tournoi()
-        else:
-            await lancer_mine_or()
+    # ══════════════════════════════════════════════════════════
+    # MERCREDI
+    # ══════════════════════════════════════════════════════════
+    # Mercredi 2h → Heure Maudite
+    if weekday == 2 and hour == 2 and not event_en_cours:
+        await lancer_heure_maudite()
         return
 
-    # Mardi 21h → Enchères ou Fausse Rumeur
-    if weekday == 1 and hour == 21 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_encheres()
-        else:
-            await lancer_fausse_rumeur()
+    # Mercredi 19h → Double XP semaines paires
+    if weekday == 2 and hour == 19 and semaine % 2 == 0 and not event_en_cours:
+        await lancer_double_xp_event()
         return
 
-    # Mercredi 22h → Rêve Collectif ou Magicien
-    if weekday == 2 and hour == 22 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_reve_collectif()
-        else:
-            await lancer_magicien()
+    # Mercredi 20h → Coffre
+    if weekday == 2 and hour == 20 and not event_en_cours:
+        await lancer_coffre_planifie()
         return
 
-    # Jeudi 20h → Oracle Maudit ou Pacte
+    # ══════════════════════════════════════════════════════════
+    # JEUDI
+    # ══════════════════════════════════════════════════════════
+    # Jeudi 20h → Event léger aléatoire
     if weekday == 3 and hour == 20 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_oracle_maudit()
-        else:
-            await lancer_pacte()
+        await _r.choice(EVENTS_LEGERS)()
         return
 
-    # Vendredi 21h → Puzzle Collectif ou Festival des Losers
-    if weekday == 4 and hour == 21 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_puzzle_collectif()
-        else:
-            await lancer_festival_losers()
+    # Jeudi 21h → Nuit Casino
+    if weekday == 3 and hour == 21 and not event_en_cours:
+        await lancer_nuit_casino()
         return
 
-    # Samedi 18h → Vague de Légendes ou Boss Final
+    # ══════════════════════════════════════════════════════════
+    # VENDREDI
+    # ══════════════════════════════════════════════════════════
+    # Vendredi 18h → Carte Mystère (33%)
+    if weekday == 4 and hour == 18 and not event_en_cours:
+        if _r.random() < 0.33:
+            await lancer_carte_mystere()
+        return
+
+    # Vendredi 20h → GROS EVENT rotation
+    if weekday == 4 and hour == 20 and not event_en_cours:
+        await event_vendredi()
+        return
+
+    # ══════════════════════════════════════════════════════════
+    # SAMEDI
+    # ══════════════════════════════════════════════════════════
+    # Samedi 15h → Imposteur du Gacha
+    if weekday == 5 and hour == 15 and not event_en_cours:
+        await lancer_imposteur()
+        return
+
+    # Samedi 18h → Carte Mystère (33%)
     if weekday == 5 and hour == 18 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_vague_legendaires()
-        else:
-            await lancer_boss_final()
+        if _r.random() < 0.33:
+            await lancer_carte_mystere()
         return
 
-    # Samedi 20h → Death Note ou Conquête
+    # Samedi 20h → GROS EVENT rotation
     if weekday == 5 and hour == 20 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_death_note()
-        else:
-            await lancer_conquete()
+        await event_samedi()
         return
 
-    # Dimanche 19h → Colis Mystère (rare)
+    # Samedi 23h → Invasion Boss
+    if weekday == 5 and hour == 23 and not event_en_cours:
+        await lancer_invasion_boss()
+        return
+
+    # ══════════════════════════════════════════════════════════
+    # DIMANCHE
+    # ══════════════════════════════════════════════════════════
+    # Dimanche 16h → Coffre
+    if weekday == 6 and hour == 16 and not event_en_cours:
+        await lancer_coffre_planifie()
+        return
+
+    # Dimanche 17h → GROS EVENT rotation
+    if weekday == 6 and hour == 17 and not event_en_cours:
+        await event_dimanche()
+        return
+
+    # Dimanche 19h → Colis Mystère (40%)
     if weekday == 6 and hour == 19 and not event_en_cours:
         if _r.random() < 0.4:
             await lancer_colis_mystere()
         return
 
-    # Dimanche 17h → Voleur de Minuit ou Event Pacifiste
-    if weekday == 6 and hour == 17 and not event_en_cours:
-        if _r.random() < 0.5:
-            await lancer_voleur_minuit()
-        else:
-            await lancer_event_pacifiste()
+    # Dimanche 20h → Classement Hebdo
+    if weekday == 6 and hour == 20:
+        await lancer_classement_hebdo()
         return
 
-    # Dimanche 21h → Alerte Rouge (rare) ou Prophétie
-    if weekday == 6 and hour == 21 and not event_en_cours:
-        if _r.random() < 0.3:
-            await lancer_alerte_rouge()
-        else:
-            await lancer_prophetie_accomplie()
-        return
 
 @tasks.loop(hours=24)
 async def events_mensuels():
     import datetime as _dt
     now = _dt.datetime.now()
-    if now.day not in (1, 8, 15, 22):
+    if now.day not in (1, 8, 15, 22) and not _est_dernier_vendredi(now):
         return
     hour = now.hour
     if hour != 18:
         return
 
-    if now.day == 1:      # 1er → Jackpot lancé
+    if now.day == 1:
         await lancer_jackpot()
-    elif now.day == 8:    # 8 → Draft de cartes
+    elif now.day == 8:
         await lancer_draft_cartes()
-    elif now.day == 15:   # 15 → Guerre de factions
+    elif now.day == 15:
         await lancer_guerre_factions()
-    elif now.day == 22:   # 22 → Event Surprise
+        await lancer_boss_final()   # Boss Final 1er passage
+    elif now.day == 22:
         await lancer_event_surprise()
+        await lancer_boss_final()   # Boss Final 2ème passage
+    elif _est_dernier_vendredi(now):
+        await lancer_vague_legendaires()  # Vague 1x/mois seulement
 
-# Heure Maudite : mercredi 2h du mat
+def _est_dernier_vendredi(dt):
+    import datetime as _dt
+    if dt.weekday() != 4:  # 4 = vendredi
+        return False
+    prochain = dt + _dt.timedelta(days=7)
+    return prochain.month != dt.month
+
+
 @tasks.loop(hours=24)
 async def heure_maudite_task():
     import datetime as _dt
@@ -9801,7 +9763,8 @@ async def supprimer_salon_temp(salon, delai=7, guild=None, nom_event=""):
     try:
         # Annonce dans salon event avant suppression
         if guild and nom_event:
-            channel_event = get_event_channel(guild)
+            # Forcer le salon event pour l'annonce de fin
+            channel_event = guild.get_channel(SALON_EVENT_ID) if SALON_EVENT_ID else guild.system_channel
             if channel_event and channel_event != salon:
                 embed_fin = discord.Embed(
                     description=f"✅ **{nom_event}** est terminé ! Merci d'avoir participé 🎉",
@@ -9834,7 +9797,8 @@ async def lancerevent_cmd(ctx, nom: str = None):
         "reve": lancer_reve_collectif,
         "magicien": lancer_magicien,
         "clown": lancer_clown,
-        "canard": lancer_canard,
+        "canard": lancer_corbeau,
+        "corbeau": lancer_corbeau,
         "pacifiste": lancer_event_pacifiste,
         "oracle": lancer_oracle_maudit,
         "pacte": lancer_pacte,
@@ -9861,6 +9825,7 @@ async def lancerevent_cmd(ctx, nom: str = None):
         "alerterouge": lancer_alerte_rouge,
         "conquete": lancer_conquete,
         "prophetie": lancer_prophetie_accomplie,
+        "prophetiehebdo": lancer_prophetie_hebdo,
     }
 
     if not nom:
@@ -10374,9 +10339,17 @@ async def lancer_parminous(ctx=None):
                 for m in membres_actifs:
                     if str(m.id) != imp_id:
                         economy_data[str(m.id)]['coins'] += reward
+                role_det = await get_or_create_role(guild, "🕵️ Détective du QG", 0x3498db)
+                # Donner le rôle au membre qui a eu le plus de votes corrects
+                top_voter = max(vote_count, key=vote_count.get) if vote_count else None
+                if top_voter and role_det:
+                    m_det = guild.get_member(int(top_voter))
+                    if m_det:
+                        try: await m_det.add_roles(role_det)
+                        except: pass
                 embed_fin = discord.Embed(
                     title="✅ L'IMPOSTEUR A ÉTÉ TROUVÉ !",
-                    description=f"**{imposteur.display_name}** était l'imposteur !\n\nTous les innocents reçoivent **+{reward} pièces** !",
+                    description=f"**{imposteur.display_name}** était l'imposteur !\n\nTous les innocents reçoivent **+{reward} pièces** !\n🕵️ Rôle **Détective du QG** attribué !",
                     color=0x2ecc71
                 )
             else:
@@ -10467,9 +10440,14 @@ async def lancer_encheres(ctx=None):
                     economy_data[winner_uid]['coins'] = max(0, economy_data[winner_uid]['coins'] - montant_max)
                     claimed_cards[carte_key] = winner_uid
                     gacha_collections[winner_uid][carte_key] = {"fusion": 0}
+                    winner_m = guild.get_member(int(winner_uid))
+                    role_baron = await get_or_create_role(guild, "💰 Baron des Enchères", 0xf39c12)
+                    if role_baron and winner_m:
+                        try: await winner_m.add_roles(role_baron)
+                        except: pass
                     await salon_enc.send(embed=discord.Embed(
                         title=f"🏆 <@{winner_uid}> remporte les enchères !",
-                        description=f"**{c['nom']}** {r_emoji} adjugé pour **{montant_max:,} pièces** !",
+                        description=f"**{c['nom']}** {r_emoji} adjugé pour **{montant_max:,} pièces** !\n💰 Rôle **Baron des Enchères** attribué !",
                         color=0x2ecc71
                     ))
             if guild.id in encheres_actives:
@@ -10742,6 +10720,16 @@ async def lancer_magicien(ctx=None):
                 salon_mag = await guild.create_text_channel("🎩・salon-du-magicien", overwrites=overwrites)
             except:
                 salon_mag = None
+            # Créer salon privé visible uniquement par le magicien
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+                magicien: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            }
+            try:
+                salon_mag = await guild.create_text_channel("🎩・salon-du-magicien", overwrites=overwrites)
+            except:
+                salon_mag = None
             magicien_actif[guild.id] = {
                 "magicien": str(magicien.id),
                 "sorts_restants": 3,
@@ -10843,85 +10831,107 @@ async def lancer_clown(ctx=None):
 # ── 🔮 ORACLE MAUDIT ──────────────────────────────────────────
 
 async def lancer_canard(ctx=None):
+    """Alias pour compatibilité — lance le Corbeau"""
+    await lancer_corbeau(ctx)
+
+async def lancer_corbeau(ctx=None):
     global event_en_cours
     event_en_cours = True
-
-    humeurs = ["joyeux", "grognon", "généreux", "voleur", "mystérieux"]
-
+    humeurs = [
+        {"nom": "généreux", "desc": "Il ramène des **pièces** à son propriétaire 💰"},
+        {"nom": "voleur",   "desc": "Il vole des **pièces** aux autres membres 😈"},
+        {"nom": "sage",     "desc": "Il apporte de l\'**XP** à son propriétaire ⭐"},
+        {"nom": "mystique", "desc": "Il peut rapporter un **point d\'amélioration** 💎"},
+        {"nom": "grognon",  "desc": "Il vole des **pièces** à son propriétaire 😤"},
+    ]
     for guild in bot.guilds:
         try:
             channel = get_event_channel(guild, ctx)
             if not channel: continue
-
             humeur = _r.choice(humeurs)
-            canard_actif[guild.id] = {"proprio": None, "humeur": humeur, "adopte": False}
-
-            effets_humeur = {
-                "joyeux": "Il rapporte **+100 pièces** à son propriétaire toutes les 10 min !",
-                "grognon": "Il vole **-50 pièces** à son propriétaire toutes les 10 min...",
-                "généreux": "Il distribue des pièces aléatoires aux membres du salon !",
-                "voleur": "Il vole des pièces aux autres membres pour son propriétaire !",
-                "mystérieux": "Son comportement est... imprévisible 👀"
-            }
+            canard_actif[guild.id] = {"proprio": None, "humeur": humeur["nom"], "adopte": False}
 
             embed = discord.Embed(
-                title="🦆 UN CANARD APPARAÎT !",
+                title="🦅 UN CORBEAU MYSTÉRIEUX APPARAÎT !",
                 description=(
-                    f"Un canard mystérieux est apparu dans le salon !\n\n"
-                    f"Humeur actuelle : **{humeur}** — {effets_humeur[humeur]}\n\n"
-                    f"Tape `.adopter` pour l'accueillir !\n"
-                    f"⏰ Il disparaît dans **20 minutes** !"
+                    "```\n"
+                    "╔═══════════════════════════════╗\n"
+                    "║   🦅  C O R B E A U  🦅       ║\n"
+                    "║  ─────────────────────────  ║\n"
+                    "║  Il observe... il attend...  ║\n"
+                    "╚═══════════════════════════════╝\n"
+                    "```\n"
+                    f"Humeur : **{humeur['nom']}** — {humeur['desc']}\n\n"
+                    "`.adopter` — Prendre le corbeau\n"
+                    "`.nourrir` — Nourrir *(améliore son humeur)*\n"
+                    "`.caresser` — Caresser *(crée un lien)*\n"
+                    "`.recup` — Récupérer ce qu\'il a ramené\n\n"
+                    "⏰ Il disparaît dans **20 minutes** !"
                 ),
-                color=0xf1c40f
+                color=0x2c2f33
             )
             await channel.send(embed=embed)
 
-            # Effets toutes les 10 min
-            for _ in range(2):
-                await asyncio.sleep(600)
+            # Effets toutes les 5 min
+            for tick in range(4):
+                await asyncio.sleep(300)
                 data = canard_actif.get(guild.id, {})
                 if not data or not data.get("proprio"):
                     continue
-
                 proprio_id = data["proprio"]
                 proprio = guild.get_member(int(proprio_id))
                 if not proprio: continue
+                humeur_nom = data["humeur"]
 
-                if humeur == "joyeux":
-                    economy_data[proprio_id]['coins'] += 100
-                    await channel.send(f"🦆 Le canard de **{proprio.display_name}** est de bonne humeur — **+100 pièces** !")
-                elif humeur == "grognon":
-                    economy_data[proprio_id]['coins'] = max(0, economy_data[proprio_id]['coins'] - 50)
-                    await channel.send(f"🦆 Le canard de **{proprio.display_name}** est grognon — **-50 pièces** 😤")
-                elif humeur == "voleur":
-                    victimes = [m for m in guild.members if not m.bot and str(m.id) != proprio_id]
+                if humeur_nom == "généreux":
+                    gain = _r.randint(50, 150)
+                    data["reserve"] = data.get("reserve", 0) + gain
+                    await channel.send(f"🦅 Le corbeau de {proprio.mention} est parti en chasse... il rapporte **{gain} pièces** en réserve ! `.recup` pour les récupérer")
+
+                elif humeur_nom == "voleur":
+                    victimes = [m for m in guild.members if not m.bot and str(m.id) != proprio_id and economy_data[str(m.id)]['coins'] > 20]
                     if victimes:
                         v = _r.choice(victimes)
-                        vol = _r.randint(20, 80)
+                        vol = _r.randint(30, 100)
                         economy_data[str(v.id)]['coins'] = max(0, economy_data[str(v.id)]['coins'] - vol)
-                        economy_data[proprio_id]['coins'] += vol
-                        await channel.send(f"🦆 Le canard de **{proprio.display_name}** a volé **{vol} pièces** à **{v.display_name}** 😈")
+                        data["reserve"] = data.get("reserve", 0) + vol
+                        await channel.send(f"🦅 Le corbeau de {proprio.mention} a volé **{vol} pièces** à {v.mention} ! `.recup` pour les récupérer 😈")
 
-            # Fin
+                elif humeur_nom == "sage":
+                    xp_gain = _r.randint(20, 60)
+                    data["reserve_xp"] = data.get("reserve_xp", 0) + xp_gain
+                    await channel.send(f"🦅 Le corbeau de {proprio.mention} médite... **+{xp_gain} XP** en réserve ! `.recup` pour récupérer")
+
+                elif humeur_nom == "mystique":
+                    if tick == 3 and _r.random() < 0.3:  # 30% chance au dernier tick
+                        data["reserve_amelio"] = 1
+                        await channel.send(f"🦅 Le corbeau de {proprio.mention} revient avec quelque chose de rare... 💎 `.recup` vite !")
+
+                elif humeur_nom == "grognon":
+                    vol = _r.randint(20, 80)
+                    economy_data[proprio_id]['coins'] = max(0, economy_data[proprio_id]['coins'] - vol)
+                    await channel.send(f"🦅 Le corbeau de {proprio.mention} est de mauvaise humeur... **-{vol} pièces** 😤")
+
+            # Fin de l'event
+            data = canard_actif.get(guild.id, {})
+            if data and data.get("proprio"):
+                proprio = guild.get_member(int(data["proprio"]))
+                await channel.send(embed=discord.Embed(
+                    description=f"🦅 Le corbeau de {proprio.mention if proprio else '???'} s\'envole... Tape `.recup` pour récupérer ses derniers dons !",
+                    color=0x95a5a6
+                ))
+            else:
+                await channel.send(embed=discord.Embed(description="🦅 Le corbeau repart sans avoir été adopté...", color=0x95a5a6))
+
+            await asyncio.sleep(60)
             if guild.id in canard_actif:
-                data = canard_actif[guild.id]
-                proprio_id = data.get("proprio")
-                if proprio_id:
-                    proprio = guild.get_member(int(proprio_id))
-                    await channel.send(embed=discord.Embed(
-                        description=f"🦆 Le canard de **{proprio.display_name if proprio else '???'}** s'envole... à bientôt !",
-                        color=0x95a5a6
-                    ))
-                else:
-                    await channel.send(embed=discord.Embed(description="🦆 Le canard repart sans avoir été adopté... 😢", color=0x95a5a6))
                 del canard_actif[guild.id]
 
         except Exception as e:
-            print(f"Canard error: {e}")
-
+            print(f"Corbeau error: {e}")
     event_en_cours = False
 
-# ── 🌈 EVENT PACIFISTE ────────────────────────────────────────
+
 async def lancer_event_pacifiste(ctx=None):
     global event_en_cours
     event_en_cours = True
@@ -11173,9 +11183,13 @@ async def lancer_puzzle_collectif(ctx=None):
                 claimed_cards[carte_key] = winner_uid
                 gacha_collections[winner_uid][carte_key] = {"fusion": 0}
                 r_emoji = RARETE_EMOJI.get(c['rarete'], '🟣')
+                role_puzzle = await get_or_create_role(guild, "🧩 Maître du Puzzle", 0x9b59b6)
+                if role_puzzle and winner:
+                    try: await winner.add_roles(role_puzzle)
+                    except: pass
                 await salon_puzzle.send(embed=discord.Embed(
                     title=f"🧩 C'était {c['nom']} !",
-                    description=f"{winner.mention if winner else winner_uid} remporte **{c['nom']}** {r_emoji} avec **{scores_puzzle[winner_uid]} points** !",
+                    description=f"{winner.mention if winner else winner_uid} remporte **{c['nom']}** {r_emoji} avec **{scores_puzzle[winner_uid]} points** !\n🧩 Rôle **Maître du Puzzle** attribué !",
                     color=0x2ecc71
                 ))
             if guild.id in puzzle_actif:
@@ -11437,6 +11451,10 @@ async def lancer_death_note(ctx=None):
                     economy_data[data["porteur"]]['coins'] = max(0, economy_data[data["porteur"]]['coins'] - montant_retour)
                     desc_retour += f"💸 Retour : **-{montant_retour} pièces**\n"
 
+            role_dn = await get_or_create_role(guild, "☠️ Porteur du Destin", 0x2c2f33)
+            if role_dn and porteur_m:
+                try: await porteur_m.add_roles(role_dn)
+                except: pass
             embed_reveal = discord.Embed(
                 title=f"💀 {porteur_m.display_name if porteur_m else '???'} possédait le Death Note !",
                 description=(
@@ -11485,7 +11503,7 @@ async def lancer_alerte_rouge(ctx=None):
                 color=0xff0000
             )
             msg_alerte = await channel_event.send("@everyone", embed=embed_silence)
-            await asyncio.sleep(120)
+            await asyncio.sleep(90)
             await msg_alerte.edit(embed=discord.Embed(
                 description=(
                     "```\n"
@@ -11498,7 +11516,7 @@ async def lancer_alerte_rouge(ctx=None):
                 ),
                 color=0xff0000
             ))
-            await asyncio.sleep(120)
+            await asyncio.sleep(90)
             for i in [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]:
                 bars = "🟥" * i + "⬛" * (10 - i)
                 await channel_event.send(embed=discord.Embed(
@@ -11755,9 +11773,19 @@ async def chasser_cmd(ctx, cible: discord.Member = None):
     economy_data[uid]['coins'] += prime
     economy_data[data["cible"]]['coins'] = max(0, economy_data[data["cible"]]['coins'] - prime // 2)
     del wanted_actif[gid]
+    # Retirer l'ancien rôle chasseur
+    old_chasseur = discord.utils.get(ctx.guild.roles, name="🎯 Chasseur de Primes N°1")
+    if old_chasseur:
+        for m in old_chasseur.members:
+            try: await m.remove_roles(old_chasseur)
+            except: pass
+    role_chasseur = await get_or_create_role(ctx.guild, "🎯 Chasseur de Primes N°1", 0xc0392b)
+    if role_chasseur:
+        try: await ctx.author.add_roles(role_chasseur)
+        except: pass
     await ctx.send(embed=discord.Embed(
         title="🎯 CIBLE CAPTURÉE !",
-        description=f"**{ctx.author.display_name}** a capturé **{cible.display_name}** et récupère la prime de **{prime:,} pièces** !",
+        description=f"{ctx.author.mention} a capturé **{cible.display_name}** et récupère **{prime:,} pièces** !\n🎯 Rôle **Chasseur de Primes N°1** attribué *(perdable au prochain Wanted)* !",
         color=0x2ecc71
     ))
 
@@ -12431,6 +12459,128 @@ async def lancer_colis_mystere(ctx=None):
         except Exception as e:
             print(f"Colis mystère error: {e}")
     event_en_cours = False
+
+
+async def lancer_invasion_boss(ctx=None):
+    """Lance une invasion de boss"""
+    import random as _rand
+    for guild in bot.guilds:
+        try:
+            channel = get_event_channel(guild, ctx)
+            if not channel: continue
+            if guild.id in invasion_active and invasion_active[guild.id].get("actif"):
+                return
+            boss = _rand.choice(BOSS_INVASIONS).copy()
+            invasion_active[guild.id] = {**boss, "attaquants": {}, "actif": True, "max_pv": boss["pv"]}
+            embed = discord.Embed(
+                title=f"⚠️ INVASION — {boss['emoji']} {boss['nom']}",
+                description=(
+                    f"**{boss['nom']}** de *{boss['serie']}* envahit le QG !\n\n"
+                    f"❤️ **{boss['pv']:,} PV**\n"
+                    "`.attaquerboss` pour le combattre !\n"
+                    "⏰ **2 heures** pour le vaincre !"
+                ),
+                color=0x8b0000
+            )
+            if boss.get("image"):
+                embed.set_thumbnail(url=boss["image"])
+            await channel.send("@everyone", embed=embed)
+        except Exception as e:
+            print(f"Invasion boss error: {e}")
+
+
+async def lancer_prophetie_hebdo(ctx=None):
+    """Prophétie hebdo — annonce la série bénie du lundi"""
+    global serie_benie
+    import random as _rand
+    series = ["Naruto", "One Piece", "Demon Slayer", "Bleach", "Attack on Titan",
+              "My Hero Academia", "Jujutsu Kaisen", "Hunter x Hunter", "Dragon Ball",
+              "Black Clover", "Fairy Tail", "Solo Leveling", "Chainsaw Man"]
+    serie_benie = _rand.choice(series)
+    for guild in bot.guilds:
+        try:
+            channel = get_event_channel(guild, ctx)
+            if not channel: continue
+            embed = discord.Embed(
+                title="🔮 PROPHÉTIE DE LA SEMAINE",
+                description=(
+                    f"L\'Oracle a parlé...\n\n"
+                    f"✨ **Série bénie cette semaine : {serie_benie}**\n\n"
+                    f"Toutes les cartes **{serie_benie}** ont **+10% de stats** en arène !\n"
+                    f"Concentrez vos rolls sur cette série cette semaine !"
+                ),
+                color=0x9b59b6
+            )
+            await channel.send("@everyone", embed=embed)
+        except Exception as e:
+            print(f"Prophétie hebdo error: {e}")
+
+
+@bot.command(name="nourrir")
+async def nourrir_cmd(ctx):
+    """Nourrir le corbeau — .nourrir"""
+    gid = ctx.guild.id
+    if gid not in canard_actif or not canard_actif[gid].get("proprio"):
+        return await ctx.send("❌ T'as pas de corbeau !", delete_after=5)
+    if str(ctx.author.id) != canard_actif[gid]["proprio"]:
+        return await ctx.send("❌ C'est pas ton corbeau !", delete_after=5)
+    data = canard_actif[gid]
+    if data.get("nourri"):
+        return await ctx.send("❌ Le corbeau a déjà mangé !", delete_after=5)
+    data["nourri"] = True
+    # Améliorer l'humeur si grognon
+    if data["humeur"] == "grognon":
+        data["humeur"] = "généreux"
+        await ctx.send(f"🦅 {ctx.author.mention} nourrit le corbeau... son humeur change ! Il devient **généreux** 💰")
+    else:
+        data["reserve"] = data.get("reserve", 0) + 50
+        await ctx.send(f"🦅 {ctx.author.mention} nourrit le corbeau... **+50 pièces** en réserve !")
+
+@bot.command(name="caresser")
+async def caresser_cmd(ctx):
+    """Caresser le corbeau — .caresser"""
+    gid = ctx.guild.id
+    if gid not in canard_actif or not canard_actif[gid].get("proprio"):
+        return await ctx.send("❌ T'as pas de corbeau !", delete_after=5)
+    if str(ctx.author.id) != canard_actif[gid]["proprio"]:
+        return await ctx.send("❌ C'est pas ton corbeau !", delete_after=5)
+    data = canard_actif[gid]
+    if data.get("caresse"):
+        return await ctx.send("❌ Le corbeau a déjà été caressé !", delete_after=5)
+    data["caresse"] = True
+    data["reserve_xp"] = data.get("reserve_xp", 0) + 30
+    await ctx.send(f"🦅 {ctx.author.mention} caresse le corbeau... il ronronne et rapporte **+30 XP** en réserve !")
+
+@bot.command(name="recup", aliases=["recuperer"])
+async def recup_cmd(ctx):
+    """Récupérer les gains du corbeau — .recup"""
+    gid = ctx.guild.id
+    if gid not in canard_actif or not canard_actif[gid].get("proprio"):
+        return await ctx.send("❌ T'as pas de corbeau actif !", delete_after=5)
+    if str(ctx.author.id) != canard_actif[gid]["proprio"]:
+        return await ctx.send("❌ C'est pas ton corbeau !", delete_after=5)
+    data = canard_actif[gid]
+    uid = str(ctx.author.id)
+    desc = ""
+    if data.get("reserve", 0) > 0:
+        economy_data[uid]["coins"] += data["reserve"]
+        desc += f"💰 **+{data['reserve']} pièces**\n"
+        data["reserve"] = 0
+    if data.get("reserve_xp", 0) > 0:
+        xp_data[uid]["xp"] += data["reserve_xp"]
+        desc += f"⭐ **+{data['reserve_xp']} XP**\n"
+        data["reserve_xp"] = 0
+    if data.get("reserve_amelio", 0) > 0:
+        points_amelio[uid] = points_amelio.get(uid, 0) + 1
+        desc += f"💎 **+1 point d\'amélioration** !\n"
+        data["reserve_amelio"] = 0
+    if not desc:
+        return await ctx.send("❌ Le corbeau n'a rien ramené pour l'instant !", delete_after=5)
+    await ctx.send(embed=discord.Embed(
+        title="🦅 Récolte du Corbeau !",
+        description=f"{ctx.author.mention} récupère :\n{desc}",
+        color=0x2ecc71
+    ))
 
 
 print("🚀 Démarrage du bot...")
