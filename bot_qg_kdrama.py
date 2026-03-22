@@ -90,6 +90,7 @@ def sauvegarder_salons():
         "ROLE_MEMBRE_NAME":   ROLE_MEMBRE_NAME,
         "REGLEMENT_ROLE_ID":  REGLEMENT_ROLE_ID,
         "REGLEMENT_MSG_ID":   REGLEMENT_MSG_ID,
+        "CONQUETE_ZONE_IDS":  CONQUETE_ZONE_IDS,
     }
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -124,6 +125,7 @@ def charger_salons():
         global REGLEMENT_ROLE_ID
         REGLEMENT_ROLE_ID  = int(data["REGLEMENT_ROLE_ID"]) if data.get("REGLEMENT_ROLE_ID") else None
         REGLEMENT_MSG_ID   = int(data["REGLEMENT_MSG_ID"]) if data.get("REGLEMENT_MSG_ID") else None
+        CONQUETE_ZONE_IDS[:] = data.get("CONQUETE_ZONE_IDS", [])
         print("[Config] ✅ Salons chargés depuis salons_config.json")
     except Exception as e:
         print(f"[Config] Erreur chargement : {e}")
@@ -8373,89 +8375,6 @@ async def marcheacheter_cmd(ctx, perso: str = None):
     await ctx.send(embed=embed)
 
 # ── Events automatiques ───────────────────────────────────────
-@tasks.loop(minutes=45)
-async def spawn_coffre():
-    import time as _t
-    for guild in bot.guilds:
-        try:
-            channel = guild.get_channel(SALON_EVENT_ID) if SALON_EVENT_ID else (guild.get_channel(SALON_GACHA_ID) if SALON_GACHA_ID else None)
-            if not channel:
-                continue
-            gain = random.randint(150, 600)
-            coffre_actif[channel.id] = {"contenu": gain, "expires": _t.time() + 300}
-            embed = discord.Embed(title="📦 Un coffre mystérieux est apparu !", description=f"Tape `.ouvrir` rapidement pour récupérer les **{gain} pièces** !\n⏰ Disponible pendant **5 minutes** !", color=0xf1c40f)
-            await channel.send(embed=embed)
-        except:
-            pass
-
-@tasks.loop(hours=12)
-async def nuit_de_chasse():
-    global nuit_chasse_active
-    import time as _t
-    if random.random() > 0.15:
-        return
-    for guild in bot.guilds:
-        try:
-            channel = guild.get_channel(SALON_EVENT_ID) if SALON_EVENT_ID else (guild.get_channel(SALON_GACHA_ID) if SALON_GACHA_ID else None)
-            if not channel:
-                continue
-            role_gacha = discord.utils.get(guild.roles, name="🎴┃Gacha")
-            mention = role_gacha.mention if role_gacha else ""
-            nuit_chasse_active = True
-            embed = discord.Embed(title="🌙 NUIT DE CHASSE !", description=f"{mention}\n\n🔴 Les taux **Mythique** sont **DOUBLÉS** pendant **2 heures** !\nC'est le moment de roll ! 🎰", color=0x9b59b6)
-            await channel.send(embed=embed)
-            await asyncio.sleep(7200)
-            nuit_chasse_active = False
-            await channel.send(embed=discord.Embed(description="🌅 La **Nuit de Chasse** est terminée !", color=0x95a5a6))
-        except:
-            pass
-
-@tasks.loop(hours=6)
-async def invasion_demons():
-    if random.random() > 0.40:
-        return
-    for guild in bot.guilds:
-        try:
-            channel = guild.get_channel(SALON_EVENT_ID) if SALON_EVENT_ID else (guild.get_channel(SALON_GACHA_ID) if SALON_GACHA_ID else None)
-            if not channel:
-                continue
-            boss = random.choice(BOSS_INVASIONS).copy()
-            invasion_active[guild.id] = {**boss, "max_pv": boss["pv"], "attaquants": {}, "actif": True}
-            embed = discord.Embed(title=f"⚠️ INVASION ! {boss['emoji']} {boss['nom']} attaque le QG !", description=f"**{boss['nom']}** de *{boss['serie']}* envahit le serveur !\n\n❤️ **PV :** {boss['pv']:,}\n\nTape `.attaquerboss` pour infliger des dégâts !\n*Coup final = récompense spéciale !*", color=0xe74c3c)
-            if boss.get("image"):
-                embed.set_thumbnail(url=boss["image"])
-            await channel.send("@everyone", embed=embed)
-        except:
-            pass
-
-@tasks.loop(hours=48)
-async def marche_noir_task():
-    import time as _t
-    if random.random() > 0.60:
-        return
-    for guild in bot.guilds:
-        try:
-            channel = guild.get_channel(SALON_EVENT_ID) if SALON_EVENT_ID else (guild.get_channel(SALON_BOUTIQUE_ID) if SALON_BOUTIQUE_ID else (guild.get_channel(SALON_GACHA_ID) if SALON_GACHA_ID else None))
-            if not channel:
-                continue
-            candidates = [k for k in ANIME_CARDS_DB if ANIME_CARDS_DB[k]["rarete"] in ("Légendaire", "Mythique", "Épique") and k not in claimed_cards]
-            if len(candidates) < 3:
-                continue
-            cartes_mn = random.sample(candidates, 3)
-            marche_noir_actif.clear()
-            prix_map = {"Mythique": 8000, "Légendaire": 5000, "Épique": 3000}
-            desc = "🕶️ Le Marché Noir ouvre ses portes pour **24h** !\n\n"
-            for k in cartes_mn:
-                c = ANIME_CARDS_DB[k]
-                prix = prix_map.get(c["rarete"], 3000) + random.randint(500, 2000)
-                marche_noir_actif[k] = {"prix": prix, "expires": _t.time() + 86400}
-                r = RARETE_EMOJI.get(c["rarete"], "🔵")
-                desc += f"{r} **{c['nom']}** — **{prix:,} pièces** → `.marcheacheter {k}`\n"
-            embed = discord.Embed(title="🕶️ MARCHÉ NOIR", description=desc, color=0x2c3e50)
-            await channel.send(embed=embed)
-        except:
-            pass
-
 
 # ── .cartefav ─────────────────────────────────────────────────
 cartes_favorites = {}   # {uid: [key1, key2, key3]}
@@ -9629,7 +9548,9 @@ magicien_actif = {}          # {guild_id: {magicien: uid, sorts_restants: 3}}
 conquete_zones = {}          # {guild_id: {zone_id: faction_id}}
 conquete_role_id = {}        # {guild_id: role_id}
 puzzle_actif = {}            # {guild_id: {carte_key, scores: {uid: int}, fragment: int}}
+fausse_rumeur_active = {}    # {guild_id: {douteurs: {uid: bool}, debut: timestamp}}
 vague_actif = {}             # {guild_id: bool}
+CONQUETE_ZONE_IDS = []       # IDs des salons de conquête configurés
 
 CRIMES_FICTIFS = [
     "avoir volé le ramen de Naruto pendant son sommeil",
@@ -9696,9 +9617,21 @@ async def creer_salon_temp(guild, nom, categorie_nom=None):
     except:
         return None
 
-async def supprimer_salon_temp(salon, delai=5):
+async def supprimer_salon_temp(salon, delai=7, guild=None, nom_event=""):
     await asyncio.sleep(delai)
     try:
+        # Annonce dans salon event avant suppression
+        if guild and nom_event:
+            channel_event = get_event_channel(guild)
+            if channel_event and channel_event != salon:
+                embed_fin = discord.Embed(
+                    description=f"✅ **{nom_event}** est terminé ! Merci d'avoir participé 🎉",
+                    color=0x2ecc71
+                )
+                try:
+                    await channel_event.send(embed=embed_fin)
+                except:
+                    pass
         await salon.delete()
     except:
         pass
@@ -9864,21 +9797,18 @@ async def lancer_roue_fortune(ctx=None):
 async def lancer_proces(ctx=None):
     global event_en_cours
     event_en_cours = True
-
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild, ctx)
-            if not channel: continue
-
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
             membres_actifs = [m for m in guild.members if not m.bot and str(m.id) in economy_data]
             if len(membres_actifs) < 3:
+                await channel_event.send("❌ Pas assez de membres actifs (minimum 3) !")
                 event_en_cours = False
                 return
-
             accuse = _r.choice(membres_actifs)
             crime = _r.choice(CRIMES_FICTIFS)
-            mise = 100  # pièces en jeu, fun sans être brutal
-
+            mise = 100
             embed = discord.Embed(
                 title="⚖️ LE TRIBUNAL DU QG KDRAMA",
                 description=(
@@ -9890,8 +9820,8 @@ async def lancer_proces(ctx=None):
                     f"**L'ACCUSÉ :** {accuse.mention}\n"
                     f"**CRIME :** *{crime}*\n\n"
                     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"🗳️ **Les jurés doivent se prononcer sous 60 secondes !**\n\n"
-                    f"✅ **COUPABLE** → L'accusé perd **{mise} pièces** redistribuées\n"
+                    f"🗳️ **Votez pendant 60 secondes !**\n\n"
+                    f"✅ **COUPABLE** → {accuse.mention} perd **{mise} pièces** redistribuées\n"
                     f"❌ **INNOCENT** → Les faux accusateurs perdent **{mise} pièces**\n\n"
                     "*L'honneur du QG est entre vos mains...*"
                 ),
@@ -9899,30 +9829,19 @@ async def lancer_proces(ctx=None):
             )
             embed.set_thumbnail(url=accuse.display_avatar.url)
             embed.set_footer(text="⚖️ Le silence est coupable — votez !")
-            msg = await channel.send(embed=embed)
+            msg = await channel_event.send(embed=embed)
             await msg.add_reaction("✅")
             await msg.add_reaction("❌")
-
             await asyncio.sleep(60)
-
-            msg = await channel.fetch_message(msg.id)
-            coupable_votes = 0
-            innocent_votes = 0
+            msg = await channel_event.fetch_message(msg.id)
             coupable_voters = []
             innocent_voters = []
-
             for reaction in msg.reactions:
                 async for user in reaction.users():
                     if user.bot or user == accuse: continue
-                    if str(reaction.emoji) == "✅":
-                        coupable_votes += 1
-                        coupable_voters.append(user)
-                    elif str(reaction.emoji) == "❌":
-                        innocent_votes += 1
-                        innocent_voters.append(user)
-
-            if coupable_votes > innocent_votes:
-                # Coupable
+                    if str(reaction.emoji) == "✅": coupable_voters.append(user)
+                    elif str(reaction.emoji) == "❌": innocent_voters.append(user)
+            if len(coupable_voters) > len(innocent_voters):
                 economy_data[str(accuse.id)]['coins'] = max(0, economy_data[str(accuse.id)]['coins'] - mise)
                 part = mise // max(len(coupable_voters), 1)
                 for voter in coupable_voters:
@@ -9930,23 +9849,18 @@ async def lancer_proces(ctx=None):
                 verdict = f"⚖️ **COUPABLE !** {accuse.mention} perd **{mise} pièces** redistribuées aux jurés !"
                 color = 0xe74c3c
             else:
-                # Innocent
                 economy_data[str(accuse.id)]['coins'] += mise
                 for voter in coupable_voters:
                     economy_data[str(voter.id)]['coins'] = max(0, economy_data[str(voter.id)]['coins'] - mise)
                 verdict = f"⚖️ **INNOCENT !** {accuse.mention} reçoit **{mise} pièces** ! Les faux accusateurs sont punis !"
                 color = 0x2ecc71
-
-            embed_verdict = discord.Embed(title="⚖️ VERDICT", description=verdict, color=color)
-            await msg.delete()
-            await channel.send(embed=embed_verdict)
-
+            await channel_event.send(embed=discord.Embed(title="⚖️ VERDICT", description=verdict, color=color))
         except Exception as e:
             print(f"Procès error: {e}")
-
     event_en_cours = False
 
-# ── ⚔️ TOURNOI DU QG ──────────────────────────────────────────
+# ── 📰 FAUSSE RUMEUR ──────────────────────────────────────────
+
 async def lancer_tournoi(ctx=None):
     global event_en_cours
     event_en_cours = True
@@ -10094,18 +10008,23 @@ async def lancer_tournoi(ctx=None):
 async def lancer_mine_or(ctx=None):
     global event_en_cours
     event_en_cours = True
-
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild, ctx)
-            if not channel: continue
-
-            pepites_total = 500  # Pas trop broken
-            pepites_restantes = [pepites_total]
-            joueurs_mine = {}
-            malédiction_pos = _r.randint(3, pepites_total - 3)
-            mine_actif[guild.id] = True
-
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
+            pepites_total = 500
+            salon_mine = await creer_salon_temp(guild, "⛏️・mine-or")
+            if not salon_mine: salon_mine = channel_event
+            malédiction_pos = _r.randint(50, pepites_total - 50)
+            mine_actif[guild.id] = {
+                "pepites": pepites_total,
+                "joueurs": {},
+                "malédiction": malédiction_pos,
+                "total_extrait": 0,
+                "channel_id": salon_mine.id,
+                "finie": [False],
+                "last_mine": {}
+            }
             embed = discord.Embed(
                 title="⛏️ LA MINE D'OR",
                 description=(
@@ -10121,38 +10040,29 @@ async def lancer_mine_or(ctx=None):
                     "`.miner` — extraire des pépites *(cooldown 2 min)*\n\n"
                     "💎 **1 pépite = 2 pièces** à la fin\n"
                     "💀 **Pépite maudite** = tu perds TOUT ce que tu as extrait\n\n"
-                    f"⏰ La mine ferme dans **20 minutes** ou quand elle est vide !"
+                    f"⏰ **20 minutes** ou jusqu'à épuisement !"
                 ),
                 color=0xf1c40f
             )
-            msg_mine = await channel.send(embed=embed)
-
-            # La mine dure 20 min max
-            mine_actif[guild.id] = {
-                "pepites": pepites_total,
-                "restantes": pepites_restantes,
-                "joueurs": joueurs_mine,
-                "malédiction": malédiction_pos,
-                "total_extrait": [0],
-                "msg_id": msg_mine.id,
-                "channel_id": channel.id,
-                "finie": [False]
-            }
-
-            await asyncio.sleep(1200)  # 20 min
-
-            # Fin de mine
+            await salon_mine.send(embed=embed)
+            await channel_event.send(embed=discord.Embed(
+                description=f"⛏️ Une **Mine d'Or** vient d'apparaître dans {salon_mine.mention} ! Tapez `.miner` pour extraire !",
+                color=0xf1c40f
+            ))
+            await asyncio.sleep(1200)
             data = mine_actif.get(guild.id, {})
             if data and not data.get("finie", [True])[0]:
-                await _finaliser_mine(guild, channel, data)
-
+                await _finaliser_mine(guild, salon_mine, data)
+                data["finie"] = [True]
             if guild.id in mine_actif:
                 del mine_actif[guild.id]
-
+            if salon_mine != channel_event:
+                asyncio.create_task(supprimer_salon_temp(salon_mine, 7, guild, "Mine d'Or"))
         except Exception as e:
             print(f"Mine or error: {e}")
-
     event_en_cours = False
+
+# ── 🌙 VOLEUR DE MINUIT ────────────────────────────────────────
 
 async def _finaliser_mine(guild, channel, data):
     joueurs = data.get("joueurs", {})
@@ -10299,217 +10209,170 @@ async def lancer_parminous(ctx=None):
 async def lancer_encheres(ctx=None):
     global event_en_cours
     event_en_cours = True
-
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild, ctx)
-            if not channel: continue
-
-            # Choisir une carte Légendaire disponible
-            legendaires = [k for k in ANIME_CARDS_DB if k not in claimed_cards and ANIME_CARDS_DB[k]['rarete'] == 'Légendaire']
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
+            legendaires = [k for k in ANIME_CARDS_DB if k not in claimed_cards and ANIME_CARDS_DB[k]['rarete'] in ('Légendaire','Mythique')]
             if not legendaires:
                 legendaires = [k for k in ANIME_CARDS_DB if k not in claimed_cards and ANIME_CARDS_DB[k]['rarete'] == 'Épique']
             if not legendaires:
                 event_en_cours = False
                 return
-
             carte_key = _r.choice(legendaires)
             c = ANIME_CARDS_DB[carte_key]
             r_emoji = RARETE_EMOJI.get(c['rarete'], '🟠')
             couleur = RARETE_COULEURS.get(c['rarete'], 0xe67e22)
-
-            mises = {}  # {uid: montant}
-
-            embed = discord.Embed(
+            mises = {}
+            salon_enc = await creer_salon_temp(guild, "⚡・encheres-qg")
+            if not salon_enc: salon_enc = channel_event
+            encheres_actives[guild.id] = {"carte_key": carte_key, "mises": mises, "salon_id": salon_enc.id, "actif": True}
+            embed_carte = discord.Embed(
                 title="⚡ ENCHÈRES INTERDITES",
                 description=(
                     f"{r_emoji} **{c['emoji']} {c['nom']}** — *{c['serie']}*\n\n"
                     f"❤️ **{c['pv']} PV** | ⚔️ **{c['attaque']} ATK** | 🛡️ **{c['defense']} DEF**\n\n"
                     "Tape `.miser <montant>` pour enchérir !\n"
-                    "⚠️ Si **deux personnes misent le même montant** — elles perdent leur mise et la carte disparaît !\n"
+                    "⚠️ Si **deux personnes misent le même montant** → les deux perdent leur mise et la carte disparaît !\n"
                     "⏰ **3 minutes** pour enchérir !"
                 ),
                 color=couleur
             )
-            if c.get('image'):
-                embed.set_image(url=c['image'])
-
-            salon_enc = await creer_salon_temp(guild, "⚡・encheres-qg")
-            if not salon_enc: salon_enc = channel
-
-            encheres_actives[guild.id] = {
-                "carte_key": carte_key,
-                "mises": mises,
-                "salon_id": salon_enc.id,
-                "actif": True
-            }
-
-            await salon_enc.send(embed=embed)
-            await channel.send(embed=discord.Embed(
-                description=f"⚡ Les **Enchères Interdites** sont ouvertes dans {salon_enc.mention} ! Carte en jeu : **{c['nom']}** {r_emoji}",
+            if c.get('image') and 'imgur' in c.get('image',''):
+                embed_carte.set_image(url=c['image'])
+            await salon_enc.send(embed=embed_carte)
+            await channel_event.send(embed=discord.Embed(
+                description=f"⚡ Les **Enchères Interdites** sont ouvertes dans {salon_enc.mention} !\nCarte en jeu : **{c['nom']}** {r_emoji}",
                 color=couleur
             ))
-
-            await asyncio.sleep(180)  # 3 min
-
-            # Résultats
+            await asyncio.sleep(180)
             data = encheres_actives.get(guild.id, {})
             mises = data.get("mises", {})
-
             if not mises:
                 await salon_enc.send(embed=discord.Embed(description="❌ Aucune mise — la carte disparaît !", color=0x95a5a6))
             else:
-                # Vérifier doublons
-                montants = list(mises.values())
-                montant_max = max(montants)
-                gagnants_potentiels = [uid for uid, m in mises.items() if m == montant_max]
-
-                if len(gagnants_potentiels) > 1:
-                    # Égalité — tous perdent leur mise
-                    for uid in gagnants_potentiels:
+                montant_max = max(mises.values())
+                gagnants = [uid for uid, m in mises.items() if m == montant_max]
+                if len(gagnants) > 1:
+                    for uid in gagnants:
                         economy_data[uid]['coins'] = max(0, economy_data[uid]['coins'] - montant_max)
-                    noms = [guild.get_member(int(uid)).display_name if guild.get_member(int(uid)) else uid for uid in gagnants_potentiels]
+                    noms = [f"<@{uid}>" for uid in gagnants]
                     await salon_enc.send(embed=discord.Embed(
                         title="💥 ÉGALITÉ FATALE !",
-                        description=f"**{' et '.join(noms)}** ont misé le même montant (**{montant_max:,}p**) !\nIls perdent leur mise et la carte disparaît dans le néant !",
+                        description=f"{' et '.join(noms)} ont misé **{montant_max:,}p** chacun !\nIls perdent leur mise et la carte disparaît !",
                         color=0xe74c3c
                     ))
                 else:
-                    # Un gagnant
-                    winner_uid = gagnants_potentiels[0]
+                    winner_uid = gagnants[0]
                     economy_data[winner_uid]['coins'] = max(0, economy_data[winner_uid]['coins'] - montant_max)
                     claimed_cards[carte_key] = winner_uid
                     gacha_collections[winner_uid][carte_key] = {"fusion": 0}
-                    winner = guild.get_member(int(winner_uid))
                     await salon_enc.send(embed=discord.Embed(
-                        title=f"🏆 {winner.display_name if winner else winner_uid} remporte les enchères !",
+                        title=f"🏆 <@{winner_uid}> remporte les enchères !",
                         description=f"**{c['nom']}** {r_emoji} adjugé pour **{montant_max:,} pièces** !",
                         color=0x2ecc71
                     ))
-
             if guild.id in encheres_actives:
                 del encheres_actives[guild.id]
-
-            if salon_enc != channel:
-                asyncio.create_task(supprimer_salon_temp(salon_enc, 120))
-
+            if salon_enc != channel_event:
+                asyncio.create_task(supprimer_salon_temp(salon_enc, 7, guild, "Enchères Interdites"))
         except Exception as e:
             print(f"Enchères error: {e}")
-
     event_en_cours = False
 
-# ── 🌙 VOLEUR DE MINUIT ────────────────────────────────────────
+# ── ⛏️ MINE D'OR ──────────────────────────────────────────────
+
 async def lancer_voleur_minuit(ctx=None):
     global event_en_cours
-    import datetime as _dt
-    now = _dt.datetime.now()
-    if not (23 <= now.hour or now.hour < 1):
-        return  # Seulement entre 23h et 1h
     event_en_cours = True
-
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild, ctx)
-            if not channel: continue
-
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
             membres = [m for m in guild.members if not m.bot and economy_data[str(m.id)]['coins'] > 0]
             if not membres:
                 event_en_cours = False
                 return
-
             voleur = _r.choice(membres)
             voleur_uid = str(voleur.id)
-
             try:
                 await voleur.send(embed=discord.Embed(
                     title="🌙 Tu es Le Voleur de Minuit !",
-                    description="Chaque message que tu envoies cette nuit te rapporte des pièces volées aux membres actifs !\nSois discret... tu seras révélé à 1h du mat !",
+                    description=(
+                        "Chaque message que tu envoies cette nuit te rapporte des pièces volées !\n"
+                        "Sois discret... tu seras révélé dans 1h !"
+                    ),
                     color=0x2c2f33
                 ))
-            except:
-                pass
-
+            except: pass
             wanted_actif[guild.id] = {"voleur": voleur_uid, "total_vole": 0}
-
             embed = discord.Embed(
                 title="🌙 NUIT DES VOLEURS",
                 description=(
                     "Quelqu'un vole des pièces cette nuit...\n\n"
                     "*Des pièces disparaissent mystérieusement des coffres*\n\n"
-                    "Le voleur sera révélé à **1h du matin** !"
+                    "Le voleur sera révélé dans **1 heure** !"
                 ),
                 color=0x2c2f33
             )
-            await channel.send(embed=embed)
-
-            # Attendre 1h ou jusqu'à 1h du mat
+            await channel_event.send(embed=embed)
             await asyncio.sleep(3600)
-
-            # Révélation
             data = wanted_actif.get(guild.id, {})
             total = data.get("total_vole", 0)
             embed_reveal = discord.Embed(
                 title="🌅 Le Voleur est Révélé !",
-                description=f"**{voleur.display_name}** était Le Voleur de Minuit !\nIl a volé **{total} pièces** cette nuit... 😈",
+                description=f"{voleur.mention} était **Le Voleur de Minuit** !\nIl a volé **{total} pièces** cette nuit 😈",
                 color=0xe74c3c
             )
             embed_reveal.set_thumbnail(url=voleur.display_avatar.url)
-            await channel.send(embed=embed_reveal)
-
+            await channel_event.send(embed=embed_reveal)
             if guild.id in wanted_actif:
                 del wanted_actif[guild.id]
-
         except Exception as e:
             print(f"Voleur minuit error: {e}")
-
     event_en_cours = False
 
 # ── 🎴 WANTED ─────────────────────────────────────────────────
+
 async def lancer_wanted(ctx=None):
     global event_en_cours
     event_en_cours = True
-
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild, ctx)
-            if not channel: continue
-
-            salon_wanted = await creer_salon_temp(guild, "🎴・wanted-qg")
-            if not salon_wanted: salon_wanted = channel
-
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
+            salon_wanted = await creer_salon_temp(guild, "💀・wanted-qg")
+            if not salon_wanted: salon_wanted = channel_event
             membres = [m for m in guild.members if not m.bot]
             if not membres:
                 event_en_cours = False
                 return
-
             cible = _r.choice(membres)
             crime = _r.choice(CRIMES_FICTIFS)
             prime = _r.randint(500, 2000)
-
             embed = discord.Embed(
-                title="🎴 ─── AVIS DE RECHERCHE ───",
+                title="💀 ─── AVIS DE RECHERCHE ───",
                 description=(
                     "```\n"
                     "╔════════════════════════════════╗\n"
-                    "║        ★  WANTED  ★            ║\n"
+                    "║    ☠️  W A N T E D  ☠️         ║\n"
                     "║     ─ QG KDRAMA BUREAU ─       ║\n"
                     "╚════════════════════════════════╝\n"
                     "```\n"
-                    f"👤 **{cible.display_name.upper()}**\n\n"
+                    f"👤 **{cible.display_name.upper()}** {cible.mention}\n\n"
                     f"📜 **CHEF D'ACCUSATION :**\n"
                     f"*{crime}*\n\n"
-                    f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"💰 **PRIME : {prime:,} PIÈCES**\n"
-                    f"*(+100p toutes les 30 min si toujours en liberté)*\n"
-                    f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                    f"🎯 Tape `.chasser {cible.mention}` pour capturer !\n"
-                    f"⏰ **2 heures** avant expiration"
+                    f"*(+100p toutes les 30 min)*\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    f"🎯 `.chasser @{cible.display_name}` pour capturer !\n"
+                    "⏰ **2 heures** avant expiration"
                 ),
                 color=0xc0392b
             )
             embed.set_thumbnail(url=cible.display_avatar.url)
-            embed.set_footer(text="🎴 QG Kdrama — Bureau des Chasseurs de Primes")
-
+            embed.set_footer(text="💀 QG Kdrama — Bureau des Chasseurs de Primes")
             wanted_actif[guild.id] = {
                 "cible": str(cible.id),
                 "prime": prime,
@@ -10517,97 +10380,89 @@ async def lancer_wanted(ctx=None):
                 "salon": salon_wanted.id,
                 "debut": __import__('time').time()
             }
-
             await salon_wanted.send(embed=embed)
-            await channel.send(embed=discord.Embed(
-                description=f"🎴 Un **Avis de Recherche** est apparu dans {salon_wanted.mention} ! Prime : **{prime:,} pièces** !",
-                color=0xe74c3c
+            await channel_event.send(embed=discord.Embed(
+                description=f"💀 Un **Avis de Recherche** est apparu dans {salon_wanted.mention} !\n{cible.mention} est recherché — Prime : **{prime:,} pièces** !",
+                color=0xc0392b
             ))
-
-            # Augmenter la prime toutes les 30 min
             for _ in range(4):
                 await asyncio.sleep(1800)
-                if guild.id not in wanted_actif:
-                    break
+                if guild.id not in wanted_actif: break
                 wanted_actif[guild.id]['prime'] += 100
                 new_prime = wanted_actif[guild.id]['prime']
                 await salon_wanted.send(embed=discord.Embed(
-                    description=f"📈 La prime sur **{cible.display_name}** monte à **{new_prime:,} pièces** !",
+                    description=f"📈 La prime sur {cible.mention} monte à **{new_prime:,} pièces** !",
                     color=0xf39c12
                 ))
-
-            # Fin event
             if guild.id in wanted_actif:
-                data = wanted_actif[guild.id]
                 await salon_wanted.send(embed=discord.Embed(
-                    description=f"⏰ L'Avis de Recherche expire — **{cible.display_name}** s'échappe ! La prime disparaît.",
+                    description=f"⏰ L'Avis de Recherche expire — {cible.mention} s'échappe ! La prime disparaît.",
                     color=0x95a5a6
                 ))
                 del wanted_actif[guild.id]
-
-            if salon_wanted != channel:
-                asyncio.create_task(supprimer_salon_temp(salon_wanted, 60))
-
+            if salon_wanted != channel_event:
+                asyncio.create_task(supprimer_salon_temp(salon_wanted, 7, guild, "Wanted"))
         except Exception as e:
             print(f"Wanted error: {e}")
-
-    event_en_cours = False
-
-# ── 📰 FAUSSE RUMEUR ──────────────────────────────────────────
-async def lancer_fausse_rumeur(ctx=None):
-    global event_en_cours
-    event_en_cours = True
-
-    rumeurs = [
-        "🚨 BREAKING : Les cartes Mythique seront supprimées dans 1 heure ! Tout le monde perd ses cartes rares !",
-        "🚨 BREAKING : Le bot va reset toutes les pièces dans 30 minutes par décision du staff !",
-        "🚨 BREAKING : Une nouvelle rareté au-dessus de Mythique vient d'être ajoutée — 'DIVIN' — mais uniquement accessible en payant !",
-        "🚨 BREAKING : Le serveur va fermer définitivement ce soir à minuit !",
-        "🚨 BREAKING : Tous les rolls vont coûter 500 pièces à partir de maintenant !",
-    ]
-
-    for guild in bot.guilds:
-        try:
-            channel = get_event_channel(guild, ctx)
-            if not channel: continue
-
-            rumeur = _r.choice(rumeurs)
-
-            embed = discord.Embed(
-                title="📰 ANNONCE OFFICIELLE",
-                description=f"{rumeur}\n\n*Vous avez 60 secondes pour réagir...*\n\nSi tu penses que c'est un mensonge tape `.jedoute` !",
-                color=0xe74c3c
-            )
-            await channel.send("@everyone", embed=embed)
-
-            douteurs = []
-            croyants = []
-
-            # Enregistrer les réactions pendant 60s
-            await asyncio.sleep(60)
-
-            # Révélation
-            embed_reveal = discord.Embed(
-                title="😂 C'ÉTAIT UNE FAUSSE RUMEUR !",
-                description=(
-                    f"**{rumeur}**\n\n"
-                    f"❌ C'était faux ! Test de sang froid !\n\n"
-                    f"🧠 **{len(douteurs)} membres** ont gardé leur calme → **+150 pièces** chacun !"
-                ),
-                color=0x2ecc71
-            )
-            await channel.send(embed=embed_reveal)
-
-        except Exception as e:
-            print(f"Fausse rumeur error: {e}")
-
     event_en_cours = False
 
 # ── 🌙 RÊVE COLLECTIF ─────────────────────────────────────────
+
+async def lancer_fausse_rumeur(ctx=None):
+    global event_en_cours
+    event_en_cours = True
+    rumeurs = [
+        "🚨 BREAKING : Les cartes Mythique vont être supprimées dans 1 heure !",
+        "🚨 BREAKING : Le bot va reset toutes les pièces dans 30 minutes !",
+        "🚨 BREAKING : Les rolls vont coûter 500 pièces à partir de maintenant !",
+        "🚨 BREAKING : Le serveur va fermer définitivement ce soir à minuit !",
+        "🚨 BREAKING : Une nouvelle rareté au-dessus de Mythique vient d'être ajoutée — payante !",
+    ]
+    for guild in bot.guilds:
+        try:
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
+            rumeur = _r.choice(rumeurs)
+            douteurs = {}  # uid: True — secret, pas visible
+            embed = discord.Embed(
+                title="📰 ANNONCE OFFICIELLE",
+                description=(
+                    f"{rumeur}\n\n"
+                    "*Vous avez 60 secondes pour réagir...*\n\n"
+                    "Si tu penses que c'est un **mensonge** tape `.jedoute` !"
+                ),
+                color=0xe74c3c
+            )
+            await channel_event.send("@everyone", embed=embed)
+            # Stocker la rumeur active pour jedoute
+            import time as _t
+            fausse_rumeur_active[guild.id] = {"douteurs": douteurs, "debut": _t.time()}
+            await asyncio.sleep(60)
+            # Révélation
+            nb_douteurs = len(douteurs)
+            gains = 150
+            desc = (
+                f"😂 **C'ÉTAIT UNE FAUSSE RUMEUR !**\n\n"
+                f"*{rumeur}*\n\n"
+                f"**{nb_douteurs} membre(s)** ont gardé leur calme et reçoivent **+{gains} pièces** !\n"
+            )
+            if douteurs:
+                mentions = " ".join([f"<@{uid}>" for uid in douteurs.keys()])
+                desc += f"\n🧠 Bravo : {mentions}"
+            await channel_event.send(embed=discord.Embed(
+                title="📰 RÉVÉLATION", description=desc, color=0x2ecc71
+            ))
+            if guild.id in fausse_rumeur_active:
+                del fausse_rumeur_active[guild.id]
+        except Exception as e:
+            print(f"Fausse rumeur error: {e}")
+    event_en_cours = False
+
+# ── ⚡ ENCHÈRES INTERDITES ─────────────────────────────────────
+
 async def lancer_reve_collectif(ctx=None):
     global event_en_cours
     event_en_cours = True
-
     reves = [
         "Tu te retrouves dans le monde de Demon Slayer mais tout le monde parle de kdrama coréen...",
         "Gojo et Luffy ont ouvert un restaurant de ramen mais Naruto a mangé tout le stock...",
@@ -10615,96 +10470,98 @@ async def lancer_reve_collectif(ctx=None):
         "L'équipage du Chapeau de Paille a trouvé le One Piece... c'est une clé USB avec tous les épisodes de Bleach...",
         "Saitama cherche un adversaire fort mais tous les méchants veulent juste son autographe...",
     ]
-
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild, ctx)
-            if not channel: continue
-
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
+            salon_reve = await creer_salon_temp(guild, "🌙・reve-collectif")
+            if not salon_reve: salon_reve = channel_event
             reve = _r.choice(reves)
-
             embed = discord.Embed(
                 title="🌙 RÊVE COLLECTIF",
                 description=(
                     f"*Tout le monde s'endort...*\n\n"
                     f"💭 **{reve}**\n\n"
-                    f"Continuez l'histoire en répondant dans ce salon !\n"
-                    f"La meilleure contribution (la plus likée) gagne le rôle **Roi de la Narration** !\n"
-                    f"⏰ **5 minutes** pour écrire !"
+                    "Continuez l'histoire dans ce salon !\n"
+                    "Le message le plus **liké** gagne le rôle **Roi de la Narration** !\n"
+                    "⏰ **5 minutes** pour écrire !"
                 ),
                 color=0x9b59b6
             )
-            await channel.send(embed=embed)
-
+            await salon_reve.send(embed=embed)
+            await channel_event.send(embed=discord.Embed(
+                description=f"🌙 Le **Rêve Collectif** commence dans {salon_reve.mention} ! Continuez l'histoire !",
+                color=0x9b59b6
+            ))
             await asyncio.sleep(300)
-
-            # Trouver le message le plus liké
             best_msg = None
             best_likes = 0
-            async for msg in channel.history(limit=50):
+            async for msg in salon_reve.history(limit=50):
                 if msg.author.bot: continue
-                total_reactions = sum(r.count for r in msg.reactions)
-                if total_reactions > best_likes:
-                    best_likes = total_reactions
+                total = sum(r.count for r in msg.reactions)
+                if total > best_likes:
+                    best_likes = total
                     best_msg = msg
-
             if best_msg:
                 role_narr = await get_or_create_role(guild, "🌙 Roi de la Narration", 0x9b59b6)
                 if role_narr:
-                    try:
-                        await best_msg.author.add_roles(role_narr)
-                    except:
-                        pass
-                await channel.send(embed=discord.Embed(
+                    try: await best_msg.author.add_roles(role_narr)
+                    except: pass
+                await salon_reve.send(embed=discord.Embed(
                     title="🌙 Fin du Rêve !",
-                    description=f"**{best_msg.author.display_name}** a écrit la meilleure suite et reçoit le rôle **Roi de la Narration** ! 👑",
+                    description=f"{best_msg.author.mention} a écrit la meilleure suite et reçoit le rôle **Roi de la Narration** ! 👑",
                     color=0x9b59b6
                 ))
-
+            if salon_reve != channel_event:
+                asyncio.create_task(supprimer_salon_temp(salon_reve, 7, guild, "Rêve Collectif"))
         except Exception as e:
             print(f"Rêve collectif error: {e}")
-
     event_en_cours = False
 
 # ── 🎩 LE MAGICIEN ────────────────────────────────────────────
+
 async def lancer_magicien(ctx=None):
     global event_en_cours
     event_en_cours = True
-
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild, ctx)
-            if not channel: continue
-
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
             membres = [m for m in guild.members if not m.bot]
             if not membres:
                 event_en_cours = False
                 return
-
             magicien = _r.choice(membres)
-
+            # Créer salon privé visible uniquement par le magicien
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+                magicien: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            }
             try:
-                await magicien.send(embed=discord.Embed(
-                    title="🎩 Tu es Le Magicien !",
-                    description=(
-                        "Tu as **3 sorts** à lancer anonymement avec `.sort <type> @joueur` :\n\n"
-                        "`double` — double les pièces du joueur\n"
-                        "`bloquer` — bloque ses commandes 30 min\n"
-                        "`troll` — lui donne une carte Commune nulle\n\n"
-                        "Tes sorts sont anonymes jusqu'à la fin !"
-                    ),
-                    color=0x9b59b6
-                ))
+                salon_mag = await guild.create_text_channel("🎩・salon-du-magicien", overwrites=overwrites)
             except:
-                pass
-
+                salon_mag = None
             magicien_actif[guild.id] = {
                 "magicien": str(magicien.id),
                 "sorts_restants": 3,
-                "sorts_lances": []
+                "sorts_lances": [],
+                "salon": salon_mag.id if salon_mag else None
             }
-
-            embed = discord.Embed(
+            if salon_mag:
+                await salon_mag.send(embed=discord.Embed(
+                    title="🎩 Bienvenue, Magicien !",
+                    description=(
+                        f"{magicien.mention} tu as **3 sorts** à lancer anonymement !\n\n"
+                        "`.sort double @joueur` — Doubler ses pièces\n"
+                        "`.sort bloquer @joueur` — Bloquer ses commandes 30min\n"
+                        "`.sort troll @joueur` — Lui donner une carte Commune nulle\n\n"
+                        "Mentionne directement le membre ici — personne ne voit ce salon !\n"
+                        "⏰ **30 minutes** — Sois stratégique 😈"
+                    ),
+                    color=0x9b59b6
+                ))
+            await channel_event.send(embed=discord.Embed(
                 title="🎩 LE MAGICIEN",
                 description=(
                     "Un **Magicien mystérieux** rôde sur le serveur !\n\n"
@@ -10715,97 +10572,76 @@ async def lancer_magicien(ctx=None):
                     "Il sera révélé dans **30 minutes** !"
                 ),
                 color=0x9b59b6
-            )
-            await channel.send(embed=embed)
-
+            ))
             await asyncio.sleep(1800)
-
-            # Révélation
             data = magicien_actif.get(guild.id, {})
             sorts = data.get("sorts_lances", [])
-            desc_sorts = "\n".join([f"• `{s['type']}` → **{s['cible']}**" for s in sorts]) if sorts else "Aucun sort lancé..."
-
+            desc_sorts = "\n".join([f"• `{s['type']}` sur {s['cible']}" for s in sorts]) if sorts else "Aucun sort lancé..."
             embed_reveal = discord.Embed(
-                title=f"🎩 Le Magicien était {magicien.display_name} !",
+                title=f"🎩 Le Magicien était {magicien.mention} !",
                 description=f"**Sorts lancés :**\n{desc_sorts}",
                 color=0x9b59b6
             )
             embed_reveal.set_thumbnail(url=magicien.display_avatar.url)
-
             role_mag = await get_or_create_role(guild, "🎩 Grand Magicien", 0x9b59b6)
             if role_mag:
-                try:
-                    await magicien.add_roles(role_mag)
-                except:
-                    pass
-
-            await channel.send(embed=embed_reveal)
-
+                try: await magicien.add_roles(role_mag)
+                except: pass
+            await channel_event.send(embed=embed_reveal)
             if guild.id in magicien_actif:
                 del magicien_actif[guild.id]
-
+            if salon_mag:
+                asyncio.create_task(supprimer_salon_temp(salon_mag, 7, guild, "Le Magicien"))
         except Exception as e:
             print(f"Magicien error: {e}")
-
     event_en_cours = False
 
 # ── 🤡 LE CLOWN ───────────────────────────────────────────────
+
 async def lancer_clown(ctx=None):
     global event_en_cours
     event_en_cours = True
-
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild, ctx)
-            if not channel: continue
-
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
             membres = [m for m in guild.members if not m.bot]
             if not membres:
                 event_en_cours = False
                 return
-
             clown = _r.choice(membres)
             clown_actif[guild.id] = str(clown.id)
-
             role_clown = await get_or_create_role(guild, "🤡 Clown du QG", 0xff6b9d)
             if role_clown:
-                try:
-                    await clown.add_roles(role_clown)
-                except:
-                    pass
-
+                try: await clown.add_roles(role_clown)
+                except: pass
             embed = discord.Embed(
                 title="🤡 LE CLOWN DU QG",
                 description=(
-                    f"**{clown.display_name}** a été désigné **Clown du QG** !\n\n"
-                    "Tout ce qu'il dit sera répété par le bot... en version ridicule 🤡\n\n"
-                    "Il peut se libérer si quelqu'un envoie 😂 en réponse à un de ses messages !\n"
+                    f"{clown.mention} a été désigné **Clown du QG** !\n\n"
+                    "Tout ce qu'il dit sera répété par le bot en version ridicule 🤡\n\n"
+                    f"Il peut se libérer si quelqu'un répond à un de ses messages avec 😂 !\n"
                     "⏰ **30 minutes** maximum !"
                 ),
                 color=0xff6b9d
             )
-            await channel.send(embed=embed)
-
+            await channel_event.send(embed=embed)
             await asyncio.sleep(1800)
-
             if guild.id in clown_actif:
                 del clown_actif[guild.id]
                 if role_clown:
-                    try:
-                        await clown.remove_roles(role_clown)
-                    except:
-                        pass
-                await channel.send(embed=discord.Embed(
-                    description=f"🤡 **{clown.display_name}** est enfin libéré de sa malédiction de Clown !",
+                    try: await clown.remove_roles(role_clown)
+                    except: pass
+                await channel_event.send(embed=discord.Embed(
+                    description=f"🤡 {clown.mention} est enfin libéré de sa malédiction de Clown !",
                     color=0x95a5a6
                 ))
-
         except Exception as e:
             print(f"Clown error: {e}")
-
     event_en_cours = False
 
-# ── 🦆 LE CANARD ──────────────────────────────────────────────
+# ── 🔮 ORACLE MAUDIT ──────────────────────────────────────────
+
 async def lancer_canard(ctx=None):
     global event_en_cours
     event_en_cours = True
@@ -10929,14 +10765,11 @@ async def lancer_event_pacifiste(ctx=None):
 async def lancer_oracle_maudit(ctx=None):
     global event_en_cours
     event_en_cours = True
-
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild, ctx)
-            if not channel: continue
-
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
             membres_actifs = [m for m in guild.members if not m.bot and str(m.id) in economy_data]
-
             embed = discord.Embed(
                 title="🔮 L'ORACLE MAUDIT",
                 description=(
@@ -10946,51 +10779,44 @@ async def lancer_oracle_maudit(ctx=None):
                 ),
                 color=0x9b59b6
             )
-            await channel.send(embed=embed)
-
+            await channel_event.send(embed=embed)
             await asyncio.sleep(3)
-
-            # Envoyer les prophéties
-            for membre in membres_actifs[:8]:  # Max 8 membres
+            for membre in membres_actifs[:8]:
                 prophecy = _r.choice(PROPHECIES)
                 oracle_prophecies[str(membre.id)] = prophecy
-                await channel.send(embed=discord.Embed(
-                    description=f"🔮 **{membre.display_name}** — *{prophecy}*",
+                await channel_event.send(embed=discord.Embed(
+                    description=f"🔮 {membre.mention} — *{prophecy}*",
                     color=0x9b59b6
                 ))
                 await asyncio.sleep(2)
-
-            await asyncio.sleep(7200)  # 2h
-
+            await asyncio.sleep(7200)
             oracle_prophecies.clear()
-            await channel.send(embed=discord.Embed(
+            await channel_event.send(embed=discord.Embed(
                 description="🔮 Les prophéties de l'Oracle sont accomplies... le voile se lève.",
                 color=0x95a5a6
             ))
-
         except Exception as e:
             print(f"Oracle error: {e}")
-
     event_en_cours = False
 
 # ── 🌑 LE PACTE ───────────────────────────────────────────────
+
 async def lancer_pacte(ctx=None):
     global event_en_cours
     event_en_cours = True
-
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild, ctx)
-            if not channel: continue
-
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
             membres = [m for m in guild.members if not m.bot and str(m.id) in economy_data]
             if len(membres) < 2:
                 event_en_cours = False
                 return
-
             _r.shuffle(membres)
             paires = [(membres[i], membres[i+1]) for i in range(0, len(membres)-1, 2)]
-
+            desc_paires = ""
+            for a, b in paires:
+                desc_paires += f"🔗 {a.mention} ↔️ {b.mention}\n"
             embed = discord.Embed(
                 title="🌑 LE PACTE",
                 description=(
@@ -10998,399 +10824,335 @@ async def lancer_pacte(ctx=None):
                     "Pendant **2 heures** leurs économies sont **fusionnées** :\n"
                     "Ce que l'un gagne → l'autre gagne aussi\n"
                     "Ce que l'un perd → l'autre perd aussi\n\n"
+                    f"**Paires liées :**\n{desc_paires}\n"
                     "Coopérez... ou sabotez-vous mutuellement 😈"
                 ),
                 color=0x2c3e50
             )
-            await channel.send(embed=embed)
-
+            await channel_event.send(embed=embed)
             pacte_actif[guild.id] = [(str(a.id), str(b.id)) for a, b in paires]
-
             for a, b in paires:
                 try:
-                    await channel.send(f"🔗 **{a.display_name}** et **{b.display_name}** sont liés par Le Pacte !")
-                    await a.send(f"🌑 Tu es lié à **{b.display_name}** — ce qu'il/elle gagne tu le gagnes, ce qu'il/elle perd tu le perds !")
-                    await b.send(f"🌑 Tu es lié à **{a.display_name}** — ce qu'il/elle gagne tu le gagnes, ce qu'il/elle perd tu le perds !")
-                except:
-                    pass
-
+                    await a.send(f"🌑 Tu es lié à {b.mention} — ce qu'il/elle gagne tu le gagnes, ce qu'il/elle perd tu le perds !")
+                    await b.send(f"🌑 Tu es lié à {a.mention} — ce qu'il/elle gagne tu le gagnes, ce qu'il/elle perd tu le perds !")
+                except: pass
             await asyncio.sleep(7200)
-
             if guild.id in pacte_actif:
                 del pacte_actif[guild.id]
-
-            await channel.send(embed=discord.Embed(
+            await channel_event.send(embed=discord.Embed(
                 description="🌑 Le Pacte prend fin... les liens se brisent.",
                 color=0x95a5a6
             ))
-
         except Exception as e:
             print(f"Pacte error: {e}")
-
     event_en_cours = False
 
 # ── 🎪 FESTIVAL DES LOSERS ────────────────────────────────────
+
 async def lancer_festival_losers(ctx=None):
     global event_en_cours
     event_en_cours = True
-
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild, ctx)
-            if not channel: continue
-
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
             eligibles = [
                 m for m in guild.members
-                if not m.bot and
-                economy_data[str(m.id)]['coins'] < 500 and
-                xp_data[str(m.id)]['level'] < 5
+                if not m.bot and economy_data[str(m.id)]['coins'] < 500
             ]
-
             if not eligibles:
-                await channel.send(embed=discord.Embed(
-                    description="🎪 Festival des Losers annulé — tout le monde est trop riche ou trop fort ! 😄",
+                await channel_event.send(embed=discord.Embed(
+                    description="🎪 Festival des Losers annulé — tout le monde est trop riche ! 😄",
                     color=0x95a5a6
                 ))
                 event_en_cours = False
                 return
-
+            mentions = " ".join([m.mention for m in eligibles[:10]])
             embed = discord.Embed(
                 title="🎪 FESTIVAL DES LOSERS",
                 description=(
                     f"**{len(eligibles)} membres** sont éligibles !\n\n"
-                    "Conditions : moins de **500 pièces** ET niveau inférieur à **5**\n\n"
-                    "Pendant **1 heure** les losers reçoivent des récompenses massives pour repartir !\n"
+                    "Condition : moins de **500 pièces**\n\n"
+                    f"**Participants :** {mentions}\n\n"
+                    "Chaque éligible reçoit des **pièces bonus**, de l'**XP** et ses **rolls rechargés** !\n"
                     "Les riches ne peuvent pas interférer 😄"
                 ),
                 color=0xf1c40f
             )
-            await channel.send(embed=embed)
-
-            # Récompenses pour les éligibles
+            await channel_event.send(embed=embed)
             for membre in eligibles:
                 uid = str(membre.id)
                 bonus_pieces = _r.randint(300, 800)
                 bonus_xp = _r.randint(50, 150)
                 economy_data[uid]['coins'] += bonus_pieces
                 xp_data[uid]['xp'] += bonus_xp
-                # Roll bonus
                 gacha_cooldowns[uid] = 0
                 try:
                     await membre.send(embed=discord.Embed(
                         title="🎪 Festival des Losers !",
-                        description=f"Tu es éligible ! Tu reçois **+{bonus_pieces} pièces**, **+{bonus_xp} XP** et tes rolls sont rechargés !",
+                        description=f"Tu es éligible ! **+{bonus_pieces} pièces**, **+{bonus_xp} XP** et rolls rechargés !",
                         color=0xf1c40f
                     ))
-                except:
-                    pass
-
-            await asyncio.sleep(3600)
-
-            await channel.send(embed=discord.Embed(
-                description="🎪 Le Festival des Losers est terminé ! Maintenant plus d'excuses pour être fauché 😄",
-                color=0x2ecc71
-            ))
-
+                except: pass
         except Exception as e:
             print(f"Festival losers error: {e}")
-
     event_en_cours = False
 
 # ── 🧩 PUZZLE COLLECTIF ───────────────────────────────────────
+
 async def lancer_puzzle_collectif(ctx=None):
     global event_en_cours
     event_en_cours = True
-
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild, ctx)
-            if not channel: continue
-
-            # Choisir une carte Épique
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
             epiques = [k for k in ANIME_CARDS_DB if k not in claimed_cards and ANIME_CARDS_DB[k]['rarete'] == 'Épique']
             if not epiques:
                 event_en_cours = False
                 return
-
             carte_key = _r.choice(epiques)
             c = ANIME_CARDS_DB[carte_key]
-            scores_puzzle = {}  # {uid: points}
-
-            embed = discord.Embed(
+            salon_puzzle = await creer_salon_temp(guild, "🧩・puzzle-collectif")
+            if not salon_puzzle: salon_puzzle = channel_event
+            scores_puzzle = {}
+            puzzle_actif[guild.id] = {"carte_key": carte_key, "scores": scores_puzzle, "fragment": 0, "actif": True}
+            embed_annonce = discord.Embed(
                 title="🧩 PUZZLE COLLECTIF",
                 description=(
-                    "Un personnage mystérieux est caché !\n\n"
+                    f"Un personnage mystérieux est caché dans {salon_puzzle.mention} !\n\n"
                     "Des fragments vont apparaître toutes les **2 minutes**\n"
                     "Premier à trouver le nom à chaque fragment gagne des points !\n"
-                    "Celui avec le plus de points à la fin **claim la carte Épique** !\n\n"
-                    f"⏰ **10 fragments** — 20 minutes d'action !"
+                    "Celui avec le plus de points **claim la carte Épique** !"
                 ),
                 color=0x9b59b6
             )
-            await channel.send(embed=embed)
-
-            # Indications progressives
+            await channel_event.send(embed=embed_annonce)
+            await salon_puzzle.send(embed=discord.Embed(
+                title="🧩 PUZZLE — Trouvez le personnage !",
+                description="Les indices arrivent... préparez-vous !",
+                color=0x9b59b6
+            ))
             indices = [
                 f"Ce personnage vient de la série **{c['serie']}**",
                 f"Sa rareté est **{c['rarete']}**",
-                f"Il a **{c['pv']} PV**",
-                f"Son attaque est de **{c['attaque']}**",
+                f"Il a **{c['pv']} PV** et **{c['attaque']} ATK**",
                 f"Son emoji est **{c['emoji']}**",
                 f"Son nom commence par **{c['nom'][0].upper()}**",
                 f"Son nom fait **{len(c['nom'])} lettres**",
-                f"Son nom contient la lettre **{c['nom'][len(c['nom'])//2].upper()}**",
-                f"*Indice final* — ses deux premières lettres sont **{c['nom'][:2].upper()}**",
-                f"*DERNIER INDICE* — son nom commence par **{c['nom'][:3].upper()}**",
+                f"Son nom contient **{c['nom'][len(c['nom'])//2].upper()}**",
+                f"Les 2 premières lettres sont **{c['nom'][:2].upper()}**",
+                f"Les 3 premières lettres sont **{c['nom'][:3].upper()}**",
+                f"*DERNIER INDICE* — commence par **{c['nom'][:4].upper()}**",
             ]
-
-            puzzle_actif[guild.id] = {
-                "carte_key": carte_key,
-                "scores": scores_puzzle,
-                "fragment": 0,
-                "actif": True
-            }
-
+            already_found = False
             for i, indice in enumerate(indices):
+                if already_found: break
                 embed_indice = discord.Embed(
                     title=f"🧩 Fragment {i+1}/10",
-                    description=f"{indice}\n\nRéponds le nom du personnage dans le salon !",
+                    description=f"{indice}\n\nTape le nom du personnage dans ce salon !",
                     color=0x9b59b6
                 )
-                await channel.send(embed=embed_indice)
-                puzzle_actif[guild.id]['fragment'] = i + 1
-
-                def check_puzzle(m):
-                    return not m.author.bot and m.channel == channel
-
+                await salon_puzzle.send(embed=embed_indice)
+                def check_puzzle(m, ch=salon_puzzle):
+                    return not m.author.bot and m.channel == ch
                 try:
                     rep = await bot.wait_for("message", timeout=120.0, check=check_puzzle)
                     if c['nom'].lower() in rep.content.lower():
                         uid = str(rep.author.id)
-                        scores_puzzle[uid] = scores_puzzle.get(uid, 0) + (10 - i)  # Plus de points tôt
-                        await channel.send(f"✅ **{rep.author.display_name}** trouve ! **+{10-i} points** !")
+                        scores_puzzle[uid] = scores_puzzle.get(uid, 0) + (10 - i)
+                        await salon_puzzle.send(f"✅ {rep.author.mention} trouve ! **+{10-i} points** !")
+                        already_found = True
+                    else:
+                        await salon_puzzle.send(f"❌ Pas tout à fait... prochain indice dans 2 min !", delete_after=10)
                 except asyncio.TimeoutError:
-                    await channel.send(f"⏰ Personne n'a trouvé ce fragment...")
-
-            # Résultats
+                    await salon_puzzle.send(f"⏰ Personne n'a trouvé ce fragment...")
             if scores_puzzle:
                 winner_uid = max(scores_puzzle, key=scores_puzzle.get)
                 winner = guild.get_member(int(winner_uid))
                 claimed_cards[carte_key] = winner_uid
                 gacha_collections[winner_uid][carte_key] = {"fusion": 0}
                 r_emoji = RARETE_EMOJI.get(c['rarete'], '🟣')
-                await channel.send(embed=discord.Embed(
-                    title=f"🧩 Puzzle résolu ! C'était {c['nom']} !",
-                    description=f"**{winner.display_name if winner else winner_uid}** remporte **{c['nom']}** {r_emoji} avec **{scores_puzzle[winner_uid]} points** !",
+                await salon_puzzle.send(embed=discord.Embed(
+                    title=f"🧩 C'était {c['nom']} !",
+                    description=f"{winner.mention if winner else winner_uid} remporte **{c['nom']}** {r_emoji} avec **{scores_puzzle[winner_uid]} points** !",
                     color=0x2ecc71
                 ))
-
             if guild.id in puzzle_actif:
                 del puzzle_actif[guild.id]
-
+            if salon_puzzle != channel_event:
+                asyncio.create_task(supprimer_salon_temp(salon_puzzle, 7, guild, "Puzzle Collectif"))
         except Exception as e:
             print(f"Puzzle error: {e}")
-
     event_en_cours = False
 
 # ── 🌊 VAGUE DE LÉGENDES ──────────────────────────────────────
+
 async def lancer_vague_legendaires(ctx=None):
     global event_en_cours
     event_en_cours = True
-
     for guild in bot.guilds:
         try:
-            channel_event = get_event_channel(guild)
+            channel_event = get_event_channel(guild, ctx)
             channel_gacha = guild.get_channel(SALON_GACHA_ID) if SALON_GACHA_ID else channel_event
             if not channel_event: continue
-
             legendaires = [k for k in ANIME_CARDS_DB if k not in claimed_cards and ANIME_CARDS_DB[k]['rarete'] in ('Légendaire', 'Mythique')]
             if len(legendaires) < 5:
                 event_en_cours = False
                 return
-
             _r.shuffle(legendaires)
             cartes_vague = legendaires[:10]
-
             embed_annonce = discord.Embed(
                 title="🌊 VAGUE DE LÉGENDES",
                 description=(
                     "```\n"
                     "╔════════════════════════════════════╗\n"
-                    "║   🌊  V A G U E  D E  L É G E N D E S  🌊   ║\n"
+                    "║  🌊  VAGUE DE LÉGENDES  🌊  ║\n"
                     "║  ──────────────────────────────  ║\n"
-                    "║         10 CARTES LÉGENDAIRES       ║\n"
-                    "║              EN 10 MINUTES          ║\n"
-                    "║         Une toutes les 60s...       ║\n"
+                    "║    10 CARTES EN 10 MINUTES !      ║\n"
+                    "║    Une toutes les 25 secondes     ║\n"
                     "╚════════════════════════════════════╝\n"
                     "```\n"
-                    f"Rendez-vous dans {channel_gacha.mention if channel_gacha else 'le salon gacha'} !\n\n"
+                    f"Rendez-vous dans {channel_gacha.mention} !\n\n"
                     "⚡ Annoncée **10 secondes avant** chaque drop\n"
-                    "❤️ Gardez vos réactions pour les persos que vous voulez vraiment !\n\n"
-                    "*Pas de seconde chance — soyez prêts.*"
+                    "❤️ **25 secondes** pour claim — pas de seconde chance !"
                 ),
                 color=0xf1c40f
             )
             await channel_event.send("@everyone", embed=embed_annonce)
             await asyncio.sleep(10)
-
             for i, carte_key in enumerate(cartes_vague):
+                if carte_key in claimed_cards: continue
                 c = ANIME_CARDS_DB[carte_key]
                 r_emoji = RARETE_EMOJI.get(c['rarete'], '🟠')
-
-                # Annonce 10s avant
-                await (channel_gacha or channel_event).send(embed=discord.Embed(
+                await channel_gacha.send(embed=discord.Embed(
                     description=f"⚡ **Dans 10 secondes** — {c['emoji']} **{c['nom']}** {r_emoji} !",
                     color=0xf39c12
                 ))
                 await asyncio.sleep(10)
-
-                if carte_key in claimed_cards:
-                    continue
-
+                if carte_key in claimed_cards: continue
                 couleur = RARETE_COULEURS.get(c['rarete'], 0xf1c40f)
                 embed_carte = discord.Embed(
                     title=f"{c['emoji']} {c['nom']}",
                     description=f"*{c['serie']}* {r_emoji} **{c['rarete']}**\n\n❤️ **{c['pv']} PV** | ⚔️ **{c['attaque']} ATK** | 🛡️ **{c['defense']} DEF**\n\nRéagis ❤️ pour claim !",
                     color=couleur
                 )
-                if c.get('image'):
+                if c.get('image') and 'imgur' in c.get('image',''):
                     embed_carte.set_image(url=c['image'])
-                embed_carte.set_footer(text="⚡ 60 secondes pour claim !")
-
-                msg = await (channel_gacha or channel_event).send(embed=embed_carte)
+                embed_carte.set_footer(text="⚡ 25 secondes pour claim !")
+                msg = await channel_gacha.send(embed=embed_carte)
                 await msg.add_reaction("❤️")
-
                 def check_vague(r, u, k=carte_key):
                     return str(r.emoji) == "❤️" and r.message.id == msg.id and not u.bot
-
                 try:
-                    reaction, claimer = await bot.wait_for("reaction_add", timeout=60.0, check=check_vague)
+                    reaction, claimer = await bot.wait_for("reaction_add", timeout=25.0, check=check_vague)
                     if carte_key not in claimed_cards:
                         claimed_cards[carte_key] = str(claimer.id)
                         gacha_collections[str(claimer.id)][carte_key] = {"fusion": 0}
-                        await (channel_gacha or channel_event).send(f"✅ **{claimer.display_name}** claim **{c['nom']}** {r_emoji} !")
+                        await channel_gacha.send(f"✅ {claimer.mention} claim **{c['nom']}** {r_emoji} !")
                 except asyncio.TimeoutError:
-                    await (channel_gacha or channel_event).send(f"⏰ **{c['nom']}** n'a pas été claimé...")
-
+                    await channel_gacha.send(f"⏰ **{c['nom']}** n'a pas été claimé...")
                 if i < len(cartes_vague) - 1:
                     await asyncio.sleep(5)
-
             await channel_event.send(embed=discord.Embed(
-                description="🌊 La Vague de Légendes est terminée !",
+                description="🌊 La Vague de Légendes est terminée ! Merci d'avoir participé 🎉",
                 color=0x95a5a6
             ))
-
         except Exception as e:
             print(f"Vague légendaires error: {e}")
-
     event_en_cours = False
 
-# ── 👾 BOSS FINAL AVEC PERSONNALITÉ ──────────────────────────
+# ── 👾 BOSS FINAL ─────────────────────────────────────────────
+
 async def lancer_boss_final(ctx=None):
     global event_en_cours
     event_en_cours = True
-
     repliques_moquerie = [
-        "C'est tout ce que t'as comme dégâts ? Mon grand-mère frappe plus fort ! 😂",
+        "C'est tout ce que t'as ? Mon grand-mère frappe plus fort ! 😂",
         "Pitoyable... J'ai dormi pendant tout ça.",
         "Tu appelles ça une attaque ? Rentrez chez vous.",
-        "Je bâille d'ennui... Quelqu'un peut envoyer un vrai combattant ?",
-        "Intéressant... NON. Pas du tout en fait.",
+        "Je bâille d'ennui... Quelqu'un de sérieux ?",
     ]
-
     repliques_fort = [
         "Tiens tiens... enfin quelqu'un qui mérite mon attention.",
         "Pas mal... mais c'est pas suffisant.",
         "Je commence à sentir quelque chose... de la DOULEUR ? Non impossible.",
-        "Voilà qui est intéressant. Continue et je pourrais daigner me défendre.",
     ]
-
     repliques_contreattaque = [
-        "Tu croyais vraiment que j'allais rester sans répondre ?",
-        "Mon tour. Profites-en pour compter tes pièces... parce que tu vas en perdre.",
-        "Leçon numéro 1 : ne jamais frapper un boss sans s'attendre à une réponse.",
+        "Tu croyais que j'allais rester sans répondre ?",
+        "Mon tour. Profites-en pour compter tes pièces...",
+        "Leçon : ne jamais frapper un boss sans s'attendre à une réponse.",
     ]
-
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild, ctx)
-            if not channel: continue
-
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
+            salon_boss = await creer_salon_temp(guild, "👾・boss-final")
+            if not salon_boss: salon_boss = channel_event
             boss = _r.choice(BOSS_INVASIONS).copy()
-            pv_boss = boss['pv'] * 2  # Plus fort que normal
-            invasion_active[guild.id] = {**boss, "pv": pv_boss, "max_pv": pv_boss, "attaquants": {}, "actif": True, "boss_final": True}
-
+            pv_boss = boss['pv'] * 2
+            invasion_active[guild.id] = {**boss, "pv": pv_boss, "max_pv": pv_boss, "attaquants": {}, "actif": True, "boss_final": True, "salon": salon_boss.id}
             embed = discord.Embed(
                 title=f"👾 BOSS FINAL — {boss['emoji']} {boss['nom']}",
                 description=(
                     f"```\n"
                     f"╔═══════════════════════════════╗\n"
                     f"║  ☠️  {boss['nom'].upper()[:22]}  ☠️  ║\n"
-                    f"║  ─────────────────────────  ║\n"
                     f"║  Série : {boss['serie'][:20]}  ║\n"
-                    f"║  PV : {pv_boss:,}  ║\n"
+                    f"║  PV : {pv_boss:,} (2x normal)        ║\n"
                     f"╚═══════════════════════════════╝\n"
                     f"```\n"
-                    f"**{boss['nom']}** se réveille avec une rage noire...\n\n"
-                    "⚠️ Ce boss parle, se moque et **contre-attaque** !\n\n"
-                    "`.attaquerboss` pour le combattre\n\n"
-                    f"*— \"Vous osez me défier ? Intéressant...\"*"
+                    f"**{boss['nom']}** se réveille dans {salon_boss.mention} avec une rage noire...\n\n"
+                    "⚠️ Ce boss **parle, se moque et contre-attaque** !\n"
+                    "`.attaquerboss` dans le salon pour le combattre !"
                 ),
                 color=0x8b0000
             )
             if boss.get('image'):
                 embed.set_thumbnail(url=boss['image'])
-
-            await channel.send("@everyone", embed=embed)
-
-            # Surveiller les attaques et répondre
+            await channel_event.send("@everyone", embed=embed)
+            await salon_boss.send(embed=discord.Embed(
+                description=f"*{boss['nom']} : \"Vous osez me défier ? Intéressant...\"*",
+                color=0x8b0000
+            ))
             last_reply = __import__('time').time()
             while guild.id in invasion_active and invasion_active[guild.id].get('actif'):
-                await asyncio.sleep(30)
+                await asyncio.sleep(20)
                 now = __import__('time').time()
-
-                if now - last_reply < 60:
-                    continue
-
+                if now - last_reply < 30: continue
                 inv = invasion_active.get(guild.id, {})
-                if not inv.get('actif'):
-                    break
-
+                if not inv.get('actif'): break
                 pct = inv['pv'] / inv['max_pv']
-
-                # Contre-attaque aléatoire
                 attaquants = inv.get('attaquants', {})
-                if attaquants and _r.random() < 0.3:
+                if attaquants and _r.random() < 0.5:
                     victime_uid = _r.choice(list(attaquants.keys()))
                     victime = guild.get_member(int(victime_uid))
                     if victime:
                         vol = _r.randint(50, 200)
                         economy_data[victime_uid]['coins'] = max(0, economy_data[victime_uid]['coins'] - vol)
-                        replique = _r.choice(repliques_contreattaque)
-                        await channel.send(embed=discord.Embed(
-                            description=f"{boss['emoji']} *\"{replique}\"*\n\n💥 {victime.mention} perd **{vol} pièces** !",
+                        await salon_boss.send(embed=discord.Embed(
+                            description=f"{boss['emoji']} *\"{_r.choice(repliques_contreattaque)}\"*\n\n💥 {victime.mention} perd **{vol} pièces** !",
                             color=0x8b0000
                         ))
-                        last_reply = now
                 elif pct > 0.7:
-                    await channel.send(embed=discord.Embed(
+                    await salon_boss.send(embed=discord.Embed(
                         description=f"{boss['emoji']} *\"{_r.choice(repliques_moquerie)}\"*",
                         color=0x8b0000
                     ))
-                    last_reply = now
-                elif pct < 0.3:
-                    await channel.send(embed=discord.Embed(
+                else:
+                    await salon_boss.send(embed=discord.Embed(
                         description=f"{boss['emoji']} *\"{_r.choice(repliques_fort)}\"*",
                         color=0xe74c3c
                     ))
-                    last_reply = now
-
+                last_reply = now
+            if salon_boss != channel_event:
+                asyncio.create_task(supprimer_salon_temp(salon_boss, 7, guild, "Boss Final"))
         except Exception as e:
             print(f"Boss final error: {e}")
-
     event_en_cours = False
 
-# ── 💀 DEATH NOTE DU QG ───────────────────────────────────────
+# ── 🔴 ALERTE ROUGE ───────────────────────────────────────────
+
 async def lancer_death_note(ctx=None):
     global event_en_cours
     event_en_cours = True
@@ -11504,13 +11266,10 @@ async def lancer_death_note(ctx=None):
 async def lancer_alerte_rouge(ctx=None):
     global event_en_cours
     event_en_cours = True
-
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild, ctx)
-            if not channel: continue
-
-            # Silence total — juste un message rouge cryptique
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
             embed_silence = discord.Embed(
                 description=(
                     "```\n"
@@ -11525,10 +11284,8 @@ async def lancer_alerte_rouge(ctx=None):
                 ),
                 color=0xff0000
             )
-            msg_alerte = await channel.send(embed=embed_silence)
-
-            await asyncio.sleep(300)  # 5 min
-
+            msg_alerte = await channel_event.send("@everyone", embed=embed_silence)
+            await asyncio.sleep(120)
             await msg_alerte.edit(embed=discord.Embed(
                 description=(
                     "```\n"
@@ -11536,256 +11293,188 @@ async def lancer_alerte_rouge(ctx=None):
                     "█   🔴  A L E R T E  🔴  █\n"
                     "█████████████████████████\n"
                     "```\n"
-                    "*Quelque chose se prépare dans l\'ombre...*\n\n"
+                    "*Quelque chose se prépare dans l'ombre...*\n\n"
                     "||Restez attentifs.||"
                 ),
                 color=0xff0000
             ))
-
-            await asyncio.sleep(300)  # 5 min de plus
-
-            # Compte à rebours dramatique
-            for i in [30, 20, 10, 5, 4, 3, 2, 1]:
-                bars = "🟥" * min(i, 10) + "⬛" * (10 - min(i, 10))
-                embed_cb = discord.Embed(
-                    description=(
-                        f"```\n"
-                        f"⚠️  SYSTÈME D\'ALERTE DU QG  ⚠️\n"
-                        f"────────────────────────\n"
-                        f"  {bars}\n"
-                        f"     {i:02d} SECONDES\n"
-                        f"────────────────────────\n"
-                        f"```\n"
-                        f"*Quelque chose arrive...*"
-                    ),
+            await asyncio.sleep(120)
+            for i in [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]:
+                bars = "🟥" * i + "⬛" * (10 - i)
+                await channel_event.send(embed=discord.Embed(
+                    description=f"```\n⚠️  ALERTE  ⚠️\n{bars}\n   {i:02d}s\n```",
                     color=0xff0000
-                )
-                await channel.send(embed=embed_cb)
-                await asyncio.sleep(1 if i <= 5 else 5)
-
-            # Déclencher un event random ultra rewarding
-            events_surprise = [
-                lancer_vague_legendaires,
-                lancer_tournoi,
-                lancer_encheres,
-            ]
-            choix = _r.choice(events_surprise)
-
+                ))
+                await asyncio.sleep(1)
             embed_reveal = discord.Embed(
                 title="💥 ÇA COMMENCE !",
                 description="L'Alerte Rouge était le prélude à quelque chose d'énorme...",
                 color=0xff0000
             )
-            await channel.send("@everyone", embed=embed_reveal)
-
-            event_en_cours = False  # Libérer pour le prochain event
-            await choix()
-
+            await channel_event.send("@everyone", embed=embed_reveal)
+            event_en_cours = False
+            # Déclencher event surprise
+            events_surprise = [lancer_vague_legendaires, lancer_tournoi, lancer_encheres]
+            await _r.choice(events_surprise)(ctx=ctx)
         except Exception as e:
             print(f"Alerte rouge error: {e}")
-
     event_en_cours = False
 
 # ── 🌍 CONQUÊTE DU QG ─────────────────────────────────────────
+
 async def lancer_conquete(ctx=None):
     global event_en_cours
     event_en_cours = True
-
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild, ctx)
-            if not channel: continue
-
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
             salon_cqt = await creer_salon_temp(guild, "🌍・conquete-qg")
-            if not salon_cqt: salon_cqt = channel
-
-            # Zones = salons texte du serveur
-            zones = [c for c in guild.text_channels if not c.name.startswith(('⚙️', '📌', '🔒')) and c != channel][:6]
+            if not salon_cqt: salon_cqt = channel_event
+            # Zones : utiliser les salons configurés ou fallback automatique
+            zones = []
+            if CONQUETE_ZONE_IDS:
+                for zid in CONQUETE_ZONE_IDS:
+                    ch = guild.get_channel(zid)
+                    if ch: zones.append(ch)
             if not zones:
+                for ch in guild.text_channels:
+                    perms = ch.permissions_for(guild.default_role)
+                    if perms.read_messages and perms.send_messages and ch != channel_event and ch != salon_cqt:
+                        zones.append(ch)
+                zones = zones[:6]
+            if not zones:
+                await channel_event.send("❌ Pas de salons accessibles pour la Conquête !")
                 event_en_cours = False
                 return
-
-            zone_control = {str(z.id): None for z in zones}  # {channel_id: faction_id}
-            zone_messages = {str(z.id): {} for z in zones}   # {channel_id: {faction_id: count}}
-
+            zone_messages = {str(z.id): {} for z in zones}
             embed = discord.Embed(
                 title="🌍 CONQUÊTE DU QG",
                 description=(
                     "Les factions s'affrontent pour contrôler les zones du serveur !\n\n"
-                    "**Comment conquérir ?** Soyez la faction la plus active dans chaque salon !\n"
-                    "Chaque message compte pour votre faction !\n\n"
+                    "**Comment conquérir ?** Soyez la faction la plus active dans chaque salon !\n\n"
                     "**Zones à conquérir :**\n" +
                     "\n".join([f"• {z.mention}" for z in zones]) +
                     "\n\n⏰ **1 heure** de conquête !\n"
-                    "La faction gagnante reçoit le rôle **Roi de la Conquête** !"
+                    "Suivez l'avancement dans " + salon_cqt.mention
                 ),
                 color=0xe74c3c
             )
-            await salon_cqt.send(embed=embed)
-            await channel.send(embed=discord.Embed(
-                description=f"🌍 La **Conquête du QG** commence dans {salon_cqt.mention} !",
+            await channel_event.send("@everyone", embed=embed)
+            await salon_cqt.send(embed=discord.Embed(
+                description="📊 Tableau de bord de la Conquête — mises à jour toutes les 20 min !",
                 color=0xe74c3c
             ))
-
-            conquete_zones[guild.id] = {
-                "zones": zone_control,
-                "messages": zone_messages,
-                "actif": True
-            }
-
-            # Updates toutes les 20 min
+            conquete_zones[guild.id] = {"zones": {str(z.id): None for z in zones}, "messages": zone_messages, "actif": True}
             for update in range(3):
                 await asyncio.sleep(1200)
-
-                # Calculer le contrôle actuel
                 scores_factions = {}
                 for zone_id, msgs in zone_messages.items():
                     if msgs:
                         winner_faction = max(msgs, key=msgs.get)
-                        zone_control[zone_id] = winner_faction
+                        conquete_zones[guild.id]["zones"][zone_id] = winner_faction
                         scores_factions[winner_faction] = scores_factions.get(winner_faction, 0) + 1
-
                 if scores_factions:
-                    desc_update = "**Contrôle actuel :**\n"
+                    desc_update = f"**Mise à jour {update+1}/3 :**\n\n"
                     for fid, count in sorted(scores_factions.items(), key=lambda x: x[1], reverse=True):
                         fd = FACTIONS.get(fid, {})
-                        desc_update += f"{fd.get('emoji', '')} **{fd.get('nom', fid)}** — {count} zone(s)\n"
-
-                    await salon_cqt.send(embed=discord.Embed(
-                        title=f"🌍 Mise à jour {update+1}/3",
-                        description=desc_update,
-                        color=0xe67e22
-                    ))
-
-            # Résultats finaux
+                        desc_update += f"{fd.get('emoji','')} **{fd.get('nom',fid)}** — {count} zone(s)\n"
+                    await salon_cqt.send(embed=discord.Embed(description=desc_update, color=0xe67e22))
             scores_finaux = {}
             for zone_id, msgs in zone_messages.items():
                 if msgs:
                     winner_faction = max(msgs, key=msgs.get)
                     scores_finaux[winner_faction] = scores_finaux.get(winner_faction, 0) + 1
-
             if scores_finaux:
                 faction_gagnante = max(scores_finaux, key=scores_finaux.get)
                 fd = FACTIONS.get(faction_gagnante, {})
-
-                # Retirer l'ancien rôle conquête
                 old_role = discord.utils.get(guild.roles, name="⚔️ Roi de la Conquête")
                 if old_role:
                     for member in old_role.members:
-                        try:
-                            await member.remove_roles(old_role)
-                        except:
-                            pass
-
-                # Donner le nouveau rôle
+                        try: await member.remove_roles(old_role)
+                        except: pass
                 role_cqt = await get_or_create_role(guild, "⚔️ Roi de la Conquête", 0xe74c3c)
-                membres_faction = [
-                    guild.get_member(int(uid))
-                    for uid, fid in faction_data.items()
-                    if fid == faction_gagnante and guild.get_member(int(uid))
-                ]
+                membres_faction = [guild.get_member(int(uid)) for uid, fid in faction_data.items() if fid == faction_gagnante and guild.get_member(int(uid))]
                 for m in membres_faction:
                     if m and role_cqt:
-                        try:
-                            await m.add_roles(role_cqt)
-                        except:
-                            pass
-
+                        try: await m.add_roles(role_cqt)
+                        except: pass
+                mentions_gagnants = " ".join([m.mention for m in membres_faction[:5]]) if membres_faction else ""
                 embed_winner = discord.Embed(
-                    title=f"🏆 {fd.get('emoji', '')} {fd.get('nom', faction_gagnante)} remporte la Conquête !",
+                    title=f"🏆 {fd.get('emoji','')} {fd.get('nom',faction_gagnante)} remporte la Conquête !",
                     description=(
                         f"**{scores_finaux[faction_gagnante]}/{len(zones)} zones** contrôlées !\n\n"
-                        f"Tous les membres de **{fd.get('nom', faction_gagnante)}** reçoivent le rôle **Roi de la Conquête** !\n"
-                        f"*Ce rôle sera perdu lors de la prochaine Conquête si une autre faction gagne !*"
+                        f"{mentions_gagnants}\n\n"
+                        "Rôle **Roi de la Conquête** attribué ! *(perdable à la prochaine Conquête)*"
                     ),
                     color=0xf1c40f
                 )
                 await salon_cqt.send(embed=embed_winner)
-                await channel.send(embed=embed_winner)
-
+                await channel_event.send(embed=embed_winner)
             if guild.id in conquete_zones:
                 del conquete_zones[guild.id]
-
-            if salon_cqt != channel:
-                asyncio.create_task(supprimer_salon_temp(salon_cqt, 300))
-
+            if salon_cqt != channel_event:
+                asyncio.create_task(supprimer_salon_temp(salon_cqt, 7, guild, "Conquête du QG"))
         except Exception as e:
             print(f"Conquête error: {e}")
-
     event_en_cours = False
 
-# ── 🌊 LA PROPHÉTIE S'ACCOMPLIT ───────────────────────────────
+# ── 🌊 PROPHÉTIE S'ACCOMPLIT ──────────────────────────────────
+
 async def lancer_prophetie_accomplie(ctx=None):
-    global event_en_cours
-    if not SALON_EVENT_ID or not serie_benie: return
+    global event_en_cours, serie_benie
     event_en_cours = True
-
+    if not serie_benie:
+        serie_benie = "Naruto"
     lore_events = {
-        "Naruto": ("Madara a lancé le Mugen Tsukuyomi sur le QG !", "🌙", "Les membres fans de Naruto ont +15% de stats en arène ! Les persos Naruto spawnent en masse !"),
-        "One Piece": ("Barbe Blanche a déclaré la guerre au QG !", "🏴‍☠️", "Les Nakama du Chapeau de Paille ont des bonus ! Les cartes One Piece ont des stats boostées !"),
-        "Demon Slayer": ("Muzan attaque le QG à l'aube !", "🌸", "Les Pourfendeurs de démons ont des pouvoirs spéciaux ! Taux de drop Demon Slayer x3 !"),
-        "Bleach": ("Aizen a trahi le Gotei 13 et attaque le QG !", "🦋", "Les Shinigami défendent le QG ! Les cartes Bleach ont des stats améliorées !"),
-        "Attack on Titan": ("Les Titans ont franchi les murs du QG !", "⚔️", "Le Bataillon d'Exploration part en mission ! Bonus spéciaux pour les membres AoT !"),
-        "My Hero Academia": ("All For One attaque UA et le QG !", "💥", "Les héros Pro se lèvent ! Les cartes MHA ont des stats doublées !"),
+        "Naruto": ("Madara a lancé le Mugen Tsukuyomi sur le QG !", "🌙", "akatsuki"),
+        "One Piece": ("Barbe Blanche a déclaré la guerre au QG !", "🏴‍☠️", "strawhat"),
+        "Demon Slayer": ("Muzan attaque le QG à l'aube !", "🌸", None),
+        "Bleach": ("Aizen a trahi le Gotei 13 et attaque le QG !", "🦋", "gotei13"),
+        "Attack on Titan": ("Les Titans ont franchi les murs du QG !", "⚔️", "surveycorps"),
+        "My Hero Academia": ("All For One attaque le QG !", "💥", "ua"),
     }
-
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild, ctx)
-            if not channel: continue
-
-            lore = lore_events.get(serie_benie, (
-                f"Une force mystérieuse liée à {serie_benie} envahit le QG !",
-                "🌀",
-                f"Les fans de {serie_benie} reçoivent des bonus spéciaux !"
-            ))
-
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
+            lore = lore_events.get(serie_benie, (f"Une force de {serie_benie} envahit le QG !", "🌀", None))
+            faction_liee = lore[2]
             embed = discord.Embed(
                 title=f"🌊 LA PROPHÉTIE S'ACCOMPLIT — {lore[1]} {serie_benie.upper()}",
                 description=(
                     f"**{lore[0]}**\n\n"
-                    f"{lore[2]}\n\n"
                     f"Pendant **2 heures** :\n"
                     f"• Les cartes **{serie_benie}** ont **+20% de stats** en arène\n"
-                    f"• Les rolls ont **×3 de chance** de tomber sur un perso **{serie_benie}**\n"
+                    f"• Les rolls ont **×3 de chance** de tomber sur **{serie_benie}**\n"
                     f"• Les membres de la faction liée reçoivent **+200 pièces** !"
                 ),
                 color=0x9b59b6
             )
-            await channel.send("@everyone", embed=embed)
-
-            # Récompenser les membres des factions liées
-            faction_liee = {
-                "Naruto": "akatsuki",
-                "One Piece": "strawhat",
-                "Attack on Titan": "surveycorps",
-                "Bleach": "gotei13",
-                "My Hero Academia": "ua",
-                "Hunter x Hunter": "phantomtroupe",
-            }.get(serie_benie)
-
+            await channel_event.send("@everyone", embed=embed)
             if faction_liee:
+                membres_recompenses = []
                 for uid, fid in faction_data.items():
                     if fid == faction_liee:
                         economy_data[uid]['coins'] += 200
-
+                        m = guild.get_member(int(uid))
+                        if m: membres_recompenses.append(m.mention)
+                if membres_recompenses:
+                    await channel_event.send(embed=discord.Embed(
+                        description=f"💰 **+200 pièces** pour : {' '.join(membres_recompenses[:10])}",
+                        color=0xf1c40f
+                    ))
             await asyncio.sleep(7200)
-
-            await channel.send(embed=discord.Embed(
-                description=f"🌊 La Prophétie de **{serie_benie}** est accomplie. Le calme revient sur le QG...",
+            await channel_event.send(embed=discord.Embed(
+                description=f"🌊 La Prophétie de **{serie_benie}** est accomplie. Le calme revient...",
                 color=0x95a5a6
             ))
-
         except Exception as e:
-            print(f"Prophétie accomplie error: {e}")
-
+            print(f"Prophétie error: {e}")
     event_en_cours = False
 
-# ══════════════════════════════════════════════════════════════
-#  COMMANDES DES EVENTS INTERACTIFS
-# ══════════════════════════════════════════════════════════════
 
-@bot.command(name="miser")
+
 async def miser_cmd(ctx, montant: int = None):
     """Miser dans les enchères — .miser <montant>"""
     gid = ctx.guild.id
@@ -11854,8 +11543,13 @@ async def chasser_cmd(ctx, cible: discord.Member = None):
     if gid not in wanted_actif:
         return await ctx.send("❌ Pas d'avis de recherche actif !", delete_after=5)
     data = wanted_actif[gid]
-    if not cible or str(cible.id) != data["cible"]:
-        return await ctx.send(f"❌ Ce n'est pas la bonne cible !", delete_after=5)
+    # Accepter mention ou ID
+    if not cible:
+        return await ctx.send("❌ Mentionne la cible ! Ex: `.chasser @joueur`", delete_after=5)
+    if str(cible.id) != str(data.get("cible","")):
+        cible_member = ctx.guild.get_member(int(data["cible"])) if data.get("cible") else None
+        nom_cible = cible_member.display_name if cible_member else "???"
+        return await ctx.send(f"❌ La cible est **{nom_cible}** — mentionne la bonne personne !", delete_after=5)
     uid = str(ctx.author.id)
     prime = data["prime"]
     economy_data[uid]['coins'] += prime
@@ -11926,8 +11620,15 @@ async def voter_cmd(ctx, cible: discord.Member = None):
 async def jedoute_cmd(ctx):
     """Signaler une fausse rumeur — .jedoute"""
     uid = str(ctx.author.id)
-    economy_data[uid]['coins'] += 150
-    await ctx.send(f"🧠 **{ctx.author.display_name}** garde son calme ! **+150 pièces** !", delete_after=10)
+    gid = ctx.guild.id
+    if gid in fausse_rumeur_active:
+        fausse_rumeur_active[gid]["douteurs"][uid] = True
+        economy_data[uid]['coins'] += 150
+        await ctx.send(f"🧠 **{ctx.author.display_name}** doute de la rumeur !", delete_after=5)
+        try: await ctx.message.delete()
+        except: pass
+    else:
+        await ctx.send("❌ Aucune fausse rumeur en cours !", delete_after=5)
 
 @bot.command(name="adopter")
 async def adopter_cmd(ctx):
@@ -12050,24 +11751,18 @@ async def process_clown(message):
     except:
         pass
 
-    # Vérifier si quelqu'un a envoyé 😂 en réponse (check dans les réactions)
-    if message.reference:
-        try:
-            ref_msg = await message.channel.fetch_message(message.reference.message_id)
-            for reaction in ref_msg.reactions:
-                if str(reaction.emoji) == "😂" and reaction.count > 0:
-                    del clown_actif[gid]
-                    role_clown = discord.utils.get(message.guild.roles, name="🤡 Clown du QG")
-                    clown_member = message.guild.get_member(int(clown_uid))
-                    if role_clown and clown_member:
-                        try:
-                            await clown_member.remove_roles(role_clown)
-                        except:
-                            pass
-                    await message.channel.send(f"😂 **{clown_member.display_name if clown_member else '???'}** a fait rire quelqu'un et est libéré du sort de Clown !")
-                    break
-        except:
-            pass
+    # Libération si quelqu'un réagit 😂 aux messages du clown
+    for reaction in message.reactions:
+        if str(reaction.emoji) == "😂" and reaction.count >= 1:
+            if gid in clown_actif:
+                del clown_actif[gid]
+                role_clown = discord.utils.get(message.guild.roles, name="🤡 Clown du QG")
+                clown_member = message.guild.get_member(int(clown_uid))
+                if role_clown and clown_member:
+                    try: await clown_member.remove_roles(role_clown)
+                    except: pass
+                await message.channel.send(f"😂 {clown_member.mention if clown_member else '???'} a fait rire quelqu'un et est **libéré** du sort de Clown !")
+            return
 
 # ── Handler conquête dans on_message ──────────────────────────
 async def process_conquete(message):
@@ -12244,6 +11939,9 @@ async def stopervent_cmd(ctx):
     for gid in list(encheres_actives.keys()):
         encheres_actives[gid]["actif"] = False
         del encheres_actives[gid]
+    for gid in list(invasion_active.keys()):
+        invasion_active[gid]["actif"] = False
+        del invasion_active[gid]
     for gid in list(parminous_game.keys()):
         parminous_game[gid]["actif"] = False
         del parminous_game[gid]
@@ -12280,19 +11978,47 @@ async def stopervent_cmd(ctx):
     oracle_prophecies.clear()
 
     # Annonce dans le salon event
-    channel = get_event_channel(ctx.guild)
-    if channel:
+    # Annonce dans salon event
+    if SALON_EVENT_ID:
+        ch_event = ctx.guild.get_channel(SALON_EVENT_ID)
+    else:
+        ch_event = ctx.channel
+    if ch_event:
         embed = discord.Embed(
             title="🛑 Event Arrêté",
             description="L'event en cours a été arrêté par un administrateur.",
             color=0xe74c3c
         )
-        await channel.send(embed=embed)
-
+        await ch_event.send(embed=embed)
     await ctx.send(embed=discord.Embed(
         description="✅ Event arrêté ! Le serveur est de nouveau libre.",
         color=0x2ecc71
     ), delete_after=10)
+
+
+@bot.command(name="setconquete", aliases=["conquetezones"])
+@commands.has_permissions(administrator=True)
+async def setconquete_cmd(ctx, *channels: discord.TextChannel):
+    """Configure les salons de la Conquête — .setconquete #general #gaming #anime"""
+    global CONQUETE_ZONE_IDS
+    if not channels:
+        if CONQUETE_ZONE_IDS:
+            zones = [ctx.guild.get_channel(cid) for cid in CONQUETE_ZONE_IDS]
+            desc = "\n".join([f"• {z.mention}" for z in zones if z])
+            return await ctx.send(embed=discord.Embed(
+                title="🌍 Zones de Conquête configurées",
+                description=desc,
+                color=0xe74c3c
+            ))
+        return await ctx.send("❌ Usage : `.setconquete #salon1 #salon2 #salon3`")
+    CONQUETE_ZONE_IDS = [ch.id for ch in channels]
+    sauvegarder_salons()
+    desc = "\n".join([f"• {ch.mention}" for ch in channels])
+    await ctx.send(embed=discord.Embed(
+        title="✅ Zones de Conquête configurées !",
+        description=desc,
+        color=0x2ecc71
+    ))
 
 
 print("🚀 Démarrage du bot...")
