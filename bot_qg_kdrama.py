@@ -6497,7 +6497,8 @@ async def sondage_cmd(ctx, *, question: str = None):
 #  🎭 SYSTÈME AUTOROLE
 # ============================================================
 
-autorole_panels = {}   # {guild_id: [{message_id, channel_id, roles: [{emoji, role_id, label}], image}]}
+autorole_panels = {}   
+reaction_roles = {}    # {msg_id: {emoji: role_id}}# {guild_id: [{message_id, channel_id, roles: [{emoji, role_id, label}], image}]}
 AUTOROLE_FILE = "autorole_config.json"
 
 def save_autorole():
@@ -11454,6 +11455,157 @@ async def recup_cmd(ctx):
 
 
 
+@bot.event
+async def on_raw_reaction_add(payload):
+    """Gère les réactions — règlement, autoroles, panels"""
+    if payload.user_id == bot.user.id:
+        return
+    guild = bot.get_guild(payload.guild_id)
+    if not guild:
+        return
+    member = guild.get_member(payload.user_id)
+    if not member or member.bot:
+        return
+    emoji = str(payload.emoji)
+    msg_id = payload.message_id
+
+    # ── Règlement ──────────────────────────────────────────
+    if REGLEMENT_MSG_ID and msg_id == int(REGLEMENT_MSG_ID):
+        if emoji == "✅" and REGLEMENT_ROLE_ID:
+            role = guild.get_role(int(REGLEMENT_ROLE_ID))
+            if role:
+                try:
+                    await member.add_roles(role)
+                except:
+                    pass
+        return
+
+    # ── Autorole panels ────────────────────────────────────
+    gid = str(guild.id)
+    panels = autorole_panels.get(guild.id, autorole_panels.get(gid, []))
+    for panel in panels:
+        if panel.get("message_id") == msg_id:
+            for role_data in panel.get("roles", []):
+                if str(role_data.get("emoji")) == emoji:
+                    role = guild.get_role(int(role_data["role_id"]))
+                    if role:
+                        try:
+                            await member.add_roles(role)
+                            ch = guild.get_channel(payload.channel_id)
+                            if ch:
+                                await ch.send(f"✅ Rôle **{role.name}** attribué à {member.mention} !", delete_after=4)
+                        except:
+                            pass
+                    return
+
+    # ── Reaction roles ─────────────────────────────────────
+    if msg_id in reaction_roles:
+        data = reaction_roles[msg_id]
+        role_id = data.get(emoji)
+        if role_id:
+            role = guild.get_role(int(role_id))
+            if role:
+                try:
+                    await member.add_roles(role)
+                except:
+                    pass
+
+@bot.event
+async def on_raw_reaction_remove(payload):
+    """Retire les rôles quand la réaction est supprimée"""
+    guild = bot.get_guild(payload.guild_id)
+    if not guild:
+        return
+    member = guild.get_member(payload.user_id)
+    if not member or member.bot:
+        return
+    emoji = str(payload.emoji)
+    msg_id = payload.message_id
+
+    # ── Règlement ──────────────────────────────────────────
+    if REGLEMENT_MSG_ID and msg_id == int(REGLEMENT_MSG_ID):
+        if emoji == "✅" and REGLEMENT_ROLE_ID:
+            role = guild.get_role(int(REGLEMENT_ROLE_ID))
+            if role:
+                try:
+                    await member.remove_roles(role)
+                except:
+                    pass
+        return
+
+    # ── Autorole panels ────────────────────────────────────
+    gid = str(guild.id)
+    panels = autorole_panels.get(guild.id, autorole_panels.get(gid, []))
+    for panel in panels:
+        if panel.get("message_id") == msg_id:
+            for role_data in panel.get("roles", []):
+                if str(role_data.get("emoji")) == emoji:
+                    role = guild.get_role(int(role_data["role_id"]))
+                    if role:
+                        try:
+                            await member.remove_roles(role)
+                            ch = guild.get_channel(payload.channel_id)
+                            if ch:
+                                await ch.send(f"❌ Rôle **{role.name}** retiré à {member.mention}", delete_after=4)
+                        except:
+                            pass
+                    return
+
+    # ── Reaction roles ─────────────────────────────────────
+    if msg_id in reaction_roles:
+        data = reaction_roles[msg_id]
+        role_id = data.get(emoji)
+        if role_id:
+            role = guild.get_role(int(role_id))
+            if role:
+                try:
+                    await member.remove_roles(role)
+                except:
+                    pass
+
+@bot.event
+async def on_member_join(member):
+    """Accueille les nouveaux membres"""
+    guild = member.guild
+    # Message de bienvenue
+    if SALON_BIENVENUE_ID:
+        channel = guild.get_channel(SALON_BIENVENUE_ID)
+        if channel:
+            embed = discord.Embed(
+                title=f"🌸 Bienvenue {member.display_name} !",
+                description=(
+                    f"{member.mention} vient de rejoindre **{guild.name}** !\n\n"
+                    f"📖 Lis le règlement pour obtenir accès au serveur\n"
+                    f"🎰 Tape `.help` pour voir toutes les commandes\n"
+                    f"🎴 Tape `.ga` pour ton premier roll gacha !"
+                ),
+                color=0xff6b9d
+            )
+            embed.set_thumbnail(url=member.display_avatar.url)
+            await channel.send(embed=embed)
+    # Rôle automatique si configuré
+    if ROLE_MEMBRE_NAME:
+        role = discord.utils.get(guild.roles, name=ROLE_MEMBRE_NAME)
+        if role:
+            try:
+                await member.add_roles(role)
+            except:
+                pass
+
+@bot.event
+async def on_member_remove(member):
+    """Message d'au revoir"""
+    guild = member.guild
+    if SALON_AUREVOIR_ID:
+        channel = guild.get_channel(SALON_AUREVOIR_ID)
+        if channel:
+            embed = discord.Embed(
+                description=f"👋 **{member.display_name}** a quitté le serveur...",
+                color=0x95a5a6
+            )
+            await channel.send(embed=embed)
+
+
 print("🚀 Démarrage du bot...")
 import traceback, time
 while True:
@@ -11463,4 +11615,5 @@ while True:
         print(f"❌ CRASH BOT: {e}")
         traceback.print_exc()
         print("🔄 Redémarrage dans 5 secondes...")
-        time.sleep(5) 
+        time.sleep(5)
+ 
