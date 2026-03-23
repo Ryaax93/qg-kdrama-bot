@@ -5936,6 +5936,8 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
         "SALON_AUREVOIR_ID":   SALON_AUREVOIR_ID,
         "SALON_BOOST_ID":      SALON_BOOST_ID,
         "SALON_HOF_ID":        SALON_HOF_ID,
+        "SALON_EVENT_ID":      SALON_EVENT_ID,
+        "SALON_GUIDE_ID":      SALON_GUIDE_ID,
     }
     current = vals.get(var_name)
 
@@ -5953,6 +5955,8 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
         elif vname == "SALON_AUREVOIR_ID": SALON_AUREVOIR_ID   = value
         elif vname == "SALON_BOOST_ID":    SALON_BOOST_ID      = value
         elif vname == "SALON_HOF_ID":      SALON_HOF_ID        = value
+        elif vname == "SALON_EVENT_ID":    SALON_EVENT_ID      = value
+        elif vname == "SALON_GUIDE_ID":    SALON_GUIDE_ID      = value
 
     # ── TOGGLE ────────────────────────────────────────────────
     # Même salon et déjà actif → DÉSACTIVER
@@ -8665,14 +8669,11 @@ async def lancerevent_cmd(ctx, nom: str = None):
     if event_en_cours:
         return await ctx.send("❌ Un event est déjà en cours ! Attends qu'il se termine.")
 
-    if not SALON_EVENT_ID:
-        await ctx.send("⚠️ Attention : aucun salon event configuré ! Fais `.setsalon event` dans ton salon event d'abord.\nL'event sera annoncé dans le system channel.", delete_after=10)
+    channel_ev = get_event_channel(ctx.guild)
+    if channel_ev:
+        await ctx.send(f"✅ Lancement de **{nom}** — annonce dans {channel_ev.mention} !", delete_after=5)
     else:
-        salon_event = ctx.guild.get_channel(SALON_EVENT_ID)
-        if salon_event:
-            await ctx.send(f"✅ Lancement de **{nom}** — annonce dans {salon_event.mention} !", delete_after=5)
-        else:
-            await ctx.send(f"✅ Lancement de **{nom}** !", delete_after=5)
+        await ctx.send(f"⚠️ Fais `.setsalon event` d'abord ! Pour l'instant annonce dans le system channel.", delete_after=8)
     await events_dispo[nom.lower()]()
 
 # ══════════════════════════════════════════════════════════════
