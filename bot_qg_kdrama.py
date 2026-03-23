@@ -22,6 +22,13 @@ bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
 # ---------- Stockage en mémoire ----------
 xp_data = defaultdict(lambda: {"xp": 0, "level": 1})
 economy_data = defaultdict(lambda: {"coins": 0, "tier": "Spectateur Débutant"})
+# ── Variables manquantes ─────────────────────────────────────
+message_count = defaultdict(int)     # {uid: nb_messages}
+gacha_cooldowns = defaultdict(int)   # {uid: timestamp}
+mariage_data = {}                    # {uid: uid_partenaire}
+anniversaire_data = {}               # {uid: "JJ/MM"}
+invitation_data = defaultdict(int)   # {uid: nb_invitations}
+
 duels = {}
 tickets = {}
 cooldowns = {}
@@ -11615,5 +11622,4 @@ while True:
         print(f"❌ CRASH BOT: {e}")
         traceback.print_exc()
         print("🔄 Redémarrage dans 5 secondes...")
-        time.sleep(5)
- 
+        time.sleep(5) 
