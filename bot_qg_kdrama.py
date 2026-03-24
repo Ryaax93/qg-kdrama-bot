@@ -7116,44 +7116,118 @@ def update_liga(uid, victoire: bool):
 # ── .faction ──────────────────────────────────────────────────
 @bot.command(name="faction", aliases=["factions"])
 async def faction_cmd(ctx, action: str = None, *, nom: str = None):
-    """Rejoins une faction — .faction | .faction rejoindre <id> | .faction info | .faction classement"""
+    """Gère les factions — .faction | .faction rejoindre <id> | .faction leave | .faction info | .faction classement"""
     uid = str(ctx.author.id)
+
+    FACTION_ROLES_MAP = {
+        "akatsuki":      ("🔴 Akatsuki",                  0xc0392b),
+        "surveycorps":   ("💙 Bataillon d\'Exploration", 0x2980b9),
+        "strawhat":      ("🏴 Chapeau de Paille",         0xe67e22),
+        "phantomtroupe": ("🕷️ Phantom Troupe",            0x2c2f33),
+        "gotei13":       ("🌸 Gotei 13",                  0x9b59b6),
+        "ua":            ("💚 Lycée U.A.",                0x27ae60),
+    }
+
+    async def get_faction_role(guild, fid):
+        if fid not in FACTION_ROLES_MAP:
+            return None
+        rname, rcolor = FACTION_ROLES_MAP[fid]
+        role = discord.utils.get(guild.roles, name=rname)
+        if not role:
+            try:
+                role = await guild.create_role(name=rname, color=discord.Color(rcolor), mentionable=True)
+            except:
+                return None
+        return role
+
+    async def retirer_roles_faction(member, guild):
+        for fid, (rname, _) in FACTION_ROLES_MAP.items():
+            r = discord.utils.get(guild.roles, name=rname)
+            if r and r in member.roles:
+                try: await member.remove_roles(r)
+                except: pass
+
     if not action or action.lower() in ["liste", "list"]:
         desc = ""
         for fid, fd in FACTIONS.items():
             nb = sum(1 for u, f in faction_data.items() if f == fid)
-            desc += f"{fd['emoji']} **{fd['nom']}** (`{fid}`) — {nb} membres — *{fd['serie']}*\n"
-        embed = discord.Embed(title="⚔️ Factions du QG", description=desc, color=0x9b59b6)
-        embed.set_footer(text=".faction rejoindre <id> pour rejoindre !")
+            emoji = fd.get("emoji", "")
+            nom_f = fd.get("nom", fid)
+            serie = fd.get("serie", "")
+            desc += f"{emoji} **{nom_f}** (`{fid}`) — {nb} membre(s) — *{serie}*\n"
+        embed = discord.Embed(
+            title="⚔️ Factions du QG",
+            description=desc + "\n`.faction rejoindre <id>` pour rejoindre !",
+            color=0x9b59b6
+        )
         return await ctx.send(embed=embed)
+
     if action.lower() in ["rejoindre", "join"]:
         if not nom:
             return await ctx.send("❌ Ex: `.faction rejoindre akatsuki`")
         fid = nom.lower().strip().replace(" ", "")
         if fid not in FACTIONS:
             return await ctx.send(f"❌ Faction `{fid}` introuvable ! Tape `.faction` pour la liste.")
+        old_fid = faction_data.get(uid)
+        if old_fid == fid:
+            return await ctx.send("❌ Tu es déjà dans cette faction !")
+        await retirer_roles_faction(ctx.author, ctx.guild)
         faction_data[uid] = fid
+        faction_rep[uid] = faction_rep.get(uid, 0)
         fd = FACTIONS[fid]
-        return await ctx.send(embed=discord.Embed(title=f"{fd['emoji']} Faction rejointe !", description=f"{ctx.author.mention} a rejoint **{fd['nom']}** !", color=0x2ecc71))
+        role = await get_faction_role(ctx.guild, fid)
+        if role:
+            try: await ctx.author.add_roles(role)
+            except: pass
+        role_txt = f" Rôle {role.mention} attribué !" if role else ""
+        embed = discord.Embed(
+            title=f"{fd.get('emoji','')} Faction rejointe !",
+            description=f"{ctx.author.mention} a rejoint **{fd.get('nom',fid)}** !{role_txt}",
+            color=0x2ecc71
+        )
+        return await ctx.send(embed=embed)
+
+    if action.lower() in ["leave", "quitter", "partir"]:
+        fid = faction_data.get(uid)
+        if not fid:
+            return await ctx.send("❌ T\'as pas de faction à quitter !")
+        fd = FACTIONS.get(fid, {})
+        await retirer_roles_faction(ctx.author, ctx.guild)
+        del faction_data[uid]
+        return await ctx.send(embed=discord.Embed(
+            description=f"👋 {ctx.author.mention} a quitté **{fd.get('nom', fid)}**. Rôle retiré.",
+            color=0xe74c3c
+        ))
+
     if action.lower() in ["info", "moi"]:
         fid = faction_data.get(uid)
         if not fid:
-            return await ctx.send("❌ T'as pas de faction ! `.faction rejoindre <id>`")
+            return await ctx.send("❌ T\'as pas de faction ! `.faction rejoindre <id>`")
         fd = FACTIONS[fid]
         rep = faction_rep.get(uid, 0)
-        return await ctx.send(embed=discord.Embed(title=f"{fd['emoji']} Ta Faction", description=f"**Faction :** {fd['nom']}\n**Réputation :** {rep} pts\n**Série :** {fd['serie']}", color=0x9b59b6))
+        role = await get_faction_role(ctx.guild, fid)
+        role_txt = f"\n**Rôle :** {role.mention}" if role else ""
+        embed = discord.Embed(
+            title=f"{fd.get('emoji','')} Ta Faction",
+            description=f"**Faction :** {fd.get('nom',fid)}\n**Réputation :** {rep} pts\n**Série :** {fd.get('serie','')}{role_txt}",
+            color=0x9b59b6
+        )
+        return await ctx.send(embed=embed)
+
     if action.lower() in ["classement", "top"]:
         scores = {}
         for u, fid in faction_data.items():
             scores[fid] = scores.get(fid, 0) + faction_rep.get(u, 0)
         if not scores:
-            return await ctx.send("❌ Aucune réputation de faction pour l'instant !")
+            return await ctx.send("❌ Aucune réputation de faction pour l\'instant !")
         sorted_f = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
         desc = ""
         for i, (fid, rep) in enumerate(sorted_f[:5]):
             fd = FACTIONS.get(fid, {})
-            desc += f"{'🥇🥈🥉4️⃣5️⃣'.split()[min(i,4)]} {fd.get('emoji', '')} **{fd.get('nom', fid)}** — **{rep} pts**\n"
+            desc += f"{medals[i]} {fd.get('emoji','')} **{fd.get('nom',fid)}** — **{rep} pts**\n"
         return await ctx.send(embed=discord.Embed(title="⚔️ Classement des Factions", description=desc, color=0x9b59b6))
+
 
 # ── .attaquerboss ─────────────────────────────────────────────
 @bot.command(name="attaquerboss", aliases=["ab", "attackboss"])
@@ -8334,8 +8408,22 @@ async def lancer_guerre_factions(ctx=None):
                 color=0x8b0000
             )
 
-            await channel_event.send(f"{mention_str}", embed=embed)
-            await salon_guerre.send(f"{mention_str}", embed=embed)
+            # Construire mentions factions uniquement
+            faction_mentions = []
+            for fid in FACTIONS.keys():
+                fname = {
+                    "akatsuki": "🔴 Akatsuki",
+                    "surveycorps": "💙 Bataillon d\'Exploration",
+                    "strawhat": "🏴 Chapeau de Paille",
+                    "phantomtroupe": "🕷️ Phantom Troupe",
+                    "gotei13": "🌸 Gotei 13",
+                    "ua": "💚 Lycée U.A.",
+                }.get(fid, "")
+                r = discord.utils.get(guild.roles, name=fname)
+                if r: faction_mentions.append(r.mention)
+            ping_str = " ".join(faction_mentions) if faction_mentions else "@everyone"
+            await channel_event.send(f"{ping_str}", embed=embed)
+            await salon_guerre.send(f"{ping_str}", embed=embed)
 
             await asyncio.sleep(7200)
 
