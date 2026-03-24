@@ -5995,8 +5995,8 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
 
     # Vérif que le joueur a bien l'item
     pending = getattr(bot, 'pending_items', {})
-    if itype not in ("freeze","curse") and (uid not in pending or itype not in pending.get(uid,{})):
-        return await ctx.send(f"❌ Tu n'as pas l'item `{itype}` ! Achète-le en boutique avec `.acheter {itype}`")
+    if uid not in pending or itype not in pending.get(uid, {}):
+        return await ctx.send(f"❌ Tu n\'as pas l\'item `{itype}` ! Achète-le avec `.acheter {itype}`")
 
     # Vérif amulette sur la cible
     amulette = getattr(bot, 'amulette_active', {})
@@ -7557,7 +7557,7 @@ async def process_jackpot(message):
     jackpot_contributions[uid] = jackpot_contributions.get(uid, 0) + 1
     jackpot_cagnotte += 1
     # Explosion !
-    if jackpot_cagnotte >= 1500:
+    if jackpot_cagnotte >= 5000:
         jackpot_actif = False
         await declencher_jackpot_explosion(message.guild, message.channel)
 
@@ -7922,11 +7922,16 @@ async def lancer_coffre_planifie(ctx=None):
             gain = _r.randint(200, 600)
             coffre_actif[channel.id] = {"contenu": gain, "expires": _t.time() + 300}
             embed = discord.Embed(
-                title="📦 Coffre Mystérieux !",
-                description=f"Un coffre vient d'apparaître !\nTape `.ouvrir` dans les **5 minutes** pour récupérer les **{gain} pièces** ! 💰\n\n*Premier arrivé, premier servi !*",
+                title="📦 COFFRE MYSTÉRIEUX !",
+                description=(
+                    f"Un coffre contenant **{gain} pièces** vient d'apparaître !\n\n"
+                    "💡 Tape `.ouvrir` dans **n'importe quel salon** pour l'ouvrir !\n"
+                    "⚡ **Premier arrivé, premier servi !**\n"
+                    f"⏰ Disparaît dans **5 minutes**"
+                ),
                 color=0xf1c40f
             )
-            msg = await channel.send("@here", embed=embed)
+            msg = await channel.send("@everyone", embed=embed)
             await asyncio.sleep(300)
             if channel.id in coffre_actif:
                 del coffre_actif[channel.id]
@@ -8095,45 +8100,120 @@ async def lancer_nuit_chasse_event(ctx=None):
 
 async def lancer_marche_noir_event(ctx=None):
     global event_en_cours
-    import time as _t
     event_en_cours = True
+    import time as _t
+
+    ITEMS_MN = [
+        # Cartes
+        {"type": "carte", "rarete": "Mythique", "prix": 10000},
+        {"type": "carte", "rarete": "Légendaire", "prix": 6000},
+        {"type": "carte", "rarete": "Épique", "prix": 3500},
+        # Rôles exclusifs
+        {"type": "role", "nom": "🕶️ Fantôme", "desc": "Rôle exclusif Marché Noir", "prix": 8000, "color": 0x2c2f33},
+        {"type": "role", "nom": "💀 Contrebandier", "desc": "Rôle rare du marché illégal", "prix": 5000, "color": 0x8b0000},
+        {"type": "role", "nom": "🐍 Serpent d\'Or", "desc": "Pour les plus riches", "prix": 12000, "color": 0xf39c12},
+        # Items PvP
+        {"type": "item", "id": "bombe_gacha", "nom": "💣 Bombe Gacha", "desc": "Force une perte de carte", "prix": 7000},
+        {"type": "item", "id": "protection", "nom": "🌟 Protection Divine", "desc": "Immunité 2h", "prix": 4500},
+        {"type": "item", "id": "amulette", "nom": "🪬 Amulette", "desc": "Renvoie les attaques", "prix": 2000},
+        {"type": "item", "id": "cadenas", "nom": "🔒 Cadenas", "desc": "Bloque le claim 30min", "prix": 3500},
+    ]
+
     for guild in bot.guilds:
         try:
-            boutique_ch = guild.get_channel(SALON_BOUTIQUE_ID) if SALON_BOUTIQUE_ID else get_event_channel(guild)
-            event_ch = get_event_channel(guild)
-            if not boutique_ch: continue
-            role = get_gacha_role(guild)
-            mention = role.mention if role else ""
-            candidates = [k for k in ANIME_CARDS_DB if ANIME_CARDS_DB[k]["rarete"] in ("Légendaire","Mythique","Épique") and k not in claimed_cards]
-            if len(candidates) < 3:
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
+
+            # Salon temporaire sombre
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=True, send_messages=False),
+                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            }
+            try:
+                salon_mn = await guild.create_text_channel("🕶️・marche-noir", overwrites=overwrites)
+            except:
+                salon_mn = channel_event
+
+            # Choisir 5 items aléatoires
+            _r.shuffle(ITEMS_MN)
+            items_choisis = []
+            for item in ITEMS_MN:
+                if item["type"] == "carte":
+                    cartes = [k for k in ANIME_CARDS_DB if k not in claimed_cards and ANIME_CARDS_DB[k]["rarete"] == item["rarete"]]
+                    if cartes:
+                        k = _r.choice(cartes)
+                        c = ANIME_CARDS_DB[k]
+                        items_choisis.append({**item, "key": k, "nom": c["nom"], "emoji": c["emoji"], "image": c.get("image","")})
+                else:
+                    items_choisis.append(item)
+                if len(items_choisis) >= 5:
+                    break
+
+            if not items_choisis:
                 event_en_cours = False
                 return
-            cartes_mn = _r.sample(candidates, 3)
+
+            # Stocker dans marche_noir_actif
             marche_noir_actif.clear()
-            prix_map = {"Mythique": 8000, "Légendaire": 5000, "Épique": 3000}
-            desc = "🕶️ Le Marché Noir ouvre ses portes pour **24h** !\n\n"
-            for k in cartes_mn:
-                c = ANIME_CARDS_DB[k]
-                prix = prix_map.get(c["rarete"], 3000) + _r.randint(500, 2000)
-                marche_noir_actif[k] = {"prix": prix, "expires": _t.time() + 86400}
-                r = RARETE_EMOJI.get(c["rarete"], "🔵")
-                desc += f"{r} **{c['nom']}** — **{prix:,} pièces** → `.marcheacheter {k}`\n"
-            embed = discord.Embed(title="🕶️ MARCHÉ NOIR", description=desc, color=0x2c3e50)
-            if event_ch:
-                await event_ch.send(mention, embed=discord.Embed(description=f"🕶️ Le **Marché Noir** est ouvert dans {boutique_ch.mention} ! Cartes rares disponibles 24h !", color=0x2c3e50))
-            msg = await boutique_ch.send(embed=embed)
-            await asyncio.sleep(86400)
+            for i, item in enumerate(items_choisis):
+                marche_noir_actif[i] = {**item, "vendu": False, "expires": _t.time() + 7200}
+
+            # Embed annonce dans event
+            embed_annonce = discord.Embed(
+                title="🕶️ LE MARCHÉ NOIR S\'OUVRE",
+                description=(
+                    "```\n"
+                    "╔════════════════════════════════╗\n"
+                    "║  🕶️   M A R C H É   N O I R   🕶️  ║\n"
+                    "║  ──────────────────────────  ║\n"
+                    "║  Marchandises rares...         ║\n"
+                    "║  Prix exorbitants...           ║\n"
+                    "║  Durée limitée...              ║\n"
+                    "║  Soyez discrets.               ║\n"
+                    "╚════════════════════════════════╝\n"
+                    "```\n"
+                    f"Les portes du marché illégal s\'ouvrent dans {salon_mn.mention}\n"
+                    "⏰ **2 heures** avant fermeture"
+                ),
+                color=0x1a1a1a
+            )
+            await channel_event.send("@everyone", embed=embed_annonce)
+
+            # Embed catalogue dans salon marché noir
+            desc_catalogue = "**— MARCHANDISES DISPONIBLES —**\n\n"
+            for i, item in enumerate(items_choisis):
+                if item["type"] == "carte":
+                    r_emoji = RARETE_EMOJI.get(item["rarete"], "")
+                    desc_catalogue += f"`[{i}]` {item.get('emoji','')} **{item['nom']}** {r_emoji} — **{item['prix']:,}p** → `.marcheacheter {i}`\n"
+                elif item["type"] == "role":
+                    desc_catalogue += f"`[{i}]` **{item['nom']}** *(rôle exclusif)* — **{item['prix']:,}p** → `.marcheacheter {i}`\n"
+                elif item["type"] == "item":
+                    desc_catalogue += f"`[{i}]` **{item['nom']}** *(item PvP)* — **{item['prix']:,}p** → `.marcheacheter {i}`\n"
+
+            embed_catalogue = discord.Embed(
+                title="🕶️ CATALOGUE — Marché Noir",
+                description=desc_catalogue,
+                color=0x1a1a1a
+            )
+            embed_catalogue.set_footer(text="⚠️ Transactions anonymes — aucune garantie — durée limitée")
+            await salon_mn.send(embed=embed_catalogue)
+
+            await asyncio.sleep(7200)
+
+            # Fermeture
             marche_noir_actif.clear()
-            await msg.delete()
+            if salon_mn != channel_event:
+                asyncio.create_task(supprimer_salon_temp(salon_mn, 7, guild, "Marché Noir"))
+
         except Exception as e:
-            print(f"Marché noir error: {e}")
+            print(f"Marché Noir error: {e}")
     event_en_cours = False
+
 
 async def lancer_jackpot(ctx=None):
     global jackpot_actif, jackpot_cagnotte, jackpot_contributions
+    # Jackpot tourne en arrière-plan — ne bloque PAS event_en_cours
     import time as _t
-    if _t.time() - jackpot_derniere_explosion < 2592000:  # 30 jours
-        return
     jackpot_actif = True
     jackpot_cagnotte = 0
     jackpot_contributions.clear()
@@ -8207,51 +8287,93 @@ async def lancer_guerre_factions(ctx=None):
     event_en_cours = True
     for guild in bot.guilds:
         try:
-            channel = get_event_channel(guild, ctx)
-            if not channel: continue
+            channel_event = get_event_channel(guild, ctx)
+            if not channel_event: continue
+
+            # Créer salon visible uniquement par les membres de factions
+            FACTION_ROLES_NAMES = ["🔴 Akatsuki", "💙 Bataillon d\'Exploration",
+                                    "🏴\u200d☠️ Équipage du Chapeau de Paille",
+                                    "🕷️ Phantom Troupe", "🌸 Gotei 13", "💚 Lycée U.A."]
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            }
+            for rname in FACTION_ROLES_NAMES:
+                role = discord.utils.get(guild.roles, name=rname)
+                if role:
+                    overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+
+            try:
+                salon_guerre = await guild.create_text_channel("⚔️・guerre-des-factions", overwrites=overwrites)
+            except:
+                salon_guerre = channel_event
+
+            # Mentions factions
+            mentions_factions = []
+            for rname in FACTION_ROLES_NAMES:
+                role = discord.utils.get(guild.roles, name=rname)
+                if role:
+                    mentions_factions.append(role.mention)
+
+            mention_str = " ".join(mentions_factions) if mentions_factions else "@everyone"
+
+            # Boss géant
             boss = _r.choice(BOSS_INVASIONS).copy()
-            pv_guerre = boss["pv"] * 3  # Boss géant x3
-            invasion_active[guild.id] = {**boss, "pv": pv_guerre, "max_pv": pv_guerre, "attaquants": {}, "actif": True, "guerre_factions": True}
-            desc = f"**GUERRE DES FACTIONS !** Les factions s'affrontent sur **{boss['nom']}** !\n\n❤️ **PV :** {pv_guerre:,}\n\n"
-            for fid, fd in FACTIONS.items():
-                membres = sum(1 for u, f in faction_data.items() if f == fid)
-                desc += f"{fd['emoji']} **{fd['nom']}** — {membres} combattants\n"
-            desc += "\nTape `.attaquerboss` ! La faction avec le plus de dégâts gagne des avantages exclusifs 🏆"
-            embed = discord.Embed(title=f"🏴‍☠️ GUERRE DES FACTIONS — {boss['emoji']} {boss['nom']}", description=desc, color=0xe74c3c)
-            if boss.get("image"):
-                embed.set_thumbnail(url=boss["image"])
-            for fid, fd in FACTIONS.items():
-                role_f = discord.utils.get(guild.roles, name=fd["nom"])
-                if role_f:
-                    await channel.send(role_f.mention)
-            await channel.send(embed=embed)
-            await asyncio.sleep(7200)  # 2h
-            # Calculer gagnant
+            pv_boss = boss["pv"] * 3
+            invasion_active[guild.id] = {**boss, "pv": pv_boss, "max_pv": pv_boss, "attaquants": {}, "actif": True, "guerre": True}
+
+            embed = discord.Embed(
+                title=f"🏴‍☠️ GUERRE DES FACTIONS",
+                description=(
+                    f"Un boss légendaire défie les factions !\n\n"
+                    f"❤️ **{pv_boss:,} PV** — 3x plus résistant !\n\n"
+                    "`.attaquerboss` pour combattre !\n"
+                    "La faction ayant infligé le plus de dégâts gagne :\n"
+                    "💰 **+500 pièces** + **+100 réputation** !"
+                ),
+                color=0x8b0000
+            )
+
+            await channel_event.send(f"{mention_str}", embed=embed)
+            await salon_guerre.send(f"{mention_str}", embed=embed)
+
+            await asyncio.sleep(7200)
+
+            # Résultats
+            inv = invasion_active.get(guild.id, {})
+            attaquants = inv.get("attaquants", {})
+            faction_degats = {}
+            for uid, degats in attaquants.items():
+                fid = faction_data.get(uid)
+                if fid:
+                    faction_degats[fid] = faction_degats.get(fid, 0) + degats
+
+            if faction_degats:
+                winner_fid = max(faction_degats, key=faction_degats.get)
+                fd = FACTIONS.get(winner_fid, {})
+                membres_winners = [guild.get_member(int(uid)) for uid, fid in faction_data.items() if fid == winner_fid and guild.get_member(int(uid))]
+                mentions_winners = " ".join([m.mention for m in membres_winners[:10] if m])
+                for uid, fid in faction_data.items():
+                    if fid == winner_fid:
+                        economy_data[uid]["coins"] += 500
+                        faction_rep[uid] = faction_rep.get(uid, 0) + 100
+
+                embed_result = discord.Embed(
+                    title="🏆 Faction Victorieuse de la Guerre !",
+                    description=f"{mentions_winners}\n\n**+500 pièces** + **+100 réputation** pour chaque membre !",
+                    color=0xf1c40f
+                )
+                await channel_event.send(embed=embed_result)
+                await salon_guerre.send(embed=embed_result)
+
             if guild.id in invasion_active:
-                inv = invasion_active[guild.id]
-                scores_faction = {}
-                for uid, data in inv["attaquants"].items():
-                    fid = faction_data.get(uid)
-                    if fid:
-                        scores_faction[fid] = scores_faction.get(fid, 0) + data["total"]
-                if scores_faction:
-                    winner_fid = max(scores_faction, key=scores_faction.get)
-                    wfd = FACTIONS[winner_fid]
-                    desc_win = f"🏆 **{wfd['emoji']} {wfd['nom']}** remporte la Guerre des Factions !\n\n**Dégâts par faction :**\n"
-                    for fid, dmg in sorted(scores_faction.items(), key=lambda x: x[1], reverse=True):
-                        fd2 = FACTIONS.get(fid, {})
-                        desc_win += f"{fd2.get('emoji','')} **{fd2.get('nom',fid)}** — {dmg:,} dégâts\n"
-                    desc_win += "\n*Récompenses distribuées aux membres de la faction gagnante !*"
-                    for uid, f in faction_data.items():
-                        if f == winner_fid:
-                            economy_data[uid]["coins"] += 500
-                            faction_rep[uid] = faction_rep.get(uid, 0) + 100
-                    embed_win = discord.Embed(title="🏆 Guerre des Factions — Résultats !", description=desc_win, color=0xf1c40f)
-                    await channel.send(embed=embed_win)
                 del invasion_active[guild.id]
+            asyncio.create_task(supprimer_salon_temp(salon_guerre, 7, guild, "Guerre des Factions"))
+
         except Exception as e:
             print(f"Guerre factions error: {e}")
     event_en_cours = False
+
 
 async def lancer_event_surprise(ctx=None):
     global event_en_cours
@@ -8274,27 +8396,46 @@ async def lancer_event_surprise(ctx=None):
     await _r.choice(events_possibles)()
 
 async def lancer_heure_maudite(ctx=None):
-    global event_en_cours, heure_maudite_active
+    global event_en_cours, double_xp_event_actif
     event_en_cours = True
-    heure_maudite_active = True
     for guild in bot.guilds:
         try:
             channel = get_event_channel(guild, ctx)
             if not channel: continue
-            role = get_gacha_role(guild)
-            mention = role.mention if role else ""
+            gacha_ch = guild.get_channel(SALON_GACHA_ID) if SALON_GACHA_ID else channel
             embed = discord.Embed(
-                title="🌙 HEURE MAUDITE",
-                description="*Les noctambules sont récompensés...*\n\n🟣 Les chances de tirer des cartes **Épique** sont **x2** pendant **30 minutes** !\n\nVous avez pas encore dormi ? `.ga` maintenant ! 🎰",
-                color=0x2c3e50
+                title="🌙 L'HEURE MAUDITE",
+                description=(
+                    "```\n"
+                    "╔═══════════════════════════════╗\n"
+                    "║  🌑  H E U R E  M A U D I T E  🌑  ║\n"
+                    "║  ─────────────────────────  ║\n"
+                    "║   Il est 2h du matin...       ║\n"
+                    "║   Les ombres s\'éveillent...   ║\n"
+                    "║   Les cartes Épique surgissent ║\n"
+                    "╚═══════════════════════════════╝\n"
+                    "```\n"
+                    "Les cartes **Épique** ont **×2 de chance** d\'apparaître\n"
+                    "pendant les **30 prochaines minutes** !\n\n"
+                    "*Ne dormez pas... ou alors dormez — pendant que les autres farm 😈*"
+                ),
+                color=0x1a1a2e
             )
-            msg = await channel.send(mention, embed=embed)
+            await channel.send(f"{GACHA_MENTION}", embed=embed)
+            if gacha_ch and gacha_ch != channel:
+                await gacha_ch.send(f"{GACHA_MENTION}", embed=discord.Embed(
+                    description="🌑 **L\'Heure Maudite** est active — ×2 chance sur les **Épique** pendant **30 min** !",
+                    color=0x1a1a2e
+                ))
             await asyncio.sleep(1800)
-            heure_maudite_active = False
-            await msg.delete()
+            await channel.send(embed=discord.Embed(
+                description="🌙 L\'Heure Maudite s\'estompe... les ombres se retirent.",
+                color=0x95a5a6
+            ))
         except Exception as e:
             print(f"Heure maudite error: {e}")
     event_en_cours = False
+
 
 async def lancer_imposteur(ctx=None):
     for guild in bot.guilds:
@@ -8714,7 +8855,7 @@ async def lancer_roue_fortune(ctx=None):
                 ),
                 color=0xf1c40f
             )
-            msg = await channel.send(embed=embed)
+            msg = await channel.send("@everyone", embed=embed)
 
             # Animation roue
             import random as _rand
@@ -9722,7 +9863,7 @@ async def lancer_corbeau(ctx=None):
                 ),
                 color=0x2c2f33
             )
-            await channel.send(embed=embed)
+            await channel.send("@everyone", embed=embed)
 
             # Effets toutes les 5 min
             for tick in range(4):
@@ -10114,7 +10255,7 @@ async def lancer_vague_legendaires(ctx=None):
                 ),
                 color=0xf1c40f
             )
-            await channel_event.send("@everyone", embed=embed_annonce)
+            await channel_event.send("<@&1484584133513580605>", embed=embed_annonce)
             await asyncio.sleep(10)
             for i, carte_key in enumerate(cartes_vague):
                 if carte_key in claimed_cards: continue
@@ -10644,11 +10785,23 @@ async def chasser_cmd(ctx, cible: discord.Member = None):
     if role_chasseur:
         try: await ctx.author.add_roles(role_chasseur)
         except: pass
-    await ctx.send(embed=discord.Embed(
-        title="🎯 CIBLE CAPTURÉE !",
-        description=f"{ctx.author.mention} a capturé **{cible.display_name}** et récupère **{prime:,} pièces** !\n🎯 Rôle **Chasseur de Primes N°1** attribué *(perdable au prochain Wanted)* !",
+    # Fin de l'event
+    if ctx.guild.id in wanted_actif:
+        del wanted_actif[ctx.guild.id]
+    event_en_cours = False
+    # Annonce dans salon event
+    ch_ev = ctx.guild.get_channel(SALON_EVENT_ID) if SALON_EVENT_ID else ctx.guild.system_channel
+    embed_win = discord.Embed(
+        title="🎯 WANTED — CIBLE CAPTURÉE !",
+        description=(
+            f"**{ctx.author.mention}** a capturé {cible.mention} et récupère **{prime:,} pièces** !\n"
+            f"🎯 Rôle **Chasseur de Primes N°1** attribué !"
+        ),
         color=0x2ecc71
-    ))
+    )
+    if ch_ev:
+        await ch_ev.send(embed=embed_win)
+    await ctx.send(embed=embed_win, delete_after=5)
 
 @bot.command(name="eliminer")
 async def eliminer_cmd(ctx, cible: discord.Member = None):
@@ -11175,37 +11328,51 @@ async def miser_cmd(ctx, montant: int = None):
 
 
 async def lancer_classement_hebdo(ctx=None):
-    """Lance le classement hebdomadaire manuellement"""
     for guild in bot.guilds:
         try:
             channel = get_event_channel(guild, ctx)
             if not channel: continue
-            top = sorted(
-                [(uid, xp_data[uid]['xp']) for uid in xp_data if guild.get_member(int(uid))],
-                key=lambda x: x[1], reverse=True
-            )[:3]
-            if not top:
-                await channel.send("❌ Pas assez de données pour le classement !")
+
+            # Score = messages + xp + heures vocal
+            scores = {}
+            for uid in xp_data:
+                m = guild.get_member(int(uid))
+                if not m: continue
+                score_msg = message_count.get(uid, 0) * 2
+                score_xp = xp_data[uid]["xp"]
+                score_level = xp_data[uid].get("level", 1) * 50
+                scores[uid] = score_msg + score_xp + score_level
+
+            if not scores:
+                await channel.send(embed=discord.Embed(description="❌ Pas assez de données pour le classement !", color=0x95a5a6))
                 return
-            recompenses = [300, 200, 100]
-            medals = ["🥇", "🥈", "🥉"]
-            desc = "**🏆 TOP 3 DE LA SEMAINE**\n\n"
-            for i, (uid, xp) in enumerate(top):
+
+            top5 = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:5]
+            recompenses = [300, 200, 150, 100, 50]
+            medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
+
+            desc = "**Basé sur : messages + XP + niveau**\n\n"
+            mentions = []
+            for i, (uid, score) in enumerate(top5):
                 member = guild.get_member(int(uid))
                 if member:
-                    economy_data[uid]['coins'] += recompenses[i]
-                    desc += f"{medals[i]} {member.mention} — **{xp} XP** → **+{recompenses[i]} pièces** !\n"
+                    economy_data[uid]["coins"] += recompenses[i]
+                    desc += f"{medals[i]} {member.mention} — **{score} pts** → **+{recompenses[i]} pièces** !\n"
+                    mentions.append(member.mention)
+                    # Reset message_count pour la semaine suivante
+                    message_count[uid] = 0
+
             embed = discord.Embed(
-                title="🏆 CLASSEMENT HEBDOMADAIRE",
+                title="🏆 CLASSEMENT HEBDOMADAIRE — TOP 5",
                 description=desc,
                 color=0xf1c40f
             )
             await channel.send("@everyone", embed=embed)
+
         except Exception as e:
             print(f"Classement hebdo error: {e}")
 
 
-# ── 🎁 COLIS MYSTÈRE ──────────────────────────────────────────
 async def lancer_colis_mystere(ctx=None):
     global event_en_cours
     event_en_cours = True
@@ -11241,9 +11408,9 @@ async def lancer_colis_mystere(ctx=None):
                     "║   Expéditeur : Inconnu 👀     ║\n"
                     "╚═══════════════════════════════╝\n"
                     "```\n"
-                    "Un seul membre peut l\'ouvrir !\n"
-                    "Tape `.ouvrir` pour tenter ta chance...\n\n"
-                    "⚠️ **Personne sait ce qu\'il y a dedans — bon ou mauvais !**\n"
+                    "💡 Tape `.ouvrir` dans **n'importe quel salon** !\n"
+                    "⚡ **Un seul membre peut l\'ouvrir — premier arrivé !**\n"
+                    "⚠️ Bon ou mauvais... personne sait avant d\'ouvrir !\n"
                     "⏰ **2 minutes** avant qu\'il disparaisse !"
                 ),
                 color=0x9b59b6
@@ -11381,7 +11548,7 @@ async def lancer_prophetie_hebdo(ctx=None):
                 ),
                 color=0x9b59b6
             )
-            await channel.send("@everyone", embed=embed)
+            await channel.send("<@&1484584133513580605>", embed=embed)
         except Exception as e:
             print(f"Prophétie hebdo error: {e}")
 
