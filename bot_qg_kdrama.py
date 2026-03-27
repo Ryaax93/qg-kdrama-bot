@@ -5262,7 +5262,7 @@ async def send_salon_embed(channel, t):
         ), inline=False)
         e1.add_field(name="💸 Jackpot Communautaire", value=(
             "1x/mois la cagnotte est lancée — chaque message = **+1 pièce**\n"
-            "À **1500 pièces** → redistribution aux membres actifs !\n"
+            "À **5000 pièces** → redistribution aux membres actifs !\n"
             "`.jackpot` — voir l'avancée en temps réel"
         ), inline=False)
         e1.set_footer(text="💡 Fais .daily et .travailler tous les jours !")
@@ -7955,8 +7955,8 @@ async def events_mensuels():
     elif now.day == 22:
         await lancer_event_surprise()
         await lancer_boss_final()   # Boss Final 2ème passage
-    elif _est_dernier_vendredi(now):
-        await lancer_vague_legendaires()  # Vague 1x/mois seulement
+    elif _est_dernier_vendredi(now) and now.isocalendar()[1] % 6 == 0:
+        await lancer_vague_legendaires()  # Vague 1x/6 semaines MAX
 
 def _est_dernier_vendredi(dt):
     import datetime as _dt
@@ -8309,7 +8309,7 @@ async def lancer_jackpot(ctx=None):
             if not channel: continue
             embed = discord.Embed(
                 title="💸 JACKPOT COMMUNAUTAIRE LANCÉ !",
-                description="**Chaque message = +1 pièce dans la cagnotte !**\n\nObjectif : **1500 pièces** → redistribution aux 5 membres les plus pauvres actifs !\n\nTape `.jackpot` pour suivre l'avancée en temps réel 📊\n\n*Cooldown invisible de 1min entre contributions • Max 100p/membre*",
+                description="**Chaque message = +1 pièce dans la cagnotte !**\n\nObjectif : **5000 pièces** → redistribution aux 5 membres les plus pauvres actifs !\n\nTape `.jackpot` pour suivre l'avancée en temps réel 📊\n\n*Cooldown invisible de 1min entre contributions • Max 100p/membre*",
                 color=0xf1c40f
             )
             await channel.send("@everyone", embed=embed)
@@ -10332,12 +10332,18 @@ async def lancer_vague_legendaires(ctx=None):
             channel_event = get_event_channel(guild, ctx)
             channel_gacha = guild.get_channel(SALON_GACHA_ID) if SALON_GACHA_ID else channel_event
             if not channel_event: continue
+
             legendaires = [k for k in ANIME_CARDS_DB if k not in claimed_cards and ANIME_CARDS_DB[k]['rarete'] in ('Légendaire', 'Mythique')]
             if len(legendaires) < 5:
                 event_en_cours = False
                 return
             _r.shuffle(legendaires)
             cartes_vague = legendaires[:10]
+
+            # Membres ayant un claim disponible
+            import time as _t
+            CLAIM_CD = CLAIM_COOLDOWN_MINUTES * 60
+
             embed_annonce = discord.Embed(
                 title="🌊 VAGUE DE LÉGENDES",
                 description=(
@@ -10345,60 +10351,96 @@ async def lancer_vague_legendaires(ctx=None):
                     "╔════════════════════════════════════╗\n"
                     "║  🌊  VAGUE DE LÉGENDES  🌊  ║\n"
                     "║  ──────────────────────────────  ║\n"
-                    "║    10 CARTES EN 10 MINUTES !      ║\n"
-                    "║    Une toutes les 25 secondes     ║\n"
+                    "║    10 CARTES LÉGENDAIRES !         ║\n"
+                    "║    Soyez prêts — elles arrivent    ║\n"
                     "╚════════════════════════════════════╝\n"
                     "```\n"
                     f"Rendez-vous dans {channel_gacha.mention} !\n\n"
-                    "⚡ Annoncée **10 secondes avant** chaque drop\n"
-                    "❤️ **25 secondes** pour claim — pas de seconde chance !"
+                    "⚡ **15 secondes** pour claim — 1 carte max par membre\n"
+                    "⚠️ Seuls ceux qui ont un **claim disponible** peuvent participer !"
                 ),
                 color=0xf1c40f
             )
             await channel_event.send("<@&1484584133513580605>", embed=embed_annonce)
-            await asyncio.sleep(10)
+            await asyncio.sleep(5)
+
+            claimed_this_vague = set()  # {uid} — 1 claim max par membre
+
             for i, carte_key in enumerate(cartes_vague):
                 if carte_key in claimed_cards: continue
                 c = ANIME_CARDS_DB[carte_key]
                 r_emoji = RARETE_EMOJI.get(c['rarete'], '🟠')
-                await channel_gacha.send(embed=discord.Embed(
-                    description=f"⚡ **Dans 10 secondes** — {c['emoji']} **{c['nom']}** {r_emoji} !",
-                    color=0xf39c12
-                ))
-                await asyncio.sleep(10)
-                if carte_key in claimed_cards: continue
                 couleur = RARETE_COULEURS.get(c['rarete'], 0xf1c40f)
+
+                # Pop la carte SANS prévenir — esprit vif !
                 embed_carte = discord.Embed(
                     title=f"{c['emoji']} {c['nom']}",
-                    description=f"*{c['serie']}* {r_emoji} **{c['rarete']}**\n\n❤️ **{c['pv']} PV** | ⚔️ **{c['attaque']} ATK** | 🛡️ **{c['defense']} DEF**\n\nRéagis ❤️ pour claim !",
+                    description=(
+                        f"*{c['serie']}* {r_emoji} **{c['rarete']}**\n\n"
+                        f"❤️ **{c['pv']} PV** | ⚔️ **{c['attaque']} ATK** | 🛡️ **{c['defense']} DEF**\n\n"
+                        "Réagis ❤️ pour claim ! *(1 carte max — claim requis)*"
+                    ),
                     color=couleur
                 )
-                if c.get('image') and 'imgur' in c.get('image',''):
+                if c.get('image') and 'imgur' in c.get('image', ''):
                     embed_carte.set_image(url=c['image'])
-                embed_carte.set_footer(text="⚡ 25 secondes pour claim !")
+                embed_carte.set_footer(text="⚡ 15 secondes !")
                 msg = await channel_gacha.send(embed=embed_carte)
                 await msg.add_reaction("❤️")
-                def check_vague(r, u, k=carte_key):
-                    return str(r.emoji) == "❤️" and r.message.id == msg.id and not u.bot
-                try:
-                    reaction, claimer = await bot.wait_for("reaction_add", timeout=25.0, check=check_vague)
-                    if carte_key not in claimed_cards:
-                        claimed_cards[carte_key] = str(claimer.id)
-                        gacha_collections[str(claimer.id)][carte_key] = {"fusion": 0}
-                        await channel_gacha.send(f"✅ {claimer.mention} claim **{c['nom']}** {r_emoji} !")
-                except asyncio.TimeoutError:
-                    await channel_gacha.send(f"⏰ **{c['nom']}** n'a pas été claimé...")
+
+                # Attendre 15 secondes
+                debut = _t.time()
+                claimer = None
+                while _t.time() - debut < 15:
+                    await asyncio.sleep(0.5)
+                    # Vérifier les nouvelles réactions
+                    msg = await channel_gacha.fetch_message(msg.id)
+                    for reaction in msg.reactions:
+                        if str(reaction.emoji) == "❤️":
+                            async for user in reaction.users():
+                                if user.bot: continue
+                                uid = str(user.id)
+                                # Vérif 1 : pas déjà claimé cette vague
+                                if uid in claimed_this_vague: continue
+                                # Vérif 2 : a un claim disponible (cooldown gacha)
+                                last_claim = gacha_cooldowns.get(uid, 0)
+                                if _t.time() - last_claim < CLAIM_CD: continue
+                                # Vérif 3 : carte pas déjà claimée
+                                if carte_key in claimed_cards: break
+                                # CLAIM !
+                                claimer = user
+                                break
+                        if claimer: break
+                    if claimer: break
+
+                if claimer and carte_key not in claimed_cards:
+                    uid = str(claimer.id)
+                    claimed_cards[carte_key] = uid
+                    gacha_collections[uid][carte_key] = {"fusion": 0}
+                    gacha_cooldowns[uid] = _t.time()  # reset cooldown
+                    claimed_this_vague.add(uid)
+                    await channel_gacha.send(embed=discord.Embed(
+                        description=f"✅ {claimer.mention} claim **{c['nom']}** {r_emoji} !",
+                        color=0x2ecc71
+                    ))
+                else:
+                    await channel_gacha.send(embed=discord.Embed(
+                        description=f"💨 **{c['nom']}** {r_emoji} n\'a pas été claimée...",
+                        color=0x95a5a6
+                    ))
+
                 if i < len(cartes_vague) - 1:
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(3)
+
             await channel_event.send(embed=discord.Embed(
-                description="🌊 La Vague de Légendes est terminée ! Merci d'avoir participé 🎉",
+                description="🌊 La Vague de Légendes est terminée ! Merci d\'avoir participé 🎉",
                 color=0x95a5a6
             ))
+
         except Exception as e:
             print(f"Vague légendaires error: {e}")
     event_en_cours = False
 
-# ── 👾 BOSS FINAL ─────────────────────────────────────────────
 
 async def lancer_boss_final(ctx=None):
     global event_en_cours
@@ -10509,20 +10551,6 @@ async def lancer_death_note(ctx=None):
             channel = get_event_channel(guild, ctx)
             if not channel: continue
 
-            salon_dn = await creer_salon_temp(guild, "💀・death-note-qg")
-            if salon_dn:
-                try:
-                    await salon_dn.send(embed=discord.Embed(
-                        title="💀 DEATH NOTE",
-                        description="`.ecrire @joueur` pour frapper (2 max) | ⚠️ Après le 2ème nom → tout revient en double !",
-                        color=0x3498db
-                    ))
-                except:
-                    pass
-            if salon_dn:
-                pass
-            if not salon_dn: salon_dn = channel
-
             membres = [m for m in guild.members if not m.bot]
             if not membres:
                 event_en_cours = False
@@ -10530,39 +10558,121 @@ async def lancer_death_note(ctx=None):
 
             porteur = _r.choice(membres)
 
+            # Salon privé visible UNIQUEMENT par le porteur
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+                porteur: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            }
+            try:
+                salon_dn = await guild.create_text_channel("💀・death-note-qg", overwrites=overwrites)
+            except:
+                salon_dn = None
+
             death_note[guild.id] = {
                 "porteur": str(porteur.id),
                 "victimes": [],
                 "utilisations": 0,
-                "salon": salon_dn.id
+                "salon": salon_dn.id if salon_dn else None,
+                "actif": True
             }
 
-            embed_reveal = discord.Embed(
-                title=f"💀 {porteur_m.display_name if porteur_m else '???'} possédait le Death Note !",
+            # Annonce stylée dans salon event — sans révéler qui est le porteur
+            embed_annonce = discord.Embed(
+                title="💀 LE DEATH NOTE EST APPARU",
                 description=(
-                    f"**{len(victimes)} victim(es)** ciblée(s)\n\n"
-                    f"{desc_retour if desc_retour else 'Le porteur n\'a pas utilisé le Death Note.'}"
+                    "```\n"
+                    "╔═══════════════════════════════╗\n"
+                    "║  💀   D E A T H   N O T E   💀  ║\n"
+                    "║  ─────────────────────────  ║\n"
+                    "║  Un carnet maudit circule...  ║\n"
+                    "║  Quelqu\'un le tient en main  ║\n"
+                    "║  Attention à vous...          ║\n"
+                    "╚═══════════════════════════════╝\n"
+                    "```\n"
+                    "⚠️ **Un membre du QG possède le Death Note.**\n\n"
+                    "Il peut inscrire **2 noms** — chaque victime subira des conséquences...\n"
+                    "Mais attention : après le **2ème nom**, tout ce qu\'il a infligé\n"
+                    "lui **revient en double** 😈\n\n"
+                    "*Qui est le porteur ? Méfiez-vous de tout le monde...*"
+                ),
+                color=0x000000
+            )
+            embed_annonce.set_footer(text="💀 Le Death Note frappe dans l'ombre — 1 heure")
+            await channel.send("@everyone", embed=embed_annonce)
+
+            # Message privé au porteur
+            if salon_dn:
+                await salon_dn.send(embed=discord.Embed(
+                    title="💀 Tu possèdes le Death Note !",
+                    description=(
+                        f"{porteur.mention} — Le pouvoir est entre tes mains.\n\n"
+                        "`.ecrire @joueur` — Inscrire un nom *(2 max)*\n\n"
+                        "⚠️ Après le **2ème nom** tout te revient en double\n"
+                        "🔒 Ce salon est **invisible** pour les autres membres\n"
+                        "⏰ **1 heure** avant la révélation..."
+                    ),
+                    color=0x000000
+                ))
+            else:
+                try:
+                    await porteur.send(embed=discord.Embed(
+                        title="💀 Tu possèdes le Death Note !",
+                        description="`.ecrire @joueur` pour inscrire une victime *(2 max)* | ⚠️ Après le 2ème nom tout revient en double !",
+                        color=0x000000
+                    ))
+                except:
+                    pass
+
+            # Attendre 1h ou stop
+            await asyncio.sleep(3600)
+
+            # Révélation finale
+            data = death_note.get(guild.id, {})
+            if not data.get("actif", False):
+                # Event stoppé manuellement
+                if salon_dn:
+                    asyncio.create_task(supprimer_salon_temp(salon_dn, 7, guild, "Death Note"))
+                continue
+
+            porteur_m = guild.get_member(int(data.get("porteur", 0)))
+            victimes = data.get("victimes", [])
+            desc_retour = ""
+            for vid in victimes:
+                vm = guild.get_member(int(vid))
+                if vm:
+                    desc_retour += f"• {vm.mention}\n"
+
+            role_dn = await get_or_create_role(guild, "☠️ Porteur du Destin", 0x2c2f33)
+            if role_dn and porteur_m:
+                try: await porteur_m.add_roles(role_dn)
+                except: pass
+
+            embed_reveal = discord.Embed(
+                title=f"💀 Le Porteur du Death Note est révélé !",
+                description=(
+                    f"**{porteur_m.mention if porteur_m else '???'}** possédait le Death Note !\n\n"
+                    f"**{len(victimes)} victime(s) :**\n{desc_retour if desc_retour else '*Aucune victime inscrite*'}\n\n"
+                    "☠️ Rôle **Porteur du Destin** attribué !"
                 ),
                 color=0xe74c3c
             )
             if porteur_m:
                 embed_reveal.set_thumbnail(url=porteur_m.display_avatar.url)
 
-            await salon_dn.send(embed=embed_reveal)
             await channel.send(embed=embed_reveal)
 
             if guild.id in death_note:
                 del death_note[guild.id]
 
-            if salon_dn != channel:
-                asyncio.create_task(supprimer_salon_temp(salon_dn, 300))
+            if salon_dn:
+                asyncio.create_task(supprimer_salon_temp(salon_dn, 7, guild, "Death Note"))
 
         except Exception as e:
             print(f"Death Note error: {e}")
-
     event_en_cours = False
 
-# ── 🔴 ALERTE ROUGE ───────────────────────────────────────────
+
 async def lancer_alerte_rouge(ctx=None):
     global event_en_cours
     event_en_cours = True
