@@ -6285,21 +6285,30 @@ async def slowmode_cmd(ctx, secondes: int = 0):
 async def lock_cmd(ctx, salon: discord.TextChannel = None):
     """Verrouille un salon — .lock [#salon]"""
     channel = salon or ctx.channel
-    # Retirer la permission d'écriture pour @everyone ET tous les rôles non-admin
-    await channel.set_permissions(ctx.guild.default_role, 
+    # Bloquer @everyone
+    await channel.set_permissions(ctx.guild.default_role,
         send_messages=False,
         add_reactions=False
     )
-    # S'assurer que les admins peuvent toujours écrire
-    await channel.set_permissions(ctx.guild.me,
-        send_messages=True,
-        add_reactions=True
-    )
+    # Bloquer TOUS les rôles non-admin explicitement
+    for role in ctx.guild.roles:
+        if role == ctx.guild.default_role:
+            continue
+        if role.permissions.administrator:
+            # Les admins peuvent toujours écrire
+            await channel.set_permissions(role, send_messages=True, add_reactions=True)
+            continue
+        # Vérifier si ce rôle a une permission explicite d'écrire dans ce salon
+        perms = channel.overwrites_for(role)
+        if perms.send_messages is True:
+            await channel.set_permissions(role, send_messages=False, add_reactions=False)
+    # Bot peut toujours écrire
+    await channel.set_permissions(ctx.guild.me, send_messages=True, add_reactions=True)
     embed = discord.Embed(
-        description=f"🔒 **{channel.mention}** est verrouillé — seuls les admins peuvent écrire.",
+        description=f"🔒 **{channel.mention}** est verrouillé.",
         color=0xe74c3c
     )
-    await ctx.send(embed=embed)
+    await channel.send(embed=embed)
 
 @bot.command(name="unlock")
 @commands.has_permissions(manage_channels=True)
