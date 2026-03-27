@@ -23,7 +23,15 @@ bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
 xp_data = defaultdict(lambda: {"xp": 0, "level": 1})
 economy_data = defaultdict(lambda: {"coins": 0, "tier": "Spectateur Débutant"})
 # ── Variables manquantes ─────────────────────────────────────
-message_count = defaultdict(int)     # {uid: nb_messages}
+message_count = defaultdict(int)
+planning_last_run = {}  # {(weekday, hour): timestamp} anti-doublon
+invasion_samedi_last = {}
+classement_last = {}
+prophetie_last = {}
+mensuel_last = {}
+heuremaudite_last = {}
+imposteur_last = {}
+lock_saved_perms = {}  # {channel_id: {role_id: overwrites}}     # {uid: nb_messages}
 gacha_cooldowns = defaultdict(int)   # {uid: timestamp}
 mariage_data = {}                    # {uid: uid_partenaire}
 anniversaire_data = {}               # {uid: "JJ/MM"}
@@ -6280,103 +6288,7 @@ async def slowmode_cmd(ctx, secondes: int = 0):
     else:
         await ctx.send(f"✅ Slowmode activé : **{secondes} secondes** entre chaque message")
 
-@bot.command(name="lock")
-@commands.has_permissions(manage_channels=True)
-async def lock_cmd(ctx, salon: discord.TextChannel = None):
-    """Verrouille un salon — .lock [#salon]"""
-    channel = salon or ctx.channel
-    # Bloquer @everyone
-    await channel.set_permissions(ctx.guild.default_role,
-        send_messages=False,
-        add_reactions=False
-    )
-    # Bloquer TOUS les rôles non-admin explicitement
-    for role in ctx.guild.roles:
-        if role == ctx.guild.default_role:
-            continue
-        if role.permissions.administrator:
-            # Les admins peuvent toujours écrire
-            await channel.set_permissions(role, send_messages=True, add_reactions=True)
-            continue
-        # Vérifier si ce rôle a une permission explicite d'écrire dans ce salon
-        perms = channel.overwrites_for(role)
-        if perms.send_messages is True:
-            await channel.set_permissions(role, send_messages=False, add_reactions=False)
-    # Bot peut toujours écrire
-    await channel.set_permissions(ctx.guild.me, send_messages=True, add_reactions=True)
-    embed = discord.Embed(
-        description=f"🔒 **{channel.mention}** est verrouillé.",
-        color=0xe74c3c
-    )
-    await channel.send(embed=embed)
 
-@bot.command(name="unlock")
-@commands.has_permissions(manage_channels=True)
-async def unlock_cmd(ctx, salon: discord.TextChannel = None):
-    """Déverrouille un salon — .unlock [#salon]"""
-    channel = salon or ctx.channel
-    overwrite = channel.overwrites_for(ctx.guild.default_role)
-    overwrite.send_messages = None
-    await channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
-    await ctx.send(f"🔓 {channel.mention} est maintenant déverrouillé !")
-
-# ─── Commandes animés/dramas/quotes (réparées) ───────────────
-
-ANIME_RECS = [
-    ("Vinland Saga", "⚔️", "Viking épique — trahison, vengeance et rédemption"),
-    ("Mushishi", "🍄", "Contemplatif et poétique — esprits de la nature"),
-    ("Ping Pong The Animation", "🏓", "Sport animé le plus unique jamais fait"),
-    ("Planetes", "🚀", "Hard SF — éboueurs de l'espace"),
-    ("Paranoia Agent", "😰", "Thriller psychologique surréaliste de Satoshi Kon"),
-    ("Tatami Galaxy", "🌀", "Boucle temporelle et choix de vie"),
-    ("Kaiji", "🎲", "Survie et jeux d'argent — tension maximale"),
-    ("Legend of the Galactic Heroes", "🌌", "Space opera politique légendaire"),
-    ("Monster", "🎭", "Thriller psychologique — médecin vs serial killer"),
-    ("Nana", "🎸", "Drame musical adulte et émouvant"),
-    ("Fruits Basket", "🌸", "Romance et trauma — magnifiquement écrit"),
-    ("Toradora", "🐉", "Romance scolaire — tsundere iconique"),
-    ("Clannad After Story", "💙", "Larmoyant et magnifique — grandir ensemble"),
-]
-
-DRAMA_RECS = [
-    ("My Mister", "🏙️", "Le drama le plus poignant de la décennie"),
-    ("Reply 1988", "📼", "Nostalgie pure — amitié et famille"),
-    ("Misaeng", "💼", "Drama de bureau le plus réaliste"),
-    ("Signal", "📻", "Thriller temporel haletant"),
-    ("Flower of Evil", "🌹", "Thriller conjugal → impossible de lâcher"),
-    ("The World of the Married", "💔", "Drame de vengeance intense"),
-    ("Move to Heaven", "📦", "Drama qui te brise le cœur mais te reconstruit"),
-    ("Our Blues", "🌊", "Anthologie des vies ordinaires de Jeju"),
-    ("Beyond Evil", "🔍", "Thriller policier — meilleur duo de l'année"),
-    ("Juvenile Justice", "⚖️", "Crimes de mineurs — très sombre mais brillant"),
-]
-
-ANIMEQUOTES = [
-    ("*« Les humains forts ne sont pas ceux qui ne pleurent pas — ce sont ceux qui pleurent et se relèvent. »*", "Monkey D. Luffy — One Piece 🏴‍☠️"),
-    ("*« Si tu ne te bats pas, tu ne peux pas gagner. »*", "Eren Yeager — Attack on Titan ⚔️"),
-    ("*« La douleur nous permet de grandir. »*", "Pain — Naruto 🌀"),
-    ("*« Un seul coup suffit. »*", "Saitama — One Punch Man 👊"),
-    ("*« Le chemin vers le sommet n'a pas de raccourcis. »*", "Rock Lee — Naruto 🔥"),
-    ("*« Je ne reculerai jamais et je ne regretterai rien. »*", "Naruto Uzumaki — Naruto 🍥"),
-    ("*« Peu importe combien tu es blessé, redresse-toi. »*", "Izuku Midoriya — MHA 💚"),
-    ("*« Deviens si fort que personne ne puisse te briser. »*", "Vegeta — Dragon Ball Z 👑"),
-    ("*« Ceux qui abandonnent leurs amis sont pire que des ordures. »*", "Kakashi — Naruto ⚡"),
-    ("*« Je protègerai ceux que j'aime, quoi qu'il arrive. »*", "Tanjiro — Demon Slayer 🔥"),
-    ("*« Le destin n'est pas écrit à l'avance. »*", "Lelouch — Code Geass ♟️"),
-    ("*« Si tu trouves quelque chose de précieux, bats-toi pour le garder. »*", "Gojo Satoru — JJK ♾️"),
-    ("*« Être le plus fort ne suffit pas. Tu dois avoir une raison de te battre. »*", "Levi Ackerman — AoT ⚔️"),
-]
-
-QUOTES_KDRAMA = [
-    ("*« Même si tu oublies tout, je me souviendrai pour deux. »*", "Goblin 🕯️"),
-    ("*« L'amour n'est pas une faiblesse, c'est ta plus grande force. »*", "Crash Landing on You 🪂"),
-    ("*« Les gens ne changent pas. Mais les circonstances, si. »*", "My Mister 🏙️"),
-    ("*« On ne choisit pas d'où on vient, mais on choisit où on va. »*", "Itaewon Class 🍺"),
-    ("*« Même dans les ténèbres, une petite lumière suffit. »*", "Kingdom 👑"),
-    ("*« Le passé ne peut pas être changé, mais le futur, lui, t'appartient. »*", "Signal 📻"),
-    ("*« Aimer quelqu'un, c'est lui donner le pouvoir de te briser. »*", "The World of the Married 💔"),
-    ("*« Parfois, disparaître est la meilleure façon de protéger ceux qu'on aime. »*", "Reply 1988 📼"),
-]
 
 @bot.command(name="animerec", aliases=["anirec"])
 async def animerec_cmd(ctx):
@@ -7712,10 +7624,16 @@ async def declencher_jackpot_explosion(guild, channel):
 # ── TASKS D'EVENTS ────────────────────────────────────────────
 
 # Invasion samedi 23h (fixe)
-@tasks.loop(hours=24)
+@tasks.loop(minutes=1)
 async def invasion_samedi():
     import datetime as _dt
     now = _dt.datetime.now()
+    if now.minute > 2: return
+    cle = (now.date(), now.hour)
+    if invasion_samedi_last.get(cle): return
+    invasion_samedi_last[cle] = True
+    for k in list(invasion_samedi_last.keys()):
+        if k[0] < now.date(): del invasion_samedi_last[k]
     if now.weekday() != 5 or now.hour != 23:  # 5 = samedi
         return
     for guild in bot.guilds:
@@ -7752,10 +7670,16 @@ async def invasion_samedi():
             print(f"Invasion samedi error: {e}")
 
 # Classement hebdo dimanche soir
-@tasks.loop(hours=24)
+@tasks.loop(minutes=1)
 async def classement_hebdo():
     import datetime as _dt
     now = _dt.datetime.now()
+    if now.minute > 2: return
+    cle = (now.date(), now.hour)
+    if classement_last.get(cle): return
+    classement_last[cle] = True
+    for k in list(classement_last.keys()):
+        if k[0] < now.date(): del classement_last[k]
     if now.weekday() != 6 or now.hour != 20:  # 6 = dimanche, 20h
         return
     for guild in bot.guilds:
@@ -7795,10 +7719,16 @@ async def classement_hebdo():
             print(f"Classement hebdo error: {e}")
 
 # Prophétie lundi matin
-@tasks.loop(hours=24)
+@tasks.loop(minutes=1)
 async def prophetie_hebdo():
     import datetime as _dt, time as _t
     now = _dt.datetime.now()
+    if now.minute > 2: return
+    cle = (now.date(), now.hour)
+    if prophetie_last.get(cle): return
+    prophetie_last[cle] = True
+    for k in list(prophetie_last.keys()):
+        if k[0] < now.date(): del prophetie_last[k]
     if now.weekday() != 0 or now.hour != 9:  # 0 = lundi, 9h
         return
     global serie_benie, serie_benie_fin
@@ -7823,15 +7753,29 @@ async def prophetie_hebdo():
             print(f"Prophétie error: {e}")
 
 # Planning hebdo aléatoire
-@tasks.loop(hours=24)
+@tasks.loop(minutes=1)
 async def planning_hebdo():
-    import datetime as _dt
+    import datetime as _dt, time as _t
     global event_en_cours
     now = _dt.datetime.now()
     hour = now.hour
+    minute = now.minute
     weekday = now.weekday()  # 0=lun, 1=mar... 6=dim
     semaine = now.isocalendar()[1]
     today = now.date()
+
+    # Anti-doublon : ne lancer qu'au début de l'heure (minute 0-2)
+    # et vérifier qu'on n'a pas déjà lancé cet event aujourd'hui
+    if minute > 2:
+        return
+    cle = (today, weekday, hour)
+    if planning_last_run.get(cle):
+        return
+    planning_last_run[cle] = True
+    # Nettoyer les vieilles entrées
+    for k in list(planning_last_run.keys()):
+        if k[0] < today:
+            del planning_last_run[k]
 
     # ── ROTATION GROS EVENTS WEEKEND (6 events, jamais le même 2 semaines) ──
     ROTATION_WEEKEND = [
@@ -7985,10 +7929,16 @@ async def planning_hebdo():
         return
 
 
-@tasks.loop(hours=24)
+@tasks.loop(minutes=1)
 async def events_mensuels():
     import datetime as _dt
     now = _dt.datetime.now()
+    if now.minute > 2: return
+    cle = (now.date(), now.hour)
+    if mensuel_last.get(cle): return
+    mensuel_last[cle] = True
+    for k in list(mensuel_last.keys()):
+        if k[0] < now.date(): del mensuel_last[k]
     if now.day not in (1, 8, 15, 22) and not _est_dernier_vendredi(now):
         return
     hour = now.hour
@@ -8016,19 +7966,31 @@ def _est_dernier_vendredi(dt):
     return prochain.month != dt.month
 
 
-@tasks.loop(hours=24)
+@tasks.loop(minutes=1)
 async def heure_maudite_task():
     import datetime as _dt
     now = _dt.datetime.now()
+    if now.minute > 2: return
+    cle = (now.date(), now.hour)
+    if heuremaudite_last.get(cle): return
+    heuremaudite_last[cle] = True
+    for k in list(heuremaudite_last.keys()):
+        if k[0] < now.date(): del heuremaudite_last[k]
     if now.weekday() != 2 or now.hour != 2:
         return
     await lancer_heure_maudite()
 
 # Imposteur Gacha : samedi 15h (avant invasion)
-@tasks.loop(hours=24)
+@tasks.loop(minutes=1)
 async def imposteur_task():
     import datetime as _dt
     now = _dt.datetime.now()
+    if now.minute > 2: return
+    cle = (now.date(), now.hour)
+    if imposteur_last.get(cle): return
+    imposteur_last[cle] = True
+    for k in list(imposteur_last.keys()):
+        if k[0] < now.date(): del imposteur_last[k]
     if now.weekday() != 5 or now.hour != 15:
         return
     await lancer_imposteur()
