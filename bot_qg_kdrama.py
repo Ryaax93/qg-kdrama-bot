@@ -714,6 +714,7 @@ async def help_cmd(ctx, categorie: str = None):
         "`.pendu` — Pendu animé/drama"
     ), inline=False)
 
+    p3.add_field(name="🐺 Loup Garou (infos)", value="`.lg` — Voir les commandes LG\n`.bracketstop` — Arrêter un tournoi", inline=False)
     p3.set_footer(text="Page 4/11 • QG Kdrama 🌸")
     pages.append(p3)
 
@@ -731,6 +732,7 @@ async def help_cmd(ctx, categorie: str = None):
         "`.faction info` — Ta faction & ta réputation\n"
         "`.faction classement` — Classement général"
     ), inline=False)
+    p4.add_field(name="↩️ Quitter", value="`.leavefaction` — Quitter sa faction *(alias de `.faction leave`)*", inline=False)
     p4.set_footer(text="Page 5/11 • QG Kdrama 🌸")
     pages.append(p4)
 
@@ -768,45 +770,35 @@ async def help_cmd(ctx, categorie: str = None):
     pages.append(p5)
 
     # ── Page 6 — Commandes Events Joueurs ─────────────────
-    p6 = discord.Embed(title="🎮 Commandes des Events — Joueurs", color=0x9b59b6)
-    p6.add_field(name="🕵️ Parmi Nous", value=(
-        "`.eliminer @joueur` — Voler une carte *(imposteur only)*\n"
-        "`.voter @joueur` — Voter pour éliminer"
-    ), inline=True)
-    p6.add_field(name="⚡ Enchères & Mine", value=(
-        "`.miser <montant>` — Miser dans les enchères\n"
-        "`.miner` — Extraire des pépites *(cd 2min)*"
-    ), inline=True)
-    p6.add_field(name="🎴 Wanted & Death Note", value=(
-        "`.chasser @joueur` — Capturer la cible\n"
-        "`.ecrire @joueur` — Écrire dans le Death Note"
-    ), inline=True)
-    p6.add_field(name="🎩 Magicien & Divers", value=(
-        "`.sort <type> @joueur` — Lancer un sort *(double/bloquer/troll)*\n"
-        "`.jedoute` — Signaler une fausse rumeur\n"
-        "`.ouvrir` — Ouvrir un coffre ou colis"
-    ), inline=True)
-    p6.add_field(name="🦅 Corbeau", value=(
-        "`.adopter` — Adopter le corbeau\n"
-        "`.nourrir` — Nourrir *(améliore son humeur)*\n"
-        "`.caresser` — Caresser *(+XP en réserve)*\n"
-        "`.recup` — Récupérer pièces/XP/amélio"
-    ), inline=True)
-    p6.add_field(name="🏆 Rôles Gagnables", value=(
-        "👑 **Champion du QG** — Tournoi *(permanent)*\n"
-        "🕵️ **Détective du QG** — Parmi Nous *(permanent)*\n"
-        "🧩 **Maître du Puzzle** — Puzzle *(permanent)*\n"
-        "🎯 **Chasseur de Primes N°1** — Wanted *(perdable)*\n"
-        "⚔️ **Roi de la Conquête** — Conquête *(perdable)*\n"
-        "💰 **Baron des Enchères** — Enchères *(permanent)*\n"
-        "⚔️ **Pourfendeur de Boss** — Boss Final *(permanent)*\n"
-        "☠️ **Porteur du Destin** — Death Note *(permanent)*\n"
-        "🌙 **Roi de la Narration** — Rêve Collectif *(permanent)*\n"
-        "🎩 **Grand Magicien** — Magicien *(permanent)*\n"
-        "🤡 **Clown du QG** — Temporaire"
+    p6 = discord.Embed(title="🔧 Divers & Utilitaires", color=0x95a5a6)
+    p6.add_field(name="🎲 Mini-Jeux", value=(
+        "`.rps <pierre/feuille/ciseaux>` — Pierre Feuille Ciseaux\n"
+        "`.dice` — Lancer un dé\n"
+        "`.choisir <option1> ou <option2>` — Choix aléatoire\n"
+        "`.sondage <question>` — Créer un sondage\n"
+        "`.giveaway <temps> <prix>` — Lancer un giveaway"
     ), inline=False)
-    p6.set_footer(text="Page 7/11 • QG Kdrama 🌸")
+    p6.add_field(name="📊 Stats & Suivi", value=(
+        "`.stats` — Tes statistiques complètes\n"
+        "`.invitations` — Tes invitations\n"
+        "`.topinvitations` — Top inviteurs du serveur\n"
+        "`.boss` — Voir le boss actif\n"
+        "`.planning` — Planning des events de la semaine"
+    ), inline=False)
+    p6.add_field(name="⚔️ PvP & Vol", value=(
+        "`.steal @joueur` — Voler des pièces\n"
+        "`.attaque @joueur` — Attaquer en arène\n"
+        "`.utiliser <item> @joueur` — Utiliser un item PvP"
+    ), inline=False)
+    p6.add_field(name="💍 Mariage & Social", value=(
+        "`.marier @joueur` — Proposer un mariage\n"
+        "`.accepter` / `.refuser` — Répondre à une proposition\n"
+        "`.divorcer` — Divorcer\n"
+        "`.anniversaire <JJ/MM>` — Enregistrer ton anniversaire"
+    ), inline=False)
+    p6.set_footer(text="Page 7/10 • QG Kdrama 🌸")
     pages.append(p6)
+
 
     # ── Page 7 — Social & Fun ─────────────────────────────
     p7 = discord.Embed(title="💬 Social & Fun", color=0xff6b9d)
@@ -876,6 +868,7 @@ async def help_cmd(ctx, categorie: str = None):
         "`Commun` • `Rare` • `Épique` • `Légendaire` • `Mythique`"
     ), inline=False)
     p9.add_field(name="Images en masse", value="`.setimages` — Ajouter images a plusieurs cartes", inline=False)
+    p9.add_field(name="📋 Liste cartes", value="`.cardlist [rarete] [serie]` — Voir toutes les cartes du DB avec images", inline=False)
     p9.set_footer(text="Page 10/11 • QG Kdrama 🌸")
     pages.append(p9)
 
@@ -897,6 +890,7 @@ async def help_cmd(ctx, categorie: str = None):
         "*levelup • combat • bienvenue • aurevoir • boost*\n"
         "*halloffame • reglement @Role*"
     ), inline=False)
+    p10.add_field(name="⚙️ Config", value="`.setconquete #salon1 #salon2` — Zones de Conquête\n`.setrollreset <heures>` — Recharge des rolls", inline=False)
     p10.set_footer(text="Page 11/11 • QG Kdrama 🌸")
     pages.append(p10)
 
@@ -6291,10 +6285,21 @@ async def slowmode_cmd(ctx, secondes: int = 0):
 async def lock_cmd(ctx, salon: discord.TextChannel = None):
     """Verrouille un salon — .lock [#salon]"""
     channel = salon or ctx.channel
-    overwrite = channel.overwrites_for(ctx.guild.default_role)
-    overwrite.send_messages = False
-    await channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
-    await ctx.send(f"🔒 {channel.mention} est maintenant verrouillé !")
+    # Retirer la permission d'écriture pour @everyone ET tous les rôles non-admin
+    await channel.set_permissions(ctx.guild.default_role, 
+        send_messages=False,
+        add_reactions=False
+    )
+    # S'assurer que les admins peuvent toujours écrire
+    await channel.set_permissions(ctx.guild.me,
+        send_messages=True,
+        add_reactions=True
+    )
+    embed = discord.Embed(
+        description=f"🔒 **{channel.mention}** est verrouillé — seuls les admins peuvent écrire.",
+        color=0xe74c3c
+    )
+    await ctx.send(embed=embed)
 
 @bot.command(name="unlock")
 @commands.has_permissions(manage_channels=True)
