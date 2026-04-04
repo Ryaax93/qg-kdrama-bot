@@ -1842,6 +1842,65 @@ async def meme(ctx):
 #  ERREURS
 # ============================================================
 
+# ============================================================
+#  LOUP GAROU — DONNÉES
+# ============================================================
+LG_ROLES = {
+    "Loup Garou":   {"emoji": "🐺", "desc": "Élimine un villageois chaque nuit. Reste caché !", "team": "loups"},
+    "Loup Blanc":   {"emoji": "🤍", "desc": "Loup solitaire — peut éliminer les autres loups la nuit.", "team": "loup_blanc"},
+    "Villageois":   {"emoji": "👨‍🌾", "desc": "Trouve et élimine les loups le jour. Tu n'as pas de pouvoir spécial.", "team": "village"},
+    "Voyante":      {"emoji": "🔮", "desc": "Chaque nuit, découvre le rôle d'un joueur.", "team": "village"},
+    "Sorcière":     {"emoji": "🧙‍♀️", "desc": "Possède 2 potions : 1 pour sauver, 1 pour tuer. Usage unique chacune.", "team": "village"},
+    "Chasseur":     {"emoji": "🏹", "desc": "Quand tu meurs, tu peux emporter quelqu'un avec toi.", "team": "village"},
+    "Cupidon":      {"emoji": "💘", "desc": "Au début, lie 2 joueurs. S'ils sont séparés, ils meurent ensemble.", "team": "village"},
+    "Petite Fille": {"emoji": "👧", "desc": "Peut espionner les loups la nuit — mais si tu te fais attraper, tu meurs !", "team": "village"},
+}
+
+LG_NARRATIONS = {
+    "debut": [
+        "La nuit tombe sur le village... Tout le monde ferme les yeux.",
+        "Le village s'endort. Les ombres commencent à bouger...",
+        "Une nuit froide s'installe. Qui survivra jusqu'à l'aube ?",
+    ],
+    "nuit": [
+        "La nuit tombe... Les loups ouvrent les yeux.",
+        "Le village dort. Dans l'obscurité, les prédateurs s'éveillent.",
+        "Chut... La nuit est dangereuse. Les loups chassent.",
+    ],
+    "jour": [
+        "Le soleil se lève sur le village. Un corps est découvert...",
+        "L'aube arrive. Le village se réunit pour délibérer.",
+        "Jour nouveau, nouvelles suspicions. Qui est le loup parmi vous ?",
+    ],
+    "vote": [
+        "Le village vote pour éliminer un suspect.",
+        "L'heure du jugement est venue.",
+        "Un villageois va être éliminé. Ont-ils fait le bon choix ?",
+    ],
+    "victoire_village": [
+        "🎉 Les villageois ont triomphé ! Tous les loups sont éliminés !",
+        "☀️ Le village est sauvé ! Les loups ont été vaincus !",
+    ],
+    "victoire_loups": [
+        "🐺 Les loups ont gagné ! Ils ont dévoré tous les villageois !",
+        "😈 La nuit règne sur le village. Les loups sont victorieux !",
+    ],
+}
+
+def lg_get_compo(n):
+    """Retourne la composition de rôles selon le nombre de joueurs"""
+    if n <= 5:
+        return ["Loup Garou", "Voyante", "Sorcière", "Villageois", "Villageois"]
+    elif n <= 7:
+        return ["Loup Garou", "Loup Garou", "Voyante", "Sorcière", "Chasseur", "Villageois", "Villageois"][:n]
+    elif n <= 9:
+        return ["Loup Garou", "Loup Garou", "Voyante", "Sorcière", "Chasseur", "Cupidon", "Villageois", "Villageois", "Villageois"][:n]
+    elif n <= 11:
+        return ["Loup Garou", "Loup Garou", "Loup Blanc", "Voyante", "Sorcière", "Chasseur", "Cupidon", "Petite Fille", "Villageois", "Villageois", "Villageois"][:n]
+    else:
+        return ["Loup Garou", "Loup Garou", "Loup Blanc", "Voyante", "Sorcière", "Chasseur", "Cupidon", "Petite Fille", "Villageois", "Villageois", "Villageois", "Villageois"][:n]
+
+
 @bot.command(name="lg")
 async def loup_garou_help(ctx):
     """Affiche l'aide du Loup Garou"""
@@ -1894,7 +1953,7 @@ async def lg_create(ctx):
         "eliminated_tonight": None,
     }
     # Le créateur rejoint automatiquement
-    lg_games[gid]["players"][ctx.author.id] = {
+    lg_games[gid]["players"][int(ctx.author.id)] = {
         "name": ctx.author.display_name,
         "role": None,
         "alive": True,
@@ -1926,7 +1985,7 @@ async def lg_join(ctx):
     if len(game["players"]) >= 12:
         return await ctx.send("❌ La partie est complète (12 joueurs max).")
 
-    game["players"][ctx.author.id] = {
+    game["players"][int(ctx.author.id)] = {
         "name": ctx.author.display_name,
         "role": None,
         "alive": True,
@@ -1985,72 +2044,18 @@ async def lg_narrer(ctx, cle: str):
     embed.set_footer(text="🐺 Loup Garou — QG Kdrama")
     await ctx.send(embed=embed)
 
-async def lg_narrer_vocal(ctx, cle: str):
-    """Narration vocale TTS via gTTS dans le salon vocal"""
-    textes = LG_NARRATIONS.get(cle, [])
-    if not textes:
-        return
-    texte = random.choice(textes)
-
-    # Toujours envoyer en texte (fallback garanti)
-    embed = discord.Embed(description=f"*{texte}*", color=0x2c2f33)
-    embed.set_footer(text="🐺 Loup Garou — QG Kdrama")
-    await ctx.send(embed=embed)
-
-    # Chercher un salon vocal avec des membres
-    voice_channel = None
-    for ch in ctx.guild.voice_channels:
-        if len(ch.members) > 0:
-            voice_channel = ch
-            break
-    if not voice_channel:
-        return  # Personne en vocal, on skip narration audio
-
-    vc = None
-    try:
-        from gtts import gTTS
-        import io
-
-        # Générer le TTS
-        tts = gTTS(text=texte, lang='fr', slow=False)
-        tmp_path = f"/tmp/lg_narr_{ctx.guild.id}.mp3"
-        tts.save(tmp_path)  # save() plus fiable que write_to_fp()
-
-        # Rejoindre le vocal
-        if ctx.voice_client and ctx.voice_client.is_connected():
-            await ctx.voice_client.move_to(voice_channel)
-            vc = ctx.voice_client
-        else:
-            vc = await voice_channel.connect()
-
-        # Attendre que le précédent son soit fini
-        while vc.is_playing():
-            await asyncio.sleep(0.3)
-
-        # Jouer le TTS
-        vc.play(discord.FFmpegPCMAudio(tmp_path))
-
-        # Attendre la fin avant de déconnecter
-        while vc.is_playing():
-            await asyncio.sleep(0.5)
-        await asyncio.sleep(0.5)
-
-        # Ne déconnecter que si plus rien ne joue
-        if vc.is_connected() and not vc.is_playing():
-            await vc.disconnect()
-
-    except Exception as e:
-        # La narration texte a déjà été envoyée, on continue sans crash
-        print(f"[LG Narration erreur] {e}")
-        if vc and vc.is_connected():
-            try:
-                await vc.disconnect()
-            except:
-                pass
-
 
 @bot.command(name="lgstart")
 async def lg_start(ctx):
+    try:
+     await _lg_start_inner(ctx)
+    except Exception as e:
+     import traceback
+     print(f"[LG START ERROR] {e}")
+     traceback.print_exc()
+     await ctx.send(f"❌ Erreur interne LG: `{type(e).__name__}: {e}`")
+
+async def _lg_start_inner(ctx):
     gid = ctx.guild.id
     if gid not in lg_games:
         return await ctx.send("❌ Aucune partie en attente.")
@@ -2098,13 +2103,18 @@ async def lg_start(ctx):
                 embed.add_field(name="🐺 Tes coéquipiers loups", value=", ".join(wolves), inline=False)
         embed.set_footer(text="Ne montre ce message à personne ! 🤫")
         try:
-            member = ctx.guild.get_member(uid)
+            member = ctx.guild.get_member(int(uid))
+            if member is None:
+                failed_dm.append(p["name"])
+                continue
             await member.send(embed=embed)
-        except:
+        except Exception as e:
+            print(f"[LG] DM error {uid}: {e}")
             failed_dm.append(p["name"])
 
     game["state"] = "day"
     game["day"] = 1
+    print(f"[LG] Partie lancée avec {n} joueurs")
 
     # Annonce publique
     embed = discord.Embed(
@@ -2120,7 +2130,7 @@ async def lg_start(ctx):
     names_list = "\n".join([f"{LG_ROLES[p['role']]['emoji'] if False else '❓'} {p['name']}" for p in game["players"].values()])
     embed.add_field(name=f"👥 Joueurs ({n})", value=names_list, inline=False)
     await ctx.send(embed=embed)
-    await lg_narrer_vocal(ctx, "debut")
+    await lg_narrer(ctx, "debut")
 
     # Cupidon en premier si présent
     for uid, p in game["players"].items():
@@ -2183,6 +2193,46 @@ async def lg_pass_vote(ctx):
     if game["state"] != "day":
         return await ctx.send("❌ Pas en phase de vote.")
     await lg_resolve_vote(ctx, game, gid)
+
+
+
+async def lg_reveal_roles(ctx, game):
+    """Révèle tous les rôles en fin de partie"""
+    lines = []
+    for uid, p in game["players"].items():
+        role = p.get("role", "?")
+        role_data = LG_ROLES.get(role, {"emoji": "❓"})
+        status = "✅ Vivant" if p["alive"] else "💀 Éliminé"
+        lines.append(f"{role_data['emoji']} **{p['name']}** — {role} ({status})")
+    embed = discord.Embed(
+        title="🎭 Révélation des Rôles",
+        description="\n".join(lines),
+        color=0x2c3e50
+    )
+    await ctx.send(embed=embed)
+
+def lg_check_win(game):
+    """Vérifie si la partie est terminée"""
+    players = game["players"]
+    alive = {uid: p for uid, p in players.items() if p["alive"]}
+    
+    wolves_alive = [uid for uid, p in alive.items() if p["role"] in ["Loup Garou", "Loup Blanc"]]
+    villagers_alive = [uid for uid, p in alive.items() if p["role"] not in ["Loup Garou", "Loup Blanc"]]
+    
+    # Loup Blanc solitaire
+    loup_blanc_alive = [uid for uid, p in alive.items() if p["role"] == "Loup Blanc"]
+    if len(alive) == 1 and loup_blanc_alive:
+        return True, "🤍 **Le Loup Blanc** gagne seul ! Mystérieux jusqu\'au bout..."
+    
+    # Les loups ont gagné
+    if len(villagers_alive) <= len(wolves_alive):
+        return True, "🐺 **Les Loups Garous** ont gagné ! Le village est sous leur emprise..."
+    
+    # Les villageois ont gagné
+    if not wolves_alive:
+        return True, "🏘️ **Le Village** a gagné ! Tous les loups sont éliminés !"
+    
+    return False, ""
 
 async def lg_resolve_vote(ctx, game, gid):
     """Compte les votes et élimine le joueur le plus voté"""
@@ -2266,7 +2316,7 @@ async def lg_resolve_vote(ctx, game, gid):
         color=0x2c3e50
     )
     await ctx.send(embed=embed)
-    await lg_narrer_vocal(ctx, "nuit")
+    await lg_narrer(ctx, "nuit")
 
     # Notifier les loups en DM
     wolves = [(uid, p) for uid, p in game["players"].items() if p["role"] in ["Loup Garou"] and p["alive"]]
@@ -12514,6 +12564,137 @@ async def eventstatus_cmd(ctx):
         color=0x2ecc71 if planning_actif else 0xe74c3c
     )
     await ctx.send(embed=embed)
+
+
+@bot.command(name="lgstop")
+@commands.has_permissions(manage_messages=True)
+async def lg_stop(ctx):
+    """Annule la partie LG en cours — .lgstop"""
+    gid = ctx.guild.id
+    if gid not in lg_games:
+        return await ctx.send("❌ Aucune partie en cours !")
+    del lg_games[gid]
+    await ctx.send(embed=discord.Embed(
+        description="🛑 Partie de Loup Garou annulée !",
+        color=0xe74c3c
+    ))
+
+@bot.command(name="lgstatus")
+async def lg_status(ctx):
+    """Voir le statut de la partie LG — .lgstatus"""
+    gid = ctx.guild.id
+    if gid not in lg_games:
+        return await ctx.send("❌ Aucune partie en cours !")
+    game = lg_games[gid]
+    players = game["players"]
+    alive = [p["name"] for p in players.values() if p["alive"]]
+    dead = [p["name"] for p in players.values() if not p["alive"]]
+    embed = discord.Embed(
+        title="🐺 Statut — Loup Garou",
+        color=0x2c3e50
+    )
+    embed.add_field(name=f"✅ Vivants ({len(alive)})", value="\n".join(alive) or "Aucun", inline=True)
+    if dead:
+        embed.add_field(name=f"💀 Éliminés ({len(dead)})", value="\n".join(dead), inline=True)
+    embed.add_field(name="📊 Phase", value=f"**{game.get('state', '?').upper()}** — Jour {game.get('day', 0)}", inline=False)
+    await ctx.send(embed=embed)
+
+@bot.command(name="lgnuit")
+async def lg_nuit(ctx, cible: discord.Member = None):
+    """Action de nuit — .lgnuit @cible (en DM)"""
+    # Cette commande doit être utilisée en DM
+    if not isinstance(ctx.channel, discord.DMChannel):
+        return await ctx.send("❌ Cette commande s\'utilise en **DM** avec le bot !", delete_after=5)
+    if not cible:
+        return await ctx.send("❌ Mentionne une cible ! `.lgnuit @joueur`")
+    
+    # Trouver la partie du joueur
+    uid = int(ctx.author.id)
+    game = None
+    guild = None
+    for g in bot.guilds:
+        for gid, gm in lg_games.items():
+            if uid in gm["players"] and g.id == gid:
+                game = gm
+                guild = g
+                break
+    
+    if not game:
+        return await ctx.send("❌ Tu n\'es pas dans une partie en cours !")
+    
+    p = game["players"].get(uid)
+    if not p or not p["alive"]:
+        return await ctx.send("❌ Tu es éliminé ou pas dans la partie !")
+    
+    role = p["role"]
+    cible_uid = int(cible.id)
+    
+    if cible_uid not in game["players"] or not game["players"][cible_uid]["alive"]:
+        return await ctx.send("❌ Cette cible n\'est pas dans la partie ou est déjà éliminée !")
+    
+    if game["state"] != "night":
+        return await ctx.send("❌ C\'est pas la nuit !")
+    
+    # Action selon le rôle
+    if role == "Loup Garou":
+        game["night_actions"][uid] = cible_uid
+        await ctx.send(f"✅ Tu as désigné **{cible.display_name}** comme victime cette nuit 🐺")
+    elif role == "Voyante":
+        cible_role = game["players"][cible_uid]["role"]
+        cible_data = LG_ROLES.get(cible_role, {"emoji": "❓"})
+        is_wolf = cible_role in ["Loup Garou", "Loup Blanc"]
+        await ctx.send(embed=discord.Embed(
+            description=f"🔮 **{cible.display_name}** est {cible_data['emoji']} **{cible_role}** {'🔴 LOUP !' if is_wolf else '✅ Innocent'}",
+            color=0xe74c3c if is_wolf else 0x2ecc71
+        ))
+    elif role == "Chasseur":
+        game["night_actions"][uid] = cible_uid
+        game["players"][cible_uid]["alive"] = False
+        cible_name = game["players"][cible_uid]["name"]
+        await ctx.send(f"🏹 Tu emportes **{cible_name}** avec toi dans la mort !")
+    else:
+        await ctx.send(f"❌ Ton rôle ({role}) n\'a pas d\'action de nuit via cette commande !")
+
+@bot.command(name="lgsorciere")
+async def lg_sorciere(ctx, action: str = None, cible: discord.Member = None):
+    """Action de la Sorcière — .lgsorciere vie/mort @cible (en DM)"""
+    if not isinstance(ctx.channel, discord.DMChannel):
+        return await ctx.send("❌ En DM seulement !", delete_after=5)
+    if not action or not cible:
+        return await ctx.send("❌ Usage : `.lgsorciere vie @joueur` ou `.lgsorciere mort @joueur`")
+    
+    uid = int(ctx.author.id)
+    game = None
+    for g in bot.guilds:
+        for gid, gm in lg_games.items():
+            if uid in gm["players"] and g.id == gid:
+                game = gm
+                break
+    
+    if not game:
+        return await ctx.send("❌ Pas dans une partie !")
+    
+    p = game["players"].get(uid)
+    if not p or p["role"] != "Sorcière":
+        return await ctx.send("❌ T\'es pas la Sorcière !")
+    
+    potions = game.get("witch_potions", {}).get(uid, {"life": True, "death": True})
+    cible_uid = int(cible.id)
+    
+    if action.lower() in ["vie", "life", "heal"]:
+        if not potions["life"]:
+            return await ctx.send("❌ Tu as déjà utilisé ta potion de vie !")
+        game["players"][cible_uid]["alive"] = True
+        game["witch_potions"][uid]["life"] = False
+        await ctx.send(f"✅ Tu utilises ta **potion de vie** sur {cible.display_name} 🌿")
+    elif action.lower() in ["mort", "death", "kill"]:
+        if not potions["death"]:
+            return await ctx.send("❌ Tu as déjà utilisé ta potion de mort !")
+        game["players"][cible_uid]["alive"] = False
+        game["witch_potions"][uid]["death"] = False
+        await ctx.send(f"✅ Tu utilises ta **potion de mort** sur {cible.display_name} ☠️")
+    else:
+        await ctx.send("❌ Action invalide ! `vie` ou `mort`")
 
 
 print("🚀 Démarrage du bot...")
