@@ -847,7 +847,7 @@ def build_help_pages(guild, is_admin=False):
         color=0xf1c40f)
     e.add_field(name="🎲 Tirer & réclamer", value=(
         "`.ga` — Tirer une carte au hasard\n"
-        "`.claim` — Réclamer la carte tirée\n"
+        "`.claim` — Réclamer la carte *(ou clique sur le cœur ❤️)*\n"
         "`.rolls` — Tirages restants\n"
         "`.invoke` — Invocation Légendaire+ garantie (10 000p)"
     ), inline=False)
@@ -2052,27 +2052,108 @@ def gacha_tirer(uid=None):
 
 def build_card_embed(key, uid_claimer=None, claimed=False):
     c = ANIME_CARDS_DB[key]
-    rarete = c["rarete"]
-    r_emoji = RARETE_EMOJI.get(rarete, "🔵")
+    rarete  = c["rarete"]
+    etoiles = RARETE_ETOILES.get(rarete, "★☆☆☆☆")
     couleur = RARETE_COULEURS.get(rarete, 0x95a5a6)
     owner_uid = claimed_cards.get(key)
+
+    # Bonus de fusion et de niveau (seulement si la carte a un propriétaire)
+    fus = fusion_levels.get(owner_uid, {}).get(key, 0) if owner_uid else 0
+    lvl = card_level.get(owner_uid, {}).get(key, 1) if owner_uid else 1
+    b_pv  = fus * 20 + (lvl - 1) * 5
+    b_atk = fus * 15 + (lvl - 1) * 3
+    b_def = fus * 10 + (lvl - 1) * 2
+
+    titre = f"{c.get('emoji','🎴')}  {c['nom']}"
+    if fus:
+        titre += "  " + "⭐" * fus
+
     embed = discord.Embed(
-        title=f"{r_emoji} {c['nom']}",
-        description=f"*{c['serie']}*",
-        color=couleur
-    )
-    embed.add_field(name="Rareté", value=f"{r_emoji} **{rarete}**", inline=True)
-    embed.add_field(name="❤️ PV", value=str(c.get("pv", 100)), inline=True)
-    embed.add_field(name="⚔️ ATK", value=str(c.get("attaque", 50)), inline=True)
+        title=titre,
+        description=f"{etoiles}   **{rarete.upper()}**\n━━━━━━━━━━━━━━━━━━━━━━━",
+        color=couleur)
+    embed.set_author(name=f"🎴  {c.get('serie','?')}")
+
+    def _stat(base, bonus):
+        return f"**{base + bonus}**" + (f"  `+{bonus}`" if bonus else "")
+
+    embed.add_field(name="❤️ PV",  value=_stat(c.get("pv", 100), b_pv),      inline=True)
+    embed.add_field(name="⚔️ ATK", value=_stat(c.get("attaque", 50), b_atk), inline=True)
+    embed.add_field(name="🛡️ DEF", value=_stat(c.get("defense", 50), b_def), inline=True)
+
+    if lvl > 1:
+        embed.add_field(name="📈 Niveau", value=f"**{lvl}** / 10", inline=False)
+
+    if c.get("image"):
+        embed.set_image(url=c["image"])
+
     if owner_uid:
-        embed.set_footer(text=f"✅ Possédée par <@{owner_uid}>")
+        embed.set_footer(text="✅ Carte déjà possédée")
     elif claimed:
         embed.set_footer(text="✅ Claimée !")
     else:
-        embed.set_footer(text="⚡ Tape `.claim` pour la réclamer !")
-    if c.get("image"):
-        embed.set_image(url=c["image"])
+        embed.set_footer(text="❤️ Clique sur le cœur pour la réclamer — 30 secondes")
     return embed
+
+
+
+# ============================================================
+#  ❤️ CLAIM — bouton cœur sous la carte (+ .claim en secours)
+# ============================================================
+def try_claim(uid, key, guild_id):
+    """Tente de claim une carte. Retourne (succès: bool, message: str)."""
+    if key not in ANIME_CARDS_DB:
+        return False, "❌ Carte introuvable !"
+    if key in claimed_cards:
+        return False, "❌ Trop tard — cette carte appartient déjà à quelqu'un !"
+    now = _time_module.time()
+    cooldown_mins = CLAIM_COOLDOWN_MINUTES - claim_reduction.get(uid, 0)
+    last = claim_cooldown[uid]
+    if last and now - last < cooldown_mins * 60:
+        reste = int((cooldown_mins * 60 - (now - last)) / 60) + 1
+        return False, f"⏳ Ton claim est en recharge — encore **{reste} min**."
+    claimed_cards[key] = uid
+    gacha_collections[uid][key] = {"fusion": 0}
+    claim_cooldown[uid] = now
+    economy_data[uid]["coins"] += 10
+    if guild_id in last_rolled and last_rolled[guild_id] == key:
+        last_rolled[guild_id] = None
+    return True, "ok"
+
+class ClaimView(ui.View):
+    """Bouton ❤️ sous la carte — premier arrivé, premier servi"""
+    def __init__(self, key, timeout=30):
+        super().__init__(timeout=timeout)
+        self.key = key
+        self.message = None
+
+    @ui.button(emoji="❤️", label="Claim", style=discord.ButtonStyle.danger)
+    async def claim_btn(self, interaction, button):
+        uid = str(interaction.user.id)
+        ok, msg = try_claim(uid, self.key, interaction.guild.id)
+        if not ok:
+            return await interaction.response.send_message(msg, ephemeral=True)
+        c = ANIME_CARDS_DB[self.key]
+        button.disabled = True
+        button.label = f"Claimée par {interaction.user.display_name}"
+        embed = build_card_embed(self.key, uid, claimed=True)
+        embed.set_author(name=f"✅  {interaction.user.display_name} a réclamé cette carte !")
+        await interaction.response.edit_message(embed=embed, view=self)
+        if c["rarete"] == "Mythique":
+            unlock_achievement(uid, "mythique_1", interaction.channel)
+        check_collection_achievements(uid, interaction.channel)
+        self.stop()
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        if self.message and self.key not in claimed_cards:
+            try:
+                embed = build_card_embed(self.key)
+                embed.set_footer(text="⏰ Claim expiré — personne n'a réclamé cette carte")
+                await self.message.edit(embed=embed, view=self)
+            except Exception:
+                pass
 
 
 # ============================================================
@@ -2170,8 +2251,12 @@ async def ga_cmd(ctx):
     c = ANIME_CARDS_DB[key]
     already_owned = key in claimed_cards
     embed = build_card_embed(key)
-    embed.set_author(name=f"🎰 Roll de {ctx.author.display_name} | {data['rolls']} rolls restants")
-    await ctx.send(embed=embed)
+    embed.set_author(name=f"🎰  Roll de {ctx.author.display_name}  •  {data['rolls']} rolls restants")
+    if key in claimed_cards:
+        await ctx.send(embed=embed)
+    else:
+        view = ClaimView(key, timeout=30)
+        view.message = await ctx.send(embed=embed, view=view)
     # Notif wishlist
     for wuid, wset in gacha_wishlist.items():
         if key in wset and wuid != uid:
@@ -2198,41 +2283,24 @@ async def rolls_cmd(ctx):
 
 @bot.command(name="claim")
 async def claim_cmd(ctx):
-    """Claim la dernière carte tirée — .claim"""
+    """Réclame la dernière carte tirée — .claim (le bouton ❤️ fait pareil)"""
     if SALON_GACHA_ID and ctx.channel.id != SALON_GACHA_ID:
-        return await ctx.send(f"❌ Claim en salon gacha seulement !", delete_after=5)
+        return await ctx.send("❌ Claim en salon gacha seulement !", delete_after=5)
     uid = str(ctx.author.id)
-    gid = ctx.guild.id
-    key = last_rolled.get(gid)
+    key = last_rolled.get(ctx.guild.id)
     if not key:
-        return await ctx.send("❌ Aucune carte à claimer ! Tire d'abord avec `.ga`")
-    if key in claimed_cards:
-        owner_uid = claimed_cards[key]
-        if owner_uid == uid:
-            return await ctx.send("❌ Tu possèdes déjà cette carte !")
-        m = ctx.guild.get_member(int(owner_uid))
-        owner_name = m.display_name if m else 'quelqu\'un'
-        return await ctx.send(f"❌ Cette carte appartient déjà à **{owner_name}** !")
-    now = _time_module.time()
-    cooldown_mins = CLAIM_COOLDOWN_MINUTES - claim_reduction.get(uid, 0)
-    last = claim_cooldown[uid]
-    if last and now - last < cooldown_mins * 60:
-        reste = int((cooldown_mins * 60 - (now - last)) / 60)
-        return await ctx.send(f"⏳ Cooldown claim ! Encore **{reste} min**")
-    # Claim !
-    claimed_cards[key] = uid
-    gacha_collections[uid][key] = {"fusion": 0}
-    if ANIME_CARDS_DB.get(key, {}).get("rarete") == "Mythique":
+        return await ctx.send("❌ Aucune carte à réclamer ! Tire d'abord avec `.ga`")
+    ok, msg = try_claim(uid, key, ctx.guild.id)
+    if not ok:
+        return await ctx.send(msg)
+    c = ANIME_CARDS_DB[key]
+    if c["rarete"] == "Mythique":
         unlock_achievement(uid, "mythique_1", ctx.channel)
     check_collection_achievements(uid, ctx.channel)
-    claim_cooldown[uid] = now
-    last_rolled[gid] = None
-    c = ANIME_CARDS_DB[key]
-    r_emoji = RARETE_EMOJI.get(c["rarete"], "🔵")
     embed = build_card_embed(key, uid, claimed=True)
-    embed.set_author(name=f"✅ {ctx.author.display_name} a claimé la carte !")
+    embed.set_author(name=f"✅  {ctx.author.display_name} a réclamé cette carte !")
     await ctx.send(embed=embed)
-    economy_data[uid]["coins"] += 10
+
 
 @bot.command(name="gachastock", aliases=["collection","col"])
 async def gachastock_cmd(ctx, member: discord.Member = None):
@@ -4113,7 +4181,7 @@ def build_guide_embeds(guild):
         name="▶️ Pour essayer, dans l'ordre",
         value=(
             "**1.** `.ga` — tire une carte au hasard\n"
-            "**2.** `.claim` — elle te plaît ? tu la réclames, elle est à toi\n"
+            "**2.** Elle te plaît ? Clique sur le **cœur ❤️** sous la carte — elle est à toi\n"
             "**3.** `.rolls` — voir combien de tirages il te reste *(c'est limité, ça se recharge)*"
         ), inline=False)
     e.add_field(
@@ -6720,6 +6788,13 @@ RARETE_EMOJI = {
     "Commun":     "⚪",
 }
 
+RARETE_ETOILES = {
+    "Mythique":   "★★★★★",
+    "Légendaire": "★★★★☆",
+    "Épique":     "★★★☆☆",
+    "Rare":       "★★☆☆☆",
+    "Commun":     "★☆☆☆☆",
+}
 RARETE_COULEURS = {
     "Mythique":   0xe74c3c,
     "Légendaire": 0xe67e22,
@@ -6810,7 +6885,7 @@ def build_gacha_embed(uid, key, rolls_left):
         for a in c["attaques"]
     ])
     embed.add_field(name="⚔️ Attaques", value=attaques_str, inline=False)
-    embed.set_footer(text=f"🎰 Rolls restants : {rolls_left} • ❤️ Claim en 30s • .rolls pour voir tes rolls")
+    embed.set_footer(text=f"🎰 Rolls restants : {rolls_left} • .rolls pour voir tes rolls")
     return embed
 
 
@@ -7201,8 +7276,12 @@ async def invoke_cmd(ctx):
     key = random.choice(pool)
     last_rolled[ctx.guild.id] = key
     embed = build_card_embed(key)
-    embed.set_author(name=f"✨ Invocation Garantie de {ctx.author.display_name} !")
-    await ctx.send(embed=embed)
+    embed.set_author(name=f"✨  Invocation Garantie de {ctx.author.display_name}")
+    if key in claimed_cards:
+        await ctx.send(embed=embed)
+    else:
+        view = ClaimView(key, timeout=30)
+        view.message = await ctx.send(embed=embed, view=view)
 
 @bot.command(name="cartefav")
 async def cartefav_cmd(ctx, action: str = None, *, perso: str = None):
