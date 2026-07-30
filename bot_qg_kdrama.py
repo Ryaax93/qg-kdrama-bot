@@ -2052,40 +2052,49 @@ def gacha_tirer(uid=None):
 
 def build_card_embed(key, uid_claimer=None, claimed=False):
     c = ANIME_CARDS_DB[key]
-    rarete  = c["rarete"]
-    etoiles = RARETE_ETOILES.get(rarete, "★☆☆☆☆")
-    couleur = RARETE_COULEURS.get(rarete, 0x95a5a6)
+    rarete    = c["rarete"]
+    r_emoji   = RARETE_EMOJI.get(rarete, "▫️")
+    couleur   = RARETE_COULEURS.get(rarete, 0x95a5a6)
     owner_uid = claimed_cards.get(key)
 
-    # Bonus de fusion et de niveau (seulement si la carte a un propriétaire)
+    # Bonus de fusion et de niveau (uniquement si la carte a un propriétaire)
     fus = fusion_levels.get(owner_uid, {}).get(key, 0) if owner_uid else 0
     lvl = card_level.get(owner_uid, {}).get(key, 1) if owner_uid else 1
     b_pv  = fus * 20 + (lvl - 1) * 5
     b_atk = fus * 15 + (lvl - 1) * 3
     b_def = fus * 10 + (lvl - 1) * 2
-
-    titre = f"{c.get('emoji','🎴')}  {c['nom']}"
-    if fus:
-        titre += "  " + "⭐" * fus
+    etoiles = " " + "⭐" * fus if fus else ""
 
     embed = discord.Embed(
-        title=titre,
-        description=f"{etoiles}   **{rarete.upper()}**\n━━━━━━━━━━━━━━━━━━━━━━━",
+        title=f"{c.get('emoji','🎴')} {c['nom']}{etoiles}",
+        description=f"*{c.get('serie','?')}*  {r_emoji} **{rarete}**",
         color=couleur)
-    embed.set_author(name=f"🎴  {c.get('serie','?')}")
-
-    def _stat(base, bonus):
-        return f"**{base + bonus}**" + (f"  `+{bonus}`" if bonus else "")
-
-    embed.add_field(name="❤️ PV",  value=_stat(c.get("pv", 100), b_pv),      inline=True)
-    embed.add_field(name="⚔️ ATK", value=_stat(c.get("attaque", 50), b_atk), inline=True)
-    embed.add_field(name="🛡️ DEF", value=_stat(c.get("defense", 50), b_def), inline=True)
-
-    if lvl > 1:
-        embed.add_field(name="📈 Niveau", value=f"**{lvl}** / 10", inline=False)
 
     if c.get("image"):
         embed.set_image(url=c["image"])
+
+    embed.add_field(
+        name="📊 Stats",
+        value=(f"❤️ **{c.get('pv',100) + b_pv}** PV  |  "
+               f"⚔️ **{c.get('attaque',50) + b_atk}** ATK  |  "
+               f"🛡️ **{c.get('defense',50) + b_def}** DEF"),
+        inline=False)
+
+    if c.get("attaques"):
+        embed.add_field(
+            name="⚔️ Attaques",
+            value="\n".join(f"{a['emoji']} **{a['nom']}** — `{a['degats']} dégâts`"
+                            for a in c["attaques"])[:1024],
+            inline=False)
+
+    if c.get("faiblesse") or c.get("resistance"):
+        embed.add_field(
+            name="🧩 Affinités",
+            value=f"Faiblesse {c.get('faiblesse','—')}   •   Résistance {c.get('resistance','—')}",
+            inline=False)
+
+    if lvl > 1:
+        embed.add_field(name="📈 Niveau", value=f"**{lvl}** / 10", inline=False)
 
     if owner_uid:
         embed.set_footer(text="✅ Carte déjà possédée")
@@ -6781,20 +6790,13 @@ daily_item_usage = defaultdict(lambda: defaultdict(float))  # {uid: {item_id: la
 
 # Probabilités gacha
 RARETE_EMOJI = {
-    "Mythique":   "🔴",
-    "Légendaire": "🟠",
-    "Épique":     "🟣",
-    "Rare":       "🔵",
-    "Commun":     "⚪",
+    "Mythique":   "💎",
+    "Légendaire": "👑",
+    "Épique":     "🔮",
+    "Rare":       "💠",
+    "Commun":     "▫️",
 }
 
-RARETE_ETOILES = {
-    "Mythique":   "★★★★★",
-    "Légendaire": "★★★★☆",
-    "Épique":     "★★★☆☆",
-    "Rare":       "★★☆☆☆",
-    "Commun":     "★☆☆☆☆",
-}
 RARETE_COULEURS = {
     "Mythique":   0xe74c3c,
     "Légendaire": 0xe67e22,
