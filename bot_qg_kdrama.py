@@ -739,356 +739,377 @@ async def on_voice_state_update(member, before, after):
             del voice_join_time[uid]
 
 # ============================================================
-#  HELP — Redesigné par grandes catégories
+#  HELP — 6 pages membres + 4 pages admin (masquées aux membres)
+#  Navigation : menu déroulant + boutons
 # ============================================================
-@bot.command(name="help")
-async def help_cmd(ctx, categorie: str = None):
-    """Affiche l'aide — .help"""
+def _help_footer(embed, i, total):
+    dots = "".join("●" if k == i else "○" for k in range(total))
+    embed.set_footer(text=f"Page {i+1}/{total}  •  {dots}  •  QG Kdrama 🌸")
+    return embed
+
+def build_help_pages(guild, is_admin=False):
+    """Construit les pages d'aide. Les pages admin ne sont ajoutées que si is_admin."""
     pages = []
 
-    # ── Page 0 — Accueil ─────────────────────────────────
-    p0 = discord.Embed(
-        title="",
-        description=(
-            "```\n"
-            "╔══════════════════════════════════════╗\n"
-            "║                                      ║\n"
-            "║    🌸   A K A R I   B O T   🌸      ║\n"
-            "║         QG  Kdrama  —  Aide          ║\n"
-            "║                                      ║\n"
-            "╚══════════════════════════════════════╝\n"
-            "```\n"
-            "◀️ ▶️ pour naviguer • Préfixe : **`.`**\n\n"
-            "```\n"
-            "1  — 🎰  Gacha\n"
-            "2  — 💰  Économie\n"
-            "3  — ⚔️   Combats & Quiz\n"
-            "4  — 📊  Progression & Factions\n"
-            "5  — 🎪  Events Auto & Spéciaux\n"
-            "6  — 🎮  Commandes Events Joueurs\n"
-            "7  — 💬  Social & Fun\n"
-            "8  — 🛡️   Modération  [ admin ]\n"
-            "9  — 🔧  Gacha & Cartes  [ admin ]\n"
-            "10 — ⚙️   Économie & Config  [ admin ]\n"
-            "```"
-        ),
-        color=0xff6b9d
-    )
-    p0.set_footer(text="Page 1/11 • QG Kdrama 🌸")
-    pages.append(p0)
+    # ══════════════ 1 — KDRAMA & ANIME ══════════════
+    e = discord.Embed(
+        title="🎬  Kdrama & Anime",
+        description="*Le cœur du serveur — trouver quoi regarder et partager tes avis.*",
+        color=0xff6b9d)
+    e.add_field(name="🍿 Trouver quoi regarder", value=(
+        "`.dramarec` — Un kdrama au hasard\n"
+        "`.animerec` — Un animé au hasard\n"
+        "`.sorties` — Les prochaines sorties"
+    ), inline=False)
+    e.add_field(name="🔎 Se renseigner", value=(
+        "`.drama <titre>` — Fiche d'un kdrama\n"
+        "`.anime <titre>` — Fiche d'un animé\n"
+        "`.avis <titre>` — Les notes et avis du serveur"
+    ), inline=False)
+    e.add_field(name="⭐ Donner son avis", value=(
+        "`.noter <1-10> <titre>` — Noter un drama/animé\n"
+        "*Ex : `.noter 9 Goblin`*"
+    ), inline=False)
+    e.add_field(name="📝 Ta watchlist", value=(
+        "`.watch ajouter <titre>` — Ajouter à ta liste\n"
+        "`.watch liste` — Voir ta liste\n"
+        "`.watch retirer <titre>` — Retirer un titre"
+    ), inline=False)
+    e.add_field(name="🧠 Quiz & Tournois", value=(
+        "`.quiz kdrama` / `.quiz anime` — Quiz solo\n"
+        "`.quizduel <thème> @joueur` — Quiz en duel\n"
+        "`.quizstop` — Arrêter le quiz en cours\n"
+        "`.bracket kdrama` — Tournoi des meilleurs kdramas\n"
+        "`.quote` / `.animequote` — Une citation au hasard"
+    ), inline=False)
+    pages.append(("🎬", "Kdrama & Anime", e))
 
-    # ── Page 1 — Gacha ────────────────────────────────────
-    p1 = discord.Embed(title="🎰 Gacha", color=0x9b59b6)
-    p1.add_field(name="🎲 Tirer & Claimer", value=(
-    "`.ga` / `.roll` — Tirer une carte\n"
-    "`.rolls` — Voir tes rolls restants\n"
-    "`.invoke` — Invocation garantie Légendaire+ *(10 000p)*"
+    # ══════════════ 2 — PROFIL & PROGRESSION ══════════════
+    e = discord.Embed(
+        title="🪪  Profil & Progression",
+        description="*Tu progresses juste en discutant — aucune commande obligatoire.*",
+        color=0x9b59b6)
+    e.add_field(name="👤 Ton profil", value=(
+        "`.profil [@membre]` — Ta carte de membre en image\n"
+        "`.rank [@membre]` — Niveau et XP en texte\n"
+        "`.stats` — Tes statistiques complètes\n"
+        "`.leaderboard` — Top 10 du serveur"
     ), inline=False)
-    p1.add_field(name="📦 Ta Collection", value=(
-    "`.gachastock [@joueur]` — Voir ta collection\n"
-    "`.gacha <perso>` — Qui possède ce perso ?\n"
-    "`.gachastats` — Classement des collections\n"
-    "`.cartefav add/remove/voir <perso>` — Favoris *(max 3)*\n"
-    "`.wishlist add/remove/voir <perso>` — Notif si la carte drop"
+    e.add_field(name="🏆 Objectifs", value=(
+        "`.succes [@membre]` — Tes 30 succès à débloquer\n"
+        "`.missions` — Tes missions du jour"
     ), inline=False)
-    p1.add_field(name="🆕 Nouveau ici ?", value=(
-    "`.guide` est publié dans le salon guide — commence par là si tu débarques !"
+    e.add_field(name="🐾 Ton compagnon", value=(
+        "`.adopter <rareté>` — Adopter un compagnon\n"
+        "`.pet` — Le voir • `.pet liste` — Tous les tiens\n"
+        "`.pet equiper <nom>` • `.pet nourrir` — +25 XP"
     ), inline=False)
-    p1.add_field(name="🪪 Profil & Progression", value=(
-    "`.profil [@membre]` — Ta carte de profil visuelle 🖼️\n"
-    "`.succes` — Tes 30 succès à débloquer 🏆\n"
-    "`.adopter` — Adopter un compagnon (bonus passifs) 🐾\n"
-    "`.pet` — Gérer ton compagnon (liste/equiper/nourrir)"
+    e.add_field(name="💪 Stats de combat", value=(
+        "`.ameliorer <pv|atk|def|endurance>` — Dépenser tes points"
     ), inline=False)
-    p1.add_field(name="🆙 Niveau & Recyclage", value=(
-    "`.cardinfo <perso>` — Stats détaillées d\'une carte (niveau, XP)\n"
-    "`.burn <perso>` — Recycler une carte contre des pièces 🔥\n"
-    "`.serie [nom]` — Progression de tes collections par série\n"
-    "*Tes cartes montent de niveau en combattant en pokebattle !*"
+    e.add_field(name="🎂 Divers", value=(
+        "`.anniversaire <JJ/MM>` — Enregistrer ta date"
     ), inline=False)
-    p1.add_field(name="🔄 Échanges & Duels", value=(
-    "`.gachatrade @joueur <carte1> <carte2>` — Proposer un échange\n"
-    "`.tradeshistory` — Historique des échanges\n"
-    "`.cardduel @joueur <carte>` — Duel, gagnant prend les 2 cartes\n"
-    "`.fusionner <perso>` — Fusionner des doublons\n"
-    "`.gachagive @joueur <perso>` — Donner une carte"
-    ), inline=False)
-    p1.add_field(name="🖼️ Image", value=(
-    "`.setimage <perso> <url>` — Changer l\'image de ta carte\n"
-    "*Les admins peuvent setimage n\'importe quelle carte*"
-    ), inline=False)
-    p1.set_footer(text="Page 2/11 • QG Kdrama 🌸")
-    pages.append(p1)
+    pages.append(("🪪", "Profil & Progression", e))
 
-    # ── Page 2 — Économie ─────────────────────────────────
-    p2 = discord.Embed(title="💰 Économie", color=0xf39c12)
-    p2.add_field(name="💵 Gagner des Pièces", value=(
-    "`.daily` — 100-200p *(24h)*\n"
-    "`.travailler` — 50-150p *(4h)*\n"
-    "`.braquage @joueur` — Vol risqué 30% succès *(6h)*\n"
-    "`.missions` — Missions journalières\n"
-    "`.investir <animé> <montant>` — Investir sur une série\n"
-    "`.retourinvest` — Récupérer ses gains\n"
-    "`.slot [mise]` — Slot machine 🎰\n"
-    "`.jackpot` — Voir la cagnotte communautaire"
+    # ══════════════ 3 — ÉCONOMIE ══════════════
+    e = discord.Embed(
+        title="💰  Économie",
+        description="*Les pièces s'utilisent partout : boutique, gacha, compagnons, loterie.*",
+        color=0x2ecc71)
+    e.add_field(name="💵 Gagner des pièces", value=(
+        "`.daily` — Ta récompense du jour (1×/24 h)\n"
+        "`.travailler` — Un petit boulot\n"
+        "`.balance [@membre]` — Voir son solde"
     ), inline=False)
-    p2.add_field(name="🏦 Banque & Transfers", value=(
-    "`.banque depot <montant>` — Déposer *(+5%/24h)*\n"
-    "`.banque retrait` — Retirer avec intérêts\n"
-    "`.balance [@joueur]` — Voir le solde\n"
-    "`.pay @joueur <montant>` — Envoyer des pièces"
+    e.add_field(name="🏦 Banque & transferts", value=(
+        "`.banque` — Déposer / retirer\n"
+        "`.pay @membre <montant>` — Envoyer des pièces"
     ), inline=False)
-    p2.add_field(name="🛒 Boutique & PvP", value=(
-    "`.shop` — Catalogue *(3 pages ◀️▶️)*\n"
-    "`.acheter <id>` — Acheter un item\n"
-    "`.utiliser <item> @joueur` — Utiliser un item offensif\n"
-    "`.marcheacheter <perso>` — Marché Noir 🕶️"
+    e.add_field(name="🛒 Dépenser", value=(
+        "`.shop` — La boutique\n"
+        "`.acheter <id>` — Acheter un article\n"
+        "`.utiliser <item> @joueur` — Utiliser un item offensif"
     ), inline=False)
-    p2.set_footer(text="Page 3/11 • QG Kdrama 🌸")
-    pages.append(p2)
+    e.add_field(name="🎲 Tenter sa chance", value=(
+        "`.slot` — Machine à sous\n"
+        "`.jackpot` — La cagnotte en cours\n"
+        "`.loto` — Ticket de loterie (100 pièces)\n"
+        "`.braquage` — Braquer la banque *(risqué)*\n"
+        "`.steal @membre` — Voler un membre *(risqué)*"
+    ), inline=False)
+    pages.append(("💰", "Économie", e))
 
-    # ── Page 3 — Combats & Quiz ───────────────────────────
-    p3 = discord.Embed(title="⚔️ Combats & Quiz", color=0xe74c3c)
-    p3.add_field(name="🥊 Combat", value=(
-    "`.arene @joueur` — PvP tour par tour\n"
-    "`.pokebattle @joueur` — Combat 3v3 avec tes cartes\n"
-    "`.cardduel @joueur <carte>` — Duel de cartes\n"
-    "`.attaquerboss` — Attaquer le boss envahisseur\n"
-    "`.liga` — Classement Elo mensuel"
+    # ══════════════ 4 — GACHA ══════════════
+    e = discord.Embed(
+        title="🎰  Gacha — collection de cartes",
+        description="*Jeu de collection optionnel : ~500 cartes, une carte = un seul propriétaire.*",
+        color=0xf1c40f)
+    e.add_field(name="🎲 Tirer & réclamer", value=(
+        "`.ga` — Tirer une carte au hasard\n"
+        "`.claim` — Réclamer la carte tirée\n"
+        "`.rolls` — Tirages restants\n"
+        "`.invoke` — Invocation Légendaire+ garantie (10 000p)"
     ), inline=False)
-    p3.add_field(name="🎯 Quiz", value=(
-    "`.quiz [thème]` — Quiz solo auto-enchaîné\n"
-    "`.quizduel @joueur [thème]` — Duel 5 questions\n"
-    "`.quizstop` — Arrêter le quiz en cours\n"
-    "*Thèmes : kdrama • anime • gaming • culture • mix*"
+    e.add_field(name="📦 Ta collection", value=(
+        "`.gachastock [@membre]` — Voir une collection\n"
+        "`.cardinfo <perso>` — Détails d'une carte\n"
+        "`.serie <nom>` — Progression sur une série\n"
+        "`.cartefav add/remove/voir <perso>` — Favoris\n"
+        "`.wishlist` — Ta liste de souhaits\n"
+        "`.gacha ordre <série> <n°>` — Ranger ta collection"
     ), inline=False)
-    p3.add_field(name="🐺 Loup Garou", value=(
-    "`.lgcreate` — Créer une partie\n"
-    "`.lgjoin` — Rejoindre la partie\n"
-    "`.lgstart` — Lancer la partie *(hôte)*\n"
-    "`.lgvote @joueur` — Voter pour éliminer\n"
-    "`.lgnuit @cible` — Action nocturne\n"
-    "`.lgsorciere save/kill @cible` — Sorcière\n"
-    "`.lgstatus` — État de la partie\n"
-    "`.lgstop` — Arrêter la partie\n"
-    "`.lgroles` — Voir les rôles disponibles"
+    e.add_field(name="🔧 Faire évoluer", value=(
+        "`.fusionner <perso>` — Fusionner des doublons (⭐)\n"
+        "`.burn <perso>` — Recycler une carte contre des pièces\n"
+        "`.setimage <perso> <url imgur>` — Changer l'image *(tes cartes)*"
     ), inline=False)
-    p3.add_field(name="🎮 Mini-Jeux", value=(
-    "`.devine` — Devine le personnage\n"
-    "`.rps <choix>` — Pierre Feuille Ciseaux\n"
-    "`.pendu` — Pendu animé/drama"
+    e.add_field(name="🔄 Échanger", value=(
+        "`.gachatrade @membre <ta carte> <sa carte>` — Échange\n"
+        "`.gachagive @membre <perso>` — Offrir une carte\n"
+        "`.marcheacheter <perso>` — Marché Noir *(event)*\n"
+        "`.tradeshistory` — Historique des échanges"
     ), inline=False)
+    e.add_field(name="📊 Infos", value=(
+        "`.gachastats` — Stats du gacha du serveur\n"
+        "`.ouvrir` — Ouvrir un coffre apparu dans le salon"
+    ), inline=False)
+    pages.append(("🎰", "Gacha", e))
 
-    p3.add_field(name="🐺 Loup Garou (infos)", value="`.lg` — Voir les commandes LG\n`.bracketstop` — Arrêter un tournoi", inline=False)
-    p3.add_field(name="🏆 Tournoi", value="`.bracketskip` — Passer un tour du bracket (admin)", inline=False)
-    p3.set_footer(text="Page 4/11 • QG Kdrama 🌸")
-    pages.append(p3)
+    # ══════════════ 5 — JEUX & COMBATS ══════════════
+    e = discord.Embed(
+        title="🎮  Jeux & Combats",
+        description="*De quoi s'occuper seul ou à plusieurs.*",
+        color=0xe74c3c)
+    e.add_field(name="🐺 Loup Garou", value=(
+        "`.lg` — L'aide complète du jeu\n"
+        "`.lgroles` — Les rôles existants\n"
+        "`.lgcreate` — Créer une partie • `.lgjoin` — Rejoindre\n"
+        "`.lgstart` — Lancer *(hôte)* • `.lgstatus` — État"
+    ), inline=False)
+    e.add_field(name="🌙 Loup Garou — pendant la partie", value=(
+        "`.lgvote @joueur` — Voter au village\n"
+        "`.lgkill @cible` — Loups : dévorer\n"
+        "`.lgvoir @cible` — Voyante : sonder\n"
+        "`.lgsave @cible` / `.lgpoison @cible` — Sorcière\n"
+        "`.lglove @a @b` — Cupidon • `.lgkillchasseur @cible` — Chasseur\n"
+        "`.lgpass` / `.lgskip` — Passer son tour • `.lgnext` — Suite"
+    ), inline=False)
+    e.add_field(name="⚔️ Combats", value=(
+        "`.arene @membre` — Duel d'arène\n"
+        "`.pokebattle @membre` — Combat de cartes\n"
+        "`.pokestop` — Annuler le combat en cours\n"
+        "`.attaquerboss` / `.attaque` — Frapper le boss du serveur"
+    ), inline=False)
+    e.add_field(name="🎯 Mini-jeux", value=(
+        "`.devine` — Devine le personnage\n"
+        "`.pendu` — Le pendu (dramas & animés)\n"
+        "`.rps <choix>` — Pierre / feuille / ciseaux\n"
+        "`.dice` — Lancer un dé"
+    ), inline=False)
+    pages.append(("🎮", "Jeux & Combats", e))
 
-    # ── Page 4 — Progression & Factions ──────────────────
-    p4 = discord.Embed(title="📊 Progression & Factions", color=0xf1c40f)
-    p4.add_field(name="📈 XP & Niveaux", value=(
-    "`.rank [@joueur]` — Niveau, XP et titre\n"
-    "`.leaderboard` — Top 10 membres\n"
-    "`.ameliorer` — Booster ses stats d\'arène\n"
-    "`.snipe` — Voir le dernier message supprimé"
+    # ══════════════ 6 — EVENTS, SOCIAL & DIVERS ══════════════
+    e = discord.Embed(
+        title="🎪  Events, Social & Divers",
+        description="*Le reste : events, vie du serveur, petites commandes pratiques.*",
+        color=0x3498db)
+    e.add_field(name="📅 Events", value=(
+        "`.planning` — Le planning de la semaine\n"
+        "`.planningauto` — Les events programmés\n"
+        "`.eventstatus` — Quels events sont actifs\n"
+        "`.faction` — Les factions • `.leavefaction` — Quitter\n"
+        "`.liga` — Classement Elo mensuel"
     ), inline=False)
-    p4.add_field(name="⚔️ Factions", value=(
-    "`.faction` — Voir les factions disponibles\n"
-    "`.faction rejoindre <id>` — Rejoindre une faction\n"
-    "`.faction info` — Ta faction & ta réputation\n"
-    "`.faction classement` — Classement général"
+    e.add_field(name="💍 Social", value=(
+        "`.marier @membre` — Demander en mariage\n"
+        "`.accepter` / `.refuser` — Répondre à une demande\n"
+        "`.divorcer` — Divorcer\n"
+        "`.invitations` — Tes invitations\n"
+        "`.topinvitations` — Le classement des inviteurs"
     ), inline=False)
-    p4.add_field(name="↩️ Quitter", value="`.leavefaction` — Quitter sa faction *(alias de `.faction leave`)*", inline=False)
-    p4.add_field(name="🌸 Girls Only", value=(
-    "`.fit <description>` — Poster ta tenue dans le Fit Check 👗\n"
-    "`.setgirlsrole @role` — Configurer le rôle filles *(admin)*\n"
-    "`.setsalon girlsonly` — Configurer le salon Girls Only *(admin)*\n"
-    "`.setsalon annonces` — Configurer le salon annonces *(admin)*\n"
-    "💫 **Star of the Week** — fille la plus active chaque lundi 10h\n"
-    "💎 **Diamond Girl** — fille la plus active chaque 1er du mois 12h\n"
-    "🌙 **Ritual du Soir** — questions drama chaque soir à 21h"
+    e.add_field(name="😄 Fun", value=(
+        "`.roast @membre` — Petite vanne\n"
+        "`.compliment @membre` — Un compliment\n"
+        "`.8ball <question>` — La boule magique\n"
+        "`.meme` — Un meme au hasard\n"
+        "`.choisir a | b | c` — Le bot choisit pour toi"
     ), inline=False)
-    p4.set_footer(text="Page 5/11 • QG Kdrama 🌸")
-    pages.append(p4)
+    e.add_field(name="🔧 Utilitaires", value=(
+        "`.snipe` — Voir le dernier message supprimé\n"
+        "`.avatar [@membre]` — L'avatar en grand\n"
+        "`.sondage <question>` — Lancer un sondage\n"
+        "`.giveaway <durée> <lot>` — Lancer un giveaway\n"
+        "`.help` — Cette aide"
+    ), inline=False)
+    pages.append(("🎪", "Events & Divers", e))
 
-    # ── Page 5 — Events ───────────────────────────────────
-    p5 = discord.Embed(title="🎪 Events — Planning & Liste", color=0x3498db)
-    p5.add_field(name="📅 Hebdomadaires", value=(
-    "**Lundi** 9h 🔮 Prophétie • 18h 📦 Coffre • 20h 🎲 Event léger\n"
-    "**Mardi** 20h 🌙 Nuit Chasse OU 🕶️ Marché Noir\n"
-    "**Mercredi** 2h 🌙 Heure Maudite • 19h 🌀 Double XP *(sem. paires)* • 20h 📦 Coffre\n"
-    "**Jeudi** 20h 🎲 Event léger • 21h 🎰 Nuit Casino\n"
-    "**Vendredi** 18h 🎴 Carte Mystère • 20h 🔥 Gros Event\n"
-    "**Samedi** 15h 🎭 Imposteur • 18h 🎴 Carte Mystère • 20h 🔥 Gros Event • 23h ⚠️ Invasion\n"
-    "**Dimanche** 16h 📦 Coffre • 17h 🔥 Gros Event • 19h 🎁 Colis Mystère • 20h 🏆 Classement"
-    ), inline=False)
-    p5.add_field(name="🔄 Rotation Gros Events Weekend", value=(
-    "⚔️ Tournoi • 💀 Death Note • 🌍 Conquête\n"
-    "⚡ Enchères • 🕵️ Parmi Nous • 🧩 Puzzle\n"
-    "*Change chaque semaine — jamais le même 2 semaines de suite !*"
-    ), inline=False)
-    p5.add_field(name="📆 Mensuels", value=(
-    "1er 💸 Jackpot • 8 🃏 Draft • 15 🏴‍☠️ Guerre + 👾 Boss\n"
-    "22 🎪 Surprise + 👾 Boss • Dernier ven. 🌊 Vague de Légendes"
-    ), inline=False)
-    p5.add_field(name="🎭 Events Lançables — `.lancerevent <nom>`", value=(
-    "`roue` `proces` `tournoi` `mine` `parminous` `fausserumeur`\n"
-    "`encheres` `voleur` `wanted` `reve` `magicien` `clown`\n"
-    "`corbeau` `pacifiste` `oracle` `pacte` `losers` `puzzle`\n"
-    "`vaguelegendaires` `bossfinal` `deathnote` `alerterouge`\n"
-    "`conquete` `prophetie` `colis` `coffre` `nuitcasino`\n"
-    "`cartemystere` `doublexp` `nuitchasse` `marchenoir`\n"
-    "`jackpot` `draft` `guerre` `heuremaudite` `classement`"
-    ), inline=False)
-    p5.add_field(name="📅 Planning", value="`.planning` — Voir le planning de la semaine + mois", inline=False)
-    p5.add_field(name="🎰 Le Banquier", value="`.lancerevent banquier` — Deal or No Deal Discord ! Cases mystères, offres du banquier, tension maximale", inline=False)
-    p5.set_footer(text="Page 6/11 • QG Kdrama 🌸")
-    pages.append(p5)
+    if not is_admin:
+        for i, (_, _, emb) in enumerate(pages):
+            _help_footer(emb, i, len(pages))
+            if guild and guild.icon:
+                emb.set_thumbnail(url=guild.icon.url)
+        return pages
 
-    # ── Page 6 — Commandes Events Joueurs ─────────────────
-    p6 = discord.Embed(title="🔧 Divers & Utilitaires", color=0x95a5a6)
-    p6.add_field(name="🎲 Mini-Jeux", value=(
-    "`.rps <pierre/feuille/ciseaux>` — Pierre Feuille Ciseaux\n"
-    "`.dice` — Lancer un dé\n"
-    "`.choisir <option1> ou <option2>` — Choix aléatoire\n"
-    "`.sondage <question>` — Créer un sondage\n"
-    "`.giveaway <temps> <prix>` — Lancer un giveaway"
+    # ══════════════ 7 — ADMIN : MODÉRATION ══════════════
+    e = discord.Embed(
+        title="🛡️  Admin — Modération",
+        description="*Réservé au staff.*",
+        color=0x95a5a6)
+    e.add_field(name="⚔️ Sanctions", value=(
+        "`.ban @membre [raison]` — Bannir\n"
+        "`.kick @membre [raison]` — Expulser\n"
+        "`.mute @membre [durée]` — Rendre muet\n"
+        "`.unmute @membre` — Rendre la parole\n"
+        "`.warn @membre <raison>` — Avertir"
     ), inline=False)
-    p6.add_field(name="📊 Stats & Suivi", value=(
-    "`.stats` — Tes statistiques complètes\n"
-    "`.invitations` — Tes invitations\n"
-    "`.topinvitations` — Top inviteurs du serveur\n"
-    "`.boss` — Voir le boss actif\n"
-    "`.planning` — Planning des events de la semaine"
+    e.add_field(name="🧹 Salon", value=(
+        "`.clear <nombre>` — Supprimer des messages\n"
+        "`.slowmode <secondes>` — Mode lent\n"
+        "`.lock` / `.unlock` — Verrouiller un salon"
     ), inline=False)
-    p6.add_field(name="⚔️ PvP & Vol", value=(
-    "`.steal @joueur` — Voler des pièces\n"
-    "`.attaque @joueur` — Attaquer en arène\n"
-    "`.utiliser <item> @joueur` — Utiliser un item PvP"
+    e.add_field(name="📢 Communication", value=(
+        "`.announce <message>` — Annonce officielle"
     ), inline=False)
-    p6.add_field(name="💍 Mariage & Social", value=(
-    "`.marier @joueur` — Proposer un mariage\n"
-    "`.accepter` / `.refuser` — Répondre à une proposition\n"
-    "`.divorcer` — Divorcer\n"
-    "`.anniversaire <JJ/MM>` — Enregistrer ton anniversaire"
-    ), inline=False)
-    p6.add_field(name="🎪 Commandes Events *(auto-expliquées dans les salons)*", value=(
-    "`.ouvrir` `.miser` `.miner` `.chasser` `.voter` `.jedoute`\n"
-    "`.adopter` `.nourrir` `.caresser` `.recup` `.sort` `.ecrire` `.eliminer`\n"
-    "*Ces commandes s'utilisent pendant les events — le salon explique tout !*"
-    ), inline=False)
-    p6.add_field(name="📢 Annonces", value="`.announce <texte>` — Créer une belle annonce officielle automatiquement", inline=False)
-    p6.set_footer(text="Page 7/10 • QG Kdrama 🌸")
-    pages.append(p6)
+    pages.append(("🛡️", "Admin — Modération", e))
 
+    # ══════════════ 8 — ADMIN : GACHA & CARTES ══════════════
+    e = discord.Embed(
+        title="🔧  Admin — Gacha & Cartes",
+        description="*Gestion des cartes et du système gacha.*",
+        color=0x95a5a6)
+    e.add_field(name="🎁 Donner / retirer", value=(
+        "`.givecard @membre <perso>` — Donner une carte\n"
+        "`.removecard @membre <perso>` — Retirer une carte"
+    ), inline=False)
+    e.add_field(name="✨ Créer", value=(
+        "`.addcard <nom> | <série> | <rareté>` — Nouvelle carte\n"
+        "*Raretés : Commun • Rare • Épique • Légendaire • Mythique*"
+    ), inline=False)
+    e.add_field(name="⚙️ Réglages", value=(
+        "`.setrollreset <heures>` — Recharge des tirages\n"
+        "`.gacharesetall` — ⚠️ Remettre tout le gacha à zéro"
+    ), inline=False)
+    pages.append(("🔧", "Admin — Gacha", e))
 
-    # ── Page 7 — Social & Fun ─────────────────────────────
-    p7 = discord.Embed(title="💬 Social & Fun", color=0xff6b9d)
-    p7.add_field(name="💍 Social", value=(
-    "`.marier @joueur` — Demande en mariage\n"
-    "`.divorcer` — Divorce 💔\n"
-    "`.anniversaire JJ/MM` — Enregistrer son anniv\n"
-    "`.avatar [@joueur]` — Voir la photo de profil"
-    ), inline=True)
-    p7.add_field(name="😄 Fun", value=(
-    "`.roast [@joueur]` — Vanne façon animé\n"
-    "`.compliment [@joueur]` — Compliment stylé\n"
-    "`.8ball <question>` — Boule magique\n"
-    "`.meme` — Meme aléatoire 😂"
-    ), inline=True)
-    p7.add_field(name="🎬 Contenu", value=(
-    "`.drama <titre>` — Infos drama\n"
-    "`.anime <titre>` — Infos animé\n"
-    "`.dramarec` / `.animerec` — Recommandation\n"
-    "`.quote` / `.animequote` — Citation\n"
-    "`.sorties` — Prochaines sorties"
-    ), inline=True)
-    p7.set_footer(text="Page 8/11 • QG Kdrama 🌸")
-    pages.append(p7)
+    # ══════════════ 9 — ADMIN : SALONS & CONFIG ══════════════
+    e = discord.Embed(
+        title="⚙️  Admin — Salons & Configuration",
+        description="*À faire une fois, puis c'est mémorisé.*",
+        color=0x95a5a6)
+    e.add_field(name="📍 Salons — `.setsalon <type>`", value=(
+        "*Tape la commande **dans** le salon voulu.*\n"
+        "`gacha` `boutique` `casino` `event` `levelup` `guide`\n"
+        "`combat` `duel` `dashboard` `bienvenue` `aurevoir`\n"
+        "`halloffame` `girlsonly` `annonces` `invitation`"
+    ), inline=False)
+    e.add_field(name="📖 Guide du serveur", value=(
+        "`.setsalon guide` puis `.guide` — Publier le guide des nouveaux"
+    ), inline=False)
+    e.add_field(name="🌸 Girls Only", value=(
+        "`.setgirlsrole @role` — Définir le rôle filles\n"
+        "`.setsalon girlsonly` — Définir le salon *(publie aussi les commandes dedans)*\n"
+        "`.setsalon annonces` — Salon des annonces\n"
+        "💫 Star of the Week — lundi 10 h  •  💎 Diamond Girl — le 1er du mois"
+    ), inline=False)
+    e.add_field(name="🔔 Rôles de notification", value=(
+        "`.setgacharole @role` — Rôle pingé pour les events gacha\n"
+        "`.setanimerole @role` — Rôle pingé pour les events animé"
+    ), inline=False)
+    e.add_field(name="🎭 Rôles par réaction", value=(
+        "`.autorole help` — Créer un panel\n"
+        "`.rolecreate @role <emoji> <desc>` — Ajouter un rôle\n"
+        "`.roledelete @role` — Retirer • `.rolelist` — Lister"
+    ), inline=False)
+    e.add_field(name="📊 Suivi", value=(
+        "`.dashboard` — Vue d'ensemble du serveur"
+    ), inline=False)
+    pages.append(("⚙️", "Admin — Config", e))
 
-    # ── Page 8 — Modération (Admin) ───────────────────────
-    p8 = discord.Embed(title="🛡️ Modération", description="⚠️ Réservé aux **admins**", color=0xe74c3c)
-    p8.add_field(name="⚔️ Sanctions", value=(
-    "`.ban @joueur [raison]` — Bannir\n"
-    "`.kick @joueur [raison]` — Expulser\n"
-    "`.warn @joueur [raison]` — Avertir\n"
-    "`.mute @joueur [minutes]` — Mute\n"
-    "`.unmute @joueur` — Retirer le mute"
-    ), inline=True)
-    p8.add_field(name="🔧 Salon", value=(
-    "`.clear [nb]` / `.clear all` — Suppr messages\n"
-    "`.slowmode [secondes]` — Slowmode\n"
-    "`.lock` / `.unlock` — Verrouiller\n"
-    "`.snipe` — Dernier message supprimé"
-    ), inline=True)
-    p8.add_field(name="🎭 Autorole & Config", value=(
-    "`.autorole create <titre> | <desc>`\n"
-    "`.autorole add <msg_id> <emoji> @role`\n"
-    "`.autorole image <msg_id> <url>`\n"
-    "`.autorole delete/list`\n\n"
-    "`.setsalon <type>` — Configurer un salon\n"
-    "`.setinvitation` — Activer le suivi invitations"
+    # ══════════════ 10 — ADMIN : EVENTS & ÉCONOMIE ══════════════
+    e = discord.Embed(
+        title="🎪  Admin — Events & Économie",
+        description="*Lancer, programmer et régler.*",
+        color=0x95a5a6)
+    e.add_field(name="▶️ Lancer maintenant", value=(
+        "`.lancerevent <nom>` — Démarrer un event\n"
+        "`.stopervent` — Arrêter l'event en cours\n"
+        "`.boss` — Faire apparaître un boss\n"
+        "`.raidstop` — Arrêter le boss/raid en cours"
     ), inline=False)
-    p8.add_field(name="📊 Dashboard", value="`.setsalon dashboard` — Salon pour le tableau de bord admin", inline=False)
-    p8.set_footer(text="Page 9/11 • QG Kdrama 🌸")
-    pages.append(p8)
+    e.add_field(name="🗓️ Programmer", value=(
+        "`.addevent <event> <jour> <heure>` — Programmer\n"
+        "`.delevent <numéro>` — Supprimer *(voir `.planningauto`)*\n"
+        "`.eventon` / `.eventoff` — Activer / mettre en pause"
+    ), inline=False)
+    e.add_field(name="🏆 Tournoi", value=(
+        "`.bracketskip` — Résoudre le match en cours\n"
+        "`.bracketstop` — Annuler le tournoi"
+    ), inline=False)
+    e.add_field(name="🐺 Loup Garou", value=(
+        "`.lgstop` — Arrêter la partie en cours"
+    ), inline=False)
+    e.add_field(name="💰 Économie", value=(
+        "`.givepieces @membre <montant>` — Donner des pièces\n"
+        "`.givexp @membre <montant>` — Donner de l'XP"
+    ), inline=False)
+    pages.append(("🎪", "Admin — Events", e))
 
-    # ── Page 9 — Admin Gacha & Cartes ─────────────────────
-    p9 = discord.Embed(title="🔧 Admin — Gacha & Cartes", description="⚠️ Réservé aux **admins**", color=0x9b59b6)
-    p9.add_field(name="🎁 Donner / Retirer", value=(
-    "`.givecard @joueur <perso>` — Donner une carte\n"
-    "`.removecard @joueur <perso>` — Retirer une carte\n"
-    "`.gacharesetall` — Reset total gacha ⚠️"
-    ), inline=False)
-    p9.add_field(name="✨ Créer & Modifier", value=(
-    "`.addcard <nom> | <serie> | <rarete> | <emoji> | <url>`\n"
-    "*Crée une carte custom — stats calculées auto*\n"
-    "*Ex : `.addcard Sensei | QG Kdrama | Mythique | 👑 | url`*\n\n"
-    "`.setimage <perso> <url>` — Changer l\'image d\'une carte\n"
-    "*Admins : modifiable sans posséder la carte*"
-    ), inline=False)
-    p9.add_field(name="📋 Raretés valides", value=(
-    "`Commun` • `Rare` • `Épique` • `Légendaire` • `Mythique`"
-    ), inline=False)
-    p9.add_field(name="Images en masse", value="`.setimages` — Ajouter images a plusieurs cartes", inline=False)
-    p9.add_field(name="📋 Liste cartes", value="`.cardlist [rarete] [serie]` — Voir toutes les cartes du DB avec images", inline=False)
-    p9.set_footer(text="Page 10/11 • QG Kdrama 🌸")
-    pages.append(p9)
+    for i, (_, _, emb) in enumerate(pages):
+        _help_footer(emb, i, len(pages))
+        if guild and guild.icon:
+            emb.set_thumbnail(url=guild.icon.url)
+    return pages
 
-    # ── Page 10 — Admin Économie & Events ─────────────────
-    p10 = discord.Embed(title="⚙️ Admin — Économie & Events", description="⚠️ Réservé aux **admins**", color=0x2ecc71)
-    p10.add_field(name="💰 Économie", value=(
-    "`.givepieces @joueur <montant>` — Donner des pièces\n"
-    "`.retirerpieces @joueur <montant>` — Retirer des pièces\n"
-    "`.givexp @joueur <montant>` — Donner de l\'XP\n"
-    "`.retirerxp @joueur <montant>` — Retirer de l\'XP\n"
-    "`.resetall` — Reset total pièces + XP + gacha ⚠️"
-    ), inline=False)
-    p10.add_field(name="🎪 Events", value=(
-    "`.lancerevent <nom>` — Lancer un event manuellement\n"
-    "`.lancerevent` — Liste de tous les events disponibles\n"
-    "`.stopervent` — Arrêter l\'event en cours immédiatement"
-    ), inline=False)
-    p10.add_field(name="📖 Guide du serveur", value=(
-    "`.setsalon guide` — Choisir le salon du guide *(dans le salon voulu)*\n"
-    "`.guide` — Y publier le guide expliqué pour les nouveaux"
-    ), inline=False)
-    p10.add_field(name="⚙️ Salons — `.setsalon <type>`", value=(
-    "`gacha` `boutique` `casino` `event` `levelup` `guide`\n"
-    "`combat` `duel` `dashboard` `bienvenue` `aurevoir`\n"
-    "`halloffame` `girlsonly` `annonces`\n"
-    "*Utilise la commande dans le salon à configurer*"
-    ), inline=False)
-    p10.add_field(name="⚙️ Config", value="`.setconquete #salon1 #salon2` — Zones de Conquête\n`.setrollreset <heures>` — Recharge des rolls", inline=False)
-    p10.add_field(name="📊 Dashboard", value="`.dashboard` — Tableau de bord admin complet (stats, events, alertes)", inline=False)
-    p10.add_field(name="🎪 Planning Events", value="`.eventon` — Activer les events auto\n`.eventoff` — Mettre en pause\n`.eventstatus` — Voir le statut", inline=False)
-    p10.set_footer(text="Page 11/11 • QG Kdrama 🌸")
-    pages.append(p10)
+class HelpSelect(ui.Select):
+    """Menu déroulant pour sauter directement à une catégorie"""
+    def __init__(self, pages):
+        options = [
+            discord.SelectOption(label=label, emoji=emoji, value=str(i),
+                                 description=(emb.description or "").strip("*")[:95])
+            for i, (emoji, label, emb) in enumerate(pages)
+        ]
+        super().__init__(placeholder="📚 Choisir une catégorie…", options=options, row=0)
 
+    async def callback(self, interaction):
+        self.view.index = int(self.values[0])
+        await self.view.refresh(interaction)
 
+class HelpView(ui.View):
+    """Navigation du help : menu déroulant + boutons ◀ ▶"""
+    def __init__(self, pages, author, timeout=180):
+        super().__init__(timeout=timeout)
+        self.pages = pages
+        self.author = author
+        self.index = 0
+        self.add_item(HelpSelect(pages))
 
-    view = PageView(pages, ctx.author, timeout=180)
-    await ctx.send(embed=pages[0], view=view)
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("❌ Tape `.help` pour avoir ta propre aide !", ephemeral=True)
+            return False
+        return True
+
+    async def refresh(self, interaction):
+        await interaction.response.edit_message(embed=self.pages[self.index][2], view=self)
+
+    @ui.button(emoji="◀️", style=discord.ButtonStyle.secondary, row=1)
+    async def prev(self, interaction, button):
+        self.index = (self.index - 1) % len(self.pages)
+        await self.refresh(interaction)
+
+    @ui.button(emoji="▶️", style=discord.ButtonStyle.secondary, row=1)
+    async def next(self, interaction, button):
+        self.index = (self.index + 1) % len(self.pages)
+        await self.refresh(interaction)
+
+@bot.command(name="help", aliases=["aide", "commandes"])
+async def help_cmd(ctx):
+    """Affiche l'aide — .help"""
+    is_admin = ctx.author.guild_permissions.administrator if ctx.guild else False
+    pages = build_help_pages(ctx.guild, is_admin)
+    view = HelpView(pages, ctx.author, timeout=180)
+    await ctx.send(embed=pages[0][2], view=view)
 
 
 @bot.command(name="setimage")
@@ -3137,9 +3158,9 @@ async def stopervent_cmd(ctx):
 async def setsalon_cmd(ctx, type_salon: str = None):
     global SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_CASINO_ID, SALON_EVENT_ID
     global SALON_LEVELUP_ID, SALON_COMBAT_ID, SALON_DUEL_ID, SALON_DASHBOARD_ID
-    global SALON_BIENVENUE_ID, SALON_AUREVOIR_ID, SALON_HOF_ID, SALON_GUIDE_ID
+    global SALON_BIENVENUE_ID, SALON_AUREVOIR_ID, SALON_HOF_ID, SALON_GUIDE_ID, SALON_INVITATION_ID
     if not type_salon:
-        return await ctx.send("❌ Types : `gacha` `boutique` `casino` `event` `levelup` `guide` `combat` `duel` `dashboard` `bienvenue` `aurevoir` `halloffame` `girlsonly` `annonces`")
+        return await ctx.send("❌ Types : `gacha` `boutique` `casino` `event` `levelup` `guide` `combat` `duel` `dashboard` `bienvenue` `aurevoir` `halloffame` `girlsonly` `annonces` `invitation`")
     mapping = {
         "gacha": "SALON_GACHA_ID", "boutique": "SALON_BOUTIQUE_ID",
         "casino": "SALON_CASINO_ID", "event": "SALON_EVENT_ID",
@@ -3148,7 +3169,7 @@ async def setsalon_cmd(ctx, type_salon: str = None):
         "duel": "SALON_DUEL_ID", "dashboard": "SALON_DASHBOARD_ID",
         "bienvenue": "SALON_BIENVENUE_ID", "aurevoir": "SALON_AUREVOIR_ID",
         "halloffame": "SALON_HOF_ID", "girlsonly": "SALON_GIRLS_ID",
-        "annonces": "SALON_ANNONCES_ID",
+        "annonces": "SALON_ANNONCES_ID", "invitation": "SALON_INVITATION_ID",
     }
     t = type_salon.lower()
     if t not in mapping:
@@ -3160,6 +3181,7 @@ async def setsalon_cmd(ctx, type_salon: str = None):
     elif var == "SALON_EVENT_ID": SALON_EVENT_ID = ctx.channel.id
     elif var == "SALON_LEVELUP_ID": SALON_LEVELUP_ID = ctx.channel.id
     elif var == "SALON_GUIDE_ID": SALON_GUIDE_ID = ctx.channel.id
+    elif var == "SALON_INVITATION_ID": SALON_INVITATION_ID = ctx.channel.id
     elif var == "SALON_COMBAT_ID": SALON_COMBAT_ID = ctx.channel.id
     elif var == "SALON_DUEL_ID": SALON_DUEL_ID = ctx.channel.id
     elif var == "SALON_DASHBOARD_ID": SALON_DASHBOARD_ID = ctx.channel.id
@@ -3175,6 +3197,32 @@ async def setsalon_cmd(ctx, type_salon: str = None):
     sauvegarder_salons()
     extra = "\n📖 Tape maintenant `.guide` pour y publier le guide du serveur." if t == "guide" else ""
     await ctx.send(embed=discord.Embed(description=f"✅ Salon **{type_salon}** configuré sur {ctx.channel.mention} !{extra}", color=0x2ecc71))
+
+    # Le salon Girls Only reçoit directement ses commandes — les filles les voient sur place
+    if t == "girlsonly":
+        presentation = discord.Embed(
+            title="🌸  Bienvenue dans le Girls Only",
+            description="*Cet espace est réservé aux filles du serveur. Voilà tout ce qui s'y passe.*",
+            color=0xff9ec7)
+        presentation.add_field(name="👗 Fit Check", value=(
+            "`.fit <description de ta tenue>`\n"
+            "Partage ton look du jour, les autres réagissent 💕"
+        ), inline=False)
+        presentation.add_field(name="🌙 Ritual du Soir", value=(
+            "Chaque soir à **21 h**, une question drama est postée ici.\n"
+            "Rien à taper : réponds simplement dans le salon."
+        ), inline=False)
+        presentation.add_field(name="💫 Star of the Week", value=(
+            "Chaque **lundi à 10 h**, la fille la plus active de la semaine est mise à l'honneur."
+        ), inline=False)
+        presentation.add_field(name="💎 Diamond Girl", value=(
+            "Le **1er de chaque mois**, la fille la plus active du mois reçoit le titre."
+        ), inline=False)
+        presentation.set_footer(text="QG Kdrama • Girls Only 🌸")
+        try:
+            await ctx.channel.send(embed=presentation)
+        except Exception:
+            pass
 
 @bot.command(name="setgirlsrole")
 @commands.has_permissions(administrator=True)
@@ -6825,18 +6873,6 @@ async def role_list(ctx):
             )
     await ctx.send(embed=embed)
 
-
-@bot.command(name="setinvitation")
-@commands.has_permissions(administrator=True)
-async def setinvitation_cmd(ctx):
-    """Définit le salon actuel pour les logs d'invitations — .setinvitation"""
-    global SALON_INVITATION_ID
-    SALON_INVITATION_ID = ctx.channel.id
-    sauvegarder_salons()
-    await ctx.send(embed=discord.Embed(
-        description=f"✅ Salon d'invitation configuré sur {ctx.channel.mention} !\nLes nouvelles invitations seront affichées ici.",
-        color=0x2ecc71
-    ))
 
 
 @bot.command(name="setrollreset")
