@@ -5180,7 +5180,7 @@ async def _card_avatar(member, size=200, grayscale=False):
 
 async def generate_welcome_card(member):
     """Carte de bienvenue — format compact, texte lisible sans zoomer."""
-    W, H = 880, 300
+    W, H = 760, 250
     img = Image.new("RGB", (W, H), (16, 8, 30))
     draw = ImageDraw.Draw(img)
     for y in range(H):
@@ -5193,10 +5193,10 @@ async def generate_welcome_card(member):
     glow = glow.filter(ImageFilter.GaussianBlur(80))
     img = Image.blend(img, glow, 0.5)
     draw = ImageDraw.Draw(img)
-    draw.rounded_rectangle([12, 12, W-12, H-12], radius=20, outline=(255, 150, 210), width=2)
+    draw.rounded_rectangle([10, 10, W-10, H-10], radius=18, outline=(255, 150, 210), width=2)
 
     # Avatar bien visible à gauche
-    AV, ax, ay = 200, 34, 50
+    AV, ax, ay = 176, 28, 37
     av, mask = await _card_avatar(member, AV)
     draw.ellipse([ax-9, ay-9, ax+AV+9, ay+AV+9], outline=(255, 90, 190), width=6)
     draw.ellipse([ax-3, ay-3, ax+AV+3, ay+AV+3], outline=(150, 220, 255), width=2)
@@ -5205,27 +5205,27 @@ async def generate_welcome_card(member):
     else:
         draw.ellipse([ax, ay, ax+AV, ay+AV], fill=(70, 40, 110))
 
-    X = ax + AV + 44
-    f_hero = _pf_font(74)
-    f_name = _pf_font(50)
-    f_badge = _pf_font(31)
-    f_tag  = _pf_font(22)
+    X = ax + AV + 34
+    f_hero = _pf_font(72)
+    f_name = _pf_font(46)
+    f_badge = _pf_font(28)
+    f_tag  = _pf_font(19)
 
-    draw.text((X+4, 40), "BIENVENUE", font=f_hero, fill=(150, 40, 110))
-    draw.text((X, 36),   "BIENVENUE", font=f_hero, fill=(255, 255, 255))
+    draw.text((X+4, 32), "BIENVENUE", font=f_hero, fill=(150, 40, 110))
+    draw.text((X, 28),   "BIENVENUE", font=f_hero, fill=(255, 255, 255))
 
     pseudo = member.display_name
     if len(pseudo) > 15:
         pseudo = pseudo[:14] + "…"
-    draw.text((X, 128), pseudo, font=f_name, fill=(255, 210, 240))
+    draw.text((X, 112), pseudo, font=f_name, fill=(255, 210, 240))
 
     n = member.guild.member_count
     txt = f"MEMBRE N°{n:03d}"
     bw = int(draw.textlength(txt, font=f_badge)) + 40
-    draw.rounded_rectangle([X, 198, X+bw, 254], radius=16, fill=(255, 75, 180))
-    draw.text((X+20, 209), txt, font=f_badge, fill=(255, 255, 255))
+    draw.rounded_rectangle([X, 172, X+bw, 222], radius=14, fill=(255, 75, 180))
+    draw.text((X+20, 181), txt, font=f_badge, fill=(255, 255, 255))
 
-    draw.text((W-160, H-42), "QG KDRAMA", font=f_tag, fill=(255, 130, 205))
+    draw.text((W-138, H-34), "QG KDRAMA", font=f_tag, fill=(255, 130, 205))
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -5235,7 +5235,7 @@ async def generate_welcome_card(member):
 
 async def generate_goodbye_card(member):
     """Carte d'aurevoir — même format compact, palette froide."""
-    W, H = 880, 300
+    W, H = 760, 250
     img = Image.new("RGB", (W, H), (10, 12, 22))
     draw = ImageDraw.Draw(img)
     for y in range(H):
@@ -5248,9 +5248,9 @@ async def generate_goodbye_card(member):
     glow = glow.filter(ImageFilter.GaussianBlur(85))
     img = Image.blend(img, glow, 0.44)
     draw = ImageDraw.Draw(img)
-    draw.rounded_rectangle([12, 12, W-12, H-12], radius=20, outline=(120, 142, 178), width=2)
+    draw.rounded_rectangle([10, 10, W-10, H-10], radius=18, outline=(120, 142, 178), width=2)
 
-    AV, ax, ay = 200, 34, 50
+    AV, ax, ay = 176, 28, 37
     av, mask = await _card_avatar(member, AV, grayscale=True)
     draw.ellipse([ax-8, ay-8, ax+AV+8, ay+AV+8], outline=(140, 162, 202), width=5)
     if av:
@@ -5258,26 +5258,26 @@ async def generate_goodbye_card(member):
     else:
         draw.ellipse([ax, ay, ax+AV, ay+AV], fill=(45, 50, 65))
 
-    X = ax + AV + 44
-    f_hero = _pf_font(70)
-    f_name = _pf_font(48)
-    f_badge = _pf_font(28)
-    f_tag  = _pf_font(22)
+    X = ax + AV + 34
+    f_hero = _pf_font(68)
+    f_name = _pf_font(45)
+    f_badge = _pf_font(25)
+    f_tag  = _pf_font(19)
 
-    draw.text((X, 40), "AU REVOIR", font=f_hero, fill=(228, 235, 248))
+    draw.text((X, 30), "AU REVOIR", font=f_hero, fill=(228, 235, 248))
 
     pseudo = member.display_name
     if len(pseudo) > 15:
         pseudo = pseudo[:14] + "…"
-    draw.text((X, 128), pseudo, font=f_name, fill=(158, 175, 208))
+    draw.text((X, 112), pseudo, font=f_name, fill=(158, 175, 208))
 
     n = member.guild.member_count
     txt = f"IL RESTE {n} MEMBRES"
     bw = int(draw.textlength(txt, font=f_badge)) + 40
-    draw.rounded_rectangle([X, 198, X+bw, 252], radius=15, outline=(120, 145, 185), width=2)
-    draw.text((X+20, 209), txt, font=f_badge, fill=(180, 200, 232))
+    draw.rounded_rectangle([X, 172, X+bw, 220], radius=14, outline=(120, 145, 185), width=2)
+    draw.text((X+20, 181), txt, font=f_badge, fill=(180, 200, 232))
 
-    draw.text((W-160, H-42), "QG KDRAMA", font=f_tag, fill=(120, 150, 195))
+    draw.text((W-138, H-34), "QG KDRAMA", font=f_tag, fill=(120, 150, 195))
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -10128,31 +10128,28 @@ async def on_member_join(member):
     lien_guide = (f"📖 Tout est expliqué dans {salon_guide.mention} — passe y jeter un œil.\n"
                   if salon_guide else "")
 
-    embed = discord.Embed(
-        description=(
-            f"🔮 **PROPHÉTIE N°{n:03d}**\n"
-            f"> *{prophetie}*\n\n"
-            f"{member.mention}, installe-toi !\n"
-            f"{lien_guide}"
-            f"🎬 Ou lance `.dramarec` tout de suite pour ta première recommandation."
-        ),
-        color=0xff6b9d)
-    embed.set_footer(
-        text="QG Kdrama • Ta place t'attendait",
-        icon_url=member.guild.icon.url if member.guild.icon else None)
+    texte = (
+        f"🔮 **PROPHÉTIE N°{n:03d}**\n"
+        f"> *{prophetie}*\n\n"
+        f"{member.mention}, installe-toi !\n"
+        f"{lien_guide}"
+        f"🎬 Ou lance `.dramarec` tout de suite pour ta première recommandation."
+    )
 
-    fichier = None
     if PIL_OK:
         try:
             buf = await generate_welcome_card(member)
-            fichier = discord.File(buf, filename="bienvenue.png")
-            embed.set_image(url="attachment://bienvenue.png")
+            return await channel.send(content=texte,
+                                      file=discord.File(buf, filename="bienvenue.png"))
         except Exception as e:
             print(f"[Bienvenue] Erreur image : {e}")
-    if not fichier:
-        embed.set_thumbnail(url=member.display_avatar.url)
+
+    embed = discord.Embed(description=texte, color=0xff6b9d)
+    embed.set_thumbnail(url=member.display_avatar.url)
+    embed.set_footer(text="QG Kdrama • Ta place t'attendait",
+                     icon_url=member.guild.icon.url if member.guild.icon else None)
     try:
-        await channel.send(file=fichier, embed=embed) if fichier else await channel.send(embed=embed)
+        await channel.send(embed=embed)
     except Exception as e:
         print(f"[Bienvenue] Erreur envoi : {e}")
 
@@ -10173,30 +10170,27 @@ async def on_member_remove(member):
     ]
     citation, source = random.choice(citations)
 
-    embed = discord.Embed(
-        description=(
-            f"💔 **{member.display_name}** a quitté le QG.\n\n"
-            f"> *« {citation} »*\n"
-            f"— {source}\n\n"
-            f"🏯 Il reste **{member.guild.member_count} membres**."
-        ),
-        color=0x5d6d7e)
-    embed.set_footer(
-        text="QG Kdrama • À bientôt, peut-être",
-        icon_url=member.guild.icon.url if member.guild.icon else None)
+    texte = (
+        f"💔 **{member.display_name}** a quitté le QG.\n\n"
+        f"> *« {citation} »*\n"
+        f"— {source}\n\n"
+        f"🏯 Il reste **{member.guild.member_count} membres**."
+    )
 
-    fichier = None
     if PIL_OK:
         try:
             buf = await generate_goodbye_card(member)
-            fichier = discord.File(buf, filename="aurevoir.png")
-            embed.set_image(url="attachment://aurevoir.png")
+            return await channel.send(content=texte,
+                                      file=discord.File(buf, filename="aurevoir.png"))
         except Exception as e:
             print(f"[Aurevoir] Erreur image : {e}")
-    if not fichier:
-        embed.set_thumbnail(url=member.display_avatar.url)
+
+    embed = discord.Embed(description=texte, color=0x5d6d7e)
+    embed.set_thumbnail(url=member.display_avatar.url)
+    embed.set_footer(text="QG Kdrama • À bientôt, peut-être",
+                     icon_url=member.guild.icon.url if member.guild.icon else None)
     try:
-        await channel.send(file=fichier, embed=embed) if fichier else await channel.send(embed=embed)
+        await channel.send(embed=embed)
     except Exception as e:
         print(f"[Aurevoir] Erreur envoi : {e}")
 
