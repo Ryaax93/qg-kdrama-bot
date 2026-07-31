@@ -1000,9 +1000,11 @@ def build_help_pages(guild, is_admin=False):
         "`combat` `duel` `dashboard` `bienvenue` `aurevoir`\n"
         "`halloffame` `girlsonly` `annonces` `invitation` `boost` `reglement`"
     ), inline=False)
-    e.add_field(name="📖 Guide du serveur", value=(
-        "`.setsalon guide` puis `.guide` — Publier le guide des nouveaux\n"
-        "`.setsalon boutique` — Publie aussi la boutique dans le salon"
+    e.add_field(name="📖 Publication automatique", value=(
+        "`.setsalon guide` — configure **et publie** le guide des nouveaux\n"
+        "`.setsalon boutique` — configure **et publie** la boutique\n"
+        "`.setsalon girlsonly` — configure **et publie** les commandes filles\n"
+        "*Refais la commande pour republier après une mise à jour.*"
     ), inline=False)
     e.add_field(name="🌸 Girls Only", value=(
         "`.setgirlsrole @role` — Définir le rôle filles\n"
@@ -4036,8 +4038,17 @@ async def setsalon_cmd(ctx, type_salon: str = None):
         global SALON_ANNONCES_ID
         SALON_ANNONCES_ID = ctx.channel.id
     sauvegarder_salons()
-    extra = "\n📖 Tape maintenant `.guide` pour y publier le guide du serveur." if t == "guide" else ""
-    await ctx.send(embed=discord.Embed(description=f"✅ Salon **{type_salon}** configuré sur {ctx.channel.mention} !{extra}", color=0x2ecc71))
+    await ctx.send(embed=discord.Embed(
+        description=f"✅ Salon **{type_salon}** configuré sur {ctx.channel.mention} !", color=0x2ecc71))
+
+    # Le salon guide reçoit directement le guide
+    if t == "guide":
+        try:
+            for e in build_guide_embeds(ctx.guild):
+                await ctx.channel.send(embed=e)
+                await asyncio.sleep(0.4)
+        except Exception as e:
+            print(f"[Guide] Erreur publication : {e}")
 
     # Le salon boutique reçoit directement la boutique
     if t == "boutique":
@@ -5010,25 +5021,6 @@ def build_guide_embeds(guild):
 
     return pages
 
-@bot.command(name="guide")
-@commands.has_permissions(administrator=True)
-async def guide_cmd(ctx):
-    """Publie le guide du serveur dans le salon guide — .guide (admin)"""
-    salon = ctx.guild.get_channel(SALON_GUIDE_ID) if SALON_GUIDE_ID else None
-    cible = salon or ctx.channel
-    try:
-        for e in build_guide_embeds(ctx.guild):
-            await cible.send(embed=e)
-            await asyncio.sleep(0.4)
-    except discord.Forbidden:
-        return await ctx.send(f"❌ Je n'ai pas la permission d'écrire dans {cible.mention} !")
-    if cible.id != ctx.channel.id:
-        await ctx.send(embed=discord.Embed(
-            description=f"✅ Guide publié dans {cible.mention} !", color=0x2ecc71))
-    elif not SALON_GUIDE_ID:
-        await ctx.send(embed=discord.Embed(
-            description="💡 Astuce : va dans le salon voulu et tape `.setsalon guide` pour que le guide s'y publie par défaut.",
-            color=0x3498db))
 
 # ============================================================
 #  🖼️ CARTE DE PROFIL — Image générée (style néon futuriste)
@@ -5187,109 +5179,111 @@ async def _card_avatar(member, size=200, grayscale=False):
         return None, None
 
 async def generate_welcome_card(member):
-    """Carte de bienvenue — dégradé rose/violet chaleureux. Retourne BytesIO PNG."""
-    W, H = 1000, 400
+    """Carte de bienvenue — format compact, texte lisible sans zoomer."""
+    W, H = 880, 300
     img = Image.new("RGB", (W, H), (16, 8, 30))
     draw = ImageDraw.Draw(img)
-    # Dégradé diagonal violet profond → rose
     for y in range(H):
         t = y / H
-        draw.line([(0, y), (W, y)], fill=(int(24 + t*70), int(8 + t*14), int(48 + t*56)))
-    # Halos néon
+        draw.line([(0, y), (W, y)], fill=(int(26 + t*72), int(9 + t*15), int(52 + t*58)))
     glow = Image.new("RGB", (W, H), (0, 0, 0))
     gd = ImageDraw.Draw(glow)
-    gd.ellipse([-160, -180, 260, 240], fill=(230, 60, 150))
-    gd.ellipse([W-300, H-180, W+160, H+200], fill=(90, 50, 220))
-    glow = glow.filter(ImageFilter.GaussianBlur(95))
+    gd.ellipse([-130, -150, 250, 230], fill=(235, 60, 155))
+    gd.ellipse([W-250, H-140, W+140, H+170], fill=(95, 50, 225))
+    glow = glow.filter(ImageFilter.GaussianBlur(80))
     img = Image.blend(img, glow, 0.5)
     draw = ImageDraw.Draw(img)
+    draw.rounded_rectangle([12, 12, W-12, H-12], radius=20, outline=(255, 150, 210), width=2)
 
-    # Cadre intérieur fin
-    draw.rounded_rectangle([16, 16, W-16, H-16], radius=22, outline=(255, 150, 210), width=2)
-
-    # Avatar avec double anneau
-    av, mask = await _card_avatar(member, 200)
-    cx, cy = 120, 100
-    draw.ellipse([cx-10, cy-10, cx+210, cy+210], outline=(255, 90, 190), width=6)
-    draw.ellipse([cx-3, cy-3, cx+203, cy+203], outline=(150, 220, 255), width=2)
+    # Avatar bien visible à gauche
+    AV, ax, ay = 200, 34, 50
+    av, mask = await _card_avatar(member, AV)
+    draw.ellipse([ax-9, ay-9, ax+AV+9, ay+AV+9], outline=(255, 90, 190), width=6)
+    draw.ellipse([ax-3, ay-3, ax+AV+3, ay+AV+3], outline=(150, 220, 255), width=2)
     if av:
-        img.paste(av, (cx, cy), mask)
+        img.paste(av, (ax, ay), mask)
     else:
-        draw.ellipse([cx, cy, cx+200, cy+200], fill=(70, 40, 110))
+        draw.ellipse([ax, ay, ax+AV, ay+AV], fill=(70, 40, 110))
 
-    # Textes
-    f_hero  = _pf_font(58)
-    f_name  = _pf_font(44)
-    f_med   = _pf_font(26)
-    f_small = _pf_font(20, bold=False)
+    X = ax + AV + 44
+    f_hero = _pf_font(74)
+    f_name = _pf_font(50)
+    f_badge = _pf_font(31)
+    f_tag  = _pf_font(22)
 
-    draw.text((375, 65), "BIENVENUE", font=f_hero, fill=(190, 60, 140))   # ombre portée
-    draw.text((372, 62), "BIENVENUE", font=f_hero, fill=(255, 255, 255))
+    draw.text((X+4, 40), "BIENVENUE", font=f_hero, fill=(150, 40, 110))
+    draw.text((X, 36),   "BIENVENUE", font=f_hero, fill=(255, 255, 255))
 
-    pseudo = member.display_name[:18]
-    draw.text((372, 142), pseudo, font=f_name, fill=(255, 215, 240))
+    pseudo = member.display_name
+    if len(pseudo) > 15:
+        pseudo = pseudo[:14] + "…"
+    draw.text((X, 128), pseudo, font=f_name, fill=(255, 210, 240))
 
     n = member.guild.member_count
-    draw.rounded_rectangle([372, 208, 372+250, 208+46], radius=14, fill=(255, 80, 180))
-    draw.text((392, 219), f"MEMBRE N°{n}", font=f_med, fill=(255, 255, 255))
+    txt = f"MEMBRE N°{n:03d}"
+    bw = int(draw.textlength(txt, font=f_badge)) + 40
+    draw.rounded_rectangle([X, 198, X+bw, 254], radius=16, fill=(255, 75, 180))
+    draw.text((X+20, 209), txt, font=f_badge, fill=(255, 255, 255))
 
-    draw.text((372, 282), "Tape  .guide  pour tout comprendre", font=f_small, fill=(230, 210, 255))
-    draw.text((372, 322), "QG KDRAMA", font=f_med, fill=(255, 120, 200))
+    draw.text((W-160, H-42), "QG KDRAMA", font=f_tag, fill=(255, 130, 205))
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
     return buf
+
 
 async def generate_goodbye_card(member):
-    """Carte d'aurevoir — bleu nuit froid, avatar désaturé. Retourne BytesIO PNG."""
-    W, H = 1000, 400
+    """Carte d'aurevoir — même format compact, palette froide."""
+    W, H = 880, 300
     img = Image.new("RGB", (W, H), (10, 12, 22))
     draw = ImageDraw.Draw(img)
-    # Dégradé bleu nuit → gris ardoise
     for y in range(H):
         t = y / H
-        draw.line([(0, y), (W, y)], fill=(int(14 + t*34), int(18 + t*40), int(32 + t*54)))
-    # Halo froid discret
+        draw.line([(0, y), (W, y)], fill=(int(15 + t*36), int(19 + t*42), int(34 + t*56)))
     glow = Image.new("RGB", (W, H), (0, 0, 0))
     gd = ImageDraw.Draw(glow)
-    gd.ellipse([W-340, -140, W+140, 260], fill=(40, 80, 150))
-    gd.ellipse([-180, H-160, 200, H+180], fill=(60, 60, 90))
-    glow = glow.filter(ImageFilter.GaussianBlur(100))
-    img = Image.blend(img, glow, 0.42)
+    gd.ellipse([W-290, -130, W+130, 240], fill=(42, 84, 155))
+    gd.ellipse([-160, H-140, 190, H+160], fill=(62, 62, 95))
+    glow = glow.filter(ImageFilter.GaussianBlur(85))
+    img = Image.blend(img, glow, 0.44)
     draw = ImageDraw.Draw(img)
+    draw.rounded_rectangle([12, 12, W-12, H-12], radius=20, outline=(120, 142, 178), width=2)
 
-    draw.rounded_rectangle([16, 16, W-16, H-16], radius=22, outline=(120, 140, 175), width=2)
-
-    # Avatar en noir et blanc (le membre s'efface)
-    av, mask = await _card_avatar(member, 190, grayscale=True)
-    cx, cy = 120, 105
-    draw.ellipse([cx-8, cy-8, cx+198, cy+198], outline=(140, 160, 200), width=5)
+    AV, ax, ay = 200, 34, 50
+    av, mask = await _card_avatar(member, AV, grayscale=True)
+    draw.ellipse([ax-8, ay-8, ax+AV+8, ay+AV+8], outline=(140, 162, 202), width=5)
     if av:
-        img.paste(av, (cx, cy), mask)
+        img.paste(av, (ax, ay), mask)
     else:
-        draw.ellipse([cx, cy, cx+190, cy+190], fill=(45, 50, 65))
+        draw.ellipse([ax, ay, ax+AV, ay+AV], fill=(45, 50, 65))
 
-    f_hero  = _pf_font(52)
-    f_name  = _pf_font(42)
-    f_med   = _pf_font(24)
-    f_small = _pf_font(20, bold=False)
+    X = ax + AV + 44
+    f_hero = _pf_font(70)
+    f_name = _pf_font(48)
+    f_badge = _pf_font(28)
+    f_tag  = _pf_font(22)
 
-    draw.text((360, 74), "AU REVOIR", font=f_hero, fill=(225, 232, 245))
-    pseudo = member.display_name[:18]
-    draw.text((362, 148), pseudo, font=f_name, fill=(165, 180, 210))
+    draw.text((X, 40), "AU REVOIR", font=f_hero, fill=(228, 235, 248))
+
+    pseudo = member.display_name
+    if len(pseudo) > 15:
+        pseudo = pseudo[:14] + "…"
+    draw.text((X, 128), pseudo, font=f_name, fill=(158, 175, 208))
 
     n = member.guild.member_count
-    draw.rounded_rectangle([362, 214, 362+286, 214+44], radius=13, outline=(120, 145, 185), width=2)
-    draw.text((380, 224), f"IL RESTE {n} MEMBRES", font=f_med, fill=(180, 200, 230))
+    txt = f"IL RESTE {n} MEMBRES"
+    bw = int(draw.textlength(txt, font=f_badge)) + 40
+    draw.rounded_rectangle([X, 198, X+bw, 252], radius=15, outline=(120, 145, 185), width=2)
+    draw.text((X+20, 209), txt, font=f_badge, fill=(180, 200, 232))
 
-    draw.text((362, 286), "Les liens tissés ne disparaissent pas.", font=f_small, fill=(140, 155, 185))
-    draw.text((362, 322), "QG KDRAMA", font=f_med, fill=(120, 150, 195))
+    draw.text((W-160, H-42), "QG KDRAMA", font=f_tag, fill=(120, 150, 195))
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
     return buf
+
 
 # ============================================================
 #  🏆 SUCCÈS / ACHIEVEMENTS — 30 succès pour tout le serveur
@@ -10130,13 +10124,17 @@ async def on_member_join(member):
     ]
     prophetie = random.choice(prophecies).replace("{n}", str(n))
 
+    salon_guide = member.guild.get_channel(SALON_GUIDE_ID) if SALON_GUIDE_ID else None
+    lien_guide = (f"📖 Tout est expliqué dans {salon_guide.mention} — passe y jeter un œil.\n"
+                  if salon_guide else "")
+
     embed = discord.Embed(
         description=(
             f"🔮 **PROPHÉTIE N°{n:03d}**\n"
             f"> *{prophetie}*\n\n"
             f"{member.mention}, installe-toi !\n"
-            f"📖 Tape `.guide` pour comprendre comment tout marche ici.\n"
-            f"🎬 Ou lance `.dramarec` tout de suite pour ta première reco."
+            f"{lien_guide}"
+            f"🎬 Ou lance `.dramarec` tout de suite pour ta première recommandation."
         ),
         color=0xff6b9d)
     embed.set_footer(
