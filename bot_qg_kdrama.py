@@ -114,6 +114,10 @@ class PageView(ui.View):
 # ============================================================
 TOKEN = os.getenv("TOKEN")
 PREFIX = "."
+
+# ── Loup Garou : durées des phases (utilisées comme valeurs par défaut des vues) ──
+LG_DUREE_NUIT = 180   # secondes avant résolution automatique de la nuit
+LG_DUREE_JOUR = 300   # secondes de débat avant dépouillement automatique
 # ============================================================
 
 intents = discord.Intents.all()
@@ -8949,8 +8953,6 @@ async def lg_nuit_annonces(guild, game, ctx_channel):
 
 lg_games = {}  # {guild_id: game_data}
 
-LG_DUREE_NUIT = 180   # secondes avant résolution automatique de la nuit
-LG_DUREE_JOUR = 300   # secondes de débat avant dépouillement automatique
 
 async def _lg_timer_nuit(ctx, gid, jour):
     """Résout la nuit automatiquement si l'hôte ne le fait pas"""
