@@ -825,7 +825,8 @@ def build_help_pages(guild, is_admin=False):
     e.add_field(name="🛒 Dépenser", value=(
         "`.shop` — La boutique\n"
         "`.acheter <id>` — Acheter un article\n"
-        "`.utiliser <item> @joueur` — Utiliser un item de sabotage"
+        "`.utiliser <item> @joueur` — Utiliser un item de sabotage\n"
+        "`.retirerole` — Retirer un rôle acheté de ton profil *(sans remboursement)*"
     ), inline=False)
     e.add_field(name="🎲 Tenter sa chance", value=(
         "`.slot` — Machine à sous\n"
@@ -2083,11 +2084,16 @@ def gacha_tirer(uid=None):
         if rare_pool and random.random() < 0.4:
             rarity_boost[uid] -= 1
             return random.choice(rare_pool)
-    poids_total = sum(RARETE_POIDS[ANIME_CARDS_DB[k]["rarete"]] for k in pool)
+    # Nuit de Chasse : Mythique ×3 et Légendaire ×2
+    poids = dict(RARETE_POIDS)
+    if nuit_chasse_active:
+        poids["Mythique"] *= 3
+        poids["Légendaire"] *= 2
+    poids_total = sum(poids[ANIME_CARDS_DB[k]["rarete"]] for k in pool)
     r = random.randint(1, poids_total)
     cumul = 0
     for key in pool:
-        cumul += RARETE_POIDS[ANIME_CARDS_DB[key]["rarete"]]
+        cumul += poids[ANIME_CARDS_DB[key]["rarete"]]
         if r <= cumul:
             return key
     return random.choice(pool)
@@ -2669,6 +2675,60 @@ def build_shop_pages():
         pages.append(embed)
     return pages
 
+
+class RetireRoleView(ui.View):
+    """Menu pour retirer un rôle boutique de son profil"""
+    def __init__(self, membre, roles, timeout=60):
+        super().__init__(timeout=timeout)
+        self.membre = membre
+        opts = [discord.SelectOption(label=r.name[:100], value=str(r.id)) for r in roles[:25]]
+        s = ui.Select(placeholder="🗑️ Choisir le rôle à retirer…", options=opts)
+        s.callback = self._cb
+        self.add_item(s)
+        self.select = s
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.membre.id:
+            await interaction.response.send_message("❌ Utilise ta propre commande !", ephemeral=True)
+            return False
+        return True
+
+    async def _cb(self, interaction):
+        role = interaction.guild.get_role(int(self.select.values[0]))
+        if not role:
+            return await interaction.response.send_message("❌ Rôle introuvable.", ephemeral=True)
+        try:
+            await self.membre.remove_roles(role, reason="Retiré par le membre")
+        except discord.Forbidden:
+            return await interaction.response.send_message(
+                "❌ Je ne peux pas retirer ce rôle — mon rôle est trop bas dans la liste.", ephemeral=True)
+        for it in self.children:
+            it.disabled = True
+        await interaction.response.edit_message(embed=discord.Embed(
+            title="🗑️ Rôle retiré",
+            description=(f"**{role.name}** n'apparaît plus sur ton profil.\n\n"
+                         f"⚠️ *Aucun remboursement — il faudra le racheter en boutique si tu le regrettes.*"),
+            color=0x95a5a6), view=self)
+        self.stop()
+
+@bot.command(name="retirerole", aliases=["enleverrole", "removerole", "roleoff"])
+async def retirerole_cmd(ctx):
+    """Retire un rôle boutique de ton profil — .retirerole"""
+    noms = {n for n, _ in ROLES_BOUTIQUE.values()}
+    possedes = [r for r in ctx.author.roles if r.name in noms]
+    if not possedes:
+        return await ctx.send(embed=discord.Embed(
+            description="🎭 Tu ne possèdes aucun rôle acheté en boutique.",
+            color=0x95a5a6))
+    liste = "\n".join(f"• **{r.name}**" for r in possedes)
+    embed = discord.Embed(
+        title="🎭 Faire le tri dans tes rôles",
+        description=(f"Tu possèdes **{len(possedes)} rôle(s)** de la boutique :\n{liste}\n\n"
+                     f"Choisis celui à retirer dans le menu.\n"
+                     f"⚠️ **Aucun remboursement** — pour le récupérer, il faudra le racheter."),
+        color=0xff6b9d)
+    await ctx.send(embed=embed, view=RetireRoleView(ctx.author, possedes))
+
 @bot.command(name="shop", aliases=["boutique", "magasin"])
 async def shop_cmd(ctx):
     """Boutique — .shop"""
@@ -3132,12 +3192,13 @@ async def run_invasion(channel, guild):
                          f"*Celui qui porte le coup fatal reçoit un bonus.*"),
             color=0xe74c3c), salon)
 
-async def run_coffre(channel, gain=None):
+async def run_coffre(channel, gain=None, guild=None):
     """📦 Coffre — premier à .ouvrir gagne les pièces"""
     import time as _t
     gain = gain or random.randint(100, 500)
     coffre_actif[channel.id] = {"contenu": gain, "expires": _t.time() + 300}
-    await channel.send(embed=discord.Embed(
+    ping = get_event_ping(guild, "gacha") if guild else ""
+    await channel.send(ping, embed=discord.Embed(
         title="📦 Un coffre mystérieux est apparu !",
         description=(f"Tape `.ouvrir` rapidement pour récupérer les **{gain} pièces** à l'intérieur !\n"
                      f"⏰ Disponible pendant **5 minutes** — un seul gagnant !"),
@@ -3164,7 +3225,7 @@ async def run_nuit_chasse(channel, guild, duree=7200):
     ping = get_event_ping(guild, "gacha")
     await channel.send(ping, embed=discord.Embed(
         title="🌙 NUIT DE CHASSE !",
-        description=(f"🔴 Les taux **Mythique** sont **DOUBLÉS** pendant **{duree//3600} heures** !\n"
+        description=(f"🔴 Taux **Mythique ×3** et **Légendaire ×2** pendant **{duree//3600} heures** !\n"
                      f"C'est le moment de roll avec `.ga` ! 🎰"),
         color=0x9b59b6))
     await asyncio.sleep(duree)
@@ -3216,11 +3277,11 @@ async def run_marche_noir(channel, guild):
     if len(candidates) < 3:
         return await channel.send("❌ Pas assez de cartes rares disponibles pour ouvrir le Marché Noir.")
     marche_noir_actif.clear()
-    prix_map = {"Mythique": 8000, "Légendaire": 5000, "Épique": 3000}
+    prix_map = {"Mythique": 25000, "Légendaire": 14000, "Épique": 7000}
     desc = "🕶️ **Le Marché Noir ouvre ses portes pour 24h !**\n*Prix gonflés, mais cartes rares garanties...*\n\n"
     for k in random.sample(candidates, 3):
         cc = ANIME_CARDS_DB[k]
-        prix = prix_map.get(cc["rarete"], 3000) + random.randint(500, 2000)
+        prix = prix_map.get(cc["rarete"], 7000) + random.randint(1000, 5000)
         marche_noir_actif[k] = {"prix": prix, "expires": _t.time() + 86400}
         desc += f"{RARETE_EMOJI.get(cc['rarete'],'▫️')} **{cc['nom']}** — **{prix:,} pièces** → `.marcheacheter {k}`\n"
     ping = get_event_ping(guild, "gacha")
@@ -3954,23 +4015,37 @@ async def loto_cmd(ctx):
 #  PING INTELLIGENT + DONNÉES DES EVENTS
 # ============================================================
 def get_event_ping(guild, ping_type):
-    """Retourne la mention du rôle à ping selon le type d'event.
-    ping_type: 'anime', 'gacha', 'girls', 'everyone', 'none'"""
-    if ping_type == "everyone":
-        return "@everyone"
-    elif ping_type == "anime" and ROLE_ANIME_ID:
-        role = guild.get_role(ROLE_ANIME_ID)
-        return role.mention if role else ""
-    elif ping_type == "gacha" and ROLE_GACHA_ID:
-        role = guild.get_role(ROLE_GACHA_ID)
-        return role.mention if role else ""
-    elif ping_type == "girls" and ROLE_GIRLS_ID:
-        role = guild.get_role(ROLE_GIRLS_ID)
-        return role.mention if role else ""
-    return ""
+    """Mention à utiliser selon le type d'event.
+    Types ciblés : 'anime', 'gacha', 'girls'. Sinon → @everyone.
+    Si le rôle ciblé n'est pas configuré, on retombe sur @everyone
+    pour que personne ne rate l'event."""
+    roles_cibles = {"anime": ROLE_ANIME_ID, "gacha": ROLE_GACHA_ID, "girls": ROLE_GIRLS_ID}
+    if ping_type == "none":
+        return ""
+    if ping_type in roles_cibles:
+        rid = roles_cibles[ping_type]
+        if rid:
+            role = guild.get_role(rid)
+            if role:
+                return role.mention
+        return "@everyone"   # rôle non configuré → on prévient tout le monde
+    return "@everyone"       # everyone, culture, ou type inconnu
 
 # Questions pour Question Éclair (avec thème pour ping ciblé)
 QUESTIONS_ECLAIR = [
+    # ── 🎬 KDRAMA — le cœur du serveur ──
+    {"q": "Dans quel drama Gong Yoo joue-t-il un gobelin immortel ?", "r": ["goblin", "guardian"], "theme": "everyone"},
+    {"q": "Dans Squid Game, quel bonbon faut-il découper sans le casser ?", "r": ["dalgona", "ppopgi"], "theme": "everyone"},
+    {"q": "Dans Crash Landing on You, dans quel pays atterrit Yoon Se-ri ?", "r": ["corée du nord", "coree du nord", "nord"], "theme": "everyone"},
+    {"q": "Quel drama suit un avocat de la mafia italienne revenu en Corée ?", "r": ["vincenzo"], "theme": "everyone"},
+    {"q": "Dans Itaewon Class, comment s'appelle le bar de Park Sae-royi ?", "r": ["danbam", "dan bam"], "theme": "everyone"},
+    {"q": "Dans Reply 1988, dans quel quartier de Séoul vivent les familles ?", "r": ["ssangmun-dong", "ssangmun"], "theme": "everyone"},
+    {"q": "Combien d'épisodes compte la saison 1 de Squid Game ?", "r": ["9", "neuf"], "theme": "everyone"},
+    {"q": "Dans Extraordinary Attorney Woo, quel animal fascine l'héroïne ?", "r": ["baleine", "baleines", "whale"], "theme": "everyone"},
+    {"q": "Quel drama historique mêle dynastie Joseon et zombies ?", "r": ["kingdom"], "theme": "everyone"},
+    {"q": "Dans Business Proposal, comment les héros se rencontrent-ils ?", "r": ["blind date", "rendez-vous arrangé", "blinddate"], "theme": "everyone"},
+
+    # ── ✨ ANIME ──
     {"q": "Quel est le nom du renard à 9 queues dans Naruto ?", "r": ["kurama", "kyubi", "kyuubi"], "theme": "anime"},
     {"q": "Comment s'appelle l'épée de Tanjiro dans Demon Slayer ?", "r": ["nichirin", "lame nichirin"], "theme": "anime"},
     {"q": "Quel est le fruit du démon de Luffy ?", "r": ["gomu gomu", "gum gum", "gomu gomu no mi"], "theme": "anime"},
@@ -3979,27 +4054,49 @@ QUESTIONS_ECLAIR = [
     {"q": "Quelle technique signature utilise Gojo dans JJK ?", "r": ["infini", "infinity", "limitless", "illimité"], "theme": "anime"},
     {"q": "Quel personnage dit 'Plus Ultra' dans My Hero Academia ?", "r": ["all might", "allmight"], "theme": "anime"},
     {"q": "Comment s'appelle le carnet dans Death Note ?", "r": ["death note", "cahier de la mort"], "theme": "anime"},
-    {"q": "Quelle est la rareté la plus haute du gacha QG ?", "r": ["mythique"], "theme": "gacha"},
-    {"q": "Quelle commande permet de tirer une carte ?", "r": [".ga", "ga", ".roll", "roll"], "theme": "gacha"},
-    {"q": "Combien de rolls as-tu au maximum dans le gacha ?", "r": ["10", "dix"], "theme": "gacha"},
-    {"q": "Quelle est la capitale de la Corée du Sud ?", "r": ["seoul", "séoul"], "theme": "culture"},
-    {"q": "Dans quel pays se déroulent les K-dramas ?", "r": ["corée", "corée du sud", "coree"], "theme": "culture"},
-    {"q": "Quel drama Netflix coréen a explosé en 2021 avec un jeu mortel ?", "r": ["squid game"], "theme": "culture"},
-    {"q": "Combien font 7 × 8 ?", "r": ["56"], "theme": "culture"},
+    {"q": "Dans Jujutsu Kaisen, quelle malédiction est scellée dans Yuji ?", "r": ["sukuna", "ryomen sukuna"], "theme": "anime"},
+    {"q": "Dans One Piece, comment s'appelle l'équipage de Luffy ?", "r": ["chapeau de paille", "chapeaux de paille", "mugiwara"], "theme": "anime"},
+
+    # ── 🌍 CULTURE GÉNÉRALE ──
+    {"q": "Quelle est la capitale de la Corée du Sud ?", "r": ["seoul", "séoul"], "theme": "everyone"},
+    {"q": "Quelle est la monnaie de la Corée du Sud ?", "r": ["won", "le won"], "theme": "everyone"},
+    {"q": "Combien font 7 × 8 ?", "r": ["56"], "theme": "everyone"},
+    {"q": "Quel est le plus grand océan du monde ?", "r": ["pacifique", "océan pacifique"], "theme": "everyone"},
+    {"q": "Combien de continents y a-t-il sur Terre ?", "r": ["7", "sept"], "theme": "everyone"},
+    {"q": "Quelle planète est la plus proche du Soleil ?", "r": ["mercure"], "theme": "everyone"},
+    {"q": "Quel est le symbole chimique de l'or ?", "r": ["au"], "theme": "everyone"},
+    {"q": "Combien de joueurs composent une équipe de foot sur le terrain ?", "r": ["11", "onze"], "theme": "everyone"},
+    {"q": "Dans quel pays se trouve la Tour de Pise ?", "r": ["italie", "l'italie"], "theme": "everyone"},
+    {"q": "Combien de côtés a un hexagone ?", "r": ["6", "six"], "theme": "everyone"},
 ]
 
 # Sujets de débat (avec 2 options + thème)
 DEBATS = [
+    # ── 🎬 KDRAMA ──
+    {"sujet": "Le meilleur genre de kdrama ?", "a": "Romance 💜", "b": "Thriller 🔪", "theme": "everyone"},
+    {"sujet": "Le drama Netflix le plus marquant ?", "a": "Squid Game 🦑", "b": "Kingdom 👑", "theme": "everyone"},
+    {"sujet": "Team ?", "a": "Second lead 💔", "b": "Male lead 😎", "theme": "everyone"},
+    {"sujet": "Un drama devrait finir…", "a": "Fin ouverte 🌫️", "b": "Fin fermée 🔒", "theme": "everyone"},
+    {"sujet": "Format idéal ?", "a": "16 épisodes 🎬", "b": "50 épisodes 📺", "theme": "everyone"},
+    {"sujet": "Tu regardes comment ?", "a": "VOSTFR direct 🇰🇷", "b": "J'attends la VF 🇫🇷", "theme": "everyone"},
+
+    # ── ✨ ANIME ──
     {"sujet": "Meilleur protagoniste shonen ?", "a": "Luffy 🏴‍☠️", "b": "Naruto 🍥", "theme": "anime"},
     {"sujet": "Le meilleur anime de combat ?", "a": "Demon Slayer 🗡️", "b": "Jujutsu Kaisen 💥", "theme": "anime"},
     {"sujet": "Qui gagnerait ?", "a": "Goku 🐉", "b": "Saitama 👊", "theme": "anime"},
     {"sujet": "Le meilleur Hokage ?", "a": "Minato ⚡", "b": "Itachi 🔴", "theme": "anime"},
     {"sujet": "Meilleur studio d'animation ?", "a": "MAPPA", "b": "Ufotable", "theme": "anime"},
-    {"sujet": "Sub ou Dub ?", "a": "VOSTFR 🇯🇵", "b": "VF 🇫🇷", "theme": "anime"},
-    {"sujet": "Le meilleur genre de K-drama ?", "a": "Romance 💜", "b": "Thriller 🔪", "theme": "culture"},
+    {"sujet": "Un anime sans son opening…", "a": "C'est mort 🎵", "b": "Je skip toujours ⏭️", "theme": "anime"},
+
+    # ── 🗣️ LA VIE DE TOUS LES JOURS ──
+    {"sujet": "Tu préfères…", "a": "Dormir 12h 😴", "b": "Ne jamais dormir ⚡", "theme": "everyone"},
+    {"sujet": "L'ananas sur la pizza ?", "a": "Oui, et j'assume 🍍", "b": "C'est un crime 🚫", "theme": "everyone"},
+    {"sujet": "La douche, c'est…", "a": "Le matin 🌅", "b": "Le soir 🌙", "theme": "everyone"},
+    {"sujet": "Pour joindre quelqu'un ?", "a": "J'appelle 📞", "b": "J'écris, jamais j'appelle 💬", "theme": "everyone"},
+    {"sujet": "Le petit-déj idéal ?", "a": "Sucré 🥐", "b": "Salé 🍳", "theme": "everyone"},
+    {"sujet": "Tu préfères…", "a": "Été ☀️", "b": "Hiver ❄️", "theme": "everyone"},
+    {"sujet": "Une soirée parfaite ?", "a": "Sortir avec du monde 🎉", "b": "Rester chez soi 🛋️", "theme": "everyone"},
     {"sujet": "Team ?", "a": "Chat 🐱", "b": "Chien 🐶", "theme": "everyone"},
-    {"sujet": "Le meilleur repas ?", "a": "Pizza 🍕", "b": "Burger 🍔", "theme": "everyone"},
-    {"sujet": "Plutôt ?", "a": "Été ☀️", "b": "Hiver ❄️", "theme": "everyone"},
 ]
 
 @bot.command(name="lancerevent")
@@ -4041,7 +4138,7 @@ async def lancerevent_cmd(ctx, nom: str = None):
 
     # ── Events à effet réel ──
     if nom in ("coffre",):
-        return await run_coffre(channel)
+        return await run_coffre(channel, guild=ctx.guild)
     if nom in ("colis",):
         return await run_colis(channel, ctx.guild)
     if nom in ("nuitchasse", "chasse"):
@@ -4105,13 +4202,17 @@ async def stopervent_cmd(ctx):
 
 @bot.command(name="setsalon")
 @commands.has_permissions(administrator=True)
-async def setsalon_cmd(ctx, type_salon: str = None):
+async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
     global SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_CASINO_ID, SALON_EVENT_ID
     global SALON_LEVELUP_ID, SALON_COMBAT_ID, SALON_DUEL_ID, SALON_DASHBOARD_ID
     global SALON_BIENVENUE_ID, SALON_AUREVOIR_ID, SALON_HOF_ID, SALON_GUIDE_ID, SALON_INVITATION_ID
     global SALON_BOOST_ID, SALON_REGLEMENT_ID
     if not type_salon:
-        return await ctx.send("❌ Types : `gacha` `boutique` `casino` `event` `levelup` `guide` `combat` `duel` `dashboard` `bienvenue` `aurevoir` `halloffame` `girlsonly` `annonces` `invitation` `boost` `reglement`")
+        return await ctx.send(
+            "❌ Types : `gacha` `boutique` `casino` `event` `levelup` `guide` `combat` `duel` "
+            "`dashboard` `bienvenue` `aurevoir` `halloffame` `girlsonly` `annonces` `invitation` "
+            "`boost` `reglement`\n\n"
+            "💡 Pour le règlement : `.setsalon reglement @RôleMembre`")
     mapping = {
         "gacha": "SALON_GACHA_ID", "boutique": "SALON_BOUTIQUE_ID",
         "casino": "SALON_CASINO_ID", "event": "SALON_EVENT_ID",
@@ -4160,6 +4261,50 @@ async def setsalon_cmd(ctx, type_salon: str = None):
                 await asyncio.sleep(0.4)
         except Exception as e:
             print(f"[Guide] Erreur publication : {e}")
+
+    # Le salon règlement reçoit le règlement + la validation par réaction
+    if t == "reglement":
+        global REGLEMENT_ROLE_ID, REGLEMENT_MSG_ID
+        if role:
+            REGLEMENT_ROLE_ID = role.id
+        cible = ctx.guild.get_role(REGLEMENT_ROLE_ID) if REGLEMENT_ROLE_ID else None
+        if not cible:
+            return await ctx.send(embed=discord.Embed(
+                description=("❌ Précise le rôle à donner : `.setsalon reglement @RôleMembre`\n"
+                             "*C'est le rôle que recevront ceux qui acceptent le règlement.*"),
+                color=0xe74c3c))
+        embed = discord.Embed(
+            title="📜  Règlement du QG Kdrama",
+            description=(
+                "Bienvenue ! Avant d'accéder au serveur, prends une minute pour lire ça.\n"
+                "*En validant, tu t'engages à les respecter.*"),
+            color=0xff6b9d)
+        embed.add_field(name="1️⃣  Respect avant tout", value=(
+            "Aucune insulte, aucun harcèlement, aucune discrimination. "
+            "On est là pour passer un bon moment ensemble."), inline=False)
+        embed.add_field(name="2️⃣  Pas de spam", value=(
+            "Évite les messages répétés, les majuscules à outrance et les mentions abusives."), inline=False)
+        embed.add_field(name="3️⃣  Spoilers", value=(
+            "Utilise les balises spoiler `||comme ça||` pour tout ce qui gâche une intrigue. "
+            "Personne n'a envie d'apprendre la fin d'un drama par accident."), inline=False)
+        embed.add_field(name="4️⃣  Contenu approprié", value=(
+            "Rien de choquant, illégal ou NSFW. Le serveur est ouvert à tous."), inline=False)
+        embed.add_field(name="5️⃣  Les bons salons", value=(
+            "Chaque salon a son sujet — le gacha dans le gacha, les dramas dans les dramas."), inline=False)
+        embed.add_field(name="6️⃣  Le staff a le dernier mot", value=(
+            "En cas de litige, la décision du staff s'applique. Un souci ? Ouvre un ticket avec `.ticket`."), inline=False)
+        embed.add_field(name="\u200b", value=(
+            f"### ✅  Réagis ci-dessous pour accepter\n"
+            f"Tu recevras le rôle **{cible.name}** et accéderas au reste du serveur."), inline=False)
+        embed.set_footer(text="QG Kdrama • Merci et bon séjour 🌸",
+                         icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
+        try:
+            msg = await ctx.channel.send(embed=embed)
+            await msg.add_reaction("✅")
+            REGLEMENT_MSG_ID = msg.id
+            sauvegarder_salons()
+        except discord.Forbidden:
+            return await ctx.send("❌ Je n'ai pas la permission d'écrire ou de réagir ici !")
 
     # Le salon boutique reçoit directement la boutique
     if t == "boutique":
@@ -4411,7 +4556,7 @@ async def trigger_scheduled_event(guild, event_name):
     }
     try:
         if event_name == "coffre":
-            await run_coffre(channel)
+            await run_coffre(channel, guild=guild)
         elif event_name in dispatch:
             await dispatch[event_name](channel, guild)
         else:
@@ -9991,20 +10136,35 @@ marche_noir_actif = {}      # {card_key: {prix, expires}}
 # ─────────────────────────────────────────────────────────────
 #  📦 SPAWN COFFRE — toutes les 30-90 min, 1 gagnant, 100-500p
 # ─────────────────────────────────────────────────────────────
-@tasks.loop(minutes=60)
+coffre_planning = {"date": None, "heure": None, "minute": None, "fait": False}
+
+@tasks.loop(minutes=5)
 async def spawn_coffre():
-    """Coffre aléatoire (~30% par heure). Premier à .ouvrir gagne."""
+    """Un seul coffre par jour, à une heure tirée au hasard — jamais en même
+    temps qu'un event programmé."""
     if not planning_actif:
         return
-    if random.random() > 0.30:
+    now = datetime.datetime.now()
+    # Nouveau jour → on tire l'horaire du coffre
+    if coffre_planning["date"] != now.date():
+        prises = {ev["heure"] for ev in scheduled_events if ev.get("jour_num") == now.weekday()}
+        libres = [h for h in range(11, 23) if h not in prises] or list(range(11, 23))
+        coffre_planning.update({"date": now.date(), "heure": random.choice(libres),
+                                "minute": random.randint(0, 55), "fait": False})
+        print(f"[Coffre] Prévu aujourd'hui à {coffre_planning['heure']}h{coffre_planning['minute']:02d}")
+    if coffre_planning["fait"]:
         return
+    if now.hour != coffre_planning["heure"] or now.minute < coffre_planning["minute"]:
+        return
+    coffre_planning["fait"] = True
     for guild in bot.guilds:
         try:
             channel = (guild.get_channel(SALON_GACHA_ID) if SALON_GACHA_ID else None) or guild.system_channel
             if channel:
-                await run_coffre(channel)
+                await run_coffre(channel, gain=random.randint(300, 1200), guild=guild)
         except Exception as e:
             print(f"[spawn_coffre] Erreur: {e}")
+
 
 # ─────────────────────────────────────────────────────────────
 #  🌙 NUIT DE CHASSE — boost Mythique x2 pendant 2h
@@ -10027,12 +10187,12 @@ async def nuit_de_chasse():
 # ─────────────────────────────────────────────────────────────
 #  🕶️ MARCHÉ NOIR — toutes les 48h, 3 cartes rares à acheter
 # ─────────────────────────────────────────────────────────────
-@tasks.loop(hours=48)
+@tasks.loop(hours=72)
 async def marche_noir_task():
-    """Toutes les 48h, 60% de chance — Marché Noir pendant 24h"""
+    """Toutes les 72h, 50% de chance — Marché Noir pendant 24h"""
     if not planning_actif:
         return
-    if random.random() > 0.60:
+    if random.random() > 0.50:
         return
     for guild in bot.guilds:
         try:
@@ -10260,8 +10420,9 @@ async def on_raw_reaction_add(payload):
         return
     emoji = str(payload.emoji)
 
-    # ── Règlement : ✅ donne le rôle Membre ──
-    if SALON_REGLEMENT_ID and payload.channel_id == SALON_REGLEMENT_ID and emoji == "✅":
+    # ── Règlement : ✅ donne le rôle d'accès ──
+    if (SALON_REGLEMENT_ID and payload.channel_id == SALON_REGLEMENT_ID and emoji == "✅"
+            and (not REGLEMENT_MSG_ID or payload.message_id == REGLEMENT_MSG_ID)):
         role = guild.get_role(REGLEMENT_ROLE_ID) if REGLEMENT_ROLE_ID else None
         if not role:
             role = discord.utils.get(guild.roles, name=ROLE_MEMBRE_NAME)
