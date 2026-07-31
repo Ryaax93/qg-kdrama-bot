@@ -5290,53 +5290,58 @@ async def _card_avatar(member, size=200, grayscale=False):
         return None, None
 
 async def generate_welcome_card(member):
-    """Carte de bienvenue — format compact, texte lisible sans zoomer."""
-    W, H = 760, 250
+    """Carte de bienvenue — titre pleine largeur pour un texte réellement lisible."""
+    W, H = 640, 240
     img = Image.new("RGB", (W, H), (16, 8, 30))
     draw = ImageDraw.Draw(img)
     for y in range(H):
         t = y / H
-        draw.line([(0, y), (W, y)], fill=(int(26 + t*72), int(9 + t*15), int(52 + t*58)))
+        draw.line([(0, y), (W, y)], fill=(int(28 + t*76), int(10 + t*16), int(55 + t*60)))
     glow = Image.new("RGB", (W, H), (0, 0, 0))
     gd = ImageDraw.Draw(glow)
-    gd.ellipse([-130, -150, 250, 230], fill=(235, 60, 155))
-    gd.ellipse([W-250, H-140, W+140, H+170], fill=(95, 50, 225))
-    glow = glow.filter(ImageFilter.GaussianBlur(80))
+    gd.ellipse([-120, -140, 220, 200], fill=(238, 62, 158))
+    gd.ellipse([W-210, H-120, W+120, H+150], fill=(98, 52, 228))
+    glow = glow.filter(ImageFilter.GaussianBlur(70))
     img = Image.blend(img, glow, 0.5)
     draw = ImageDraw.Draw(img)
-    draw.rounded_rectangle([10, 10, W-10, H-10], radius=18, outline=(255, 150, 210), width=2)
+    draw.rounded_rectangle([8, 8, W-8, H-8], radius=16, outline=(255, 150, 210), width=2)
 
-    # Avatar bien visible à gauche
-    AV, ax, ay = 176, 28, 37
+    f_hero  = _pf_font(76)
+    f_name  = _pf_font(50)
+    f_badge = _pf_font(28)
+    f_tag   = _pf_font(17)
+
+    # ── Titre sur toute la largeur ──
+    titre = "BIENVENUE"
+    tw = draw.textlength(titre, font=f_hero)
+    tx = (W - tw) / 2
+    draw.text((tx + 3, 25), titre, font=f_hero, fill=(150, 38, 108))
+    draw.text((tx, 21),     titre, font=f_hero, fill=(255, 255, 255))
+
+    # ── Avatar + infos en dessous ──
+    AV, ax, ay = 108, 26, 108
     av, mask = await _card_avatar(member, AV)
-    draw.ellipse([ax-9, ay-9, ax+AV+9, ay+AV+9], outline=(255, 90, 190), width=6)
-    draw.ellipse([ax-3, ay-3, ax+AV+3, ay+AV+3], outline=(150, 220, 255), width=2)
+    draw.ellipse([ax-6, ay-6, ax+AV+6, ay+AV+6], outline=(255, 90, 190), width=5)
     if av:
         img.paste(av, (ax, ay), mask)
     else:
         draw.ellipse([ax, ay, ax+AV, ay+AV], fill=(70, 40, 110))
 
-    X = ax + AV + 34
-    f_hero = _pf_font(72)
-    f_name = _pf_font(46)
-    f_badge = _pf_font(28)
-    f_tag  = _pf_font(19)
-
-    draw.text((X+4, 32), "BIENVENUE", font=f_hero, fill=(150, 40, 110))
-    draw.text((X, 28),   "BIENVENUE", font=f_hero, fill=(255, 255, 255))
-
+    X = ax + AV + 26
     pseudo = member.display_name
-    if len(pseudo) > 15:
-        pseudo = pseudo[:14] + "…"
-    draw.text((X, 112), pseudo, font=f_name, fill=(255, 210, 240))
+    while draw.textlength(pseudo, font=f_name) > W - X - 24 and len(pseudo) > 4:
+        pseudo = pseudo[:-1]
+    if pseudo != member.display_name:
+        pseudo += "…"
+    draw.text((X, 112), pseudo, font=f_name, fill=(255, 212, 240))
 
     n = member.guild.member_count
     txt = f"MEMBRE N°{n:03d}"
-    bw = int(draw.textlength(txt, font=f_badge)) + 40
-    draw.rounded_rectangle([X, 172, X+bw, 222], radius=14, fill=(255, 75, 180))
-    draw.text((X+20, 181), txt, font=f_badge, fill=(255, 255, 255))
+    bw = int(draw.textlength(txt, font=f_badge)) + 32
+    draw.rounded_rectangle([X, 176, X+bw, 222], radius=13, fill=(255, 75, 180))
+    draw.text((X+16, 184), txt, font=f_badge, fill=(255, 255, 255))
 
-    draw.text((W-138, H-34), "QG KDRAMA", font=f_tag, fill=(255, 130, 205))
+    draw.text((W-108, H-28), "QG KDRAMA", font=f_tag, fill=(255, 135, 208))
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -5345,50 +5350,55 @@ async def generate_welcome_card(member):
 
 
 async def generate_goodbye_card(member):
-    """Carte d'aurevoir — même format compact, palette froide."""
-    W, H = 760, 250
+    """Carte d'aurevoir — même mise en page, palette froide."""
+    W, H = 640, 240
     img = Image.new("RGB", (W, H), (10, 12, 22))
     draw = ImageDraw.Draw(img)
     for y in range(H):
         t = y / H
-        draw.line([(0, y), (W, y)], fill=(int(15 + t*36), int(19 + t*42), int(34 + t*56)))
+        draw.line([(0, y), (W, y)], fill=(int(16 + t*38), int(20 + t*44), int(36 + t*58)))
     glow = Image.new("RGB", (W, H), (0, 0, 0))
     gd = ImageDraw.Draw(glow)
-    gd.ellipse([W-290, -130, W+130, 240], fill=(42, 84, 155))
-    gd.ellipse([-160, H-140, 190, H+160], fill=(62, 62, 95))
-    glow = glow.filter(ImageFilter.GaussianBlur(85))
+    gd.ellipse([W-240, -110, W+110, 200], fill=(44, 86, 158))
+    gd.ellipse([-130, H-120, 160, H+140], fill=(64, 64, 98))
+    glow = glow.filter(ImageFilter.GaussianBlur(75))
     img = Image.blend(img, glow, 0.44)
     draw = ImageDraw.Draw(img)
-    draw.rounded_rectangle([10, 10, W-10, H-10], radius=18, outline=(120, 142, 178), width=2)
+    draw.rounded_rectangle([8, 8, W-8, H-8], radius=16, outline=(120, 142, 178), width=2)
 
-    AV, ax, ay = 176, 28, 37
+    f_hero  = _pf_font(72)
+    f_name  = _pf_font(48)
+    f_badge = _pf_font(25)
+    f_tag   = _pf_font(17)
+
+    titre = "AU REVOIR"
+    tw = draw.textlength(titre, font=f_hero)
+    tx = (W - tw) / 2
+    draw.text((tx, 24), titre, font=f_hero, fill=(230, 237, 250))
+
+    AV, ax, ay = 108, 26, 108
     av, mask = await _card_avatar(member, AV, grayscale=True)
-    draw.ellipse([ax-8, ay-8, ax+AV+8, ay+AV+8], outline=(140, 162, 202), width=5)
+    draw.ellipse([ax-6, ay-6, ax+AV+6, ay+AV+6], outline=(142, 164, 204), width=5)
     if av:
         img.paste(av, (ax, ay), mask)
     else:
         draw.ellipse([ax, ay, ax+AV, ay+AV], fill=(45, 50, 65))
 
-    X = ax + AV + 34
-    f_hero = _pf_font(68)
-    f_name = _pf_font(45)
-    f_badge = _pf_font(25)
-    f_tag  = _pf_font(19)
-
-    draw.text((X, 30), "AU REVOIR", font=f_hero, fill=(228, 235, 248))
-
+    X = ax + AV + 26
     pseudo = member.display_name
-    if len(pseudo) > 15:
-        pseudo = pseudo[:14] + "…"
-    draw.text((X, 112), pseudo, font=f_name, fill=(158, 175, 208))
+    while draw.textlength(pseudo, font=f_name) > W - X - 24 and len(pseudo) > 4:
+        pseudo = pseudo[:-1]
+    if pseudo != member.display_name:
+        pseudo += "…"
+    draw.text((X, 112), pseudo, font=f_name, fill=(160, 177, 210))
 
     n = member.guild.member_count
     txt = f"IL RESTE {n} MEMBRES"
-    bw = int(draw.textlength(txt, font=f_badge)) + 40
-    draw.rounded_rectangle([X, 172, X+bw, 220], radius=14, outline=(120, 145, 185), width=2)
-    draw.text((X+20, 181), txt, font=f_badge, fill=(180, 200, 232))
+    bw = int(draw.textlength(txt, font=f_badge)) + 32
+    draw.rounded_rectangle([X, 176, X+bw, 220], radius=13, outline=(122, 147, 187), width=2)
+    draw.text((X+16, 184), txt, font=f_badge, fill=(182, 202, 234))
 
-    draw.text((W-138, H-34), "QG KDRAMA", font=f_tag, fill=(120, 150, 195))
+    draw.text((W-108, H-28), "QG KDRAMA", font=f_tag, fill=(122, 152, 197))
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -10523,3 +10533,4 @@ while True:
         traceback.print_exc()
         print("🔄 Redémarrage dans 5 secondes...")
         time.sleep(5)
+    
