@@ -825,7 +825,7 @@ def build_help_pages(guild, is_admin=False):
     e.add_field(name="🛒 Dépenser", value=(
         "`.shop` — La boutique\n"
         "`.acheter <id>` — Acheter un article\n"
-        "`.utiliser <item> @joueur` — Utiliser un item offensif"
+        "`.utiliser <item> @joueur` — Utiliser un item de sabotage"
     ), inline=False)
     e.add_field(name="🎲 Tenter sa chance", value=(
         "`.slot` — Machine à sous\n"
@@ -1646,42 +1646,91 @@ async def leaderboard(ctx):
         color=0xf1c40f
     ))
 
+
+# ============================================================
+#  🎭 RÔLES BOUTIQUE — nom + couleur (créés automatiquement)
+# ============================================================
+ROLES_BOUTIQUE = {
+    # ── Prestige ──
+    "shadow":     ("🌑 Monarque des Ombres", 0x2c2f33),
+    "pillier":    ("🔥 Pillier du Soleil",   0xe67e22),
+    "drama_king": ("👑 Roi des Malédictions", 0x8e44ad),
+    "gamer_pro":  ("⚔️ Chasseur National",   0x2980b9),
+    "otaku":      ("🌀 Œil de Dieu",         0x1abc9c),
+    "vip":        ("💎 Rang S — VIP",        0xf1c40f),
+    # ── Girly — chacune sa couleur ──
+    "strawberry": ("🍓 Strawberry",  0xe8506e),  # rouge fraise
+    "coquette":   ("🎀 Coquette",    0xf7a8c4),  # rose poudré
+    "butterfly":  ("🦋 Butterfly",   0xa78bfa),  # lavande
+    "snowbunny":  ("❄️ Snow Bunny",  0xeaf2ff),  # blanc neige
+    "peachy":     ("🍑 Peachy",      0xffb37a),  # pêche
+    "bubblegum":  ("🫧 Bubblegum",   0xff6fd8),  # rose bonbon
+    "matcha":     ("🍵 Matcha",      0x9ccc65),  # vert pastel
+    "mermaid":    ("🌊 Mermaid",     0x4dd0e1),  # turquoise
+    "moongirl":   ("🌙 Moon Girl",   0x8ba3d9),  # bleu argenté
+    "maidsenpai": ("🕯️ Maid Senpai", 0xfff3d6),  # crème
+    "darkdoll":   ("🖤 Dark Doll",   0x5b4a6b),  # violet sombre
+    "slayqueen":  ("👑 Slay Queen",  0xffd166),  # or
+}
+
 # ============================================================
 #  BOUTIQUE — ITEMS
 # ============================================================
 # ============================================================
 SHOP_ITEMS = [
-    # ═══ RÔLES EXCLUSIFS (du plus cher au moins cher) ═══
-    {"id": "shadow",       "nom": "🌑 Monarque des Ombres",  "prix": 25000, "cat": "role",  "description": "Le rôle le plus rare du serveur — prestige absolu"},
-    {"id": "pillier",      "nom": "🔥 Pillier du Soleil",    "prix": 15000, "cat": "role",  "description": "Rôle légendaire des membres les plus actifs"},
-    {"id": "drama_king",   "nom": "👑 Roi des Malédictions", "prix": 12000, "cat": "role",  "description": "Le titre ultime façon Jujutsu Kaisen"},
-    {"id": "otaku",        "nom": "🌀 Oeil de Dieu",         "prix": 8000, "cat": "role",  "description": "Rôle exclusif des vrais connaisseurs d'animé"},
-    {"id": "vip",          "nom": "💎 Rang S — VIP",         "prix": 5000, "cat": "role",  "description": "Le rang des élus — accès exclusif aux salons VIP"},
-    {"id": "gamer_pro",    "nom": "⚔️ Chasseur National",   "prix": 9000,  "cat": "role",  "description": "Le rang des meilleurs gamers du QG"},
-    # ═══ BOOSTS & ROLLS (du plus cher au moins cher) ═══
-    {"id": "claim_10",     "nom": "⚡ Claim 10 min",         "prix": 3000, "cat": "boost", "description": "Réduit le claim reset à 10 min (permanent)"},
-    {"id": "boost_rarete", "nom": "🎯 Boost Rareté",         "prix": 1500, "cat": "boost", "description": "↑↑ chances Épique/Légendaire/Mythique pour 5 rolls (1x/jour)", "daily": True},
-    {"id": "claim_15",     "nom": "⚡ Claim 15 min",         "prix": 1500, "cat": "boost", "description": "Réduit le claim reset à 15 min (permanent)"},
-    {"id": "claim_20",     "nom": "⚡ Claim 20 min",         "prix": 800,  "cat": "boost", "description": "Réduit le claim reset à 20 min (permanent)"},
-    {"id": "rolls_5",      "nom": "🎰 +5 Rolls Gacha",       "prix": 700,  "cat": "boost", "description": "+5 rolls gacha instantanément !"},
-    {"id": "double_xp",    "nom": "⚡ Double XP (1h)",       "prix": 300,  "cat": "boost", "description": "Double ton XP pendant 1 heure !"},
-    {"id": "fav_slot_5",   "nom": "🔓 Slot Favoris (5)",     "prix": 3000, "cat": "boost", "description": "Passe ta limite de cartes favorites de 3 à 5 !"},
-    {"id": "fav_slot_10",  "nom": "🔓 Slot Favoris (10)",    "prix": 8000, "cat": "boost", "description": "Passe ta limite de cartes favorites à 10 ! (nécessite slot 5)"},
-    # ═══ ITEMS PVP — SABOTAGE & DÉFENSE (du plus cher au moins cher) ═══
-    {"id": "bombe_gacha",  "nom": "💣 Bombe Gacha",          "prix": 8000, "cat": "pvp",   "description": "Force un joueur à perdre sa dernière carte claimée 💀"},
-    {"id": "protection",   "nom": "🌟 Protection Divine",    "prix": 5000, "cat": "pvp",   "description": "Immunité totale contre tout sabotage pendant 2h"},
-    {"id": "cadenas",      "nom": "🔒 Cadenas",              "prix": 4000, "cat": "pvp",   "description": "Empêche un joueur de claim pendant 30 min"},
-    {"id": "amulette",     "nom": "🪬 Amulette",             "prix": 2500, "cat": "pvp",   "description": "Renvoie tout sabotage sur l'attaquant pendant 20 min"},
-    {"id": "cadeau",       "nom": "🎁 Cadeau Mystère",       "prix": 900,  "cat": "pvp",   "description": "Reçois une carte aléatoire Rare ou supérieure 🎲"},
-    {"id": "fantome",      "nom": "👻 Fantôme",              "prix": 800,  "cat": "pvp",   "description": "Rend une carte aléatoire d'un joueur invisible 30 min"},
-    {"id": "malediction",  "nom": "🎭 Malédiction Rare",     "prix": 700,  "cat": "pvp",   "description": "Force le prochain tirage d'un joueur à être Commun (2x/jour, 1x/joueur)", "daily": True},
-    {"id": "oracle",       "nom": "🔮 Oracle",               "prix": 499,  "cat": "pvp",   "description": "Une carte mystère a 1/5 chance de drop dans les 3 prochains tirages !"},
-    {"id": "vol_roll",     "nom": "🎯 Vol de Roll",          "prix": 500,  "cat": "pvp",   "description": "Vole 1 roll à un joueur ciblé (max 3x sur le même joueur)"},
-    {"id": "double_rien",  "nom": "🎰 Double ou Rien",       "prix": 200,  "cat": "pvp",   "description": "Double tes rolls ou les perds tous ! (max 4 rolls restants)"},
-    {"id": "shield",       "nom": "🛡️ Bouclier",            "prix": 600,  "cat": "pvp",   "description": "Protège du Sceau et Malédiction pendant 30 min"},
-    {"id": "freeze",       "nom": "🧊 Sceau des Ombres",     "prix": 500,  "cat": "pvp",   "description": "Bloque le claim d'un joueur 10 secondes (1x/jour)", "daily": True},
-    {"id": "curse",        "nom": "⏳ Malédiction Claim",    "prix": 400,  "cat": "pvp",   "description": "+5 min sur le claim d'un joueur (1x/jour)", "daily": True},
+    # ═══ 🎭 RÔLES PRESTIGE ═══
+    {"id": "shadow",     "nom": "🌑 Monarque des Ombres",  "prix": 25000, "cat": "role",  "description": "Le rôle le plus rare du serveur — noir absolu"},
+    {"id": "pillier",    "nom": "🔥 Pillier du Soleil",    "prix": 15000, "cat": "role",  "description": "Orange flamboyant, pour les plus actifs"},
+    {"id": "drama_king", "nom": "👑 Roi des Malédictions", "prix": 12000, "cat": "role",  "description": "Violet profond façon Jujutsu Kaisen"},
+    {"id": "gamer_pro",  "nom": "⚔️ Chasseur National",   "prix": 9000,  "cat": "role",  "description": "Bleu roi — le rang des chasseurs d'élite"},
+    {"id": "otaku",      "nom": "🌀 Œil de Dieu",          "prix": 8000,  "cat": "role",  "description": "Turquoise, pour les vrais connaisseurs"},
+    {"id": "vip",        "nom": "💎 Rang S — VIP",         "prix": 5000,  "cat": "role",  "description": "Doré — le rang des élus"},
+
+    # ═══ 💗 RÔLES GIRLY — une couleur différente pour chacun ═══
+    {"id": "slayqueen",  "nom": "👑 Slay Queen",  "prix": 7000, "cat": "girly", "description": "Doré éclatant — tu ne passes jamais inaperçue"},
+    {"id": "darkdoll",   "nom": "🖤 Dark Doll",   "prix": 5500, "cat": "girly", "description": "Violet sombre — poupée gothique"},
+    {"id": "mermaid",    "nom": "🌊 Mermaid",     "prix": 5000, "cat": "girly", "description": "Turquoise océan"},
+    {"id": "maidsenpai", "nom": "🕯️ Maid Senpai", "prix": 4800, "cat": "girly", "description": "Crème délicat — okaerinasai goshujin-sama"},
+    {"id": "snowbunny",  "nom": "❄️ Snow Bunny",  "prix": 4500, "cat": "girly", "description": "Blanc neige immaculé"},
+    {"id": "bubblegum",  "nom": "🫧 Bubblegum",   "prix": 4200, "cat": "girly", "description": "Rose bonbon pétillant"},
+    {"id": "moongirl",   "nom": "🌙 Moon Girl",   "prix": 4000, "cat": "girly", "description": "Bleu argenté clair de lune"},
+    {"id": "butterfly",  "nom": "🦋 Butterfly",   "prix": 3800, "cat": "girly", "description": "Lavande légère"},
+    {"id": "matcha",     "nom": "🍵 Matcha",      "prix": 3500, "cat": "girly", "description": "Vert pastel tout doux"},
+    {"id": "peachy",     "nom": "🍑 Peachy",      "prix": 3500, "cat": "girly", "description": "Pêche corail"},
+    {"id": "strawberry", "nom": "🍓 Strawberry",  "prix": 3000, "cat": "girly", "description": "Rouge fraise acidulé"},
+    {"id": "coquette",   "nom": "🎀 Coquette",    "prix": 3000, "cat": "girly", "description": "Rose poudré, nœuds et rubans"},
+
+    # ═══ 🎰 GACHA — BOOSTS ═══
+    {"id": "fav_slot_10",  "nom": "🔓 Slots Favoris (10)", "prix": 8000, "cat": "gacha_boost", "description": "Passe ta limite de cartes favorites à 10 (nécessite le slot 5)"},
+    {"id": "claim_10",     "nom": "⚡ Claim 10 min",        "prix": 3000, "cat": "gacha_boost", "description": "Réduit ton cooldown de claim à 10 min — permanent"},
+    {"id": "fav_slot_5",   "nom": "🔓 Slots Favoris (5)",   "prix": 3000, "cat": "gacha_boost", "description": "Passe ta limite de cartes favorites de 3 à 5"},
+    {"id": "boost_rarete", "nom": "🎯 Boost Rareté",        "prix": 1500, "cat": "gacha_boost", "description": "Chances Épique+ fortement augmentées pour 5 rolls", "daily": True},
+    {"id": "claim_15",     "nom": "⚡ Claim 15 min",        "prix": 1500, "cat": "gacha_boost", "description": "Réduit ton cooldown de claim à 15 min — permanent"},
+    {"id": "cadeau",       "nom": "🎁 Cadeau Mystère",      "prix": 900,  "cat": "gacha_boost", "description": "Une carte aléatoire Rare ou supérieure, offerte"},
+    {"id": "claim_20",     "nom": "⚡ Claim 20 min",        "prix": 800,  "cat": "gacha_boost", "description": "Réduit ton cooldown de claim à 20 min — permanent"},
+    {"id": "rolls_5",      "nom": "🎰 +5 Rolls",            "prix": 700,  "cat": "gacha_boost", "description": "Cinq tirages supplémentaires immédiatement"},
+    {"id": "oracle",       "nom": "🔮 Oracle",              "prix": 499,  "cat": "gacha_boost", "description": "Tes 3 prochains rolls ont 1 chance sur 5 de faire tomber une carte bonus"},
+    {"id": "double_rien",  "nom": "🎰 Double ou Rien",      "prix": 200,  "cat": "gacha_boost", "description": "Double tes rolls… ou les perd tous (4 rolls max)"},
+
+    # ═══ ⚔️ GACHA — SABOTAGE ═══
+    {"id": "bombe_gacha", "nom": "💣 Bombe Gacha",       "prix": 8000, "cat": "gacha_pvp", "description": "Fait perdre à un joueur sa dernière carte claimée"},
+    {"id": "cadenas",     "nom": "🔒 Cadenas",           "prix": 4000, "cat": "gacha_pvp", "description": "Empêche un joueur de claim pendant 30 min"},
+    {"id": "fantome",     "nom": "👻 Fantôme",           "prix": 800,  "cat": "gacha_pvp", "description": "Rend une carte d'un joueur invisible 30 min"},
+    {"id": "malediction", "nom": "🎭 Malédiction Rare",  "prix": 700,  "cat": "gacha_pvp", "description": "Force le prochain tirage d'un joueur à être Commun", "daily": True},
+    {"id": "vol_roll",    "nom": "🎯 Vol de Roll",       "prix": 500,  "cat": "gacha_pvp", "description": "Vole 1 roll à un joueur (3 fois maximum par cible)"},
+    {"id": "freeze",      "nom": "🧊 Sceau des Ombres",  "prix": 500,  "cat": "gacha_pvp", "description": "Bloque le claim d'un joueur 10 secondes", "daily": True},
+    {"id": "curse",       "nom": "⏳ Malédiction Claim", "prix": 400,  "cat": "gacha_pvp", "description": "Ajoute 5 min au cooldown de claim d'un joueur", "daily": True},
+
+    # ═══ 🛡️ GACHA — PROTECTION ═══
+    {"id": "protection", "nom": "🌟 Protection Divine", "prix": 5000, "cat": "gacha_def", "description": "Immunité totale contre tout sabotage pendant 2 h"},
+    {"id": "amulette",   "nom": "🪬 Amulette",          "prix": 2500, "cat": "gacha_def", "description": "Renvoie tout sabotage sur l'attaquant pendant 20 min"},
+    {"id": "shield",     "nom": "🛡️ Bouclier",         "prix": 600,  "cat": "gacha_def", "description": "Protège du Sceau et des Malédictions pendant 30 min"},
+
+    # ═══ ✨ DIVERS ═══
+    {"id": "double_xp", "nom": "⚡ Double XP (1 h)", "prix": 300, "cat": "divers", "description": "Ton XP de messages est doublée pendant une heure"},
 ]
+
+# Les compagnons sont générés depuis PETS_DB (voir build_shop_pages)
 
 # ============================================================
 #  ÉCONOMIE
@@ -2568,15 +2617,41 @@ async def jackpot_cmd(ctx):
 def build_shop_pages():
     """Construit les pages de la boutique — utilisé par .shop et .setsalon boutique"""
     cats = {
-        "role":    ("👑 Rôles", 0xf1c40f),
-        "boost":   ("🚀 Boosts", 0x9b59b6),
-        "pvp":     ("⚔️ PvP", 0xe74c3c),
-        "protect": ("🛡️ Protection", 0x3498db),
-        "special": ("✨ Spéciaux", 0x2ecc71),
-        "girls":   ("🌸 Girls Only", 0xff6b9d),
+        "role":        ("🎭 Rôles Prestige",      0xf1c40f),
+        "girly":       ("💗 Rôles Girly",          0xff6fd8),
+        "pets":        ("🐾 Compagnons",           0xe91e63),
+        "gacha_boost": ("🎰 Gacha — Boosts",       0x9b59b6),
+        "gacha_pvp":   ("⚔️ Gacha — Sabotage",     0xe74c3c),
+        "gacha_def":   ("🛡️ Gacha — Protection",   0x3498db),
+        "divers":      ("✨ Divers",                0x2ecc71),
     }
     pages = []
     for cat_id, (cat_name, color) in cats.items():
+        if cat_id == "pets":
+            # Page générée depuis PETS_DB, groupée par rareté
+            ordre = ["Commun", "Rare", "Épique", "Légendaire"]
+            embed = discord.Embed(
+                title="🛒 Boutique — 🐾 Compagnons",
+                description=(
+                    "*Un compagnon te donne un **bonus permanent** et monte de niveau quand tu discutes.*\n"
+                    "Achète-le avec `.acheter <id>` pour choisir exactement lequel,\n"
+                    "ou tente ta chance moins cher avec `.adopter <rareté>` *(aléatoire)*."),
+                color=color)
+            for rar in ordre:
+                lignes = []
+                for pid, p in PETS_DB.items():
+                    if p["rarete"] != rar:
+                        continue
+                    t = {"coins": "💰", "xp": "⭐", "roll": "🎰"}[p["type"]]
+                    lignes.append(f"{p['emoji']} **{p['nom']}** — `{pid}` · {t} +{p['base']}%")
+                if lignes:
+                    embed.add_field(
+                        name=f"{RARETE_EMOJI.get(rar, '▫️')} {rar} — {PETS_PRIX[rar]:,} pièces",
+                        value="\n".join(lignes), inline=False)
+            embed.set_footer(text=f"{len(PETS_DB)} compagnons • QG Kdrama 🌸")
+            pages.append(embed)
+            continue
+
         items = [i for i in SHOP_ITEMS if i["cat"] == cat_id]
         if not items:
             continue
@@ -2612,8 +2687,13 @@ async def acheter_cmd(ctx, item_id: str = None):
     """Acheter un item — .acheter <id>"""
     if not item_id: return await ctx.send("❌ `.acheter <id>` — Consulte `.shop`")
     uid = str(ctx.author.id)
-    item = next((i for i in SHOP_ITEMS if i["id"] == item_id.lower()), None)
-    if not item: return await ctx.send(f"❌ Item `{item_id}` introuvable !")
+    iid_low = item_id.lower()
+    item = next((i for i in SHOP_ITEMS if i["id"] == iid_low), None)
+    if not item and iid_low in PETS_DB:
+        p = PETS_DB[iid_low]
+        item = {"id": iid_low, "nom": f"{p['emoji']} {p['nom']}",
+                "prix": PETS_PRIX[p["rarete"]], "cat": "pets", "description": p["desc"]}
+    if not item: return await ctx.send(f"❌ Item `{item_id}` introuvable ! Consulte `.shop`")
     if economy_data[uid]["coins"] < item["prix"]:
         return await ctx.send(f"❌ Il te manque **{item['prix']-economy_data[uid]['coins']} pièces** !")
     now = _time_module.time()
@@ -2625,17 +2705,50 @@ async def acheter_cmd(ctx, item_id: str = None):
         daily_item_usage[uid][item["id"]] = now
     economy_data[uid]["coins"] -= item["prix"]
     iid = item["id"]
-    role_names = {"vip":"⭐ VIP","drama_king":"👑 Drama King","otaku":"🌀 Oeil de Dieu","gamer_pro":"⚔️ Chasseur National","shadow":"🌑 Monarque des Ombres","pillier":"🔥 Pillier du Soleil","strawberry":"🍓 Strawberry","coquette":"🎀 Coquette","butterfly":"🦋 Butterfly"}
-    if iid in role_names:
-        if iid in ("strawberry","coquette","butterfly") and ROLE_GIRLS_ID:
-            role_girls = discord.utils.get(ctx.guild.roles, id=ROLE_GIRLS_ID)
-            if role_girls and role_girls not in ctx.author.roles:
+    if iid in ROLES_BOUTIQUE:
+        nom_role, couleur_role = ROLES_BOUTIQUE[iid]
+        role = discord.utils.get(ctx.guild.roles, name=nom_role)
+        if not role:
+            try:
+                role = await ctx.guild.create_role(name=nom_role, colour=discord.Colour(couleur_role),
+                                                   reason="Rôle boutique")
+            except discord.Forbidden:
                 economy_data[uid]["coins"] += item["prix"]
-                return await ctx.send("❌ Réservé aux filles du serveur ! 🌸")
-        role = discord.utils.get(ctx.guild.roles, name=role_names[iid])
-        if not role: role = await ctx.guild.create_role(name=role_names[iid])
-        await ctx.author.add_roles(role)
-        return await ctx.send(embed=discord.Embed(description=f"✅ Rôle **{role_names[iid]}** obtenu ! 🎉", color=0x2ecc71))
+                return await ctx.send("❌ Je n'ai pas la permission de créer des rôles !")
+        if role in ctx.author.roles:
+            economy_data[uid]["coins"] += item["prix"]
+            return await ctx.send("❌ Tu possèdes déjà ce rôle !")
+        try:
+            await ctx.author.add_roles(role, reason="Achat boutique")
+        except discord.Forbidden:
+            economy_data[uid]["coins"] += item["prix"]
+            return await ctx.send("❌ Je ne peux pas t'attribuer ce rôle — mon rôle est trop bas dans la liste.")
+        return await ctx.send(embed=discord.Embed(
+            title="🎉 Nouveau rôle !",
+            description=f"**{nom_role}** est à toi — regarde ta couleur dans la liste des membres.",
+            color=couleur_role))
+
+    # ── Achat direct d'un compagnon ──
+    if iid in PETS_DB:
+        p = PETS_DB[iid]
+        prix_pet = PETS_PRIX[p["rarete"]]
+        if uid not in pets_data:
+            pets_data[uid] = {"owned": {}, "active": None}
+        if iid in pets_data[uid]["owned"]:
+            economy_data[uid]["coins"] += item["prix"]
+            return await ctx.send(f"❌ Tu possèdes déjà **{p['nom']}** ! Utilise `.pet equiper {p['nom']}`.")
+        pets_data[uid]["owned"][iid] = {"level": 1, "xp": 0}
+        if not pets_data[uid]["active"]:
+            pets_data[uid]["active"] = iid
+        unlock_achievement(uid, "pet_1", ctx.channel)
+        t = {"coins": "💰 pièces", "xp": "⭐ XP", "roll": "🎰 rolls gratuits"}[p["type"]]
+        couleurs = {"Commun": 0x95a5a6, "Rare": 0x3498db, "Épique": 0x9b59b6, "Légendaire": 0xf1c40f}
+        return await ctx.send(embed=discord.Embed(
+            title=f"🐾 {p['emoji']} {p['nom']} rejoint ton équipe !",
+            description=(f"**Rareté :** {p['rarete']}\n**Bonus :** +{p['base']}% {t}\n\n"
+                         + ("🌟 Équipé automatiquement !" if pets_data[uid]["active"] == iid
+                            else f"Utilise `.pet equiper {p['nom']}` pour l'activer.")),
+            color=couleurs.get(p["rarete"], 0x95a5a6)))
     if iid == "rolls_5":
         roll_data[uid]["rolls"] = min(roll_data[uid]["rolls"]+5, ROLLS_MAX+5)
         return await ctx.send(embed=discord.Embed(description=f"🎰 **+5 rolls** ! ({roll_data[uid]['rolls']} restants)", color=0x2ecc71))
@@ -3439,10 +3552,7 @@ async def run_banquier(channel, guild):
 LOTS_ROTATION = ["carte", "role", "item"]
 enchere_rotation = {"index": 0}
 
-ROLES_ENCHERE = [
-    ("🌑 Monarque des Ombres", 0x2c3e50), ("🔥 Pillier du Soleil", 0xe67e22),
-    ("👑 Roi des Malédictions", 0x9b59b6), ("💎 Rang S — VIP", 0x3498db),
-]
+ROLES_ENCHERE = ["shadow", "pillier", "drama_king", "vip", "slayqueen", "darkdoll"]
 
 class EnchereModal(ui.Modal, title="Miser un montant"):
     montant = ui.TextInput(label="Ton offre (en pièces)", placeholder="Ex : 3500", max_length=8)
@@ -3519,7 +3629,7 @@ async def run_encheres(channel, guild):
             ping_type = "gacha"
 
     if type_lot == "role":
-        lot_role, couleur = random.choice(ROLES_ENCHERE)
+        lot_role, couleur = ROLES_BOUTIQUE[random.choice(ROLES_ENCHERE)]
         lot_nom = lot_role
         lot_desc = "Un rôle exclusif, attribué immédiatement au gagnant."
 
@@ -3613,7 +3723,8 @@ async def run_encheres(channel, guild):
         role = discord.utils.get(guild.roles, name=lot_role)
         if not role:
             try:
-                role = await guild.create_role(name=lot_role)
+                role = await guild.create_role(name=lot_role, colour=discord.Colour(couleur),
+                                               reason="Enchère remportée")
             except Exception:
                 role = None
         if role:
@@ -5422,7 +5533,22 @@ PETS_DB = {
     "licorne":  {"nom": "Licorne Céleste",      "emoji": "🦄", "rarete": "Légendaire", "type": "coins", "base": 25, "desc": "+% pièces sur daily/travail"},
     "phenix":   {"nom": "Phénix Immortel",      "emoji": "🔥", "rarete": "Légendaire", "type": "xp",    "base": 25, "desc": "+% XP sur les messages"},
     "gumiho":   {"nom": "Gumiho aux Neuf Queues","emoji": "🌙", "rarete": "Légendaire", "type": "roll", "base": 12, "desc": "% chance de roll gratuit"},
+    # ── Nouveaux : animaux réels ──
+    "shiba":    {"nom": "Shiba Inu",             "emoji": "🐕", "rarete": "Commun",     "type": "coins", "base": 5,  "desc": "+% pièces sur daily/travail"},
+    "herisson": {"nom": "Hérisson Grognon",      "emoji": "🦔", "rarete": "Commun",     "type": "xp",    "base": 5,  "desc": "+% XP sur les messages"},
+    "mochivi":  {"nom": "Mochi Vivant",          "emoji": "🍡", "rarete": "Commun",     "type": "roll",  "base": 3,  "desc": "% chance de roll gratuit"},
+    "manchot":  {"nom": "Manchot Empereur",      "emoji": "🐧", "rarete": "Rare",       "type": "coins", "base": 10, "desc": "+% pièces sur daily/travail"},
+    "loutre":   {"nom": "Loutre Farceuse",       "emoji": "🦦", "rarete": "Rare",       "type": "xp",    "base": 10, "desc": "+% XP sur les messages"},
+    "panthere": {"nom": "Panthère des Neiges",   "emoji": "🐆", "rarete": "Épique",     "type": "coins", "base": 15, "desc": "+% pièces sur daily/travail"},
+    # ── Nouveaux : créatures d'anime & mythologie ──
+    "kodama":   {"nom": "Esprit de la Forêt",    "emoji": "🌸", "rarete": "Rare",       "type": "roll",  "base": 5,  "desc": "% chance de roll gratuit"},
+    "nuage":    {"nom": "Nuage Doré",            "emoji": "☁️", "rarete": "Épique",     "type": "xp",    "base": 15, "desc": "+% XP sur les messages"},
+    "komainu":  {"nom": "Lion Gardien",          "emoji": "🦁", "rarete": "Épique",     "type": "roll",  "base": 8,  "desc": "% chance de roll gratuit"},
+    "haku":     {"nom": "Dragon de Rivière",     "emoji": "🐲", "rarete": "Légendaire", "type": "coins", "base": 25, "desc": "+% pièces sur daily/travail"},
+    "cerf":     {"nom": "Cerf Sacré",            "emoji": "🦌", "rarete": "Légendaire", "type": "xp",    "base": 25, "desc": "+% XP sur les messages"},
+    "fenrir":   {"nom": "Fenrir",                "emoji": "🐺", "rarete": "Légendaire", "type": "roll",  "base": 12, "desc": "% chance de roll gratuit"},
 }
+PETS_PRIX = {"Commun": 2000, "Rare": 6000, "Épique": 14000, "Légendaire": 35000}
 PET_XP_PER_LEVEL = 100
 PET_LEVEL_MAX = 10
 pets_data = {}  # {uid: {"owned": {pet_id: {"level": 1, "xp": 0}}, "active": pet_id}}
