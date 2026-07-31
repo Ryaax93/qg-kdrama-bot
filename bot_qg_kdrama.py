@@ -109,7 +109,6 @@ class PageView(ui.View):
         self.index = (self.index + 1) % len(self.pages)
         await interaction.response.edit_message(embed=self.update_footer(self.pages[self.index]), view=self)
 
-
 # ============================================================
 #  CONFIG — remplace TOKEN par ton vrai token
 # ============================================================
@@ -120,7 +119,6 @@ PREFIX = "."
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
 
-
 # ---------- Stockage en mémoire ----------
 xp_data = defaultdict(lambda: {"xp": 0, "level": 1})
 economy_data = defaultdict(lambda: {"coins": 0, "tier": "Spectateur Débutant"})
@@ -128,15 +126,7 @@ economy_data = defaultdict(lambda: {"coins": 0, "tier": "Spectateur Débutant"})
 message_count = defaultdict(int)
 planning_last_run = {}  # {(weekday, hour): timestamp} anti-doublon
 planning_actif = True  # True = events automatiques activés
-invasion_samedi_last = {}
-classement_last = {}
-prophetie_last = {}
-mensuel_last = {}
-heuremaudite_last = {}
-gacha_cooldowns = defaultdict(int)   # {uid: timestamp}
-mariage_data = {}                    # {uid: uid_partenaire}
 anniversaire_data = {}               # {uid: "JJ/MM"}
-invitation_data = defaultdict(int)   # {uid: nb_invitations}
 
 duels = {}
 tickets = {}
@@ -146,6 +136,14 @@ queues = defaultdict(list)
 double_xp_event_actif = False
 casino_boost_actif = False
 active_pokebattles = {}      # {channel_id: game_data}
+active_boss = {}             # {guild_id: {boss, hp, participants, channel, msg}}
+jackpot_cagnotte = 0         # cagnotte de l'event Jackpot
+inventaire = defaultdict(lambda: defaultdict(int))  # {uid: {item_id: quantité}}
+amulette_active = {}         # {uid: timestamp de fin}
+oracle_actif = defaultdict(int)      # {uid: rolls restants avec bonus Oracle}
+malediction_active = {}      # {uid: timestamp de fin}
+ghost_cards = {}             # {f"{uid}_{key}": timestamp de fin}
+active_brackets = {}         # {guild_id: {theme, matchs, tour, gagnants, votes_en_cours, channel}}
 bank_data = defaultdict(lambda: {"depot": 0, "depot_time": 0})
 CONQUETE_ZONE_IDS = []
 ROLE_GACHA_ID = None
@@ -611,7 +609,6 @@ QUIZ_CULTURE = [
     {"q": "Dans quelle ville se trouve le Colisée ?", "a": "rome"},
 ]
 
-
 QUIZ_QG = QUIZ_KDRAMA + QUIZ_ANIME + QUIZ_GAMING  # Pour compatibilité
 
 KDRAMA_QUOTES = [
@@ -706,11 +703,7 @@ async def on_message(message):
 
     # Jackpot communautaire
     await process_jackpot(message)
-    # Clown
-    await process_clown(message)
-    # Conquête
-    # Voleur de minuit
-    await process_voleur(message)
+
     # Tracking missions — messages
     try:
         missions_progress[uid]["messages"] += 1
@@ -898,7 +891,7 @@ def build_help_pages(guild, is_admin=False):
         "`.arene @membre` — Duel d'arène\n"
         "`.pokebattle @membre` — Combat de cartes\n"
         "`.pokestop` — Annuler le combat en cours\n"
-        "`.attaquerboss` / `.attaque` — Frapper le boss du serveur"
+        "`.attaque` — Frapper le boss du serveur *(alias `.attaquerboss`)*"
     ), inline=False)
     e.add_field(name="🎯 Mini-jeux", value=(
         "`.devine` — Devine le personnage\n"
@@ -917,6 +910,7 @@ def build_help_pages(guild, is_admin=False):
         "`.planning` — Le planning de la semaine\n"
         "`.planningauto` — Les events programmés\n"
         "`.eventstatus` — Quels events sont actifs\n"
+        "🎩 **Banquier** et 🏛️ **Enchères** se jouent dans un salon dédié\n"
         "`.faction` — Les factions • `.leavefaction` — Quitter\n"
         "`.liga` — Classement Elo mensuel"
     ), inline=False)
@@ -1000,10 +994,11 @@ def build_help_pages(guild, is_admin=False):
         "*Tape la commande **dans** le salon voulu.*\n"
         "`gacha` `boutique` `casino` `event` `levelup` `guide`\n"
         "`combat` `duel` `dashboard` `bienvenue` `aurevoir`\n"
-        "`halloffame` `girlsonly` `annonces` `invitation`"
+        "`halloffame` `girlsonly` `annonces` `invitation` `boost` `reglement`"
     ), inline=False)
     e.add_field(name="📖 Guide du serveur", value=(
-        "`.setsalon guide` puis `.guide` — Publier le guide des nouveaux"
+        "`.setsalon guide` puis `.guide` — Publier le guide des nouveaux\n"
+        "`.setsalon boutique` — Publie aussi la boutique dans le salon"
     ), inline=False)
     e.add_field(name="🌸 Girls Only", value=(
         "`.setgirlsrole @role` — Définir le rôle filles\n"
@@ -1109,7 +1104,6 @@ async def help_cmd(ctx):
     pages = build_help_pages(ctx.guild, is_admin)
     view = HelpView(pages, ctx.author, timeout=180)
     await ctx.send(embed=pages[0][2], view=view)
-
 
 @bot.command(name="setimage")
 async def setimage_cmd(ctx, *, args: str = None):
@@ -1261,7 +1255,6 @@ async def removecard_cmd(ctx, membre: discord.Member = None, *, perso: str = Non
     embed.set_footer(text=f"Action effectuée par {ctx.author.display_name} 🛡️")
     await ctx.send(embed=embed)
 
-
 # ============================================================
 #  QUIZ QG — Par catégorie + Mode Duel 1v1 + Multijoueur
 # ============================================================
@@ -1283,7 +1276,6 @@ THEME_LABELS = {
     "culture": "🌍 Culture Générale",
     "mix": "🎲 Mix",
 }
-
 
 @bot.command(name="quiz", aliases=["q"])
 async def quiz(ctx, theme: str = "mix"):
@@ -1384,8 +1376,6 @@ async def quiz_stop(ctx):
         ))
     else:
         await ctx.send("❌ Aucun quiz en cours ici !")
-
-
 
 @bot.command(name="quizduel")
 async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
@@ -1530,8 +1520,6 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
     embed.add_field(name="📊 Classement final", value=scores_final, inline=False)
     await ctx.send(embed=embed)
 
-
-
 # ============================================================
 #  NIVEAUX / XP
 # ============================================================
@@ -1632,8 +1620,6 @@ async def ameliorer(ctx, stat: str = None):
     embed.set_footer(text="⚔️ Ces stats sont actives dans l'arène !")
     await ctx.send(embed=embed)
 
-
-
 @bot.command(name="leaderboard", aliases=["top","classement","lb"])
 async def leaderboard(ctx):
     sorted_data = sorted(xp_data.items(), key=lambda x: (x[1]["level"], x[1]["xp"]), reverse=True)[:10]
@@ -1690,7 +1676,6 @@ SHOP_ITEMS = [
     {"id": "freeze",       "nom": "🧊 Sceau des Ombres",     "prix": 500,  "cat": "pvp",   "description": "Bloque le claim d'un joueur 10 secondes (1x/jour)", "daily": True},
     {"id": "curse",        "nom": "⏳ Malédiction Claim",    "prix": 400,  "cat": "pvp",   "description": "+5 min sur le claim d'un joueur (1x/jour)", "daily": True},
 ]
-
 
 # ============================================================
 #  ÉCONOMIE
@@ -1926,8 +1911,6 @@ async def clear_cmd(ctx, nombre: str = "10"):
         except ValueError:
             await ctx.send("❌ Utilise `.clear <nombre>` ou `.clear all`")
 
-
-
 # ============================================================
 #  FUN
 # ============================================================
@@ -2021,7 +2004,6 @@ import time as _time_module
 gacha_wishlist = defaultdict(set)
 claim_freeze = {}
 claim_curse = {}
-rarity_boost_active = {}
 
 RARETE_POIDS = {
     "Mythique":   5,
@@ -2034,6 +2016,12 @@ RARETE_POIDS = {
 def gacha_tirer(uid=None):
     """Tire une carte aléatoire selon les probabilités"""
     pool = list(ANIME_CARDS_DB.keys())
+    # Malédiction Rare : forcé en Commun
+    if uid and malediction_active.get(uid, 0) > _time_module.time():
+        malediction_active.pop(uid, None)
+        communs = [k for k in pool if ANIME_CARDS_DB[k]["rarete"] == "Commun"]
+        if communs:
+            return random.choice(communs)
     # Si boost rareté actif
     if uid and rarity_boost.get(uid, 0) > 0:
         rare_pool = [k for k in pool if ANIME_CARDS_DB[k]["rarete"] in ("Rare","Épique","Légendaire","Mythique")]
@@ -2103,8 +2091,6 @@ def build_card_embed(key, uid_claimer=None, claimed=False):
         embed.set_footer(text="❤️ Clique sur le cœur pour la réclamer — 30 secondes")
     return embed
 
-
-
 # ============================================================
 #  ❤️ CLAIM — bouton cœur sous la carte
 # ============================================================
@@ -2115,7 +2101,14 @@ def try_claim(uid, key, guild_id):
     if key in claimed_cards:
         return False, "❌ Trop tard — cette carte appartient déjà à quelqu'un !"
     now = _time_module.time()
+    # Sceau des Ombres / Cadenas — le claim est bloqué
+    if claim_freeze.get(uid, 0) > now:
+        reste = int(claim_freeze[uid] - now)
+        return False, f"🧊 Tu es **bloqué** — encore **{reste}s** avant de pouvoir claim !"
     cooldown_mins = CLAIM_COOLDOWN_MINUTES - claim_reduction.get(uid, 0)
+    # Malédiction Claim — +5 min de cooldown
+    if claim_curse.get(uid, 0) > now:
+        cooldown_mins += 5
     last = claim_cooldown[uid]
     if last and now - last < cooldown_mins * 60:
         reste = int((cooldown_mins * 60 - (now - last)) / 60) + 1
@@ -2159,7 +2152,6 @@ class ClaimView(ui.View):
                 await self.message.edit(embed=embed, view=self)
             except Exception:
                 pass
-
 
 # ============================================================
 #  D. NIVEAU DE CARTE — Helpers
@@ -2221,8 +2213,6 @@ def serie_reward(total):
     """Récompense en pièces selon la taille de la série complétée"""
     return total * 500   # 500 pièces par carte de la série
 
-
-
 @bot.command(name="ga", aliases=["roll"])
 async def ga_cmd(ctx):
     """Tire une carte gacha — .ga"""
@@ -2283,7 +2273,6 @@ async def rolls_cmd(ctx):
         description=f"🎰 **{ctx.author.display_name}** — **{data['rolls']}/{ROLLS_MAX} rolls** disponibles\n⏳ Recharge dans **{reset_in} min**",
         color=0x9b59b6
     ))
-
 
 @bot.command(name="gachastock", aliases=["collection","col"])
 async def gachastock_cmd(ctx, member: discord.Member = None):
@@ -2456,7 +2445,7 @@ async def travailler_cmd(ctx):
         color=0x2ecc71
     ))
 
-@bot.command(name="braquage", aliases=["voler", "steal_bank"])
+@bot.command(name="braquage", aliases=["voler", "steal", "steal_bank"])
 async def braquage_cmd(ctx, target: discord.Member = None):
     """Tenter de braquer quelqu'un — .braquage @joueur"""
     if not target:
@@ -2494,10 +2483,6 @@ async def braquage_cmd(ctx, target: discord.Member = None):
             description=f"🚨 **{ctx.author.mention}** s'est fait attraper ! Amende : **{amende} pièces** 😂",
             color=0xe74c3c
         ))
-
-@bot.command(name="steal")
-async def steal_cmd(ctx, target: discord.Member = None):
-    await braquage_cmd(ctx, target)
 
 @bot.command(name="slot")
 async def slot_cmd(ctx, mise: int = 50):
@@ -2574,13 +2559,8 @@ async def jackpot_cmd(ctx):
         color=0xf1c40f
     ))
 
-@bot.command(name="shop")
-async def shop_cmd(ctx):
-    """Boutique — .shop"""
-    if SALON_BOUTIQUE_ID and ctx.channel.id != SALON_BOUTIQUE_ID:
-        salon = ctx.guild.get_channel(SALON_BOUTIQUE_ID)
-        mention = salon.mention if salon else "le salon boutique"
-        return await ctx.send(f"🛒 Boutique dans {mention} !", delete_after=5)
+def build_shop_pages():
+    """Construit les pages de la boutique — utilisé par .shop et .setsalon boutique"""
     cats = {
         "role":    ("👑 Rôles", 0xf1c40f),
         "boost":   ("🚀 Boosts", 0x9b59b6),
@@ -2592,18 +2572,32 @@ async def shop_cmd(ctx):
     pages = []
     for cat_id, (cat_name, color) in cats.items():
         items = [i for i in SHOP_ITEMS if i["cat"] == cat_id]
-        if not items: continue
-        embed = discord.Embed(title=f"🛒 Boutique — {cat_name}", color=color)
+        if not items:
+            continue
+        embed = discord.Embed(
+            title=f"🛒 Boutique — {cat_name}",
+            description="*Achète avec* `.acheter <id>`",
+            color=color)
         for item in items:
-            daily_tag = " *(1x/jour)*" if item.get("daily") else ""
+            daily_tag = " *(1×/jour)*" if item.get("daily") else ""
             embed.add_field(
-                name=f"{item['nom']} — **{item['prix']} pièces**{daily_tag}",
-                value=f"`{item['id']}` — {item['desc']}",
-                inline=False
-            )
-        embed.set_footer(text="`.acheter <id>` pour acheter")
+                name=f"{item['nom']} — **{item['prix']:,} pièces**{daily_tag}",
+                value=f"`{item['id']}` — {item.get('description', '')}",
+                inline=False)
+        embed.set_footer(text=f"{len(items)} article(s) • QG Kdrama 🌸")
         pages.append(embed)
-    if not pages: return await ctx.send("❌ Boutique vide !")
+    return pages
+
+@bot.command(name="shop", aliases=["boutique", "magasin"])
+async def shop_cmd(ctx):
+    """Boutique — .shop"""
+    if SALON_BOUTIQUE_ID and ctx.channel.id != SALON_BOUTIQUE_ID:
+        salon = ctx.guild.get_channel(SALON_BOUTIQUE_ID)
+        mention = salon.mention if salon else "le salon boutique"
+        return await ctx.send(f"🛒 Boutique dans {mention} !", delete_after=5)
+    pages = build_shop_pages()
+    if not pages:
+        return await ctx.send("❌ Boutique vide !")
     view = PageView(pages, ctx.author, timeout=120) if len(pages) > 1 else None
     await ctx.send(embed=pages[0], view=view)
 
@@ -2666,6 +2660,74 @@ async def acheter_cmd(ctx, item_id: str = None):
             return await ctx.send("❌ Tu as déjà 10 slots favoris !")
         fav_slots[uid] = 10
         return await ctx.send(embed=discord.Embed(description="🔓 **Slots favoris augmentés à 10 !** 🌟🌟", color=0x2ecc71))
+    # ── Réductions de claim permanentes ──
+    if iid in ("claim_10", "claim_15", "claim_20"):
+        cible = {"claim_10": 20, "claim_15": 15, "claim_20": 10}[iid]
+        if claim_reduction[uid] >= cible:
+            economy_data[uid]["coins"] += item["prix"]
+            return await ctx.send("❌ Tu as déjà une réduction égale ou meilleure !")
+        claim_reduction[uid] = cible
+        restant = CLAIM_COOLDOWN_MINUTES - cible
+        return await ctx.send(embed=discord.Embed(
+            description=f"⚡ Ton cooldown de claim passe à **{restant} minutes** ! *(permanent)*",
+            color=0x2ecc71))
+
+    # ── Cadeau Mystère : une carte Rare ou mieux ──
+    if iid == "cadeau":
+        dispo = [k for k, cc in ANIME_CARDS_DB.items()
+                 if cc["rarete"] in ("Rare", "Épique", "Légendaire", "Mythique") and k not in claimed_cards]
+        if not dispo:
+            economy_data[uid]["coins"] += item["prix"]
+            return await ctx.send("❌ Aucune carte disponible pour le moment !")
+        key = random.choice(dispo)
+        claimed_cards[key] = uid
+        gacha_collections[uid][key] = {"fusion": 0}
+        check_collection_achievements(uid, ctx.channel)
+        cc = ANIME_CARDS_DB[key]
+        if cc["rarete"] == "Mythique":
+            unlock_achievement(uid, "mythique_1", ctx.channel)
+        embed = build_card_embed(key, uid, claimed=True)
+        embed.set_author(name="🎁  Cadeau Mystère ouvert !")
+        return await ctx.send(embed=embed)
+
+    # ── Double ou Rien : mise sur tes rolls ──
+    if iid == "double_rien":
+        r = roll_data[uid]["rolls"]
+        if r > 4:
+            economy_data[uid]["coins"] += item["prix"]
+            return await ctx.send("❌ Utilisable seulement avec **4 rolls ou moins** !")
+        if random.random() < 0.5:
+            roll_data[uid]["rolls"] = min(r * 2, ROLLS_MAX + 5)
+            return await ctx.send(embed=discord.Embed(
+                description=f"🎰 **DOUBLÉ !** Tu passes de {r} à **{roll_data[uid]['rolls']} rolls** ! 🎉",
+                color=0x2ecc71))
+        roll_data[uid]["rolls"] = 0
+        return await ctx.send(embed=discord.Embed(
+            description=f"💀 **Perdu !** Tes {r} rolls sont partis en fumée...", color=0xe74c3c))
+
+    # ── Oracle : chance de carte mystère sur les 3 prochains rolls ──
+    if iid == "oracle":
+        oracle_actif[uid] = 3
+        return await ctx.send(embed=discord.Embed(
+            description="🔮 **Oracle activé !** Tes **3 prochains rolls** ont 1 chance sur 5 de faire tomber une carte rare bonus.",
+            color=0x9b59b6))
+
+    # ── Amulette : renvoie les sabotages ──
+    if iid == "amulette":
+        amulette_active[uid] = now + 1200
+        return await ctx.send(embed=discord.Embed(
+            description="🪬 **Amulette active 20 min** — tout sabotage se retournera contre son auteur.",
+            color=0x9b59b6))
+
+    # ── Items offensifs : rangés dans l'inventaire ──
+    if iid in ("freeze", "curse", "cadenas", "bombe_gacha", "fantome", "malediction", "vol_roll"):
+        inventaire[uid][iid] += 1
+        return await ctx.send(embed=discord.Embed(
+            title="🛒 Achat réussi !",
+            description=(f"✅ **{item['nom']}** ajouté à ton inventaire *(x{inventaire[uid][iid]})*\n"
+                         f"Utilise-le avec `.utiliser {iid} @joueur`"),
+            color=0x2ecc71))
+
     await ctx.send(embed=discord.Embed(title="🛒 Achat réussi !", description=f"✅ **{item['nom']}** acheté !", color=0x2ecc71))
 
 # ============================================================
@@ -2930,28 +2992,26 @@ async def planning_cmd(ctx):
     embed.set_footer(text=f"Events automatiques : {statut}")
     await ctx.send(embed=embed)
 
-
-
-
-
 # ============================================================
 #  EVENTS À EFFET RÉEL — partagés entre le lancement auto et manuel
 # ============================================================
 async def run_invasion(channel, guild):
-    """⚠️ Invasion — un boss débarque, tout le monde peut frapper avec .attaquerboss"""
-    boss = random.choice(BOSS_INVASIONS).copy()
-    invasion_active[guild.id] = {**boss, "max_pv": boss["pv"], "attaquants": {}, "actif": True}
-    ping = get_event_ping(guild, "everyone")
-    embed = discord.Embed(
-        title=f"⚠️ INVASION ! {boss['emoji']} {boss['nom']} attaque le QG !",
-        description=(f"**{boss['nom']}** de *{boss['serie']}* envahit le serveur !\n\n"
-                     f"❤️ **PV :** {boss['pv']:,}\n"
-                     f"⚔️ Tape `.attaquerboss` pour infliger des dégâts !\n\n"
-                     f"*Celui qui porte le coup final reçoit une récompense spéciale.*"),
-        color=0xe74c3c)
-    if boss.get("image"):
-        embed.set_thumbnail(url=boss["image"])
-    await channel.send(ping, embed=embed)
+    """⚠️ Invasion — boss dans un salon dédié (les .attaque en rafale polluent sinon)"""
+    if guild.id in active_boss:
+        return await channel.send("⚔️ Un boss est déjà en cours sur le serveur !")
+    salon = await create_event_channel(guild, "🐉・invasion-boss")
+    cible = salon or channel
+    ping = get_event_ping(guild, "everyone") if cible is channel else ""
+    if not await spawn_boss(cible, guild, ping):
+        return
+    if salon:
+        active_boss[guild.id]["salon_temp"] = salon.id
+        b = active_boss[guild.id]["boss"]
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title=f"⚠️ INVASION ! {b['emoji']} {b['nom']} attaque le QG !",
+            description=(f"**{b['hp_max']:,} PV** — tout le monde peut frapper avec `.attaque` !\n"
+                         f"*Celui qui porte le coup fatal reçoit un bonus.*"),
+            color=0xe74c3c), salon)
 
 async def run_coffre(channel, gain=None):
     """📦 Coffre — premier à .ouvrir gagne les pièces"""
@@ -3099,12 +3159,502 @@ async def run_heure_maudite(channel, guild):
 
 
 # ============================================================
+#  🎪 SALONS TEMPORAIRES D'EVENT — évitent de polluer les discussions
+# ============================================================
+EVENT_CATEGORY_NAME = "🎪 Events du QG"
+
+async def create_event_channel(guild, nom):
+    """Crée un salon temporaire pour un event. Retourne le salon ou None."""
+    cat = discord.utils.get(guild.categories, name=EVENT_CATEGORY_NAME)
+    if not cat:
+        try:
+            cat = await guild.create_category(EVENT_CATEGORY_NAME)
+        except Exception:
+            cat = None
+    try:
+        return await guild.create_text_channel(nom, category=cat,
+                                               topic="Salon temporaire — supprimé à la fin de l'event")
+    except Exception as e:
+        print(f"[Event] Salon '{nom}' non créé : {e}")
+        return None
+
+async def close_event_channel(channel, delai=120):
+    """Prévient puis supprime le salon d'event"""
+    if not channel:
+        return
+    try:
+        await channel.send(embed=discord.Embed(
+            description=f"🚪 Ce salon sera supprimé dans **{delai//60} minute(s)**.",
+            color=0x95a5a6))
+        await asyncio.sleep(delai)
+        await channel.delete(reason="Fin de l'event")
+    except Exception:
+        pass
+
+async def annoncer_event(guild, salon_event, ping_type, embed, salon_temp=None):
+    """Annonce l'event dans le salon events avec le bon ping + lien vers le salon dédié"""
+    ping = get_event_ping(guild, ping_type)
+    if salon_temp:
+        embed.add_field(name="📍 Ça se passe ici",
+                        value=f"➡️ {salon_temp.mention}", inline=False)
+    try:
+        await salon_event.send(ping, embed=embed)
+    except Exception as e:
+        print(f"[Event] Annonce impossible : {e}")
+
+# ============================================================
+#  🎩 LE BANQUIER — Deal or No Deal
+# ============================================================
+BANQUIER_MONTANTS = [1, 5, 25, 50, 100, 250, 500, 1000, 2000, 3500, 6000, 9000]
+BANQUIER_MANCHES = [4, 3, 2, 1, 1]          # valises à ouvrir par manche
+BANQUIER_FACTEURS = [0.40, 0.55, 0.70, 0.85, 0.95]   # radin au début, généreux à la fin
+
+class BanquierCandidatView(ui.View):
+    """Bouton d'inscription — premier arrivé devient le candidat"""
+    def __init__(self, timeout=60):
+        super().__init__(timeout=timeout)
+        self.candidat = None
+
+    @ui.button(label="Je joue !", emoji="🎩", style=discord.ButtonStyle.success)
+    async def jouer(self, interaction, button):
+        self.candidat = interaction.user
+        button.disabled = True
+        button.label = f"{interaction.user.display_name} est en jeu"
+        await interaction.response.edit_message(view=self)
+        self.stop()
+
+class ValisesView(ui.View):
+    """Grille des valises encore fermées"""
+    def __init__(self, joueur, restantes, timeout=90):
+        super().__init__(timeout=timeout)
+        self.joueur = joueur
+        self.choix = None
+        for i, num in enumerate(sorted(restantes)):
+            btn = ui.Button(label=str(num), style=discord.ButtonStyle.secondary, row=i // 4)
+            async def cb(interaction, n=num):
+                if interaction.user.id != self.joueur.id:
+                    return await interaction.response.send_message("❌ Ce n'est pas toi le candidat !", ephemeral=True)
+                self.choix = n
+                for it in self.children:
+                    it.disabled = True
+                await interaction.response.edit_message(view=self)
+                self.stop()
+            btn.callback = cb
+            self.add_item(btn)
+
+class DealView(ui.View):
+    """DEAL / NO DEAL"""
+    def __init__(self, joueur, timeout=60):
+        super().__init__(timeout=timeout)
+        self.joueur = joueur
+        self.deal = None
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.joueur.id:
+            await interaction.response.send_message("❌ Seul le candidat décide !", ephemeral=True)
+            return False
+        return True
+
+    @ui.button(label="DEAL", emoji="💰", style=discord.ButtonStyle.success)
+    async def deal_btn(self, interaction, button):
+        self.deal = True
+        for it in self.children: it.disabled = True
+        await interaction.response.edit_message(view=self)
+        self.stop()
+
+    @ui.button(label="NO DEAL", emoji="🚫", style=discord.ButtonStyle.danger)
+    async def nodeal_btn(self, interaction, button):
+        self.deal = False
+        for it in self.children: it.disabled = True
+        await interaction.response.edit_message(view=self)
+        self.stop()
+
+def _banquier_tableau(montants_restants):
+    """Affiche les montants encore en jeu"""
+    lignes, ligne = [], []
+    for m in BANQUIER_MONTANTS:
+        txt = f"**{m:,}**" if m in montants_restants else f"~~{m:,}~~"
+        ligne.append(txt)
+        if len(ligne) == 4:
+            lignes.append(" · ".join(ligne)); ligne = []
+    if ligne:
+        lignes.append(" · ".join(ligne))
+    return "\n".join(lignes)
+
+async def run_banquier(channel, guild):
+    """🎩 Le Banquier — Deal or No Deal, dans un salon dédié"""
+    salon = await create_event_channel(guild, "🎩・le-banquier")
+    if not salon:
+        salon = channel
+
+    annonce = discord.Embed(
+        title="🎩 LE BANQUIER OUVRE SON BUREAU",
+        description=(
+            "**12 valises. Une seule sera la vôtre.**\n\n"
+            "Un candidat affronte le banquier. Il peut repartir avec "
+            "**9 000 pièces**… ou avec **1**.\n\n"
+            "*Premier à cliquer sur le bouton entre en jeu.*"),
+        color=0x1abc9c)
+    if salon is not channel:
+        await annoncer_event(guild, channel, "everyone", annonce, salon)
+
+    # ── Recrutement du candidat ──
+    view = BanquierCandidatView(timeout=60)
+    embed_inscr = discord.Embed(
+        title="🎩 LE BANQUIER",
+        description="**12 valises. Une seule sera la vôtre.**\n\nQui ose affronter le banquier ?",
+        color=0x1abc9c)
+    embed_inscr.set_footer(text="⏰ 60 secondes — premier arrivé")
+    await salon.send(get_event_ping(guild, "everyone") if salon is channel else "", embed=embed_inscr, view=view)
+    await view.wait()
+
+    if not view.candidat:
+        await salon.send(embed=discord.Embed(
+            description="😴 Personne ne s'est présenté — le banquier referme son bureau.",
+            color=0x95a5a6))
+        if salon is not channel:
+            await close_event_channel(salon, 60)
+        return
+
+    joueur = view.candidat
+    uid = str(joueur.id)
+
+    # ── Distribution secrète des montants ──
+    montants = BANQUIER_MONTANTS[:]
+    random.shuffle(montants)
+    valises = {i + 1: montants[i] for i in range(12)}
+    fermees = set(valises)
+
+    # ── Le candidat choisit SA valise ──
+    v = ValisesView(joueur, fermees, timeout=90)
+    await salon.send(
+        f"{joueur.mention}",
+        embed=discord.Embed(
+            title=f"🎩 {joueur.display_name} entre en jeu !",
+            description="**Choisis TA valise.**\nElle restera fermée jusqu'à la toute fin.",
+            color=0x1abc9c),
+        view=v)
+    await v.wait()
+    ma_valise = v.choix or random.choice(list(fermees))
+    fermees.discard(ma_valise)
+
+    await salon.send(embed=discord.Embed(
+        description=f"🧳 **{joueur.display_name}** garde la valise **n°{ma_valise}**.\n\nQue le jeu commence…",
+        color=0x1abc9c))
+    await asyncio.sleep(2)
+
+    # ── Les manches ──
+    restants = set(valises.values())
+    offre_finale = None
+    for idx_manche, nb in enumerate(BANQUIER_MANCHES):
+        for _ in range(nb):
+            if not fermees:
+                break
+            vw = ValisesView(joueur, fermees, timeout=90)
+            e = discord.Embed(
+                title=f"🎩 MANCHE {idx_manche + 1} — ouvre une valise",
+                description=f"💰 **Montants encore en jeu**\n{_banquier_tableau(restants)}\n\n🧳 Ta valise : **n°{ma_valise}**",
+                color=0x3498db)
+            msg = await salon.send(f"{joueur.mention} à toi !", embed=e, view=vw)
+            await vw.wait()
+            num = vw.choix or random.choice(list(fermees))
+            fermees.discard(num)
+            montant = valises[num]
+            restants.discard(montant)
+            gros = montant >= 2000
+            await salon.send(embed=discord.Embed(
+                description=(f"Valise **n°{num}**…\n\n"
+                             f"# {'💀' if gros else '😌'}  {montant:,} pièces\n\n"
+                             + ("*Aïe. Un gros montant part en fumée.*" if gros
+                                else "*Ouf — un petit montant éliminé.*")),
+                color=0xe74c3c if gros else 0x2ecc71))
+            await asyncio.sleep(1.5)
+
+        if not fermees:
+            break
+
+        # ── L'appel du banquier ──
+        moyenne = sum(restants) / max(len(restants), 1)
+        offre = max(1, int(moyenne * BANQUIER_FACTEURS[min(idx_manche, len(BANQUIER_FACTEURS) - 1)]))
+        offre_finale = offre
+        dv = DealView(joueur, timeout=60)
+        e = discord.Embed(
+            title="☎️ LE BANQUIER APPELLE",
+            description=(f"Il propose à **{joueur.display_name}** :\n\n"
+                         f"# 💰 {offre:,} pièces\n\n"
+                         f"**Montants restants**\n{_banquier_tableau(restants)}"),
+            color=0xf1c40f)
+        e.set_footer(text="⏰ 60 secondes pour décider")
+        await salon.send(f"{joueur.mention}", embed=e, view=dv)
+        await dv.wait()
+
+        if dv.deal:
+            contenu = valises[ma_valise]
+            economy_data[uid]["coins"] += offre
+            check_coins_achievements(uid, salon)
+            ecart = contenu - offre
+            await salon.send(embed=discord.Embed(
+                title="💰 DEAL !",
+                description=(
+                    f"**{joueur.display_name}** accepte les **{offre:,} pièces**.\n\n"
+                    f"… mais ouvrons sa valise **n°{ma_valise}** :\n\n"
+                    f"# {contenu:,} pièces\n\n"
+                    + (f"😱 Il laisse **{ecart:,} pièces** sur la table." if ecart > 0
+                       else f"😎 Bien joué — il gagne **{abs(ecart):,} pièces** de plus que sa valise !")),
+                color=0xf1c40f))
+            if salon is not channel:
+                await close_event_channel(salon, 180)
+            return
+        await salon.send(embed=discord.Embed(
+            description=f"🚫 **NO DEAL !** {joueur.display_name} continue… 😤", color=0xe74c3c))
+        await asyncio.sleep(1.5)
+
+    # ── Il est allé au bout ──
+    contenu = valises[ma_valise]
+    economy_data[uid]["coins"] += contenu
+    check_coins_achievements(uid, salon)
+    await salon.send(embed=discord.Embed(
+        title="🧳 LA VALISE FINALE",
+        description=(
+            f"**{joueur.display_name}** a refusé toutes les offres.\n"
+            f"*(la dernière était de {offre_finale:,} pièces)*\n\n"
+            f"Sa valise **n°{ma_valise}** contient…\n\n"
+            f"# 💰 {contenu:,} pièces\n\n"
+            + ("🏆 **Quel sang-froid !**" if offre_finale and contenu >= offre_finale
+               else "💔 **Il aurait mieux fait d'accepter…**")),
+        color=0xf1c40f if (offre_finale and contenu >= offre_finale) else 0xe74c3c))
+    if salon is not channel:
+        await close_event_channel(salon, 180)
+
+
+# ============================================================
+#  🏛️ LES ENCHÈRES — lot en rotation, compte à rebours relancé
+# ============================================================
+LOTS_ROTATION = ["carte", "role", "item"]
+enchere_rotation = {"index": 0}
+
+ROLES_ENCHERE = [
+    ("🌑 Monarque des Ombres", 0x2c3e50), ("🔥 Pillier du Soleil", 0xe67e22),
+    ("👑 Roi des Malédictions", 0x9b59b6), ("💎 Rang S — VIP", 0x3498db),
+]
+
+class EnchereModal(ui.Modal, title="Miser un montant"):
+    montant = ui.TextInput(label="Ton offre (en pièces)", placeholder="Ex : 3500", max_length=8)
+
+    def __init__(self, etat):
+        super().__init__()
+        self.etat = etat
+
+    async def on_submit(self, interaction):
+        try:
+            val = int(str(self.montant.value).replace(" ", ""))
+        except ValueError:
+            return await interaction.response.send_message("❌ Entre un nombre.", ephemeral=True)
+        ok, msg = _placer_enchere(self.etat, interaction.user, val)
+        await interaction.response.send_message(msg, ephemeral=True)
+
+def _placer_enchere(etat, membre, montant):
+    """Valide et enregistre une enchère. Retourne (succès, message)."""
+    import time as _t
+    uid = str(membre.id)
+    mini = etat["offre"] + etat["increment"] if etat["gagnant"] else etat["offre"]
+    if etat["gagnant"] and etat["gagnant"].id == membre.id:
+        return False, "❌ Tu détiens déjà la meilleure offre !"
+    if montant < mini:
+        return False, f"❌ Il faut miser au moins **{mini:,} pièces**."
+    if economy_data[uid]["coins"] < montant:
+        return False, f"❌ Tu n'as que **{economy_data[uid]['coins']:,} pièces**."
+    etat["offre"] = montant
+    etat["gagnant"] = membre
+    etat["nb"] += 1
+    etat["participants"].add(uid)
+    etat["deadline"] = _t.time() + etat["duree_relance"]
+    return True, f"✅ Offre de **{montant:,} pièces** enregistrée !"
+
+class EnchereView(ui.View):
+    def __init__(self, etat, timeout=900):
+        super().__init__(timeout=timeout)
+        self.etat = etat
+
+    @ui.button(label="Enchérir", emoji="💰", style=discord.ButtonStyle.success)
+    async def encherir(self, interaction, button):
+        mini = self.etat["offre"] + self.etat["increment"] if self.etat["gagnant"] else self.etat["offre"]
+        ok, msg = _placer_enchere(self.etat, interaction.user, mini)
+        await interaction.response.send_message(msg, ephemeral=True)
+
+    @ui.button(label="Miser un montant", emoji="✍️", style=discord.ButtonStyle.secondary)
+    async def miser(self, interaction, button):
+        await interaction.response.send_modal(EnchereModal(self.etat))
+
+async def run_encheres(channel, guild):
+    """🏛️ Vente aux enchères — carte, rôle ou item selon la rotation"""
+    import time as _t
+    type_lot = LOTS_ROTATION[enchere_rotation["index"] % len(LOTS_ROTATION)]
+    enchere_rotation["index"] += 1
+
+    lot_nom = lot_desc = None
+    lot_image = None
+    lot_key = lot_role = lot_item = None
+    couleur = 0xf1c40f
+    ping_type = "everyone"
+
+    if type_lot == "carte":
+        dispo = [k for k, cc in ANIME_CARDS_DB.items()
+                 if cc["rarete"] in ("Légendaire", "Mythique") and k not in claimed_cards]
+        if not dispo:
+            type_lot = "item"
+        else:
+            lot_key = random.choice(dispo)
+            cc = ANIME_CARDS_DB[lot_key]
+            lot_nom = f"{RARETE_EMOJI.get(cc['rarete'],'')} {cc['nom']}"
+            lot_desc = f"*{cc['serie']}* — **{cc['rarete']}**\n❤️ {cc['pv']} PV · ⚔️ {cc['attaque']} ATK · 🛡️ {cc['defense']} DEF"
+            lot_image = cc.get("image")
+            couleur = RARETE_COULEURS.get(cc["rarete"], 0xf1c40f)
+            ping_type = "gacha"
+
+    if type_lot == "role":
+        lot_role, couleur = random.choice(ROLES_ENCHERE)
+        lot_nom = lot_role
+        lot_desc = "Un rôle exclusif, attribué immédiatement au gagnant."
+
+    if type_lot == "item":
+        candidats = [i for i in SHOP_ITEMS if i["cat"] in ("boost", "pvp") and i["prix"] >= 1000]
+        lot_item = random.choice(candidats)
+        lot_nom = lot_item["nom"]
+        lot_desc = f"{lot_item.get('description','')}\n*Valeur boutique : {lot_item['prix']:,} pièces*"
+        couleur = 0x9b59b6
+
+    depart = {"carte": 500, "role": 2000, "item": 400}[type_lot]
+    increment = max(50, depart // 10)
+
+    salon = await create_event_channel(guild, "🏛️・encheres")
+    if not salon:
+        salon = channel
+
+    annonce = discord.Embed(
+        title="🏛️ VENTE AUX ENCHÈRES",
+        description=f"**Lot du jour :** {lot_nom}\n\nMise de départ : **{depart:,} pièces**",
+        color=couleur)
+    if salon is not channel:
+        await annoncer_event(guild, channel, ping_type, annonce, salon)
+
+    etat = {"offre": depart, "gagnant": None, "increment": increment, "nb": 0,
+            "participants": set(), "deadline": _t.time() + 60, "duree_relance": 60}
+    view = EnchereView(etat)
+
+    def build():
+        e = discord.Embed(title="🏛️ ENCHÈRE EN COURS", color=couleur)
+        e.add_field(name=f"📦 {lot_nom}", value=lot_desc or "\u200b", inline=False)
+        if etat["gagnant"]:
+            e.add_field(name="💰 Meilleure offre",
+                        value=f"**{etat['offre']:,} pièces**\n🙋 {etat['gagnant'].mention}", inline=True)
+        else:
+            e.add_field(name="💰 Mise de départ", value=f"**{depart:,} pièces**", inline=True)
+        e.add_field(name="📊 Activité",
+                    value=f"{etat['nb']} enchère(s)\n{len(etat['participants'])} participant(s)", inline=True)
+        reste = max(0, int(etat["deadline"] - _t.time()))
+        e.add_field(name="⏰ Temps restant", value=f"**{reste}s**\n*(relancé à chaque offre)*", inline=False)
+        if lot_image:
+            e.set_image(url=lot_image)
+        e.set_footer(text=f"Enchère minimum : +{increment:,} pièces • QG Kdrama")
+        return e
+
+    msg = await salon.send(get_event_ping(guild, ping_type) if salon is channel else "",
+                           embed=build(), view=view)
+
+    fin_max = _t.time() + 900   # 15 min maximum
+    while _t.time() < etat["deadline"] and _t.time() < fin_max:
+        await asyncio.sleep(5)
+        try:
+            await msg.edit(embed=build(), view=view)
+        except Exception:
+            break
+
+    view.stop()
+    try:
+        await msg.edit(embed=build(), view=None)
+    except Exception:
+        pass
+
+    # ── Adjugé ──
+    if not etat["gagnant"]:
+        await salon.send(embed=discord.Embed(
+            description="🔨 **Aucune offre** — le lot retourne dans les réserves.", color=0x95a5a6))
+        if salon is not channel:
+            await close_event_channel(salon, 60)
+        return
+
+    gagnant = etat["gagnant"]
+    uid = str(gagnant.id)
+    prix = etat["offre"]
+    if economy_data[uid]["coins"] < prix:
+        await salon.send(embed=discord.Embed(
+            description=f"❌ {gagnant.mention} n'a plus les fonds — la vente est annulée.", color=0xe74c3c))
+        if salon is not channel:
+            await close_event_channel(salon, 60)
+        return
+
+    economy_data[uid]["coins"] -= prix
+    detail = ""
+    if lot_key:
+        claimed_cards[lot_key] = uid
+        gacha_collections[uid][lot_key] = {"fusion": 0}
+        check_collection_achievements(uid, salon)
+        if ANIME_CARDS_DB[lot_key]["rarete"] == "Mythique":
+            unlock_achievement(uid, "mythique_1", salon)
+        detail = "La carte rejoint sa collection."
+    elif lot_role:
+        role = discord.utils.get(guild.roles, name=lot_role)
+        if not role:
+            try:
+                role = await guild.create_role(name=lot_role)
+            except Exception:
+                role = None
+        if role:
+            try:
+                await gagnant.add_roles(role, reason="Enchère remportée")
+                detail = "Le rôle vient de lui être attribué."
+            except Exception:
+                detail = "⚠️ Rôle non attribué — permissions insuffisantes."
+    elif lot_item:
+        iid = lot_item["id"]
+        if iid in ("freeze", "curse", "cadenas", "bombe_gacha", "fantome", "malediction", "vol_roll"):
+            inventaire[uid][iid] += 1
+            detail = f"L'objet est dans son inventaire — `.utiliser {iid} @joueur`"
+        elif iid == "rolls_5":
+            roll_data[uid]["rolls"] = min(roll_data[uid]["rolls"] + 5, ROLLS_MAX + 5)
+            detail = "+5 rolls crédités."
+        elif iid == "boost_rarete":
+            rarity_boost[uid] = 5
+            detail = "Boost Rareté actif pour 5 rolls."
+        else:
+            inventaire[uid][iid] += 1
+            detail = "L'objet est dans son inventaire."
+
+    await salon.send(embed=discord.Embed(
+        title="🔨 ADJUGÉ !",
+        description=(f"**{lot_nom}** revient à {gagnant.mention}\n"
+                     f"pour **{prix:,} pièces** !\n\n{detail}\n\n"
+                     f"*{etat['nb']} enchères · {len(etat['participants'])} participants*"),
+        color=couleur))
+    if salon is not channel:
+        await close_event_channel(salon, 180)
+
+# ============================================================
 #  NOUVEAUX EVENTS — Fonctions réutilisables (auto + manuel)
 # ============================================================
 async def run_question_eclair(channel, guild):
-    """⚡ Question Éclair — 3 premiers à répondre gagnent"""
+    """⚡ Question Éclair — 3 premiers à répondre gagnent, dans un salon dédié"""
     q = random.choice(QUESTIONS_ECLAIR)
-    ping = get_event_ping(guild, q["theme"])
+    salon_principal = channel
+    salon = await create_event_channel(guild, "⚡・question-eclair")
+    if salon:
+        await annoncer_event(guild, salon_principal, q["theme"], discord.Embed(
+            title="⚡ QUESTION ÉCLAIR !",
+            description="Une question arrive — les **3 premiers** à répondre gagnent des pièces !",
+            color=0xf1c40f), salon)
+        channel = salon
+    ping = get_event_ping(guild, q["theme"]) if channel is salon_principal else ""
     embed = discord.Embed(
         title="⚡ QUESTION ÉCLAIR !",
         description=f"**{q['q']}**\n\n🥇 1er : **200 pièces** • 🥈 2e : **120p** • 🥉 3e : **80p**\n*Réponds vite dans le chat !*",
@@ -3141,19 +3691,59 @@ async def run_question_eclair(channel, guild):
         await channel.send(embed=discord.Embed(
             description=f"⏰ Personne n'a trouvé ! La réponse était : **{q['r'][0]}**",
             color=0xe74c3c))
+    if channel is not salon_principal:
+        await close_event_channel(channel, 120)
 
-async def run_debat(channel, guild):
-    """🎤 Débat du Jour — vote communautaire"""
+async def run_debat(channel, guild, duree=3600):
+    """🎤 Débat du Jour — vote dans un salon dédié, résultat annoncé à la fin"""
     d = random.choice(DEBATS)
-    ping = get_event_ping(guild, d["theme"])
+    salon = await create_event_channel(guild, "🎤・debat-du-jour")
+    if not salon:
+        salon = channel
     embed = discord.Embed(
         title="🎤 DÉBAT DU JOUR !",
-        description=f"## {d['sujet']}\n\n🅰️ **{d['a']}**\n🆚\n🅱️ **{d['b']}**\n\n*Votez avec les réactions ! Résultat dans 1h.*",
-        color=0x9b59b6
-    )
-    msg = await channel.send(ping, embed=embed)
+        description=(f"## {d['sujet']}\n\n🅰️ **{d['a']}**\n🆚\n🅱️ **{d['b']}**\n\n"
+                     f"*Votez avec les réactions — résultat dans {duree//60} minutes.*"),
+        color=0x9b59b6)
+    if salon is not channel:
+        annonce = discord.Embed(
+            title="🎤 DÉBAT DU JOUR !",
+            description=f"## {d['sujet']}\n🅰️ {d['a']}  🆚  🅱️ {d['b']}",
+            color=0x9b59b6)
+        await annoncer_event(guild, channel, d["theme"], annonce, salon)
+        msg = await salon.send(embed=embed)
+    else:
+        msg = await salon.send(get_event_ping(guild, d["theme"]), embed=embed)
     await msg.add_reaction("🅰️")
     await msg.add_reaction("🅱️")
+
+    await asyncio.sleep(duree)
+
+    # ── Dépouillement ──
+    try:
+        msg = await salon.fetch_message(msg.id)
+    except Exception:
+        return
+    va = vb = 0
+    for r in msg.reactions:
+        if str(r.emoji) == "🅰️": va = max(0, r.count - 1)
+        elif str(r.emoji) == "🅱️": vb = max(0, r.count - 1)
+    total = va + vb
+    if total == 0:
+        gagnant, detail = "Personne n'a voté", ""
+    elif va > vb:
+        gagnant, detail = f"🅰️ **{d['a']}**", f"{va} voix contre {vb} ({va*100//total}%)"
+    elif vb > va:
+        gagnant, detail = f"🅱️ **{d['b']}**", f"{vb} voix contre {va} ({vb*100//total}%)"
+    else:
+        gagnant, detail = "🤝 **Égalité parfaite !**", f"{va} voix partout"
+    await salon.send(embed=discord.Embed(
+        title="🎤 RÉSULTAT DU DÉBAT",
+        description=f"### {d['sujet']}\n\nLe QG a tranché :\n\n# {gagnant}\n{detail}",
+        color=0x9b59b6))
+    if salon is not channel:
+        await close_event_channel(salon, 300)
+
 
 async def run_roi_colline(channel, guild):
     """👑 Roi de la Colline — défis en arène"""
@@ -3173,8 +3763,16 @@ async def run_roi_colline(channel, guild):
     await channel.send(ping, embed=embed)
 
 async def run_loterie(channel, guild):
-    """🍀 Loterie du QG — tickets puis tirage"""
-    ping = get_event_ping(guild, "everyone")
+    """🍀 Loterie du QG — tickets puis tirage, dans un salon dédié"""
+    salon_principal = channel
+    salon = await create_event_channel(guild, "🍀・loterie")
+    if salon:
+        await annoncer_event(guild, salon_principal, "everyone", discord.Embed(
+            title="🍀 LOTERIE DU QG !",
+            description="Achète tes tickets — **un seul gagnant rafle toute la cagnotte !**",
+            color=0xf1c40f), salon)
+        channel = salon
+    ping = get_event_ping(guild, "everyone") if channel is salon_principal else ""
     gid = guild.id
     loterie_data[gid] = {"participants": {}, "cagnotte": 0, "active": True}
     embed = discord.Embed(
@@ -3193,8 +3791,11 @@ async def run_loterie(channel, guild):
     data = loterie_data.get(gid)
     if not data or not data["participants"]:
         loterie_data.pop(gid, None)
-        return await channel.send(embed=discord.Embed(
+        await channel.send(embed=discord.Embed(
             description="🍀 Loterie annulée — aucun participant !", color=0x95a5a6))
+        if channel is not salon_principal:
+            await close_event_channel(channel, 60)
+        return
     # Tirage pondéré par nombre de tickets
     tickets_pool = []
     for uid, nb in data["participants"].items():
@@ -3210,8 +3811,8 @@ async def run_loterie(channel, guild):
         title="🍀 TIRAGE DE LA LOTERIE !",
         description=f"🎉 Félicitations {nom} !\n💰 Tu remportes la cagnotte de **{cagnotte:,} pièces** !\n\n*{len(tickets_pool)} tickets vendus à {len(data['participants'])} joueurs*",
         color=0xf1c40f))
-
-
+    if channel is not salon_principal:
+        await close_event_channel(channel, 180)
 
 @bot.command(name="loto", aliases=["loterie", "ticket_loto"])
 async def loto_cmd(ctx):
@@ -3231,7 +3832,6 @@ async def loto_cmd(ctx):
     await ctx.send(embed=discord.Embed(
         description=f"🎟️ **{ctx.author.display_name}** achète un ticket ! *(tu en as {nb})*\n💰 Cagnotte actuelle : **{cagnotte:,} pièces**",
         color=0x2ecc71))
-
 
 # ============================================================
 #  PING INTELLIGENT + DONNÉES DES EVENTS
@@ -3295,6 +3895,7 @@ async def lancerevent_cmd(ctx, nom: str = None):
                 "**👥 Ouverts à tout le monde :**\n"
                 "`questioneclair` `debatdujour` `roicolline` `loterie`\n"
                 "`invasion` `coffre` `colis` `jackpot` `classement`\n"
+                "`banquier` `encheres`\n"
                 "`doublexp` `nuitcasino` `heuremaudite`\n\n"
                 "**🎰 Orientés gacha :**\n"
                 "`nuitchasse` `marchenoir` `cartemystere`\n\n"
@@ -3342,15 +3943,48 @@ async def lancerevent_cmd(ctx, nom: str = None):
         return await run_classement(channel, ctx.guild)
     if nom in ("heuremaudite", "maudite"):
         return await run_heure_maudite(channel, ctx.guild)
+    if nom in ("banquier", "banque", "deal"):
+        return await run_banquier(channel, ctx.guild)
+    if nom in ("encheres", "enchere", "vente"):
+        return await run_encheres(channel, ctx.guild)
     await ctx.send(f"❌ Event `{nom}` inconnu — utilise `.lancerevent` sans argument pour la liste !")
 
-
-@bot.command(name="stopervent")
+@bot.command(name="stopervent", aliases=["stopevent"])
 @commands.has_permissions(manage_guild=True)
 async def stopervent_cmd(ctx):
-    global event_en_cours
-    event_en_cours = False
-    await ctx.send(embed=discord.Embed(description="🛑 Event arrêté !", color=0xe74c3c))
+    """Arrête tous les events en cours — .stopervent"""
+    global nuit_chasse_active, double_xp_event_actif, casino_boost_actif, jackpot_cagnotte
+    arretes = []
+    if nuit_chasse_active:
+        nuit_chasse_active = False; arretes.append("🌙 Nuit de Chasse")
+    if double_xp_event_actif:
+        double_xp_event_actif = False; arretes.append("⚡ Double XP")
+    if casino_boost_actif:
+        casino_boost_actif = False; arretes.append("🎰 Nuit Casino")
+    if jackpot_cagnotte:
+        jackpot_cagnotte = 0; arretes.append("💰 Jackpot")
+    if marche_noir_actif:
+        marche_noir_actif.clear(); arretes.append("🕶️ Marché Noir")
+    if coffre_actif:
+        coffre_actif.clear(); arretes.append("📦 Coffres")
+    if ctx.guild.id in active_boss:
+        _st = active_boss[ctx.guild.id].get("salon_temp")
+        del active_boss[ctx.guild.id]; arretes.append("⚔️ Boss")
+        if _st:
+            _ch = ctx.guild.get_channel(_st)
+            if _ch:
+                asyncio.create_task(close_event_channel(_ch, 30))
+    if ctx.guild.id in loterie_data:
+        del loterie_data[ctx.guild.id]; arretes.append("🍀 Loterie")
+    if ctx.guild.id in active_brackets:
+        del active_brackets[ctx.guild.id]; arretes.append("🏆 Tournoi")
+    if not arretes:
+        return await ctx.send("✅ Aucun event n'était en cours.")
+    await ctx.send(embed=discord.Embed(
+        title="🛑 Events arrêtés",
+        description="\n".join(f"• {a}" for a in arretes),
+        color=0xe74c3c))
+
 
 @bot.command(name="setsalon")
 @commands.has_permissions(administrator=True)
@@ -3358,8 +3992,9 @@ async def setsalon_cmd(ctx, type_salon: str = None):
     global SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_CASINO_ID, SALON_EVENT_ID
     global SALON_LEVELUP_ID, SALON_COMBAT_ID, SALON_DUEL_ID, SALON_DASHBOARD_ID
     global SALON_BIENVENUE_ID, SALON_AUREVOIR_ID, SALON_HOF_ID, SALON_GUIDE_ID, SALON_INVITATION_ID
+    global SALON_BOOST_ID, SALON_REGLEMENT_ID
     if not type_salon:
-        return await ctx.send("❌ Types : `gacha` `boutique` `casino` `event` `levelup` `guide` `combat` `duel` `dashboard` `bienvenue` `aurevoir` `halloffame` `girlsonly` `annonces` `invitation`")
+        return await ctx.send("❌ Types : `gacha` `boutique` `casino` `event` `levelup` `guide` `combat` `duel` `dashboard` `bienvenue` `aurevoir` `halloffame` `girlsonly` `annonces` `invitation` `boost` `reglement`")
     mapping = {
         "gacha": "SALON_GACHA_ID", "boutique": "SALON_BOUTIQUE_ID",
         "casino": "SALON_CASINO_ID", "event": "SALON_EVENT_ID",
@@ -3369,6 +4004,7 @@ async def setsalon_cmd(ctx, type_salon: str = None):
         "bienvenue": "SALON_BIENVENUE_ID", "aurevoir": "SALON_AUREVOIR_ID",
         "halloffame": "SALON_HOF_ID", "girlsonly": "SALON_GIRLS_ID",
         "annonces": "SALON_ANNONCES_ID", "invitation": "SALON_INVITATION_ID",
+        "boost": "SALON_BOOST_ID", "reglement": "SALON_REGLEMENT_ID",
     }
     t = type_salon.lower()
     if t not in mapping:
@@ -3381,6 +4017,8 @@ async def setsalon_cmd(ctx, type_salon: str = None):
     elif var == "SALON_LEVELUP_ID": SALON_LEVELUP_ID = ctx.channel.id
     elif var == "SALON_GUIDE_ID": SALON_GUIDE_ID = ctx.channel.id
     elif var == "SALON_INVITATION_ID": SALON_INVITATION_ID = ctx.channel.id
+    elif var == "SALON_BOOST_ID": SALON_BOOST_ID = ctx.channel.id
+    elif var == "SALON_REGLEMENT_ID": SALON_REGLEMENT_ID = ctx.channel.id
     elif var == "SALON_COMBAT_ID": SALON_COMBAT_ID = ctx.channel.id
     elif var == "SALON_DUEL_ID": SALON_DUEL_ID = ctx.channel.id
     elif var == "SALON_DASHBOARD_ID": SALON_DASHBOARD_ID = ctx.channel.id
@@ -3396,6 +4034,15 @@ async def setsalon_cmd(ctx, type_salon: str = None):
     sauvegarder_salons()
     extra = "\n📖 Tape maintenant `.guide` pour y publier le guide du serveur." if t == "guide" else ""
     await ctx.send(embed=discord.Embed(description=f"✅ Salon **{type_salon}** configuré sur {ctx.channel.mention} !{extra}", color=0x2ecc71))
+
+    # Le salon boutique reçoit directement la boutique
+    if t == "boutique":
+        try:
+            for e in build_shop_pages():
+                await ctx.channel.send(embed=e)
+                await asyncio.sleep(0.3)
+        except Exception as e:
+            print(f"[Boutique] Erreur publication : {e}")
 
     # Le salon Girls Only reçoit directement ses commandes — les filles les voient sur place
     if t == "girlsonly":
@@ -3570,11 +4217,9 @@ async def dashboard_cmd(ctx):
     embed.set_footer(text=f"Dashboard — {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}")
     await ctx.send(embed=embed)
 
-
 # ============================================================
 #  TASKS PLANIFIÉES
 # ============================================================
-
 
 # ============================================================
 #  SCHEDULER — Programmation d'events auto (jour + heure)
@@ -3594,6 +4239,7 @@ EVENTS_VALIDES = [
     "questioneclair", "debatdujour", "roicolline", "loterie",
     "coffre", "cartemystere", "nuitcasino", "nuitchasse", "marchenoir",
     "doublexp", "jackpot", "colis", "invasion", "heuremaudite", "classement",
+    "banquier", "encheres",
 ]
 
 def save_scheduled_events():
@@ -3634,6 +4280,8 @@ async def trigger_scheduled_event(guild, event_name):
         "jackpot":        run_jackpot,
         "classement":     run_classement,
         "heuremaudite":   run_heure_maudite,
+        "banquier":       run_banquier,
+        "encheres":       run_encheres,
     }
     try:
         if event_name == "coffre":
@@ -3644,7 +4292,6 @@ async def trigger_scheduled_event(guild, event_name):
             print(f"[Scheduler] Event inconnu : {event_name}")
     except Exception as e:
         print(f"[Scheduler] Erreur déclenchement {event_name}: {e}")
-
 
 @tasks.loop(minutes=1)
 async def scheduler_task():
@@ -3670,7 +4317,7 @@ async def addevent_cmd(ctx, event: str = None, jour: str = None, heure: str = No
         return await ctx.send(
             "❌ Usage : `.addevent <event> <jour> <heure>`\n"
             "Ex : `.addevent loterie samedi 20h`\n\n"
-            "📋 Events : `questioneclair` `debatdujour` `roicolline` `loterie` `coffre` `cartemystere` `nuitcasino` `nuitchasse` `marchenoir` `doublexp` `jackpot` `colis` `invasion` `heuremaudite` `classement`\n"
+            "📋 Events : `questioneclair` `debatdujour` `roicolline` `loterie` `coffre` `cartemystere` `nuitcasino` `nuitchasse` `marchenoir` `doublexp` `jackpot` `colis` `invasion` `heuremaudite` `classement` `banquier` `encheres`\n"
             "📅 Jours : lundi → dimanche\n"
             "🕐 Heure : `20h`, `20h30`, `9h`..."
         )
@@ -3753,7 +4400,6 @@ async def planningauto_cmd(ctx):
     embed.set_footer(text=f"Events auto : {statut} • .delevent <#> pour supprimer")
     await ctx.send(embed=embed)
 
-
 @tasks.loop(minutes=1)
 async def check_anniversaires():
     today = datetime.datetime.now().strftime("%d/%m")
@@ -3769,9 +4415,6 @@ async def check_anniversaires():
                         description=f"Toute la communauté souhaite un joyeux anniversaire à **{m.mention}** ! 🎉🥳",
                         color=0xff6b9d
                     ))
-
-
-
 
 @bot.command(name="arene", aliases=["duel","pvp"])
 async def arene_cmd(ctx, adversaire: discord.Member = None):
@@ -4054,8 +4697,7 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
 
         await combat_msg.edit(content=None, embed=build_embed_combat(), view=None)
 
-
-@bot.command(name="attaque")
+@bot.command(name="attaque", aliases=["attaquerboss", "boss_attack"])
 async def attaque_cmd(ctx):
     """Attaque le boss en cours ! — .attaque"""
     gid = ctx.guild.id
@@ -4091,7 +4733,6 @@ async def attaque_cmd(ctx):
     game["hp"] = max(0, game["hp"] - degats)
 
     boss = game["boss"]
-    build_embed = game["embed_fn"]
 
     if game["hp"] <= 0:
         # ── Boss vaincu ──────────────────────────────────────
@@ -4131,17 +4772,20 @@ async def attaque_cmd(ctx):
         except:
             await ctx.send(embed=win_embed)
 
+        salon_temp = game.get("salon_temp")
         del active_boss[gid]
+        if salon_temp:
+            ch = ctx.guild.get_channel(salon_temp)
+            if ch:
+                asyncio.create_task(close_event_channel(ch, 180))
 
     else:
         # ── Mise à jour de l'embed boss ──────────────────────
         derniere = f"**{ctx.author.display_name}** inflige **{degats:,} dégâts** !"
         try:
-            await game["msg"].edit(embed=build_embed(game["hp"], derniere))
+            await game["msg"].edit(embed=build_boss_embed(gid, derniere))
         except:
-            game["msg"] = await ctx.send(embed=build_embed(game["hp"], derniere))
-
-
+            game["msg"] = await ctx.send(embed=build_boss_embed(gid, derniere))
 
 # ============================================================
 #  ⚔️ ARÈNE PVP
@@ -4160,12 +4804,6 @@ ATTAQUES_PVP = [
 ]
 
 active_arene = {}
-
-
-
-
-
-
 
 # ============================================================
 #  📖 GUIDE DU SERVEUR — Explications pour les nouveaux
@@ -4388,7 +5026,6 @@ async def guide_cmd(ctx):
             description="💡 Astuce : va dans le salon voulu et tape `.setsalon guide` pour que le guide s'y publie par défaut.",
             color=0x3498db))
 
-
 # ============================================================
 #  🖼️ CARTE DE PROFIL — Image générée (style néon futuriste)
 # ============================================================
@@ -4529,8 +5166,6 @@ async def profil_cmd(ctx, membre: discord.Member = None):
     embed.add_field(name="🐾 Compagnon", value=pet_txt, inline=True)
     await ctx.send(embed=embed)
 
-
-
 # ============================================================
 #  🖼️ CARTES BIENVENUE / AUREVOIR — Images générées
 # ============================================================
@@ -4652,7 +5287,6 @@ async def generate_goodbye_card(member):
     buf.seek(0)
     return buf
 
-
 # ============================================================
 #  🏆 SUCCÈS / ACHIEVEMENTS — 30 succès pour tout le serveur
 # ============================================================
@@ -4769,7 +5403,6 @@ async def succes_cmd(ctx, membre: discord.Member = None):
         pages.append(embed)
     view = PageView(pages, ctx.author, timeout=120)
     await ctx.send(embed=pages[0], view=view)
-
 
 # ============================================================
 #  🐾 COMPAGNONS (PETS) — Bonus passifs pour tous
@@ -4951,7 +5584,6 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
         return await ctx.send(embed=discord.Embed(description=msg, color=0x2ecc71))
     await ctx.send("❌ Actions : `.pet` • `.pet liste` • `.pet equiper <nom>` • `.pet nourrir`")
 
-
 # ============================================================
 #  AUTOROLE — Persistance
 # ============================================================
@@ -5127,7 +5759,6 @@ async def bracket_resoudre_match(guild, gid, match_idx):
                     self.guild = g
             await bracket_lancer_match(FakeCtx(channel, guild), gid, 0)
 
-
 @bot.command(name="autorole")
 @commands.has_permissions(administrator=True)
 async def autorole_cmd(ctx, *, args: str = None):
@@ -5276,7 +5907,6 @@ async def autorole_cmd(ctx, *, args: str = None):
         embed = discord.Embed(title="🎭 Panels Autorole actifs", description=desc, color=0x9b59b6)
         await ctx.send(embed=embed)
 
-
 @bot.command(name="avis")
 async def avis_cmd(ctx, *, titre: str):
     """Voir les notes et avis du serveur pour un titre"""
@@ -5314,7 +5944,6 @@ SORTIES = [
     {"titre": "Jujutsu Kaisen S3", "type": "✨ Animé", "date": "2026", "plateforme": "Crunchyroll"},
 ]
 
-
 # ============================================================
 #  DEVINE LE PERSONNAGE
 # ============================================================
@@ -5333,60 +5962,63 @@ PERSONNAGES = [
 
 active_devine = {}
 
+def boss_barre(hp, hp_max):
+    """Barre de vie colorée du boss"""
+    ratio = hp / max(hp_max, 1)
+    filled = int(ratio * 14)
+    couleur = "🟩" if ratio > 0.6 else ("🟨" if ratio > 0.3 else "🟥")
+    return couleur * filled + "⬛" * (14 - filled)
 
-@bot.command(name="boss")
-@commands.has_permissions(manage_guild=True)
-async def boss_cmd(ctx):
-    """Fait apparaître un boss de serveur ! (admin) — .boss"""
-    gid = ctx.guild.id
-    if gid in active_boss:
-        return await ctx.send("⚔️ Un boss est déjà en cours ! Tape `.attaque` pour combattre !", delete_after=5)
-
-    boss = random.choice(BOSS_LIST)
-
-    def barre_boss(hp, hp_max):
-        ratio = hp / hp_max
-        filled = int(ratio * 14)
-        empty = 14 - filled
-        if ratio > 0.6:   c = "🟩"
-        elif ratio > 0.3: c = "🟨"
-        else:             c = "🟥"
-        return c * filled + "⬛" * empty
-
-    def build_boss_embed(hp, derniere_attaque=None):
-        ratio = hp / boss["hp_max"]
-        pct = int(ratio * 100)
-        color = 0xe74c3c if ratio < 0.3 else 0xf39c12 if ratio < 0.6 else 0x2ecc71
-
-        desc = (
-            f"## {boss['emoji']} {boss['nom']}\n"
-            f"*{boss['anime']}*\n\n"
-            f"❤️ **{hp:,} / {boss['hp_max']:,} HP** — {pct}%\n"
-            f"{barre_boss(hp, boss['hp_max'])}\n\n"
-        )
-        if derniere_attaque:
-            desc += f"⚔️ {derniere_attaque}\n\n"
-        desc += f"━━━━━━━━━━━━━━━━━━━━\n"
-        desc += f"🗡️ Tape `.attaque` pour frapper ! *(cooldown 13s)*\n"
-        desc += f"🏆 Récompense : **{boss['recompense']} pièces** pour tous + **+250 bonus** au coup fatal !"
-
-        embed = discord.Embed(description=desc, color=color)
+def build_boss_embed(gid, derniere_attaque=None):
+    """Embed du boss en cours — partagé par .boss, .attaque et l'event invasion"""
+    game = active_boss[gid]
+    boss = game["boss"]
+    hp, hp_max = game["hp"], boss["hp_max"]
+    ratio = hp / max(hp_max, 1)
+    color = 0xe74c3c if ratio < 0.3 else (0xf39c12 if ratio < 0.6 else 0x2ecc71)
+    desc = (
+        f"## {boss['emoji']} {boss['nom']}\n"
+        f"*{boss['anime']}*\n\n"
+        f"❤️ **{hp:,} / {hp_max:,} PV** — {int(ratio*100)}%\n"
+        f"{boss_barre(hp, hp_max)}\n\n"
+    )
+    if derniere_attaque:
+        desc += f"⚔️ {derniere_attaque}\n\n"
+    desc += (
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🗡️ Tape `.attaque` pour frapper ! *(cooldown 13s)*\n"
+        f"🏆 **{boss['recompense']} pièces** pour tous les participants "
+        "+ **250 bonus** au coup fatal !"
+    )
+    embed = discord.Embed(description=desc, color=color)
+    if boss.get("image"):
         embed.set_image(url=boss["image"])
-        embed.set_footer(text=f"QG Kdrama — Boss Event ⚔️")
-        return embed
+    embed.set_footer(text="QG Kdrama — Boss Event ⚔️")
+    return embed
 
-    msg = await ctx.send(embed=build_boss_embed(boss["hp_max"]))
-
+async def spawn_boss(channel, guild, ping=""):
+    """Fait apparaître un boss. Retourne False si un boss est déjà en cours."""
+    gid = guild.id
+    if gid in active_boss:
+        return False
+    boss = random.choice(BOSS_LIST).copy()
     active_boss[gid] = {
         "boss": boss,
         "hp": boss["hp_max"],
         "participants": {},
-        "channel": ctx.channel.id,
-        "msg": msg,
-        "barre_fn": barre_boss,
-        "embed_fn": build_boss_embed,
+        "channel": channel.id,
+        "msg": None,
     }
+    msg = await channel.send(ping, embed=build_boss_embed(gid))
+    active_boss[gid]["msg"] = msg
+    return True
 
+@bot.command(name="boss")
+@commands.has_permissions(manage_guild=True)
+async def boss_cmd(ctx):
+    """Fait apparaître un boss de serveur (admin) — .boss"""
+    if not await spawn_boss(ctx.channel, ctx.guild):
+        await ctx.send("⚔️ Un boss est déjà en cours ! Tape `.attaque` pour combattre.", delete_after=5)
 
 @bot.command(name="bracket")
 async def bracket_cmd(ctx, theme: str = None):
@@ -5435,7 +6067,6 @@ async def bracket_cmd(ctx, theme: str = None):
     # Lancer le premier match
     await bracket_lancer_match(ctx, gid, 0)
 
-
 @bot.command(name="bracketskip")
 @commands.has_permissions(manage_guild=True)
 async def bracket_skip(ctx):
@@ -5448,7 +6079,6 @@ async def bracket_skip(ctx):
         return await ctx.send("❌ Aucun vote en cours !")
     idx = list(game["votes_en_cours"].keys())[0]
     await bracket_resoudre_match(ctx.guild, gid, idx)
-
 
 @bot.command(name="bracketstop")
 @commands.has_permissions(manage_guild=True)
@@ -5468,8 +6098,6 @@ SLOT_GAINS = {
     3: {"🌸": 50, "🗡️": 100, "🦊": 150, "👑": 300, "🐉": 500, "💎": 750, "🎭": 200, "⚡": 400},
     2: 20,
 }
-slot_cooldowns = {}
-
 
 @bot.command(name="devine")
 async def devine_cmd(ctx):
@@ -5544,7 +6172,6 @@ PENDU_MOTS = [
 PENDU_STAGES = ["😵", "😰", "😨", "😟", "😐", "🙂", "😄"]
 
 active_pendu = {}
-
 
 @bot.command(name="gacha", aliases=["gc"])
 async def gacha_cmd(ctx, sous_cmd: str = None, *args):
@@ -5686,7 +6313,6 @@ async def gacha_cmd(ctx, sous_cmd: str = None, *args):
         embed.add_field(name="⚔️ Attaques", value=attaques_str, inline=False)
         await ctx.send(embed=embed)
 
-
 @bot.command(name="gacharesetall")
 @commands.has_permissions(administrator=True)
 async def gacharesetall_cmd(ctx):
@@ -5731,9 +6357,7 @@ async def gacharesetall_cmd(ctx):
     else:
         await msg.edit(embed=discord.Embed(description="⏰ Reset annulé — timeout.", color=0x95a5a6), view=None)
 
-
 # ============================================================
-
 
 # ── Fonctions process_ ──────────────────────────────────────
 async def process_jackpot(message):
@@ -5748,14 +6372,6 @@ async def process_jackpot(message):
         ))
         jackpot_cagnotte = 0
 loterie_data = {}  # {guild_id: {participants, cagnotte, active}}
-
-async def process_clown(message):
-    pass
-
-async def process_voleur(message):
-    pass
-
-
 
 @bot.command(name="gachatrade", aliases=["gctrade","cardtrade"])
 async def gachatrade_cmd(ctx, membre: discord.Member = None, ma_carte: str = None, *, sa_carte: str = None):
@@ -5856,7 +6472,6 @@ async def invitations_cmd(ctx, membre: discord.Member = None):
     )
     await ctx.send(embed=embed)
 
-
 @bot.command(name="noter")
 async def noter_cmd(ctx, note: int, *, titre: str):
     """
@@ -5879,7 +6494,6 @@ async def noter_cmd(ctx, note: int, *, titre: str):
         color=0xf1c40f
     )
     await ctx.send(embed=embed)
-
 
 @bot.command(name="pendu")
 async def pendu_cmd(ctx):
@@ -5974,11 +6588,9 @@ def _pendu_embed(game):
 
 # ============================================================
 
-shop_roles = {}  # {item_id: role_id}
 double_xp_users = {}  # {user_id: end_timestamp}
 voice_time = defaultdict(int)  # {user_id: minutes}
 voice_join_time = {}  # {user_id: join_timestamp}
-
 
 @bot.command(name="pokebattle", aliases=["pb", "pokefight"])
 async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
@@ -6263,7 +6875,6 @@ async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
         game["tour_num"] += 1
         await combat_msg.edit(content=None, embed=build_embed_pb(), view=None)
 
-
 @bot.command(name="pokestop", aliases=["stopcombat"])
 async def pokestop(ctx):
     """Annule le combat en cours — .pokestop"""
@@ -6272,11 +6883,6 @@ async def pokestop(ctx):
         await ctx.send("🛑 Combat annulé !")
     else:
         await ctx.send("❌ Aucun combat en cours !")
-
-
-
-
-
 
 # ============================================================
 #  🃏 BASE DE DONNÉES CARTES GACHA
@@ -6908,92 +7514,6 @@ RARETE_COULEURS = {
     "Commun":     0x95a5a6,
 }
 
-GACHA_RATES = {
-    "Mythique":   1,     # ~0.01%
-    "Légendaire": 50,    # ~0.5%
-    "Épique":     300,   # ~3%
-    "Rare":       2000,  # ~20%
-    "Commun":     7649,  # ~76.49%
-}
-
-def gacha_tirage(boost=False):
-    """Tire une carte dispo (non claimée) selon les probabilités"""
-    available = [k for k in ANIME_CARDS_DB if k not in claimed_cards]
-    if not available:
-        return None
-    rates = dict(GACHA_RATES)
-    if boost:
-        rates["Commun"] = 50
-        rates["Rare"] = 80
-        rates["Épique"] = 40
-        rates["Légendaire"] = 20
-        rates["Mythique"] = 5
-    pool = []
-    for key in available:
-        c = ANIME_CARDS_DB[key]
-        rarete = c["rarete"] if c["rarete"] in rates else "Commun"
-        pool.extend([key] * rates[rarete])
-    return random.choice(pool) if pool else None
-
-def get_roll_cooldown_seconds(uid):
-    """Retourne le temps restant avant reset des rolls en secondes"""
-    import time
-    data = roll_data[uid]
-    elapsed = time.time() - data["last_reset"]
-    total = ROLLS_RESET_HOURS * 3600
-    remaining = total - elapsed
-    return max(0, remaining)
-
-def get_claim_cooldown_seconds(uid):
-    """Retourne le temps restant avant pouvoir claim"""
-    import time
-    now_t = time.time()
-    cooldown = max(0, CLAIM_COOLDOWN_MINUTES - claim_reduction[uid])
-    # Malédiction active ? +5 min
-    if uid in claim_curse and claim_curse[uid] > now_t:
-        cooldown += 5
-    elapsed = now_t - claim_cooldown[uid]
-    remaining = (cooldown * 60) - elapsed
-    return max(0, remaining)
-
-def build_gacha_embed(uid, key, rolls_left):
-    """Construit l'embed de tirage gacha style Mudae"""
-    import time
-    c = ANIME_CARDS_DB[key]
-    level = fusion_levels[uid][key]
-    rarete_emoji = RARETE_EMOJI.get(c["rarete"], "🔵")
-    couleur = RARETE_COULEURS.get(c["rarete"], 0x95a5a6)
-    stars = "⭐" * level if level > 0 else ""
-
-    boost_atk = level * 15
-    boost_def = level * 10
-    boost_pv = level * 20
-
-    embed = discord.Embed(
-        title=f"{c['emoji']} {c['nom']} {stars}",
-        description=f"*{c['serie']}* {rarete_emoji} **{c['rarete']}**",
-        color=couleur
-    )
-
-    image = c.get("image")
-    if image:
-        embed.set_image(url=image)
-
-    embed.add_field(
-        name="📊 Stats",
-        value=f"❤️ **{c['pv'] + boost_pv}** PV | ⚔️ **{c['attaque'] + boost_atk}** ATK | 🛡️ **{c['defense'] + boost_def}** DEF",
-        inline=False
-    )
-
-    attaques_str = "\n".join([
-        f"{a['emoji']} **{a['nom']}** — `{a['degats']} dégâts`"
-        for a in c["attaques"]
-    ])
-    embed.add_field(name="⚔️ Attaques", value=attaques_str, inline=False)
-    embed.set_footer(text=f"🎰 Rolls restants : {rolls_left} • .rolls pour voir tes rolls")
-    return embed
-
-
 @bot.command(name="rolecreate")
 @commands.has_permissions(manage_roles=True)
 async def role_create(ctx, role: discord.Role, emoji: str, image_url: str = None):
@@ -7020,7 +7540,6 @@ async def role_create(ctx, role: discord.Role, emoji: str, image_url: str = None
     }
     await ctx.message.delete()
 
-
 @bot.command(name="roledelete")
 @commands.has_permissions(manage_roles=True)
 async def role_delete(ctx, role: discord.Role):
@@ -7034,7 +7553,6 @@ async def role_delete(ctx, role: discord.Role):
         description=f"✅ Rôle par réaction **{role.name}** supprimé !",
         color=0x2ecc71
     ))
-
 
 @bot.command(name="rolelist")
 @commands.has_permissions(manage_roles=True)
@@ -7053,8 +7571,6 @@ async def role_list(ctx):
             )
     await ctx.send(embed=embed)
 
-
-
 @bot.command(name="setrollreset")
 @commands.has_permissions(administrator=True)
 async def setrollreset(ctx, heures: int = None):
@@ -7064,7 +7580,6 @@ async def setrollreset(ctx, heures: int = None):
         return await ctx.send("❌ Précise un nombre d'heures entre 1 et 24 ! Ex: `.setrollreset 6`")
     ROLLS_RESET_HOURS = heures
     await ctx.send(f"✅ Rolls rechargés toutes les **{heures}h** maintenant !")
-
 
 @bot.command(name="sorties")
 async def sorties_cmd(ctx):
@@ -7092,11 +7607,9 @@ async def sorties_cmd(ctx):
 
 # ─── Système d'invitations ───────────────────────────────────
 
-invite_tracker  = {}   # {invited_user_id: inviter_user_id}
 invite_counts   = defaultdict(int)   # {inviter_user_id: count}
 guild_invites   = {}   # cache {guild_id: {code: uses}}
 SALON_INVITATION_ID = None  # salon où afficher les invitations
-
 
 @bot.command(name="topinvitations", aliases=["topinvites"])
 async def topinvitations_cmd(ctx):
@@ -7119,7 +7632,6 @@ async def topinvitations_cmd(ctx):
 
 # ─── Sondage simplifié ───────────────────────────────────────
 
-
 @bot.command(name="utiliser")
 async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None):
     """Utilise un item offensif sur un joueur — .utiliser <item> @joueur"""
@@ -7133,16 +7645,12 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
     itype = item_type.lower()
 
     # Vérif que le joueur a bien l'item
-    pending = getattr(bot, 'pending_items', {})
-    if itype not in ("freeze","curse") and (uid not in pending or itype not in pending.get(uid,{})):
-        return await ctx.send(f"❌ Tu n'as pas l'item `{itype}` ! Achète-le en boutique avec `.acheter {itype}`")
+    if inventaire[uid].get(itype, 0) <= 0:
+        return await ctx.send(f"❌ Tu n'as pas l'item `{itype}` ! Achète-le avec `.acheter {itype}`")
 
     # Vérif amulette sur la cible
-    amulette = getattr(bot, 'amulette_active', {})
-    if uid_cible in amulette and amulette[uid_cible] > now_ts:
-        # Renvoyer sur l'attaquant
-        if uid in pending and itype in pending[uid]:
-            del pending[uid][itype]
+    if amulette_active.get(uid_cible, 0) > now_ts:
+        inventaire[uid][itype] -= 1
         return await ctx.send(embed=discord.Embed(
             title="🪬 Amulette activée !",
             description=f"**{cible.display_name}** est protégé par une **Amulette** ! Le sabotage se retourne contre **{ctx.author.mention}** ! 😈",
@@ -7150,9 +7658,8 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
         ))
 
     # Vérif protection divine
-    if uid_cible in shield_active and shield_active[uid_cible] > now_ts:
-        if uid in pending and itype in pending[uid]:
-            del pending[uid][itype]
+    if shield_active.get(uid_cible, 0) > now_ts:
+        inventaire[uid][itype] -= 1
         restant = int((shield_active[uid_cible] - now_ts) // 60)
         return await ctx.send(f"🌟 **{cible.display_name}** est sous **Protection Divine** ! ({restant} min restantes)")
 
@@ -7161,8 +7668,7 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
         return await ctx.send(f"🛡️ **{cible.display_name}** est protégé par un bouclier !")
 
     # Consommer l'item
-    if uid in pending and itype in pending.get(uid,{}):
-        del pending[uid][itype]
+    inventaire[uid][itype] -= 1
 
     # ── FREEZE ───────────────────────────────────────────────
     if itype == "freeze":
@@ -7212,9 +7718,7 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
             return await ctx.send(f"❌ **{cible.display_name}** n'a aucune carte !")
         ghost_key = random.choice(cible_cards)
         ghost_card = ANIME_CARDS_DB[ghost_key]
-        if not hasattr(bot, 'ghost_cards'):
-            bot.ghost_cards = {}
-        bot.ghost_cards[f"{uid_cible}_{ghost_key}"] = now_ts + 1800  # 30 min
+        ghost_cards[f"{uid_cible}_{ghost_key}"] = now_ts + 1800  # 30 min
         await ctx.send(embed=discord.Embed(title="👻 Fantôme !",
             description=f"Une carte de **{cible.mention}** devient invisible pendant **30 min** ! 👻",
             color=0x9b59b6))
@@ -7229,9 +7733,7 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
         if key_mal in bot.malediction_targets:
             return await ctx.send(f"❌ Tu as déjà maudit **{cible.display_name}** aujourd'hui !")
         bot.malediction_targets[key_mal] = True
-        if not hasattr(bot, 'malediction_active'):
-            bot.malediction_active = {}
-        bot.malediction_active[uid_cible] = now_ts + 3600  # 1h
+        malediction_active[uid_cible] = now_ts + 3600  # 1h
         await ctx.send(embed=discord.Embed(title="🎭 Malédiction Rare !",
             description=f"**{cible.mention}** ne tirera que des cartes **Communes** lors de son prochain roll ! 😈",
             color=0x9b59b6))
@@ -7327,39 +7829,9 @@ async def watch_cmd(ctx, action: str = None, *, title: str = None):
 # ============================================================
 reviews_data = defaultdict(lambda: defaultdict(dict))  # {title_lower: {user_id: {"note": int, "avis": str}}}
 
-
-
-
 # ============================================================
 #  COMMANDES SUPPLÉMENTAIRES RÉCUPÉRÉES
 # ============================================================
-
-@bot.command(name="attaquerboss", aliases=["boss_attack"])
-async def attaquerboss_cmd(ctx):
-    """Attaquer le boss en cours — .attaquerboss"""
-    uid = str(ctx.author.id)
-    if not active_boss:
-        return await ctx.send("❌ Aucun boss actif pour l'instant !")
-    boss = list(active_boss.values())[0]
-    degats = random.randint(50, 200)
-    boss["pv"] = max(0, boss["pv"] - degats)
-    boss.setdefault("participants", {})[uid] = boss["participants"].get(uid, 0) + degats
-    if boss["pv"] <= 0:
-        reward = random.randint(200, 500)
-        economy_data[uid]["coins"] += reward
-        unlock_achievement(uid, "boss_kill", ctx.channel)
-        embed = discord.Embed(
-            title="💀 BOSS VAINCU !",
-            description=f"**{ctx.author.display_name}** a porté le coup fatal ! **+{reward} pièces** 🎉",
-            color=0xf1c40f
-        )
-        active_boss.clear()
-    else:
-        pct = int((boss["pv"] / boss["pv_max"]) * 20)
-        bar = "\u2588"*pct + "\u2591"*(20-pct)
-        desc = f"\u2694\ufe0f **{ctx.author.display_name}** inflige **{degats} dégâts** !\n`{bar}` {boss['pv']}/{boss['pv_max']} PV"
-        embed = discord.Embed(description=desc, color=0xe74c3c)
-    await ctx.send(embed=embed)
 
 @bot.command(name="invoke")
 async def invoke_cmd(ctx):
@@ -7493,7 +7965,6 @@ async def leavefaction_cmd(ctx):
         await ctx.send("✅ Tu as quitté ta faction !")
     else:
         await ctx.send("❌ Tu n'es dans aucune faction !")
-
 
 # ============================================================
 #  E. BURN / RECYCLAGE — Détruire une carte contre des pièces
@@ -7703,7 +8174,6 @@ async def cardinfo_cmd(ctx, *, perso: str = None):
             embed.set_footer(text="Carte disponible — personne ne la possède !")
     await ctx.send(embed=embed)
 
-
 @bot.command(name="gachastats")
 async def gachastats_cmd(ctx):
     """Classement des collections — .gachastats"""
@@ -7847,7 +8317,6 @@ async def missions_cmd(ctx):
     
     await ctx.send(embed=embed)
 
-
 # ============================================================
 #  LOUP GAROU — DONNÉES
 # ============================================================
@@ -7893,6 +8362,341 @@ LG_NARRATIONS = {
         "Les loups garous ont gagné. Ils contrôlent désormais le village. Les villageois n'ont pas su les démasquer. 🐺🏆",
     ],
 }
+
+
+# ============================================================
+#  🐺 LOUP GAROU — Interfaces cliquables par rôle
+# ============================================================
+def _lg_options(game, guild, exclure=(), loups_visibles=False):
+    """Construit la liste déroulante des joueurs vivants"""
+    opts = []
+    for uid, p in game["players"].items():
+        if not p["alive"] or uid in exclure:
+            continue
+        emoji = "🐺" if (loups_visibles and p["role"] in ("Loup Garou", "Loup Blanc")) else "👤"
+        opts.append(discord.SelectOption(label=p["name"][:100], value=str(uid), emoji=emoji))
+    return opts[:25]
+
+class LGCibleSelect(ui.Select):
+    """Menu déroulant générique de désignation"""
+    def __init__(self, options, placeholder):
+        super().__init__(placeholder=placeholder, options=options, min_values=1, max_values=1)
+
+    async def callback(self, interaction):
+        await self.view.choisir(interaction, int(self.values[0]))
+
+class LGLoupsView(ui.View):
+    """🐺 Vote de la meute — majorité l'emporte"""
+    def __init__(self, game, gid, ctx, timeout=LG_DUREE_NUIT):
+        super().__init__(timeout=timeout)
+        self.game, self.gid, self.ctx = game, gid, ctx
+        self.message = None
+        opts = _lg_options(game, ctx.guild,
+                           exclure=[u for u, p in game["players"].items()
+                                    if p["role"] in ("Loup Garou", "Loup Blanc")])
+        self.add_item(LGCibleSelect(opts, "🎯 Désigner une victime…"))
+
+    async def interaction_check(self, interaction):
+        p = self.game["players"].get(interaction.user.id)
+        if not p or not p["alive"] or p["role"] not in ("Loup Garou", "Loup Blanc"):
+            await interaction.response.send_message("❌ Seuls les loups votent ici.", ephemeral=True)
+            return False
+        return True
+
+    async def choisir(self, interaction, cible):
+        uid = interaction.user.id
+        self.game["kill_votes"][uid] = cible
+        nom = self.game["players"][cible]["name"]
+        loups = [u for u, p in self.game["players"].items() if p["alive"] and p["role"] == "Loup Garou"]
+        votes = {k: v for k, v in self.game["kill_votes"].items()
+                 if self.game["players"].get(k, {}).get("role") == "Loup Garou"}
+        detail = "\n".join(f"• **{self.game['players'][k]['name']}** → {self.game['players'][v]['name']}"
+                           for k, v in votes.items())
+        await interaction.response.send_message(f"🎯 Tu désignes **{nom}**.", ephemeral=True)
+        try:
+            await interaction.message.edit(embed=discord.Embed(
+                title="🐺 La meute délibère",
+                description=(f"*Vos crocs se découvrent. Il faut choisir — et vite.*\n\n"
+                             f"**Votes ({len(votes)}/{len(loups)})**\n{detail}"),
+                color=0x2c3e50), view=self)
+        except Exception:
+            pass
+        if len(votes) >= len(loups) and loups:
+            from collections import Counter as _C
+            victime = _C(votes.values()).most_common(1)[0][0]
+            self.game["eliminated_tonight"] = victime
+            for it in self.children: it.disabled = True
+            try:
+                await interaction.message.edit(view=self)
+            except Exception:
+                pass
+            await interaction.channel.send(embed=discord.Embed(
+                description=f"🐺 La meute a tranché : **{self.game['players'][victime]['name']}** ne verra pas l'aube.",
+                color=0xe74c3c))
+            await _lg_inform_sorciere(self.ctx.guild, self.game, victime)
+            self.stop()
+
+class LGLoupBlancView(ui.View):
+    """🤍 Frappe solitaire — peut viser un loup"""
+    def __init__(self, game, uid_lb, guild, timeout=LG_DUREE_NUIT):
+        super().__init__(timeout=timeout)
+        self.game, self.uid_lb = game, uid_lb
+        self.add_item(LGCibleSelect(_lg_options(game, guild, exclure=[uid_lb], loups_visibles=True),
+                                    "🤍 Ta cible secrète…"))
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.uid_lb:
+            await interaction.response.send_message("❌ Ce n'est pas ton salon.", ephemeral=True)
+            return False
+        return True
+
+    async def choisir(self, interaction, cible):
+        self.game["loup_blanc_cible"] = cible
+        for it in self.children: it.disabled = True
+        await interaction.response.edit_message(embed=discord.Embed(
+            title="🤍 Ton choix est scellé",
+            description=(f"**{self.game['players'][cible]['name']}** mourra cette nuit.\n\n"
+                         f"*Personne ne saura que c'était toi. Pas même la meute.*"),
+            color=0x95a5a6), view=self)
+        self.stop()
+
+class LGVoyanteView(ui.View):
+    """🔮 Une seule vision par nuit"""
+    def __init__(self, game, uid_v, guild, timeout=LG_DUREE_NUIT):
+        super().__init__(timeout=timeout)
+        self.game, self.uid_v = game, uid_v
+        self.add_item(LGCibleSelect(_lg_options(game, guild, exclure=[uid_v]), "🔮 Qui veux-tu sonder ?"))
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.uid_v:
+            await interaction.response.send_message("❌ Ce n'est pas ton salon.", ephemeral=True)
+            return False
+        return True
+
+    async def choisir(self, interaction, cible):
+        p = self.game["players"][cible]
+        rd = LG_ROLES.get(p["role"], {"emoji": "❓"})
+        loup = p["role"] in ("Loup Garou", "Loup Blanc")
+        for it in self.children: it.disabled = True
+        await interaction.response.edit_message(embed=discord.Embed(
+            title="🔮 La vision se dissipe…",
+            description=(f"**{p['name']}** est {rd['emoji']} **{p['role']}**\n\n"
+                         + ("🔴 *Un loup. Tu le sais maintenant — mais comment le dire sans te trahir ?*"
+                            if loup else "✅ *Innocent. Une piste écartée.*")),
+            color=0xe74c3c if loup else 0x2ecc71), view=self)
+        self.stop()
+
+
+class LGSorciereView(ui.View):
+    """🧙 Désigne d'abord, puis choisis la fiole"""
+    def __init__(self, game, uid_s, guild, timeout=LG_DUREE_NUIT):
+        super().__init__(timeout=timeout)
+        self.game, self.uid_s, self.cible = game, uid_s, None
+        self.add_item(LGCibleSelect(_lg_options(game, guild), "🧪 Désigner quelqu'un…"))
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.uid_s:
+            await interaction.response.send_message("❌ Ce n'est pas ton antre.", ephemeral=True)
+            return False
+        return True
+
+    def _potions(self):
+        return self.game["witch_potions"].get(self.uid_s, {"life": True, "death": True})
+
+    async def choisir(self, interaction, cible):
+        self.cible = cible
+        nom = self.game["players"][cible]["name"]
+        pot = self._potions()
+        victime = self.game.get("eliminated_tonight")
+        peut_soigner = pot.get("life") and victime == cible
+        self.soigner.disabled = not peut_soigner
+        self.empoisonner.disabled = not pot.get("death")
+        aide = ("*Cette personne est la proie des loups — tu peux encore la sauver.*"
+                if peut_soigner else
+                "*Ta fiole de vie ne ramène que la victime des loups.*" if pot.get("life")
+                else "*Ta fiole de vie est vide.*")
+        await interaction.response.edit_message(embed=discord.Embed(
+            title="🧙‍♀️ Ton chaudron frémit",
+            description=f"Tu as désigné **{nom}**.\n\n{aide}\n\nQue fais-tu ?",
+            color=0x27ae60), view=self)
+
+    @ui.button(label="Sauver", emoji="🌿", style=discord.ButtonStyle.success, row=1, disabled=True)
+    async def soigner(self, interaction, button):
+        if self.cible is None:
+            return await interaction.response.send_message("❌ Désigne d'abord quelqu'un.", ephemeral=True)
+        self.game["witch_potions"][self.uid_s]["life"] = False
+        if self.game.get("eliminated_tonight") == self.cible:
+            self.game["eliminated_tonight"] = None
+        nom = self.game["players"][self.cible]["name"]
+        for it in self.children: it.disabled = True
+        await interaction.response.edit_message(embed=discord.Embed(
+            title="🌿 Fiole de vie brisée",
+            description=f"**{nom}** respirera encore demain.\n\n*Il ne saura jamais qui l'a sauvé.*",
+            color=0x2ecc71), view=self)
+        await _lg_check_sorciere_potions(interaction.guild, self.game, self.uid_s)
+        self.stop()
+
+    @ui.button(label="Empoisonner", emoji="☠️", style=discord.ButtonStyle.danger, row=1, disabled=True)
+    async def empoisonner(self, interaction, button):
+        if self.cible is None:
+            return await interaction.response.send_message("❌ Désigne d'abord quelqu'un.", ephemeral=True)
+        self.game["witch_potions"][self.uid_s]["death"] = False
+        self.game["players"][self.cible]["alive"] = False
+        nom = self.game["players"][self.cible]["name"]
+        for it in self.children: it.disabled = True
+        await interaction.response.edit_message(embed=discord.Embed(
+            title="☠️ Fiole de mort versée",
+            description=f"**{nom}** ne se réveillera pas.\n\n*Le village croira que ce sont les loups.*",
+            color=0xe74c3c), view=self)
+        await _lg_check_sorciere_potions(interaction.guild, self.game, self.uid_s)
+        self.stop()
+
+    @ui.button(label="Ne rien faire", emoji="⏭️", style=discord.ButtonStyle.secondary, row=1)
+    async def passer(self, interaction, button):
+        for it in self.children: it.disabled = True
+        await interaction.response.edit_message(embed=discord.Embed(
+            description="⏭️ Tu ranges tes fioles. *Cette nuit, tu observes.*", color=0x95a5a6), view=self)
+        self.stop()
+
+class LGCupidonView(ui.View):
+    """💘 Deux flèches, deux destins liés"""
+    def __init__(self, game, uid_c, guild, timeout=LG_DUREE_NUIT):
+        super().__init__(timeout=timeout)
+        self.game, self.uid_c = game, uid_c
+        self.a = self.b = None
+        opts = _lg_options(game, guild)
+        s1 = LGCibleSelect(opts, "💘 Premier amoureux…"); s1.row = 0
+        s2 = LGCibleSelect(list(opts), "💘 Second amoureux…"); s2.row = 1
+        s1.callback = self._mk(1, s1); s2.callback = self._mk(2, s2)
+        self.add_item(s1); self.add_item(s2)
+
+    def _mk(self, num, select):
+        async def cb(interaction):
+            if interaction.user.id != self.uid_c:
+                return await interaction.response.send_message("❌ Ce n'est pas ton salon.", ephemeral=True)
+            val = int(select.values[0])
+            if num == 1: self.a = val
+            else: self.b = val
+            self.lier.disabled = not (self.a and self.b and self.a != self.b)
+            txt = (f"❤️ **{self.game['players'][self.a]['name']}**" if self.a else "❤️ *(à choisir)*")
+            txt += "  ✚  "
+            txt += (f"**{self.game['players'][self.b]['name']}**" if self.b else "*(à choisir)*")
+            if self.a and self.a == self.b:
+                txt += "\n\n⚠️ *Choisis deux personnes différentes.*"
+            await interaction.response.edit_message(embed=discord.Embed(
+                title="💘 Tes flèches sont prêtes",
+                description=f"*Tu ne tues pas — tu lies. Pour le meilleur et surtout pour le pire.*\n\n{txt}",
+                color=0xff6b9d), view=self)
+        return cb
+
+    @ui.button(label="Lier ces deux âmes", emoji="💞", style=discord.ButtonStyle.success, row=2, disabled=True)
+    async def lier(self, interaction, button):
+        self.game["lovers"] = [self.a, self.b]
+        self.game["cupidon_done"] = True
+        for it in self.children: it.disabled = True
+        na = self.game["players"][self.a]["name"]; nb = self.game["players"][self.b]["name"]
+        await interaction.response.edit_message(embed=discord.Embed(
+            title="💞 Les âmes sont liées",
+            description=f"**{na}** et **{nb}** vivront et mourront ensemble.\n\n*Ils viennent d'être prévenus en privé.*",
+            color=0xff6b9d), view=self)
+        for uid in (self.a, self.b):
+            m = interaction.guild.get_member(int(uid))
+            autre = self.b if uid == self.a else self.a
+            if m:
+                try:
+                    await m.send(embed=discord.Embed(
+                        title="💘 Une flèche t'a touché",
+                        description=(f"Tu es lié à **{self.game['players'][autre]['name']}**.\n\n"
+                                     f"*Si l'un de vous meurt, l'autre le suivra de chagrin.*"),
+                        color=0xff6b9d))
+                except Exception:
+                    pass
+        salon_id = self.game.get("salons_temp", {}).pop("cupidon", None)
+        if salon_id:
+            ch = interaction.guild.get_channel(salon_id)
+            if ch:
+                asyncio.create_task(close_event_channel(ch, 30))
+        self.stop()
+
+class LGChasseurView(ui.View):
+    """🏹 Le dernier geste"""
+    def __init__(self, game, uid_ch, guild, timeout=120):
+        super().__init__(timeout=timeout)
+        self.game, self.uid_ch = game, uid_ch
+        self.add_item(LGCibleSelect(_lg_options(game, guild, exclure=[uid_ch]), "🏹 Qui pars avec toi ?"))
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.uid_ch:
+            await interaction.response.send_message("❌ Ce n'est pas ton arme.", ephemeral=True)
+            return False
+        return True
+
+    async def choisir(self, interaction, cible):
+        self.game["players"][cible]["alive"] = False
+        nom = self.game["players"][cible]["name"]
+        for it in self.children: it.disabled = True
+        await interaction.response.edit_message(embed=discord.Embed(
+            title="🏹 Le coup part",
+            description=f"**{nom}** s'effondre à tes côtés.\n\n*Tu ne pars pas seul.*",
+            color=0xe67e22), view=self)
+        ch_pub = interaction.guild.get_channel(self.game["channel"])
+        if ch_pub:
+            await ch_pub.send(embed=discord.Embed(
+                description=f"🏹 Dans un dernier souffle, le Chasseur emporte **{nom}** !",
+                color=0xe67e22))
+        salon_id = self.game.get("salons_temp", {}).pop("chasseur", None)
+        if salon_id:
+            c2 = interaction.guild.get_channel(salon_id)
+            if c2:
+                asyncio.create_task(close_event_channel(c2, 30))
+        self.stop()
+
+
+class LGVoteView(ui.View):
+    """⚖️ Vote du village — menu déroulant, tout le monde vote"""
+    def __init__(self, game, gid, ctx, timeout=LG_DUREE_JOUR):
+        super().__init__(timeout=timeout)
+        self.game, self.gid, self.ctx = game, gid, ctx
+        self.add_item(LGCibleSelect(_lg_options(game, ctx.guild), "⚖️ Voter contre…"))
+
+    async def interaction_check(self, interaction):
+        p = self.game["players"].get(interaction.user.id)
+        if not p:
+            await interaction.response.send_message("❌ Tu ne participes pas à cette partie.", ephemeral=True)
+            return False
+        if not p["alive"]:
+            await interaction.response.send_message("💀 Les morts ne votent pas.", ephemeral=True)
+            return False
+        return True
+
+    async def choisir(self, interaction, cible):
+        uid = interaction.user.id
+        if cible == uid:
+            return await interaction.response.send_message("❌ Tu ne peux pas voter contre toi-même.", ephemeral=True)
+        self.game["votes"][uid] = cible
+        vivants = [u for u, p in self.game["players"].items() if p["alive"]]
+        from collections import Counter as _C
+        tally = _C(self.game["votes"].values())
+        detail = "\n".join(f"• **{self.game['players'][k]['name']}** — {v} voix"
+                           for k, v in tally.most_common())
+        await interaction.response.send_message(
+            f"🗳️ Ton vote va contre **{self.game['players'][cible]['name']}**.", ephemeral=True)
+        try:
+            await interaction.message.edit(embed=discord.Embed(
+                title="⚖️ Le village délibère",
+                description=(f"*Les accusations fusent. Il faut trancher.*\n\n"
+                             f"**Votes ({len(self.game['votes'])}/{len(vivants)})**\n{detail}"),
+                color=0xe67e22), view=self)
+        except Exception:
+            pass
+        if len(self.game["votes"]) >= len(vivants):
+            for it in self.children: it.disabled = True
+            try:
+                await interaction.message.edit(view=self)
+            except Exception:
+                pass
+            self.stop()
+            await lg_resolve_vote(self.ctx, self.game, self.gid)
 
 async def lg_narrer(ctx, cle: str):
     import random as _r
@@ -8037,206 +8841,106 @@ async def lg_create_salons(guild, game):
     return salons
 
 async def lg_nuit_annonces(guild, game, ctx_channel):
-    """Ping et instructions dans chaque salon de nuit"""
-    import random as _r
+    """Narration + interface cliquable dans chaque salon de rôle"""
     players = game["players"]
     salons = game.get("salons_temp", {})
-    nuit_num = game.get("day", 1)
+    nuit = game.get("day", 1)
 
-    # Liste villageois vivants (pas loups)
-    villageois_vivants = [(uid, p) for uid, p in players.items() 
-                          if p["alive"] and p["role"] not in ["Loup Garou", "Loup Blanc"]]
-    tous_vivants = [(uid, p) for uid, p in players.items() if p["alive"]]
+    class _Ctx:
+        def __init__(s, g, ch): s.guild, s.channel = g, ch
+    ctx = _Ctx(guild, ctx_channel)
 
-    def mentions_list(liste):
-        parts = []
-        for uid, p in liste:
-            m = guild.get_member(int(uid))
-            if m:
-                parts.append(f"• {m.mention} ({p['role'] if p['role'] in ['Loup Garou','Loup Blanc'] else p['name']})")
-            else:
-                parts.append(f"• {p['name']}")
-        return "\n".join(parts) if parts else "Aucun"
+    def ping(uids):
+        return " ".join(m.mention for m in
+                        (guild.get_member(int(u)) for u in uids) if m)
 
-    def mentions_villageois():
-        parts = []
-        for uid, p in villageois_vivants:
-            m = guild.get_member(int(uid))
-            if m:
-                parts.append(f"• {m.mention}")
-            else:
-                parts.append(f"• {p['name']}")
-        return "\n".join(parts) if parts else "Aucun"
-
-    def mentions_tous():
-        parts = []
-        for uid, p in tous_vivants:
-            m = guild.get_member(int(uid))
-            if m:
-                parts.append(f"• {m.mention}")
-            else:
-                parts.append(f"• {p['name']}")
-        return "\n".join(parts) if parts else "Aucun"
-
-    # 🐺 Salon Loups
-    if "loups" in salons:
+    # ── 🐺 La meute ──
+    loups = [u for u, p in players.items() if p["alive"] and p["role"] in ("Loup Garou", "Loup Blanc")]
+    if "loups" in salons and loups:
         ch = guild.get_channel(salons["loups"])
         if ch:
-            loups_vivants = [(uid, p) for uid, p in players.items() 
-                            if p["alive"] and p["role"] in ["Loup Garou", "Loup Blanc"]]
-            pings = " ".join([guild.get_member(int(uid)).mention 
-                             for uid, p in loups_vivants 
-                             if guild.get_member(int(uid))])
-            embed = discord.Embed(
-                title=f"🐺 Nuit {nuit_num} — Choisissez votre victime",
-                description=(
-                    f"**Villageois disponibles :**\n{mentions_villageois()}\n\n"
-                    f"Votez avec `.lgkill @joueur` dans ce salon !\n"
-                    f"*Décidez ensemble — la majorité l'emporte.*"
-                ),
-                color=0x2c3e50
-            )
-            await ch.send(f"{pings}", embed=embed)
+            v = LGLoupsView(game, guild.id, ctx)
+            await ch.send(ping(loups), embed=discord.Embed(
+                title=f"🐺 Nuit {nuit} — la meute s'éveille",
+                description=("*Le village dort. Vos crocs se découvrent.*\n\n"
+                             "**Ce que tu dois faire :** désigne une victime dans le menu. "
+                             "Quand tous les loups auront choisi, la majorité l'emportera.\n"
+                             "*Discutez ici — personne d'autre ne vous lit.*"),
+                color=0x2c3e50), view=v)
 
-    # 🤍 Salon Loup Blanc
-    if "loup_blanc" in salons:
+    # ── 🤍 Le Loup Blanc ──
+    lb = [u for u, p in players.items() if p["alive"] and p["role"] == "Loup Blanc"]
+    if "loup_blanc" in salons and lb:
         ch = guild.get_channel(salons["loup_blanc"])
         if ch:
-            lb = [(uid, p) for uid, p in players.items() 
-                  if p["alive"] and p["role"] == "Loup Blanc"]
-            if lb:
-                uid_lb = lb[0][0]
-                m_lb = guild.get_member(int(uid_lb))
-                ping = m_lb.mention if m_lb else ""
-                # Liste complète — villageois + loups
-                tous_sauf_lb = [(uid, p) for uid, p in players.items() 
-                                if p["alive"] and uid != uid_lb]
-                parts = []
-                for uid, p in tous_sauf_lb:
-                    m = guild.get_member(int(uid))
-                    role_tag = "🐺 Loup" if p["role"] in ["Loup Garou"] else ""
-                    if m:
-                        parts.append(f"• {m.mention} {role_tag}")
-                    else:
-                        parts.append(f"• {p['name']} {role_tag}")
-                liste = "\n".join(parts) if parts else "Personne"
-                embed = discord.Embed(
-                    title=f"🤍 Nuit {nuit_num} — Ton choix secret",
-                    description=(
-                        f"Tu peux tuer **n'importe qui** — villageois ou loup !\n"
-                        f"Les autres loups ne sauront pas.\n\n"
-                        f"**Joueurs vivants :**\n{liste}\n\n"
-                        f"`.lgkill @joueur` pour cibler (optionnel cette nuit)"
-                    ),
-                    color=0x95a5a6
-                )
-                await ch.send(f"{ping}", embed=embed)
+            await ch.send(ping(lb), embed=discord.Embed(
+                title=f"🤍 Nuit {nuit} — tu chasses seul",
+                description=("*Ni la meute ni le village ne sont tes alliés. Un seul survivra, et ce sera toi.*\n\n"
+                             "**Ce que tu dois faire :** tu peux frapper **n'importe qui** — "
+                             "même un loup. Ton choix reste secret.\n"
+                             "*Tu peux aussi ne rien faire cette nuit.*"),
+                color=0x95a5a6), view=LGLoupBlancView(game, lb[0], guild))
 
-    # 🔮 Salon Voyante
-    if "voyante" in salons:
+    # ── 🔮 La Voyante ──
+    voy = [u for u, p in players.items() if p["alive"] and p["role"] == "Voyante"]
+    if "voyante" in salons and voy:
         ch = guild.get_channel(salons["voyante"])
         if ch:
-            voy = [(uid, p) for uid, p in players.items() 
-                   if p["alive"] and p["role"] == "Voyante"]
-            if voy:
-                uid_v = voy[0][0]
-                m_v = guild.get_member(int(uid_v))
-                ping = m_v.mention if m_v else ""
-                cibles = [(uid, p) for uid, p in players.items() 
-                          if p["alive"] and uid != uid_v]
-                parts = []
-                for uid, p in cibles:
-                    m = guild.get_member(int(uid))
-                    if m:
-                        parts.append(f"• {m.mention}")
-                    else:
-                        parts.append(f"• {p['name']}")
-                embed = discord.Embed(
-                    title=f"🔮 Nuit {nuit_num} — Qui veux-tu espionner ?",
-                    description=(
-                        f"**Joueurs vivants :**\n{chr(10).join(parts)}\n\n"
-                        f"`.lgvoir @joueur` pour révéler son rôle (dans ce salon)"
-                    ),
-                    color=0x9b59b6
-                )
-                await ch.send(f"{ping}", embed=embed)
+            await ch.send(ping(voy), embed=discord.Embed(
+                title=f"🔮 Nuit {nuit} — une seule vision",
+                description=("*La boule s'éclaircit. Tu n'auras qu'un regard cette nuit.*\n\n"
+                             "**Ce que tu dois faire :** choisis un joueur, son rôle exact te sera révélé.\n"
+                             "*Le plus dur viendra demain : le dire sans te faire dévorer.*"),
+                color=0x9b59b6), view=LGVoyanteView(game, voy[0], guild))
 
-    # 🧙 Salon Sorcière
-    if "sorciere" in salons:
+    # ── 🧙 La Sorcière ──
+    sorc = [u for u, p in players.items() if p["alive"] and p["role"] == "Sorcière"]
+    if "sorciere" in salons and sorc:
         ch = guild.get_channel(salons["sorciere"])
         if ch:
-            sorc = [(uid, p) for uid, p in players.items() 
-                    if p["alive"] and p["role"] == "Sorcière"]
-            if sorc:
-                uid_s = sorc[0][0]
-                m_s = guild.get_member(int(uid_s))
-                ping = m_s.mention if m_s else ""
-                potions = game.get("witch_potions", {}).get(uid_s, {"life": True, "death": True})
-                victime_id = game.get("eliminated_tonight")
-                victime_txt = ""
-                if victime_id and victime_id in players:
-                    victime_txt = f"💀 Cette nuit, **{players[victime_id]['name']}** a été tué par les loups.\n\n"
-                potion_vie = "✅ Disponible" if potions.get("life") else "❌ Utilisée"
-                potion_mort = "✅ Disponible" if potions.get("death") else "❌ Utilisée"
-                embed = discord.Embed(
-                    title=f"🧙 Nuit {nuit_num} — Utilise tes potions",
-                    description=(
-                        f"{victime_txt}"
-                        f"🌿 Potion de vie : {potion_vie}\n"
-                        f"☠️ Potion de mort : {potion_mort}\n\n"
-                        f"`.lgsave @joueur` — Sauver quelqu'un\n"
-                        f"`.lgpoison @joueur` — Tuer quelqu'un\n"
-                        f"`.lgskip` — Passer cette nuit"
-                    ),
-                    color=0x27ae60
-                )
-                await ch.send(f"{ping}", embed=embed)
+            pot = game["witch_potions"].get(sorc[0], {"life": True, "death": True})
+            await ch.send(ping(sorc), embed=discord.Embed(
+                title=f"🧙‍♀️ Nuit {nuit} — deux fioles, deux destins",
+                description=(f"*Ton antre sent le soufre et la menthe.*\n\n"
+                             f"🌿 Fiole de vie : {'**disponible**' if pot.get('life') else '~~vide~~'}\n"
+                             f"☠️ Fiole de mort : {'**disponible**' if pot.get('death') else '~~vide~~'}\n\n"
+                             f"**Ce que tu dois faire :** désigne quelqu'un dans le menu, "
+                             f"puis choisis ta fiole. Chacune ne sert **qu'une fois de toute la partie**.\n"
+                             f"*Je te préviendrai dès que les loups auront frappé.*"),
+                color=0x27ae60), view=LGSorciereView(game, sorc[0], guild))
 
-    # 👧 Petit Fille — indice 50/50
-    if "petite_fille" in salons:
-        ch = guild.get_channel(salons["petite_fille"])
-        if ch:
-            pg_list = [(uid, p) for uid, p in players.items() 
-                       if p["alive"] and p["role"] == "Petite Fille"]
-            if pg_list:
-                uid_pg = pg_list[0][0]
-                m_pg = guild.get_member(int(uid_pg))
-                ping = m_pg.mention if m_pg else ""
-                loups_vivants = [p["name"] for uid, p in players.items() 
-                                 if p["alive"] and p["role"] in ["Loup Garou", "Loup Blanc"]]
-                if _r.random() < 0.5 and loups_vivants:
-                    loup_nom = _r.choice(loups_vivants)
-                    indice = f"👁️ Cette nuit tu entends des chuchotements... le nom de **{loup_nom}** revient dans l'obscurité.\n*Cet indice peut être vrai... ou te mener sur une fausse piste.*"
-                else:
-                    indice = "👁️ Cette nuit tu tends l'oreille... mais tu ne distingues rien de précis. Trop risqué d'en dire plus."
-                embed = discord.Embed(
-                    title=f"👧 Nuit {nuit_num} — Ce que tu entends...",
-                    description=indice,
-                    color=0xf39c12
-                )
-                await ch.send(f"{ping}", embed=embed)
-
-    # 💘 Cupidon — seulement nuit 1
-    if "cupidon" in salons and nuit_num == 1:
+    # ── 💘 Cupidon (nuit 1) ──
+    cup = [u for u, p in players.items() if p["alive"] and p["role"] == "Cupidon"]
+    if "cupidon" in salons and cup and nuit == 1 and not game.get("cupidon_done"):
         ch = guild.get_channel(salons["cupidon"])
         if ch:
-            cup = [(uid, p) for uid, p in players.items() 
-                   if p["alive"] and p["role"] == "Cupidon"]
-            if cup:
-                uid_c = cup[0][0]
-                m_c = guild.get_member(int(uid_c))
-                ping = m_c.mention if m_c else ""
-                embed = discord.Embed(
-                    title="💘 Nuit 1 — Lie les amoureux !",
-                    description=(
-                        f"**Joueurs :**\n{mentions_tous()}\n\n"
-                        f"`.lglove @joueur1 @joueur2` pour les lier\n"
-                        f"*Si l'un meurt, l'autre meurt aussi de chagrin.*\n"
-                        f"`.lgskip` si tu ne veux pas lier personne"
-                    ),
-                    color=0xff6b9d
-                )
-                await ch.send(f"{ping}", embed=embed)
+            await ch.send(ping(cup), embed=discord.Embed(
+                title="💘 Nuit 1 — tes flèches ne tuent pas",
+                description=("*Elles lient. Pour le meilleur, et surtout pour le pire.*\n\n"
+                             "**Ce que tu dois faire :** choisis **deux** joueurs dans les menus, "
+                             "puis valide. Si l'un meurt, l'autre le suivra de chagrin.\n"
+                             "*Tu peux te choisir toi-même — à tes risques.*"),
+                color=0xff6b9d), view=LGCupidonView(game, cup[0], guild))
+
+    # ── 👧 La Petite Fille ──
+    pf = [u for u, p in players.items() if p["alive"] and p["role"] == "Petite Fille"]
+    if "petite_fille" in salons and pf:
+        ch = guild.get_channel(salons["petite_fille"])
+        if ch:
+            noms_loups = [p["name"] for u, p in players.items()
+                          if p["alive"] and p["role"] in ("Loup Garou", "Loup Blanc")]
+            if random.random() < 0.5 and noms_loups:
+                indice = (f"*Tu entrouvres les volets. Dans l'obscurité, un nom revient en chuchotement :*\n\n"
+                          f"# 🕯️ {random.choice(noms_loups)}\n\n"
+                          f"*Vrai ? Piège ? Tu n'en sauras rien avant demain.*")
+            else:
+                indice = ("*Tu tends l'oreille longtemps… mais les voix restent indistinctes.*\n\n"
+                          "# 🌫️ Rien cette nuit\n\n*Trop risqué d'insister.*")
+            await ch.send(ping(pf), embed=discord.Embed(
+                title=f"👧 Nuit {nuit} — tu espionnes",
+                description=indice + "\n\n**Ce que tu dois faire :** rien à cliquer — "
+                                     "garde l'info et choisis bien tes mots demain.",
+                color=0xf39c12))
 
 
 # ============================================================
@@ -8244,6 +8948,64 @@ async def lg_nuit_annonces(guild, game, ctx_channel):
 # ============================================================
 
 lg_games = {}  # {guild_id: game_data}
+
+LG_DUREE_NUIT = 180   # secondes avant résolution automatique de la nuit
+LG_DUREE_JOUR = 300   # secondes de débat avant dépouillement automatique
+
+async def _lg_timer_nuit(ctx, gid, jour):
+    """Résout la nuit automatiquement si l'hôte ne le fait pas"""
+    await asyncio.sleep(LG_DUREE_NUIT)
+    game = lg_games.get(gid)
+    if not game or game["state"] != "night" or game["day"] != jour:
+        return
+    try:
+        await ctx.send(embed=discord.Embed(
+            description="🌅 Le temps de la nuit est écoulé — l'aube se lève d'elle-même…",
+            color=0x95a5a6))
+        await lg_resoudre_nuit(ctx, game, gid)
+    except Exception as e:
+        print(f"[LG] Timer nuit : {e}")
+
+async def _lg_timer_jour(ctx, gid, jour):
+    """Dépouille le vote automatiquement si tout le monde n'a pas voté"""
+    await asyncio.sleep(LG_DUREE_JOUR)
+    game = lg_games.get(gid)
+    if not game or game["state"] != "day" or game["day"] != jour:
+        return
+    try:
+        await ctx.send(embed=discord.Embed(
+            description="⏰ Le temps du débat est écoulé — dépouillement des votes !",
+            color=0x95a5a6))
+        await lg_resolve_vote(ctx, game, gid)
+    except Exception as e:
+        print(f"[LG] Timer jour : {e}")
+
+async def _lg_chasseur(guild, game, uid, ctx_channel):
+    """Ouvre le salon du Chasseur — appelé qu'il meure de jour ou de nuit"""
+    if game["players"].get(uid, {}).get("role") != "Chasseur":
+        return
+    m = guild.get_member(int(uid))
+    if not m:
+        return
+    overwrites = {
+        guild.default_role: discord.PermissionOverwrite(read_messages=False),
+        guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True),
+        m: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+    }
+    try:
+        cat = discord.utils.get(guild.categories, name="🐺 Loup Garou")
+        ch = await guild.create_text_channel("🏹・chasseur-secret", overwrites=overwrites, category=cat)
+    except Exception:
+        return
+    game["salons_temp"]["chasseur"] = ch.id
+    await ch.send(m.mention, embed=discord.Embed(
+        title="🏹 Ton dernier geste",
+        description=("*Tu tombes. Ta main se crispe une dernière fois sur la détente.*\n\n"
+                     "**Ce que tu dois faire :** choisis qui part avec toi dans le menu.\n"
+                     "*Tu as 2 minutes — après quoi ton doigt se relâchera.*"),
+        color=0xe67e22), view=LGChasseurView(game, uid, guild))
+
+
 
 @bot.command(name="lg")
 async def loup_garou_help(ctx):
@@ -8257,23 +9019,21 @@ async def loup_garou_help(ctx):
         "`.lgcreate` — Créer une partie\n"
         "`.lgjoin` — Rejoindre la partie\n"
         "`.lgstart` — Lancer (créateur uniquement)\n"
-        "`.lgvote @joueur` — Voter pour éliminer (le jour)\n"
-        "`.lgpass` — Forcer la fin du vote (hôte)\n"
+        "`.lgvote @joueur` — Voter *(ou utilise le menu du jour)*\n"
+        "`.lgnext` — Terminer la nuit tout de suite (hôte)\n"
+        "`.lgpass` — Terminer la phase en cours (hôte)\n"
         "`.lgstatus` — Voir les joueurs en vie\n"
         "`.lgstop` — Annuler la partie\n"
         "`.lgroles` — Voir tous les rôles"
     ), inline=False)
-    embed.add_field(name="📋 Commandes salons secrets", value=(
-        "`.lgkill @joueur` — Loups : désigner la victime\n"
-        "`.lgvoir @joueur` — Voyante : voir le rôle\n"
-        "`.lgsave @joueur` — Sorcière : potion de vie\n"
-        "`.lgpoison @joueur` — Sorcière : potion de mort\n"
-        "`.lglove @j1 @j2` — Cupidon : lier les amoureux\n"
-        "`.lgskip` — Passer son action de nuit"
+    embed.add_field(name="🖱️ Pendant la partie", value=(
+        "**Tout se fait au clic !** Chaque rôle reçoit son menu déroulant "
+        "dans son salon secret — aucune commande à taper, aucun pseudo à écrire.\n"
+        "*Les commandes texte (`.lgkill`, `.lgvoir`…) restent dispo en secours.*"
     ), inline=False)
     embed.add_field(name="🗺️ Déroulement", value=(
-        "**Nuit 1** → Salons secrets créés, actions de nuit\n"
-        "**Jour** → Débat + vote d'élimination\n"
+        "**Nuit 1** → Salons secrets créés, actions de nuit *(3 min max)*\n"
+        "**Jour** → Débat + vote d'élimination *(5 min max)*\n"
         "**Nuit suivante** → Actions de nuit dans les salons\n"
         "*Les salons secrets sont supprimés en fin de partie*"
     ), inline=False)
@@ -8304,6 +9064,7 @@ async def lg_create(ctx):
         "lovers": [],
         "witch_potions": {},
         "eliminated_tonight": None,
+        "loup_blanc_cible": None,
         "salons_temp": {},
         "cupidon_done": False,
         "kill_votes": {},  # votes des loups
@@ -8432,7 +9193,14 @@ async def _lg_start_inner(ctx):
 
     # Créer les salons temporaires
     await ctx.send("⏳ Création des salons secrets...")
-    await lg_create_salons(ctx.guild, game)
+    salons = await lg_create_salons(ctx.guild, game)
+    if not salons:
+        await ctx.send(embed=discord.Embed(
+            title="⚠️ Salons secrets non créés",
+            description=("Je n'ai pas la permission **Gérer les salons**.\n"
+                         "Les rôles spéciaux ne pourront pas agir — demande à un admin "
+                         "de me donner la permission, puis relance la partie."),
+            color=0xe67e22))
 
     # Annonce publique
     dm_status = "⚠️ DM fermés : " + ", ".join(failed_dm) if failed_dm else "✅ Rôles envoyés en DM !"
@@ -8454,6 +9222,7 @@ async def _lg_start_inner(ctx):
 
     # Envoyer les annonces de nuit dans les salons
     await lg_nuit_annonces(ctx.guild, game, ctx.channel)
+    asyncio.create_task(_lg_timer_nuit(ctx, gid, game["day"]))
 
 @bot.command(name="lgvote")
 async def lg_vote(ctx, target: discord.Member = None):
@@ -8507,13 +9276,22 @@ async def lg_kill(ctx, target: discord.Member = None):
     if target_uid not in game["players"] or not game["players"][target_uid]["alive"]:
         return await ctx.send("❌ Cible invalide !", delete_after=5)
 
+    # Le Loup Blanc frappe seul depuis son salon secret
+    if ctx.channel.id == game.get("salons_temp", {}).get("loup_blanc"):
+        game["loup_blanc_cible"] = target_uid
+        return await ctx.send(embed=discord.Embed(
+            description=f"🤍 Ta cible secrète : **{game['players'][target_uid]['name']}**.\nLes autres loups n'en sauront rien.",
+            color=0x95a5a6))
+
     game["kill_votes"][uid] = target_uid
     loups_vivants = [u for u, p in game["players"].items() if p["alive"] and p["role"] == "Loup Garou"]
     voted = len([v for v in game["kill_votes"] if game["players"].get(v, {}).get("role") == "Loup Garou"])
     await ctx.send(f"✅ **{ctx.author.display_name}** vote pour tuer **{target.display_name}** ({voted}/{len(loups_vivants)})")
 
     # Tous les loups ont voté ?
-    if voted >= len(loups_vivants) and loups_vivants:
+    if not loups_vivants:
+        return
+    if voted >= len(loups_vivants):
         from collections import Counter
         count = Counter(v for k, v in game["kill_votes"].items() if game["players"].get(k, {}).get("role") == "Loup Garou")
         if count:
@@ -8629,23 +9407,33 @@ async def _lg_check_sorciere_potions(guild, game, uid):
             game["salons_temp"].pop("sorciere", None)
 
 async def _lg_inform_sorciere(guild, game, victime_id):
-    """Informe la sorcière de la victime des loups"""
+    """Prévient la sorcière de la victime des loups, avec le bouton de soin"""
     salon_id = game.get("salons_temp", {}).get("sorciere")
     if not salon_id:
         return
     ch = guild.get_channel(salon_id)
     if not ch:
         return
-    victime_name = game["players"].get(victime_id, {}).get("name", "?")
-    sorc = [(uid, p) for uid, p in game["players"].items() if p["role"] == "Sorcière" and p["alive"]]
-    if sorc:
-        uid_s = sorc[0][0]
-        m_s = guild.get_member(int(uid_s))
-        ping = m_s.mention if m_s else ""
-        await ch.send(embed=discord.Embed(
-            description=f"☠️ {ping} Les loups ont choisi **{victime_name}** comme victime cette nuit.\nVeux-tu le sauver avec `.lgsave @joueur` ?",
-            color=0xe74c3c
-        ))
+    sorc = [u for u, p in game["players"].items() if p["role"] == "Sorcière" and p["alive"]]
+    if not sorc:
+        return
+    uid_s = sorc[0]
+    pot = game["witch_potions"].get(uid_s, {})
+    m = guild.get_member(int(uid_s))
+    nom = game["players"].get(victime_id, {}).get("name", "?")
+    v = LGSorciereView(game, uid_s, guild)
+    v.cible = victime_id
+    v.soigner.disabled = not pot.get("life")
+    v.empoisonner.disabled = not pot.get("death")
+    await ch.send(m.mention if m else "", embed=discord.Embed(
+        title="☠️ Les crocs ont choisi",
+        description=(f"*Une silhouette s'affaisse dans la nuit…*\n\n"
+                     f"# {nom}\n\n"
+                     f"**Ce que tu dois faire :** clique sur 🌿 **Sauver** pour le ramener, "
+                     f"ou désigne quelqu'un d'autre et verse ☠️ ta fiole de mort.\n"
+                     f"*Ou ne fais rien — c'est aussi un choix.*"),
+        color=0xe74c3c), view=v)
+
 
 @bot.command(name="lglove")
 async def lg_love(ctx, j1: discord.Member = None, j2: discord.Member = None):
@@ -8729,18 +9517,26 @@ async def lg_resoudre_nuit(ctx, game, gid):
     players = game["players"]
 
     # Appliquer la mort des loups
-    victime_id = game.get("eliminated_tonight")
     morts_nuit = []
 
-    if victime_id and players.get(victime_id, {}).get("alive"):
-        players[victime_id]["alive"] = False
-        morts_nuit.append(victime_id)
-        # Amoureux ?
-        if victime_id in game["lovers"]:
-            autre = [l for l in game["lovers"] if l != victime_id]
+    def _tuer(cible):
+        if not cible or not players.get(cible, {}).get("alive"):
+            return
+        players[cible]["alive"] = False
+        morts_nuit.append(cible)
+        # Amoureux : l'autre meurt de chagrin
+        if cible in game["lovers"]:
+            autre = [l for l in game["lovers"] if l != cible]
             if autre and players.get(autre[0], {}).get("alive"):
                 players[autre[0]]["alive"] = False
                 morts_nuit.append(autre[0])
+
+    _tuer(game.get("eliminated_tonight"))
+    _tuer(game.get("loup_blanc_cible"))
+
+    # Le Chasseur emporte quelqu'un même s'il meurt la nuit
+    for mort_uid in morts_nuit:
+        await _lg_chasseur(guild, game, mort_uid, ctx.channel)
 
     # Annonce du matin
     if morts_nuit:
@@ -8780,6 +9576,14 @@ async def lg_resoudre_nuit(ctx, game, gid):
     game["night_actions"] = {}
     game["kill_votes"] = {}
     game["eliminated_tonight"] = None
+    game["loup_blanc_cible"] = None
+    await ctx.send(embed=discord.Embed(
+        title="⚖️ Le village délibère",
+        description=("*Les accusations fusent. Il faut trancher avant la nuit.*\n\n"
+                     "**Ce que vous devez faire :** votez dans le menu ci-dessous.\n"
+                     f"*{LG_DUREE_JOUR//60} minutes — ou l'hôte peut couper court avec `.lgpass`.*"),
+        color=0xe67e22), view=LGVoteView(game, gid, ctx))
+    asyncio.create_task(_lg_timer_jour(ctx, gid, game["day"]))
 
 async def lg_resolve_vote(ctx, game, gid):
     """Compte les votes et élimine"""
@@ -8825,30 +9629,7 @@ async def lg_resolve_vote(ctx, game, gid):
                 ))
 
         # Chasseur ?
-        if role == "Chasseur":
-            m = guild.get_member(int(eliminated_id))
-            if m:
-                # Créer salon chasseur temporaire
-                overwrites = {
-                    guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                    guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True),
-                    m: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-                }
-                try:
-                    cat = discord.utils.get(guild.categories, name="🐺 Loup Garou")
-                    ch_chass = await guild.create_text_channel("🏹・chasseur-secret", overwrites=overwrites, category=cat)
-                    alive_list = "\n".join([f"• {pp['name']}" for uid, pp in players.items() if pp["alive"]])
-                    await ch_chass.send(
-                        f"{m.mention}",
-                        embed=discord.Embed(
-                            title="🏹 Chasseur — Tu peux te venger !",
-                            description=f"Tu es éliminé mais tu peux emporter quelqu'un avec toi !\n\n**Joueurs en vie :**\n{alive_list}\n\n`.lgkillchasseur @joueur` pour tirer",
-                            color=0xe67e22
-                        )
-                    )
-                    game["salons_temp"]["chasseur"] = ch_chass.id
-                except:
-                    pass
+        await _lg_chasseur(guild, game, eliminated_id, ctx.channel)
 
     # Check victoire
     won, msg = lg_check_win(game)
@@ -8866,6 +9647,7 @@ async def lg_resolve_vote(ctx, game, gid):
     game["votes"] = {}
     game["kill_votes"] = {}
     game["eliminated_tonight"] = None
+    game["loup_blanc_cible"] = None
     game["day"] += 1
 
     alive_list = "\n".join([f"• {p['name']}" for p in players.values() if p["alive"]])
@@ -8880,6 +9662,7 @@ async def lg_resolve_vote(ctx, game, gid):
     await ctx.send(embed=embed)
     await lg_narrer(ctx, "nuit")
     await lg_nuit_annonces(ctx.guild, game, ctx.channel)
+    asyncio.create_task(_lg_timer_nuit(ctx, gid, game["day"]))
 
 @bot.command(name="lgkillchasseur")
 async def lg_kill_chasseur(ctx, target: discord.Member = None):
@@ -8940,16 +9723,12 @@ async def lg_status(ctx):
     embed.add_field(name="📊 Phase", value=f"**{game.get('state','?').upper()}** — Jour {game.get('day',0)}", inline=False)
     await ctx.send(embed=embed)
 
-
-
 # ============================================================
 #  GIRLS ONLY — TASKS AUTOMATIQUES
 # ============================================================
 
 # Tracking activité filles dans le salon Girls Only
 girls_message_count = defaultdict(lambda: defaultdict(int))  # {guild_id: {uid: count}}
-girls_week_reset = {}    # {guild_id: timestamp dernier reset lundi}
-girls_month_reset = {}   # {guild_id: timestamp dernier reset 1er du mois}
 
 # Questions Ritual du Soir (21h chaque soir dans le salon girls)
 RITUAL_QUESTIONS = [
@@ -9052,8 +9831,6 @@ async def girls_auto_tasks():
                     chan_annonces = guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else channel_girls
                     await (chan_annonces or channel_girls).send(embed=embed)
 
-
-
 # ============================================================
 #  PERSISTANCE JSON — Sauvegarde et chargement des données
 # ============================================================
@@ -9105,6 +9882,8 @@ def save_all_data():
             "achievements": {k: list(v) for k, v in achievements_data.items()},
             "user_stats": {k: dict(v) for k, v in user_stats.items()},
             "invite_counts": dict(invite_counts),
+            "inventaire": {k: dict(v) for k, v in inventaire.items()},
+            "claim_reduction": dict(claim_reduction),
         }
         with open(DATA_FILES["social"], "w", encoding="utf-8") as f:
             _json.dump(social_save, f, ensure_ascii=False)
@@ -9173,6 +9952,9 @@ def load_all_data():
             for k, v in data.get("user_stats", {}).items():
                 user_stats[k].update(v)
             invite_counts.update(data.get("invite_counts", {}))
+            for k, v in data.get("inventaire", {}).items():
+                inventaire[k].update(v)
+            claim_reduction.update(data.get("claim_reduction", {}))
             print(f"[Load] ✅ Social chargé")
         except Exception as e:
             print(f"[Load] Erreur social: {e}")
@@ -9193,28 +9975,16 @@ async def autosave():
     save_all_data()
     print("[AutoSave] ✅ Données sauvegardées")
 
-
-
-
 # ============================================================
 #  EVENTS AUTOMATIQUES — Récupérés de l'original
 # ============================================================
 
 # Variables d'état des events
 coffre_actif = {}           # {channel_id: {contenu, expires}}
-invasion_active = {}        # {guild_id: {boss_key, pv, max_pv, attaquants}}
 nuit_chasse_active = False  # Bool global
 marche_noir_actif = {}      # {card_key: {prix, expires}}
 
 # Liste des boss possibles pour les invasions
-BOSS_INVASIONS = [
-    {"nom": "Muzan Kibutsuji",  "emoji": "🌙",  "pv": 5000, "serie": "Demon Slayer", "image": "https://i.imgur.com/amD1hXZ.jpg"},
-    {"nom": "Sosuke Aizen",     "emoji": "🦋",  "pv": 4500, "serie": "Bleach",        "image": "https://i.imgur.com/rtSGfrn.jpg"},
-    {"nom": "Madara Uchiha",    "emoji": "👁️", "pv": 6000, "serie": "Naruto",        "image": "https://i.imgur.com/FYEJwwH.jpg"},
-    {"nom": "All For One",      "emoji": "☠️",  "pv": 4000, "serie": "MHA",           "image": "https://i.imgur.com/qtpXAdm.jpg"},
-    {"nom": "Yhwach",           "emoji": "👑",  "pv": 5500, "serie": "Bleach",        "image": "https://i.imgur.com/UR1i6Tb.jpg"},
-    {"nom": "Meruem",           "emoji": "♟️",  "pv": 4800, "serie": "HxH",           "image": "https://i.imgur.com/ajOXRt1.jpg"},
-]
 
 # ─────────────────────────────────────────────────────────────
 #  📦 SPAWN COFFRE — toutes les 30-90 min, 1 gagnant, 100-500p
@@ -9234,7 +10004,6 @@ async def spawn_coffre():
         except Exception as e:
             print(f"[spawn_coffre] Erreur: {e}")
 
-
 # ─────────────────────────────────────────────────────────────
 #  🌙 NUIT DE CHASSE — boost Mythique x2 pendant 2h
 # ─────────────────────────────────────────────────────────────
@@ -9252,42 +10021,6 @@ async def nuit_de_chasse():
                 await run_nuit_chasse(channel, guild)
         except Exception as e:
             print(f"[nuit_de_chasse] Erreur: {e}")
-
-
-@tasks.loop(hours=6)
-async def invasion_demons():
-    """Toutes les 6h, 40% chance — un boss envahit le QG"""
-    if not planning_actif:
-        return
-    if random.random() > 0.40:
-        return
-    for guild in bot.guilds:
-        try:
-            channel = guild.get_channel(SALON_GACHA_ID) if SALON_GACHA_ID else guild.system_channel
-            if not channel:
-                continue
-            boss = random.choice(BOSS_INVASIONS).copy()
-            invasion_active[guild.id] = {
-                **boss,
-                "max_pv": boss["pv"],
-                "attaquants": {},
-                "actif": True
-            }
-            embed = discord.Embed(
-                title=f"⚠️ INVASION ! {boss['emoji']} {boss['nom']} attaque le QG !",
-                description=(
-                    f"**{boss['nom']}** de *{boss['serie']}* envahit le serveur !\n\n"
-                    f"❤️ **PV :** {boss['pv']:,}\n"
-                    f"⚔️ Tape `.attaquerboss` pour infliger des dégâts !\n\n"
-                    f"*Celui qui inflige le coup final reçoit une récompense spéciale !*"
-                ),
-                color=0xe74c3c
-            )
-            if boss.get("image"):
-                embed.set_thumbnail(url=boss["image"])
-            await channel.send("@everyone", embed=embed)
-        except Exception as e:
-            print(f"[invasion_demons] Erreur: {e}")
 
 # ─────────────────────────────────────────────────────────────
 #  🕶️ MARCHÉ NOIR — toutes les 48h, 3 cartes rares à acheter
@@ -9308,7 +10041,6 @@ async def marche_noir_task():
         except Exception as e:
             print(f"[marche_noir_task] Erreur: {e}")
 
-
 @bot.command(name="ouvrir", aliases=["coffre", "open"])
 async def ouvrir_cmd(ctx):
     """Ouvrir le coffre actif dans le salon — premier arrivé, premier servi"""
@@ -9327,8 +10059,6 @@ async def ouvrir_cmd(ctx):
         color=0xf1c40f
     )
     await ctx.send(embed=embed)
-
-
 
 # ============================================================
 #  👋 ARRIVÉES & DÉPARTS — Bienvenue, aurevoir, invitations
@@ -9470,6 +10200,178 @@ async def on_member_remove(member):
     except Exception as e:
         print(f"[Aurevoir] Erreur envoi : {e}")
 
+@bot.event
+async def on_member_update(before, after):
+    """Annonce quand un membre boost le serveur"""
+    if before.premium_since is not None or after.premium_since is None:
+        return
+    if not SALON_BOOST_ID:
+        return
+    channel = after.guild.get_channel(SALON_BOOST_ID)
+    if not channel:
+        return
+    total = after.guild.premium_subscription_count or 0
+    embed = discord.Embed(
+        title="💎 NOUVEAU BOOST !",
+        description=(
+            f"### 🌟 {after.mention} vient de booster le QG Kdrama !\n\n"
+            f"Le serveur compte maintenant **{total} boost(s)**.\n"
+            f"Merci du fond du cœur 💜"
+        ),
+        color=0xff73fa)
+    embed.set_thumbnail(url=after.display_avatar.url)
+    embed.set_footer(
+        text="QG Kdrama • Merci aux boosteurs 🚀",
+        icon_url=after.guild.icon.url if after.guild.icon else None)
+    try:
+        await channel.send(embed=embed)
+    except Exception as e:
+        print(f"[Boost] Erreur envoi : {e}")
+
+@bot.event
+async def on_error(event, *args, **kwargs):
+    """Attrape les erreurs d'événements au lieu de les perdre silencieusement"""
+    import traceback
+    print(f"❌ Erreur dans l'événement '{event}' :")
+    traceback.print_exc()
+
+@bot.event
+async def on_command_error(ctx, error):
+    """Messages d'erreur clairs au lieu d'un silence total"""
+    if isinstance(error, commands.CommandNotFound):
+        return
+    if isinstance(error, commands.MissingPermissions):
+        return await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.", delete_after=8)
+    if isinstance(error, commands.MissingRequiredArgument):
+        return await ctx.send(f"❌ Il manque un argument : `{error.param.name}`\nTape `.help` pour voir l'usage.", delete_after=10)
+    if isinstance(error, commands.BadArgument):
+        return await ctx.send("❌ Argument invalide — vérifie la commande avec `.help`.", delete_after=8)
+    if isinstance(error, commands.CommandOnCooldown):
+        return await ctx.send(f"⏳ Patiente encore **{int(error.retry_after)}s**.", delete_after=8)
+    if isinstance(error, commands.NoPrivateMessage):
+        return await ctx.send("❌ Cette commande ne marche que sur le serveur.")
+    # Vraie erreur : on prévient et on log
+    import traceback
+    print(f"[Erreur] {ctx.command} → {type(error).__name__}: {error}")
+    traceback.print_exception(type(error), error, error.__traceback__)
+    try:
+        await ctx.send("❌ Une erreur est survenue — un admin a été notifié dans les logs.", delete_after=10)
+    except Exception:
+        pass
+
+# ============================================================
+#  🎭 RÉACTIONS — Autorole, rôles par réaction, règlement, Hall of Fame
+# ============================================================
+@bot.event
+async def on_raw_reaction_add(payload):
+    if payload.user_id == bot.user.id:
+        return
+    guild = bot.get_guild(payload.guild_id)
+    if not guild:
+        return
+    member = guild.get_member(payload.user_id)
+    if not member or member.bot:
+        return
+    emoji = str(payload.emoji)
+
+    # ── Règlement : ✅ donne le rôle Membre ──
+    if SALON_REGLEMENT_ID and payload.channel_id == SALON_REGLEMENT_ID and emoji == "✅":
+        role = guild.get_role(REGLEMENT_ROLE_ID) if REGLEMENT_ROLE_ID else None
+        if not role:
+            role = discord.utils.get(guild.roles, name=ROLE_MEMBRE_NAME)
+        if role and role not in member.roles:
+            try:
+                await member.add_roles(role, reason="Règlement accepté")
+            except discord.Forbidden:
+                print("[Règlement] Permission refusée pour attribuer le rôle")
+        elif not role:
+            print(f"[Règlement] Rôle introuvable (ID={REGLEMENT_ROLE_ID}, nom={ROLE_MEMBRE_NAME})")
+
+    # ── Rôles par réaction simples (.rolecreate) ──
+    if payload.message_id in reaction_roles:
+        data = reaction_roles[payload.message_id]
+        if emoji == data["emoji"]:
+            role = guild.get_role(data["role_id"])
+            if role:
+                try:
+                    await member.add_roles(role, reason="Rôle par réaction")
+                except discord.Forbidden:
+                    pass
+
+    # ── Panels autorole (.autorole) ──
+    for panel in autorole_panels.get(str(guild.id), []):
+        if str(payload.message_id) != panel["message_id"]:
+            continue
+        for r in panel["roles"]:
+            if r["emoji"] == emoji:
+                role = guild.get_role(int(r["role_id"]))
+                if role:
+                    try:
+                        await member.add_roles(role, reason="Autorole")
+                    except discord.Forbidden:
+                        pass
+                break
+
+    # ── Hall of Fame : message très réagi ──
+    if SALON_HOF_ID and emoji in HOF_EMOJIS and payload.message_id not in HOF_MESSAGES:
+        channel = guild.get_channel(payload.channel_id)
+        hof_channel = guild.get_channel(SALON_HOF_ID)
+        if channel and hof_channel and channel.id != SALON_HOF_ID:
+            try:
+                msg = await channel.fetch_message(payload.message_id)
+            except Exception:
+                return
+            total = sum(r.count for r in msg.reactions if str(r.emoji) in HOF_EMOJIS)
+            if total >= HOF_SEUIL and not msg.author.bot:
+                HOF_MESSAGES.add(msg.id)
+                embed = discord.Embed(
+                    description=msg.content[:2000] or "*(message sans texte)*",
+                    color=0xf1c40f,
+                    timestamp=msg.created_at)
+                embed.set_author(name=msg.author.display_name, icon_url=msg.author.display_avatar.url)
+                embed.add_field(name="\u200b", value=f"[↗️ Aller au message]({msg.jump_url})", inline=False)
+                if msg.attachments and msg.attachments[0].content_type and "image" in msg.attachments[0].content_type:
+                    embed.set_image(url=msg.attachments[0].url)
+                embed.set_footer(text=f"🏆 Hall of Fame • {total} réactions • #{channel.name}")
+                try:
+                    await hof_channel.send(embed=embed)
+                except Exception as e:
+                    print(f"[HOF] Erreur envoi : {e}")
+
+@bot.event
+async def on_raw_reaction_remove(payload):
+    guild = bot.get_guild(payload.guild_id)
+    if not guild:
+        return
+    member = guild.get_member(payload.user_id)
+    if not member or member.bot:
+        return
+    emoji = str(payload.emoji)
+
+    # ── Rôles par réaction simples ──
+    if payload.message_id in reaction_roles:
+        data = reaction_roles[payload.message_id]
+        if emoji == data["emoji"]:
+            role = guild.get_role(data["role_id"])
+            if role:
+                try:
+                    await member.remove_roles(role, reason="Réaction retirée")
+                except discord.Forbidden:
+                    pass
+
+    # ── Panels autorole ──
+    for panel in autorole_panels.get(str(guild.id), []):
+        if str(payload.message_id) != panel["message_id"]:
+            continue
+        for r in panel["roles"]:
+            if r["emoji"] == emoji:
+                role = guild.get_role(int(r["role_id"]))
+                if role:
+                    try:
+                        await member.remove_roles(role, reason="Autorole retiré")
+                    except discord.Forbidden:
+                        pass
+                break
 
 @bot.event
 async def on_ready():
