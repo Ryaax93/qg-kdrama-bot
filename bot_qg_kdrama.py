@@ -803,6 +803,10 @@ def build_help_pages(guild, is_admin=False):
     e.add_field(name="💪 Stats de combat", value=(
         "`.ameliorer <pv|atk|def|endurance>` — Dépenser tes points"
     ), inline=False)
+    e.add_field(name="🌸 Girls Only", value=(
+        "`.fit <description>` — Poster ton look dans le salon filles\n"
+        "*Réservé aux membres ayant le rôle filles du serveur.*"
+    ), inline=False)
     e.add_field(name="🎂 Divers", value=(
         "`.anniversaire <JJ/MM>` — Enregistrer ta date"
     ), inline=False)
@@ -884,7 +888,12 @@ def build_help_pages(guild, is_admin=False):
         "`.lgcreate` — Créer une partie • `.lgjoin` — Rejoindre\n"
         "`.lgstart` — Lancer *(hôte)* • `.lgstatus` — État"
     ), inline=False)
-    e.add_field(name="🌙 Loup Garou — pendant la partie", value=(
+    e.add_field(name="🖱️ Loup Garou — pendant la partie", value=(
+        "**Tout se joue au clic !** Chaque rôle reçoit son menu déroulant "
+        "dans son salon secret — rien à taper.\n"
+        "*Les commandes ci-dessous restent dispo en secours.*"
+    ), inline=False)
+    e.add_field(name="🌙 Commandes de secours", value=(
         "`.lgvote @joueur` — Voter au village\n"
         "`.lgkill @cible` — Loups : dévorer\n"
         "`.lgvoir @cible` — Voyante : sonder\n"
@@ -986,7 +995,7 @@ def build_help_pages(guild, is_admin=False):
     ), inline=False)
     e.add_field(name="⚙️ Réglages", value=(
         "`.setrollreset <heures>` — Recharge des tirages\n"
-        "`.gacharesetall` — ⚠️ Remettre tout le gacha à zéro"
+        "`.reset gacha` — ⚠️ Remettre le gacha à zéro *(voir `.reset`)*"
     ), inline=False)
     pages.append(("🔧", "Admin — Gacha", e))
 
@@ -1039,7 +1048,7 @@ def build_help_pages(guild, is_admin=False):
     ), inline=False)
     e.add_field(name="🗓️ Programmer", value=(
         "`.addevent <event> <jour> <heure>` — Programmer\n"
-        "`.delevent <numéro>` — Supprimer *(voir `.planningauto`)*\n"
+        "`.delevent <numéro>` — Supprimer un event programmé\n"
         "`.eventon` / `.eventoff` — Activer / mettre en pause"
     ), inline=False)
     e.add_field(name="🏆 Tournoi", value=(
@@ -1052,6 +1061,12 @@ def build_help_pages(guild, is_admin=False):
     e.add_field(name="💰 Économie", value=(
         "`.givepieces @membre <montant>` — Donner des pièces\n"
         "`.givexp @membre <montant>` — Donner de l'XP"
+    ), inline=False)
+    e.add_field(name="🔄 Réinitialisation", value=(
+        "`.reset` — Voir les cibles disponibles\n"
+        "`.reset <cible>` — Remet à zéro pour tout le serveur\n"
+        "`.reset <cible> @membre` — Pour une seule personne\n"
+        "*Cibles : `xp` `economie` `gacha` `pets` `social` `tout`*"
     ), inline=False)
     pages.append(("🎪", "Admin — Events", e))
 
@@ -6590,49 +6605,124 @@ async def gacha_cmd(ctx, sous_cmd: str = None, *args):
         embed.add_field(name="⚔️ Attaques", value=attaques_str, inline=False)
         await ctx.send(embed=embed)
 
-@bot.command(name="gacharesetall")
+RESET_CIBLES = {
+    "xp":      ("⭐ XP & niveaux",   "niveaux, XP, points d'amélioration, stats d'arène, succès"),
+    "economie":("💰 Économie",       "pièces, banque, inventaire, jackpot"),
+    "gacha":   ("🎰 Gacha",          "cartes, collections, fusions, rolls, wishlists"),
+    "pets":    ("🐾 Compagnons",     "tous les compagnons adoptés"),
+    "social":  ("💖 Social",         "mariages, anniversaires, watchlists, notes, invitations"),
+    "tout":    ("💥 TOUT",           "absolument toutes les données de jeu"),
+}
+
+def _reset_bloc(cible):
+    """Efface un bloc de données. Retourne le nombre d'éléments supprimés."""
+    global jackpot_cagnotte
+    n = 0
+    if cible in ("xp", "tout"):
+        n += len(xp_data)
+        xp_data.clear(); points_amelio.clear(); arena_stats.clear()
+        message_count.clear(); user_stats.clear(); achievements_data.clear()
+    if cible in ("economie", "tout"):
+        n += len(economy_data)
+        economy_data.clear(); bank_data.clear(); inventaire.clear()
+        shield_active.clear(); amulette_active.clear(); jackpot_cagnotte = 0
+    if cible in ("gacha", "tout"):
+        n += len(claimed_cards)
+        claimed_cards.clear(); gacha_collections.clear(); fusion_levels.clear()
+        card_xp.clear(); card_level.clear(); serie_badges.clear()
+        fav_slots.clear(); roll_data.clear(); claim_cooldown.clear()
+        claim_reduction.clear(); gacha_wishlist.clear(); rarity_boost.clear()
+        collection_order.clear(); oracle_actif.clear(); malediction_active.clear()
+        ghost_cards.clear(); claim_freeze.clear(); claim_curse.clear()
+        marche_noir_actif.clear()
+    if cible in ("pets", "tout"):
+        n += len(pets_data)
+        pets_data.clear()
+    if cible in ("social", "tout"):
+        n += len(mariages) + len(anniversaire_data)
+        mariages.clear(); demandes_mariage.clear(); anniversaire_data.clear()
+        watchlist_data.clear(); reviews_data.clear(); invite_counts.clear()
+    return n
+
+@bot.command(name="reset", aliases=["resetall", "gacharesetall"])
 @commands.has_permissions(administrator=True)
-async def gacharesetall_cmd(ctx):
-    """Remet le gacha à zéro — admin only — .gacharesetall"""
+async def reset_cmd(ctx, cible: str = None, membre: discord.Member = None):
+    """Réinitialise les données — .reset <cible> [@membre] (admin)"""
+    if not cible or cible.lower() not in RESET_CIBLES:
+        lignes = "\n".join(f"`{k}` — {nom} : *{desc}*" for k, (nom, desc) in RESET_CIBLES.items())
+        return await ctx.send(embed=discord.Embed(
+            title="🔄 Réinitialisation",
+            description=(
+                f"**Usage :** `.reset <cible>` — remet à zéro pour tout le serveur\n"
+                f"**Ou :** `.reset <cible> @membre` — pour une seule personne\n\n"
+                f"{lignes}\n\n"
+                f"*Les salons configurés, rôles et events programmés ne sont jamais touchés.*"),
+            color=0x3498db))
+
+    cible = cible.lower()
+    nom, desc = RESET_CIBLES[cible]
+
+    # ── Reset d'un seul membre ──
+    if membre:
+        uid = str(membre.id)
+        efface = []
+        if cible in ("xp", "tout"):
+            for d in (xp_data, points_amelio, arena_stats, message_count, user_stats, achievements_data):
+                d.pop(uid, None)
+            efface.append("XP & succès")
+        if cible in ("economie", "tout"):
+            for d in (economy_data, bank_data, inventaire):
+                d.pop(uid, None)
+            efface.append("pièces & inventaire")
+        if cible in ("gacha", "tout"):
+            for k in [k for k, v in claimed_cards.items() if v == uid]:
+                del claimed_cards[k]
+            for d in (gacha_collections, fusion_levels, card_xp, card_level, serie_badges,
+                      fav_slots, roll_data, claim_cooldown, claim_reduction,
+                      gacha_wishlist, collection_order):
+                d.pop(uid, None)
+            efface.append("cartes & collection")
+        if cible in ("pets", "tout"):
+            pets_data.pop(uid, None)
+            efface.append("compagnons")
+        if cible in ("social", "tout"):
+            partenaire = mariages.pop(uid, None)
+            if partenaire:
+                mariages.pop(str(partenaire), None)
+            for d in (anniversaire_data, watchlist_data, invite_counts):
+                d.pop(uid, None)
+            efface.append("social")
+        save_all_data()
+        return await ctx.send(embed=discord.Embed(
+            title="🔄 Données réinitialisées",
+            description=f"**{membre.display_name}** — {nom} remis à zéro.\n*{' · '.join(efface)}*",
+            color=0x2ecc71))
+
+    # ── Reset serveur : confirmation obligatoire ──
     embed = discord.Embed(
-        title="⚠️ RESET TOTAL DU GACHA",
+        title=f"⚠️ RÉINITIALISATION — {nom}",
         description=(
-            "Tu es sur le point de **tout remettre à zéro** :\n"
-            "• Toutes les cartes claimées perdues\n"
-            "• Toutes les collections effacées\n"
-            "• Tous les niveaux de fusion réinitialisés\n"
-            "• Tous les rolls réinitialisés\n\n"
-            "Clique sur **Confirmer** pour valider."
-        ),
-        color=0xe74c3c
-    )
+            f"Tu vas effacer **pour tous les membres** :\n### {desc}\n\n"
+            f"⚠️ **Action irréversible.** Les salons configurés, les rôles Discord "
+            f"et les events programmés ne sont pas touchés.\n\n"
+            f"Clique sur **Confirmer** pour valider."),
+        color=0xe74c3c)
     view = ConfirmView(ctx.author, timeout=30)
     msg = await ctx.send(embed=embed, view=view)
     await view.wait()
+
     if view.value:
-        claimed_cards.clear()
-        gacha_collections.clear()
-        fusion_levels.clear()
-        card_xp.clear()
-        card_level.clear()
-        serie_badges.clear()
-        fav_slots.clear()
-        roll_data.clear()
-        claim_cooldown.clear()
-        claim_reduction.clear()
-        gacha_wishlist.clear()
-        rarity_boost.clear()
-        collection_order.clear()
-        embed_ok = discord.Embed(
-            title="✅ Gacha remis à zéro !",
-            description="Toutes les cartes, collections et données gacha ont été réinitialisées.\nLe jeu repart de zéro !",
-            color=0x2ecc71
-        )
-        await msg.edit(embed=embed_ok, view=None)
+        n = _reset_bloc(cible)
+        save_all_data()
+        await msg.edit(embed=discord.Embed(
+            title="✅ Réinitialisation terminée",
+            description=f"**{nom}** remis à zéro — {n} entrée(s) effacée(s).\nLe jeu repart de zéro.",
+            color=0x2ecc71), view=None)
     elif view.value is False:
-        await msg.edit(embed=discord.Embed(description="❌ Reset annulé.", color=0x95a5a6), view=None)
+        await msg.edit(embed=discord.Embed(description="❌ Annulé.", color=0x95a5a6), view=None)
     else:
-        await msg.edit(embed=discord.Embed(description="⏰ Reset annulé — timeout.", color=0x95a5a6), view=None)
+        await msg.edit(embed=discord.Embed(description="⏰ Annulé — délai dépassé.", color=0x95a5a6), view=None)
+
 
 # ============================================================
 
