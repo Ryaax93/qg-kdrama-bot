@@ -1001,11 +1001,10 @@ def build_help_pages(guild, is_admin=False):
         "`combat` `duel` `dashboard` `bienvenue` `aurevoir`\n"
         "`halloffame` `girlsonly` `annonces` `invitation` `boost` `reglement`"
     ), inline=False)
-    e.add_field(name="📖 Publication automatique", value=(
-        "`.setsalon guide` — configure **et publie** le guide des nouveaux\n"
-        "`.setsalon boutique` — configure **et publie** la boutique\n"
-        "`.setsalon girlsonly` — configure **et publie** les commandes filles\n"
-        "*Refais la commande pour republier après une mise à jour.*"
+    e.add_field(name="📖 Salons qui publient leur panneau", value=(
+        "`guide` `boutique` `girlsonly` `casino` `gacha` `combat` `duel` `event`\n"
+        "`reglement` *(nécessite un rôle : `.setsalon reglement @Rôle`)*\n"
+        "*Chacun publie automatiquement ses explications. Refais la commande pour republier.*"
     ), inline=False)
     e.add_field(name="🌸 Girls Only", value=(
         "`.setgirlsrole @role` — Définir le rôle filles\n"
@@ -1646,7 +1645,6 @@ async def leaderboard(ctx):
         description=desc or "Aucune donnée",
         color=0xf1c40f
     ))
-
 
 # ============================================================
 #  🎭 RÔLES BOUTIQUE — nom + couleur (créés automatiquement)
@@ -2675,7 +2673,6 @@ def build_shop_pages():
         pages.append(embed)
     return pages
 
-
 class RetireRoleView(ui.View):
     """Menu pour retirer un rôle boutique de son profil"""
     def __init__(self, membre, roles, timeout=60):
@@ -3337,7 +3334,6 @@ async def run_heure_maudite(channel, guild):
     await asyncio.sleep(5)
     await random.choice([run_question_eclair, run_roi_colline, run_debat])(channel, guild)
 
-
 # ============================================================
 #  🎪 SALONS TEMPORAIRES D'EVENT — évitent de polluer les discussions
 # ============================================================
@@ -3605,7 +3601,6 @@ async def run_banquier(channel, guild):
         color=0xf1c40f if (offre_finale and contenu >= offre_finale) else 0xe74c3c))
     if salon is not channel:
         await close_event_channel(salon, 180)
-
 
 # ============================================================
 #  🏛️ LES ENCHÈRES — lot en rotation, compte à rebours relancé
@@ -3922,7 +3917,6 @@ async def run_debat(channel, guild, duree=3600):
     if salon is not channel:
         await close_event_channel(salon, 300)
 
-
 async def run_roi_colline(channel, guild):
     """👑 Roi de la Colline — défis en arène"""
     ping = get_event_ping(guild, "everyone")
@@ -4199,7 +4193,6 @@ async def stopervent_cmd(ctx):
         description="\n".join(f"• {a}" for a in arretes),
         color=0xe74c3c))
 
-
 @bot.command(name="setsalon")
 @commands.has_permissions(administrator=True)
 async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
@@ -4253,16 +4246,7 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
     await ctx.send(embed=discord.Embed(
         description=f"✅ Salon **{type_salon}** configuré sur {ctx.channel.mention} !", color=0x2ecc71))
 
-    # Le salon guide reçoit directement le guide
-    if t == "guide":
-        try:
-            for e in build_guide_embeds(ctx.guild):
-                await ctx.channel.send(embed=e)
-                await asyncio.sleep(0.4)
-        except Exception as e:
-            print(f"[Guide] Erreur publication : {e}")
-
-    # Le salon règlement reçoit le règlement + la validation par réaction
+    # ── Le salon règlement reçoit le règlement + la validation par réaction ──
     if t == "reglement":
         global REGLEMENT_ROLE_ID, REGLEMENT_MSG_ID
         if role:
@@ -4273,73 +4257,35 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
                 description=("❌ Précise le rôle à donner : `.setsalon reglement @RôleMembre`\n"
                              "*C'est le rôle que recevront ceux qui acceptent le règlement.*"),
                 color=0xe74c3c))
-        embed = discord.Embed(
-            title="📜  Règlement du QG Kdrama",
-            description=(
-                "Bienvenue ! Avant d'accéder au serveur, prends une minute pour lire ça.\n"
-                "*En validant, tu t'engages à les respecter.*"),
-            color=0xff6b9d)
-        embed.add_field(name="1️⃣  Respect avant tout", value=(
-            "Aucune insulte, aucun harcèlement, aucune discrimination. "
-            "On est là pour passer un bon moment ensemble."), inline=False)
-        embed.add_field(name="2️⃣  Pas de spam", value=(
-            "Évite les messages répétés, les majuscules à outrance et les mentions abusives."), inline=False)
-        embed.add_field(name="3️⃣  Spoilers", value=(
-            "Utilise les balises spoiler `||comme ça||` pour tout ce qui gâche une intrigue. "
-            "Personne n'a envie d'apprendre la fin d'un drama par accident."), inline=False)
-        embed.add_field(name="4️⃣  Contenu approprié", value=(
-            "Rien de choquant, illégal ou NSFW. Le serveur est ouvert à tous."), inline=False)
-        embed.add_field(name="5️⃣  Les bons salons", value=(
-            "Chaque salon a son sujet — le gacha dans le gacha, les dramas dans les dramas."), inline=False)
-        embed.add_field(name="6️⃣  Le staff a le dernier mot", value=(
-            "En cas de litige, la décision du staff s'applique. Un souci ? Ouvre un ticket avec `.ticket`."), inline=False)
-        embed.add_field(name="\u200b", value=(
-            f"### ✅  Réagis ci-dessous pour accepter\n"
-            f"Tu recevras le rôle **{cible.name}** et accéderas au reste du serveur."), inline=False)
-        embed.set_footer(text="QG Kdrama • Merci et bon séjour 🌸",
-                         icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
         try:
-            msg = await ctx.channel.send(embed=embed)
+            msg = await ctx.channel.send(embed=panneau_reglement(ctx.guild, cible))
             await msg.add_reaction("✅")
             REGLEMENT_MSG_ID = msg.id
             sauvegarder_salons()
         except discord.Forbidden:
             return await ctx.send("❌ Je n'ai pas la permission d'écrire ou de réagir ici !")
+        return
 
-    # Le salon boutique reçoit directement la boutique
-    if t == "boutique":
+    # ── Les autres salons publient leur panneau automatiquement ──
+    panneaux = {
+        "guide":     build_guide_embeds,
+        "boutique":  lambda g: build_shop_pages(),
+        "girlsonly": panneau_girlsonly,
+        "casino":    panneau_casino,
+        "gacha":     panneau_gacha,
+        "combat":    panneau_combat,
+        "duel":      panneau_duel,
+        "event":     panneau_event,
+    }
+    if t in panneaux:
         try:
-            for e in build_shop_pages():
+            for e in panneaux[t](ctx.guild):
                 await ctx.channel.send(embed=e)
-                await asyncio.sleep(0.3)
+                await asyncio.sleep(0.4)
+        except discord.Forbidden:
+            await ctx.send("❌ Je n'ai pas la permission d'écrire ici !")
         except Exception as e:
-            print(f"[Boutique] Erreur publication : {e}")
-
-    # Le salon Girls Only reçoit directement ses commandes — les filles les voient sur place
-    if t == "girlsonly":
-        presentation = discord.Embed(
-            title="🌸  Bienvenue dans le Girls Only",
-            description="*Cet espace est réservé aux filles du serveur. Voilà tout ce qui s'y passe.*",
-            color=0xff9ec7)
-        presentation.add_field(name="👗 Fit Check", value=(
-            "`.fit <description de ta tenue>`\n"
-            "Partage ton look du jour, les autres réagissent 💕"
-        ), inline=False)
-        presentation.add_field(name="🌙 Ritual du Soir", value=(
-            "Chaque soir à **21 h**, une question drama est postée ici.\n"
-            "Rien à taper : réponds simplement dans le salon."
-        ), inline=False)
-        presentation.add_field(name="💫 Star of the Week", value=(
-            "Chaque **lundi à 10 h**, la fille la plus active de la semaine est mise à l'honneur."
-        ), inline=False)
-        presentation.add_field(name="💎 Diamond Girl", value=(
-            "Le **1er de chaque mois**, la fille la plus active du mois reçoit le titre."
-        ), inline=False)
-        presentation.set_footer(text="QG Kdrama • Girls Only 🌸")
-        try:
-            await ctx.channel.send(embed=presentation)
-        except Exception:
-            pass
+            print(f"[Panneau {t}] Erreur : {e}")
 
 @bot.command(name="setgirlsrole")
 @commands.has_permissions(administrator=True)
@@ -5077,6 +5023,192 @@ ATTAQUES_PVP = [
 active_arene = {}
 
 # ============================================================
+#  📌 PANNEAUX DE SALON — publiés automatiquement par .setsalon
+# ============================================================
+def panneau_girlsonly(guild):
+    e = discord.Embed(
+        title="🌸  Bienvenue dans le Girls Only",
+        description="*Cet espace est réservé aux filles du serveur. Voilà tout ce qui s'y passe.*",
+        color=0xff9ec7)
+    e.add_field(name="👗 Fit Check", value=(
+        "`.fit <description de ta tenue>`\n"
+        "Partage ton look du jour, les autres réagissent 💕"), inline=False)
+    e.add_field(name="🌙 Ritual du Soir", value=(
+        "Chaque soir à **21 h**, une question drama est postée ici.\n"
+        "Rien à taper : réponds simplement dans le salon."), inline=False)
+    e.add_field(name="💫 Star of the Week", value=(
+        "Chaque **lundi à 10 h**, la fille la plus active de la semaine est mise à l'honneur."), inline=False)
+    e.add_field(name="💎 Diamond Girl", value=(
+        "Le **1er de chaque mois**, la fille la plus active du mois reçoit le titre."), inline=False)
+    e.set_footer(text="QG Kdrama • Girls Only 🌸")
+    return [e]
+
+def panneau_reglement(guild, role_cible):
+    e = discord.Embed(
+        title="📜  Règlement du QG Kdrama",
+        description=("Bienvenue ! Avant d'accéder au serveur, prends une minute pour lire ça.\n"
+                     "*En validant, tu t'engages à le respecter.*"),
+        color=0xff6b9d)
+    e.add_field(name="1️⃣  Respect avant tout", value=(
+        "Aucune insulte, aucun harcèlement, aucune discrimination. "
+        "On est là pour passer un bon moment ensemble."), inline=False)
+    e.add_field(name="2️⃣  Pas de spam", value=(
+        "Évite les messages répétés, les majuscules à outrance et les mentions abusives."), inline=False)
+    e.add_field(name="3️⃣  Spoilers", value=(
+        "Utilise les balises spoiler `||comme ça||` pour tout ce qui gâche une intrigue. "
+        "Personne n'a envie d'apprendre la fin d'un drama par accident."), inline=False)
+    e.add_field(name="4️⃣  Contenu approprié", value=(
+        "Rien de choquant, illégal ou NSFW. Le serveur est ouvert à tous."), inline=False)
+    e.add_field(name="5️⃣  Les bons salons", value=(
+        "Chaque salon a son sujet — le gacha dans le gacha, les dramas dans les dramas."), inline=False)
+    e.add_field(name="6️⃣  Le staff a le dernier mot", value=(
+        "En cas de litige, la décision du staff s'applique. Un souci ? Ouvre un ticket avec `.ticket`."), inline=False)
+    e.add_field(name="\u200b", value=(
+        f"### ✅  Réagis ci-dessous pour accepter\n"
+        f"Tu recevras le rôle **{role_cible.name}** et accéderas au reste du serveur."), inline=False)
+    e.set_footer(text="QG Kdrama • Merci et bon séjour 🌸",
+                 icon_url=guild.icon.url if guild.icon else None)
+    return e
+
+def panneau_casino(guild):
+    e = discord.Embed(
+        title="🎰  Bienvenue au Casino du QG",
+        description="*Ici on mise, on perd, on retente. Les pièces se gagnent ailleurs — elles se jouent ici.*",
+        color=0xf1c40f)
+    e.add_field(name="🎰 Machine à sous", value=(
+        "`.slot` — mise 50 pièces par défaut\n"
+        "`.slot 200` — choisis ta mise *(entre 10 et 500)*\n\n"
+        "**Gains :** 3 symboles identiques = **×10** · une paire = **×2**"
+    ), inline=False)
+    e.add_field(name="💰 Le Jackpot", value=(
+        "`.jackpot` — voir la cagnotte en cours\n"
+        "Quand un admin lance l'event, le **premier** à écrire exactement `!jackpot` rafle tout."
+    ), inline=False)
+    e.add_field(name="🍀 La Loterie", value=(
+        "`.loto` — un ticket coûte **100 pièces**\n"
+        "Tu peux en acheter plusieurs pour multiplier tes chances. Un seul gagnant remporte toute la cagnotte."
+    ), inline=False)
+    e.add_field(name="⚡ Nuit Casino", value=(
+        "Pendant cet event, **tous les gains de `.slot` sont doublés** — 3 identiques rapportent ×20."
+    ), inline=False)
+    e.set_footer(text="Joue avec modération… ou pas 🎲 • QG Kdrama")
+    return [e]
+
+def panneau_gacha(guild):
+    e = discord.Embed(
+        title="🎰  Le Gacha du QG",
+        description=(f"*Jeu de collection : **{len(ANIME_CARDS_DB)} cartes** de personnages d'animés.*\n"
+                     "**Une carte n'appartient qu'à une seule personne sur tout le serveur.**"),
+        color=0xf1c40f)
+    e.add_field(name="▶️ Pour commencer", value=(
+        "**1.** `.ga` — tire une carte au hasard\n"
+        "**2.** Elle te plaît ? Clique sur le **cœur ❤️** sous la carte — elle est à toi\n"
+        "**3.** `.rolls` — vois combien de tirages il te reste *(ça se recharge)*"
+    ), inline=False)
+    e.add_field(name="📦 Ta collection", value=(
+        "`.gachastock` — ta collection · `.cardinfo <perso>` — les détails d'une carte\n"
+        "`.serie <nom>` — ta progression sur une série *(+ récompense si complète)*\n"
+        "`.cartefav add <perso>` — tes favorites · `.wishlist` — tes envies"
+    ), inline=False)
+    e.add_field(name="🔧 Faire évoluer", value=(
+        "`.fusionner <perso>` — fusionne des doublons pour gagner des ⭐\n"
+        "`.burn <perso>` — recycle une carte contre des pièces\n"
+        "`.setimage <perso> <url imgur>` — change l'image de **tes** cartes"
+    ), inline=False)
+    e.add_field(name="🔄 Échanger", value=(
+        "`.gachatrade @membre <ta carte> <sa carte>` — proposer un échange\n"
+        "`.gachagive @membre <perso>` — offrir une carte\n"
+        "`.invoke` — invocation Légendaire+ garantie *(10 000 pièces)*"
+    ), inline=False)
+    e.add_field(name="🎁 Les events qui se passent ici", value=(
+        "📦 **Coffre** — un par jour à une heure surprise, `.ouvrir` pour le rafler\n"
+        "🌙 **Nuit de Chasse** — taux Mythique ×3 et Légendaire ×2\n"
+        "🕶️ **Marché Noir** — 3 cartes rares à acheter, `.marcheacheter <perso>`\n"
+        "🎴 **Carte Mystère** — une carte rare tombe, premier au cœur la garde"
+    ), inline=False)
+    e.set_footer(text="Tout ça est 100% optionnel — le serveur tourne très bien sans 🌸")
+    return [e]
+
+def panneau_combat(guild):
+    e = discord.Embed(
+        title="⚔️  Combats de cartes",
+        description="*Affronte quelqu'un avec ton équipe de 3 cartes gacha.*",
+        color=0xe74c3c)
+    e.add_field(name="🎴 Lancer un combat", value=(
+        "`.pokebattle @membre` — défie quelqu'un en 3 contre 3\n"
+        "`.pokestop` — annuler le combat en cours\n\n"
+        "*Il faut posséder au moins 3 cartes pour jouer.*"
+    ), inline=False)
+    e.add_field(name="🕹️ Comment ça marche", value=(
+        "Chacun choisit ses **3 cartes** dans un menu, puis vous jouez chacun votre tour :\n"
+        "3 attaques au choix, ou changer de carte. Les dégâts dépendent de l'ATK de ta carte "
+        "face à la DEF de l'adversaire."
+    ), inline=False)
+    e.add_field(name="📈 Tes cartes progressent", value=(
+        "Chaque combat donne de l'**XP à tes cartes** : +30 en victoire, +10 en défaite.\n"
+        "Une carte peut monter jusqu'au **niveau 10** et gagne des stats à chaque palier.\n"
+        "`.cardinfo <perso>` pour suivre sa progression."
+    ), inline=False)
+    e.add_field(name="🏆 Récompense", value="**+300 pièces** et **+60 XP** pour le vainqueur.", inline=False)
+    e.set_footer(text="⚔️ Combat 3v3 — QG Kdrama")
+    return [e]
+
+def panneau_duel(guild):
+    e = discord.Embed(
+        title="🥊  L'Arène",
+        description="*Duel au tour par tour — pas besoin de cartes, juste tes stats de personnage.*",
+        color=0xe67e22)
+    e.add_field(name="⚔️ Se battre", value=(
+        "`.arene @membre` — lance un défi *(l'autre a 30 s pour accepter)*"
+    ), inline=False)
+    e.add_field(name="🎮 Tes six actions", value=(
+        "⚔️ **Attaque** — fiable, 25-40 dégâts\n"
+        "💥 **Frappe Chargée** — risquée, 10-65 dégâts\n"
+        "🌀 **Attaque Spéciale** — puissante et stable, 30-50\n"
+        "🛡️ **Défense** — divise par deux les dégâts reçus\n"
+        "🌿 **Soin** — récupère 15 à 30 PV\n"
+        "💨 **Esquive** — secrète : ton adversaire ne la voit pas venir"
+    ), inline=False)
+    e.add_field(name="💪 Devenir plus fort", value=(
+        "Chaque niveau te donne **1 point d'amélioration**.\n"
+        "`.ameliorer pv` · `.ameliorer atk` · `.ameliorer def` · `.ameliorer endurance`\n"
+        "`.rank` pour voir tes stats actuelles."
+    ), inline=False)
+    e.add_field(name="🏆 Récompense", value="**100 à 250 pièces** et **+40 XP** pour le vainqueur.", inline=False)
+    e.set_footer(text="🥊 Arène PvP — QG Kdrama")
+    return [e]
+
+def panneau_event(guild):
+    e = discord.Embed(
+        title="🎪  Les Events du QG",
+        description="*Ici tombent les annonces. Certains events créent leur propre salon le temps de la partie.*",
+        color=0x3498db)
+    e.add_field(name="👥 Ouverts à tout le monde", value=(
+        "🎩 **Le Banquier** — Deal or No Deal, un candidat face au banquier\n"
+        "🏛️ **Enchères** — une carte, un rôle ou un objet mis aux enchères\n"
+        "🐉 **Invasion** — un boss débarque, tapez `.attaque` tous ensemble\n"
+        "⚡ **Question Éclair** — les 3 premiers à répondre gagnent\n"
+        "🎤 **Débat du Jour** — vote 🅰️/🅱️, résultat une heure plus tard\n"
+        "🍀 **Loterie** — `.loto` pour un ticket, un seul gagnant\n"
+        "👑 **Roi de la Colline** — 30 min de duels, le dernier vainqueur est couronné\n"
+        "🎁 **Colis** · 💰 **Jackpot** · 🏆 **Classement** · ⚡ **Double XP** · 🎰 **Nuit Casino**"
+    ), inline=False)
+    e.add_field(name="🎰 Orientés gacha", value=(
+        "🌙 **Nuit de Chasse** · 🕶️ **Marché Noir** · 🎴 **Carte Mystère** · 📦 **Coffre**"
+    ), inline=False)
+    e.add_field(name="📅 Savoir ce qui arrive", value=(
+        "`.planning` — comment fonctionnent les events\n"
+        "`.planningauto` — les events programmés de la semaine\n"
+        "`.eventstatus` — savoir si les events automatiques tournent"
+    ), inline=False)
+    e.add_field(name="🔔 Être prévenu", value=(
+        "Les events ne notifient que les personnes concernées : un event gacha ne réveille "
+        "que ceux qui ont le rôle Gacha. Demande à un admin pour ajuster tes rôles."
+    ), inline=False)
+    e.set_footer(text="🎪 Events — QG Kdrama")
+    return [e]
+
+# ============================================================
 #  📖 GUIDE DU SERVEUR — Explications pour les nouveaux
 #  Posté en embeds fixes (lisibles par tous, en permanence)
 # ============================================================
@@ -5277,7 +5409,6 @@ def build_guide_embeds(guild):
 
     return pages
 
-
 # ============================================================
 #  🖼️ CARTE DE PROFIL — Image générée (style néon futuriste)
 # ============================================================
@@ -5417,9 +5548,6 @@ async def profil_cmd(ctx, membre: discord.Member = None):
     embed.add_field(name="🏆 Succès", value=f"{nb_succes}/{len(ACHIEVEMENTS)}", inline=True)
     embed.add_field(name="🐾 Compagnon", value=pet_txt, inline=True)
     await ctx.send(embed=embed)
-
-
-
 
 # ============================================================
 #  🏆 SUCCÈS / ACHIEVEMENTS — 30 succès pour tout le serveur
@@ -8512,7 +8640,6 @@ LG_NARRATIONS = {
     ],
 }
 
-
 # ============================================================
 #  🐺 LOUP GAROU — Interfaces cliquables par rôle
 # ============================================================
@@ -8634,7 +8761,6 @@ class LGVoyanteView(ui.View):
                             if loup else "✅ *Innocent. Une piste écartée.*")),
             color=0xe74c3c if loup else 0x2ecc71), view=self)
         self.stop()
-
 
 class LGSorciereView(ui.View):
     """🧙 Désigne d'abord, puis choisis la fiole"""
@@ -8799,7 +8925,6 @@ class LGChasseurView(ui.View):
             if c2:
                 asyncio.create_task(close_event_channel(c2, 30))
         self.stop()
-
 
 class LGVoteView(ui.View):
     """⚖️ Vote du village — menu déroulant, tout le monde vote"""
@@ -9091,13 +9216,11 @@ async def lg_nuit_annonces(guild, game, ctx_channel):
                                      "garde l'info et choisis bien tes mots demain.",
                 color=0xf39c12))
 
-
 # ============================================================
 #  COMMANDES LG
 # ============================================================
 
 lg_games = {}  # {guild_id: game_data}
-
 
 async def _lg_timer_nuit(ctx, gid, jour):
     """Résout la nuit automatiquement si l'hôte ne le fait pas"""
@@ -9151,8 +9274,6 @@ async def _lg_chasseur(guild, game, uid, ctx_channel):
                      "**Ce que tu dois faire :** choisis qui part avec toi dans le menu.\n"
                      "*Tu as 2 minutes — après quoi ton doigt se relâchera.*"),
         color=0xe67e22), view=LGChasseurView(game, uid, guild))
-
-
 
 @bot.command(name="lg")
 async def loup_garou_help(ctx):
@@ -9580,7 +9701,6 @@ async def _lg_inform_sorciere(guild, game, victime_id):
                      f"ou désigne quelqu'un d'autre et verse ☠️ ta fiole de mort.\n"
                      f"*Ou ne fais rien — c'est aussi un choix.*"),
         color=0xe74c3c), view=v)
-
 
 @bot.command(name="lglove")
 async def lg_love(ctx, j1: discord.Member = None, j2: discord.Member = None):
@@ -10164,7 +10284,6 @@ async def spawn_coffre():
                 await run_coffre(channel, gain=random.randint(300, 1200), guild=guild)
         except Exception as e:
             print(f"[spawn_coffre] Erreur: {e}")
-
 
 # ─────────────────────────────────────────────────────────────
 #  🌙 NUIT DE CHASSE — boost Mythique x2 pendant 2h
