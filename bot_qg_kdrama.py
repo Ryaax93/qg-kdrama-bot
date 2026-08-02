@@ -398,6 +398,54 @@ def check_answer(reponse: str, correct: str) -> bool:
     return False
 
 QUIZ_KDRAMA = [
+    # ── Kdramas incontournables & récents ──
+    {"q": "Dans Squid Game, quel est le numéro du joueur principal ?", "a": "456"},
+    {"q": "Dans Squid Game, quel est le premier jeu ?", "a": "1 2 3 soleil"},
+    {"q": "Dans Squid Game, combien de joueurs participent au début ?", "a": "456"},
+    {"q": "Dans Goblin, que doit faire Kim Shin pour mourir enfin ?", "a": "retirer l epee"},
+    {"q": "Dans Goblin, qui est le colocataire du gobelin ?", "a": "la faucheuse"},
+    {"q": "Dans Crash Landing on You, quel est le métier de Ri Jeong-hyeok ?", "a": "officier/soldat"},
+    {"q": "Dans Vincenzo, où est caché l'or dans le bâtiment ?", "a": "sous-sol/cave"},
+    {"q": "Dans Itaewon Class, combien d'années Sae-royi passe-t-il en prison ?", "a": "3"},
+    {"q": "Dans Reply 1988, quel sport pratique Choi Taek ?", "a": "go/baduk"},
+    {"q": "Dans Hospital Playlist, de quel instrument joue le groupe d'amis ?", "a": "groupe de musique"},
+    {"q": "Dans The Glory, quel jeu obsède l'héroïne ?", "a": "go/baduk"},
+    {"q": "Dans The Glory, quelle est la vengeance de Moon Dong-eun ?", "a": "harcelement scolaire"},
+    {"q": "Dans Extraordinary Attorney Woo, quel est le cabinet de l'héroïne ?", "a": "hanbada"},
+    {"q": "Dans Queen of Tears, quelle maladie touche Hae-in ?", "a": "tumeur au cerveau"},
+    {"q": "Dans Business Proposal, quel est le pseudo utilisé par Ha-ri ?", "a": "shin geum-hui"},
+    {"q": "Dans Twenty-Five Twenty-One, en quelle année commence l'histoire ?", "a": "1998"},
+    {"q": "Dans Start-Up, quel est le nom de la compétition de startups ?", "a": "sandbox"},
+    {"q": "Dans Sweet Home, où sont enfermés les survivants ?", "a": "immeuble/green home"},
+    {"q": "Dans All of Us Are Dead, comment s'appelle le lycée ?", "a": "hyosan"},
+    {"q": "Dans Alchemy of Souls, quel pouvoir permet de changer d'âme ?", "a": "alchimie des ames"},
+    {"q": "Dans Hometown Cha-Cha-Cha, quel est le métier de Hye-jin ?", "a": "dentiste"},
+    {"q": "Dans My Demon, que perd le démon au début ?", "a": "ses pouvoirs"},
+    {"q": "Dans Reborn Rich, quel groupe le héros veut-il récupérer ?", "a": "soonyang"},
+    {"q": "Dans D.P., que traquent les protagonistes ?", "a": "deserteurs"},
+    {"q": "Dans Move to Heaven, quel est le métier du protagoniste ?", "a": "nettoyeur de scenes"},
+    {"q": "Dans Hellbound, que reçoivent les condamnés avant leur mort ?", "a": "un decret"},
+    {"q": "Dans Mr. Queen, dans quel corps se réveille le chef cuisinier ?", "a": "la reine"},
+    {"q": "Dans Descendants of the Sun, dans quel pays fictif se déroule l'action ?", "a": "uruk"},
+    {"q": "Dans Kingdom, quelle plante ramène les morts ?", "a": "plante de resurrection"},
+    {"q": "Dans Signal, en quelle année vit le policier du passé ?", "a": "1989"},
+    {"q": "Dans My Love from the Star, depuis combien de temps l'alien est sur Terre ?", "a": "400 ans"},
+    {"q": "Dans Boys Over Flowers, comment s'appelle le groupe des 4 riches ?", "a": "f4"},
+    {"q": "Dans True Beauty, quel est le talent caché de l'héroïne ?", "a": "maquillage"},
+    {"q": "Dans Weak Hero, quelle est l'arme principale de Yeon Si-eun ?", "a": "son intelligence"},
+    {"q": "Dans Lovely Runner, quel groupe est le personnage masculin ?", "a": "eclipse"},
+    {"q": "Dans Marry My Husband, que fait l'héroïne après sa mort ?", "a": "revient dans le passe"},
+    {"q": "Dans Nevertheless, quel est le passe-temps du personnage masculin ?", "a": "sculpture"},
+    {"q": "Dans It's Okay to Not Be Okay, quel est le métier de Moon Gang-tae ?", "a": "infirmier psychiatrique"},
+    {"q": "Dans Doctor Slump, que partagent les deux protagonistes ?", "a": "burnout"},
+    {"q": "Dans Crash Course in Romance, quelle matière enseigne le professeur star ?", "a": "mathematiques"},
+    {"q": "Dans Mask Girl, sur quelle plateforme diffuse l'héroïne ?", "a": "streaming"},
+    {"q": "Dans Big Mouth, quel surnom porte l'avocat ?", "a": "big mouse"},
+    {"q": "Dans Stranger, quelle particularité a le procureur Hwang ?", "a": "pas d emotions"},
+    {"q": "Dans My Mister, quel âge sépare les deux protagonistes ?", "a": "20 ans"},
+    {"q": "Dans Prison Playbook, quel sport pratique le protagoniste ?", "a": "baseball"},
+    {"q": "Dans Guardian, combien d'années le gobelin a-t-il vécu ?", "a": "939"},
+
     {"q": "Dans quel drama joue Lee Min-ho dans le rôle de Gu Jun-pyo ?", "a": "boys over flowers"},
     {"q": "Comment s'appelle le goblin dans le drama 'Goblin' ?", "a": "kim shin"},
     {"q": "Dans 'Crash Landing on You', dans quel pays atterrit Yoon Se-ri ?", "a": "corée du nord"},
@@ -451,6 +499,68 @@ QUIZ_KDRAMA = [
 ]
 
 QUIZ_ANIME = [
+    # ── Animés tendance & récents ──
+    {"q": "Dans Chainsaw Man, quel est le nom du démon fusionné à Denji ?", "a": "pochita"},
+    {"q": "Dans Chainsaw Man, qui contrôle Denji au début ?", "a": "makima"},
+    {"q": "Dans Spy x Family, quel est le nom de code de Loid Forger ?", "a": "twilight"},
+    {"q": "Dans Spy x Family, quel est le pouvoir d'Anya ?", "a": "telepathie"},
+    {"q": "Dans Spy x Family, quel est le métier secret de Yor ?", "a": "assassin"},
+    {"q": "Dans Frieren, combien de temps Frieren attend-elle avant de revoir ses amis ?", "a": "50 ans"},
+    {"q": "Dans Oshi no Ko, quel est le nom de l'idole assassinée ?", "a": "ai hoshino"},
+    {"q": "Dans Blue Lock, quel est l'objectif du programme ?", "a": "meilleur attaquant"},
+    {"q": "Dans Blue Lock, comment s'appelle le protagoniste ?", "a": "isagi"},
+    {"q": "Dans Jujutsu Kaisen, quel est le domaine de Sukuna ?", "a": "malevolent shrine"},
+    {"q": "Dans Jujutsu Kaisen, qui est le professeur de Yuji ?", "a": "gojo"},
+    {"q": "Dans Demon Slayer, quel est le rang le plus élevé chez les démons ?", "a": "lune superieure 1"},
+    {"q": "Dans Demon Slayer, qui est la Lune Supérieure 1 ?", "a": "kokushibo"},
+    {"q": "Dans Solo Leveling, quel est le titre final de Jin-Woo ?", "a": "monarque des ombres"},
+    {"q": "Dans Solo Leveling, comment s'appelle son premier soldat d'ombre ?", "a": "igris"},
+    {"q": "Dans Attack on Titan, qui est le père d'Eren ?", "a": "grisha"},
+    {"q": "Dans Attack on Titan, quel titan possède Reiner ?", "a": "titan cuirasse"},
+    {"q": "Dans Attack on Titan, quel titan possède Annie ?", "a": "titan feminin"},
+    {"q": "Dans One Piece, quel est le vrai nom du fruit de Luffy ?", "a": "hito hito no mi nika"},
+    {"q": "Dans One Piece, qui est le Roi des Pirates avant Luffy ?", "a": "gol d roger"},
+    {"q": "Dans One Piece, comment s'appelle l'île des hommes-poissons ?", "a": "fishman island"},
+    {"q": "Dans Naruto, qui est le père de Boruto ?", "a": "naruto"},
+    {"q": "Dans Naruto, quel est le nom du village de Gaara ?", "a": "suna"},
+    {"q": "Dans My Hero Academia, quel est l'alter de Todoroki ?", "a": "mi-glace mi-feu"},
+    {"q": "Dans My Hero Academia, qui est le successeur d'All Might ?", "a": "deku"},
+    {"q": "Dans Vinland Saga, qui tue le père de Thorfinn ?", "a": "askeladd"},
+    {"q": "Dans Mob Psycho, quel est le métier de Reigen ?", "a": "escroc/voyant"},
+    {"q": "Dans Dr Stone, quel est le nom du protagoniste ?", "a": "senku"},
+    {"q": "Dans Dr Stone, en quoi l'humanité a-t-elle été transformée ?", "a": "pierre"},
+    {"q": "Dans Kaiju No 8, quel est le vrai nom de Kaiju No 8 ?", "a": "kafka hibino"},
+    {"q": "Dans Sakamoto Days, quel est l'ancien métier de Taro ?", "a": "tueur a gages"},
+    {"q": "Dans Hell's Paradise, quelle île les condamnés explorent-ils ?", "a": "shinsenkyo"},
+    {"q": "Dans Wind Breaker, comment s'appelle le lycée du protagoniste ?", "a": "furin"},
+    {"q": "Dans Dandadan, à quoi croit Momo au début ?", "a": "fantomes"},
+    {"q": "Dans Dandadan, à quoi croit Okarun au début ?", "a": "aliens"},
+    {"q": "Dans Tokyo Revengers, quel gang Takemichi rejoint-il ?", "a": "toman"},
+    {"q": "Dans Tokyo Revengers, quel est le pouvoir de Takemichi ?", "a": "voyage dans le temps"},
+    {"q": "Dans Bleach, quel est le nom du bankai d'Ichigo ?", "a": "tensa zangetsu"},
+    {"q": "Dans Bleach, quel est le nom de l'organisation des Quincy ?", "a": "wandenreich"},
+    {"q": "Dans Hunter x Hunter, quelles sont les 6 catégories de Nen ?", "a": "renforcement emission transformation manipulation materialisation specialisation"},
+    {"q": "Dans Hunter x Hunter, quel est le type de Nen de Gon ?", "a": "renforcement"},
+    {"q": "Dans Fullmetal Alchemist, quel est le nom du Père des homoncules ?", "a": "pere/father"},
+    {"q": "Dans Death Note, quel est le vrai nom de L ?", "a": "l lawliet"},
+    {"q": "Dans Code Geass, quelle est la condition du Geass de Lelouch ?", "a": "une seule fois par personne"},
+    {"q": "Dans Re Zero, quelle sorcière est liée à Subaru ?", "a": "satella"},
+    {"q": "Dans Mushoku Tensei, quel est le nom du protagoniste réincarné ?", "a": "rudeus"},
+    {"q": "Dans Overlord, quel jeu Ainz jouait-il ?", "a": "yggdrasil"},
+    {"q": "Dans Konosuba, quelle est la seule magie de Megumin ?", "a": "explosion"},
+    {"q": "Dans Fire Force, comment s'appellent les humains enflammés ?", "a": "infernaux"},
+    {"q": "Dans Black Clover, quel grimoire possède Asta ?", "a": "grimoire a cinq feuilles"},
+    {"q": "Dans Haikyuu, quel est le lycée de Hinata ?", "a": "karasuno"},
+    {"q": "Dans Jujutsu Kaisen, qui scelle Gojo ?", "a": "geto/kenjaku"},
+    {"q": "Dans Demon Slayer, quelle respiration est à l'origine de toutes les autres ?", "a": "respiration du soleil"},
+    {"q": "Dans One Punch Man, quel est le rang de Saitama au début ?", "a": "classe c"},
+    {"q": "Dans Berserk, quel est le nom de la marque de Guts ?", "a": "brand of sacrifice"},
+    {"q": "Dans Made in Abyss, comment s'appelle la malédiction en remontant ?", "a": "malediction de l abime"},
+    {"q": "Dans Steins Gate, quel appareil permet de voyager dans le temps ?", "a": "micro-ondes/phone microwave"},
+    {"q": "Dans Your Name, comment s'appelle la comète ?", "a": "tiamat"},
+    {"q": "Dans Le Voyage de Chihiro, quel est le vrai nom de Haku ?", "a": "nigihayami kohaku nushi"},
+    {"q": "Dans Princesse Mononoké, quel animal accompagne San ?", "a": "loup"},
+
     {"q": "Quel est le vrai nom de Light Yagami dans Death Note ?", "a": "light yagami"},
     {"q": "Dans Demon Slayer, quelle est la technique signature de Tanjiro avec l'eau ?", "a": "respiration de l'eau"},
     {"q": "Dans Demon Slayer, comment s'appelle la technique du Soleil de Tanjiro ?", "a": "hinokami kagura/danse du feu"},
@@ -538,6 +648,22 @@ QUIZ_ANIME = [
 ]
 
 QUIZ_GAMING = [
+    {"q": "Dans Elden Ring, qui est le premier boss majeur ?", "a": "margit"},
+    {"q": "Dans Baldur's Gate 3, quel parasite infecte le héros ?", "a": "tetard mental"},
+    {"q": "Dans Zelda Tears of the Kingdom, quel pouvoir colle les objets ?", "a": "amalgame/ultrahand"},
+    {"q": "Dans Hollow Knight, quelle est la monnaie du jeu ?", "a": "geo"},
+    {"q": "Dans Minecraft, combien de blocs de diamant pour un bloc plein ?", "a": "9"},
+    {"q": "Dans Terraria, quel est le boss final ?", "a": "moon lord"},
+    {"q": "Dans League of Legends, combien de joueurs par équipe ?", "a": "5"},
+    {"q": "Dans Valorant, quel agent est un duelliste coréen ?", "a": "jett"},
+    {"q": "Dans Genshin Impact, quelle région est celle de l'Electro ?", "a": "inazuma"},
+    {"q": "Dans Honkai Star Rail, quel est le nom du train ?", "a": "astral express"},
+    {"q": "Dans Pokémon, quel type est efficace contre Dragon ?", "a": "fee/glace/dragon"},
+    {"q": "Dans Animal Crossing, qui est le raton laveur qui prête l'argent ?", "a": "tom nook"},
+    {"q": "Dans Dark Souls, quelle phrase apparaît à la mort ?", "a": "you died"},
+    {"q": "Dans Fortnite, quelle danse est devenue culte ?", "a": "floss"},
+    {"q": "Dans Rocket League, quel sport est mélangé aux voitures ?", "a": "football"},
+
     {"q": "Dans Genshin Impact, quel est le nom de la région de départ ?", "a": "mondstadt"},
     {"q": "Dans Elden Ring, comment s'appelle le monde ouvert principal ?", "a": "entre-terre"},
     {"q": "Dans Valorant, combien de rounds faut-il gagner pour remporter une partie ?", "a": "13"},
@@ -576,6 +702,60 @@ QUIZ_GAMING = [
 ]
 
 QUIZ_CULTURE = [
+    # ── Histoire & géographie ──
+    {"q": "En quelle année est tombé le mur de Berlin ?", "a": "1989"},
+    {"q": "Quel pays a offert la Statue de la Liberté aux États-Unis ?", "a": "france"},
+    {"q": "Quelle est la plus longue muraille du monde ?", "a": "grande muraille de chine"},
+    {"q": "Dans quel pays se trouve Machu Picchu ?", "a": "perou"},
+    {"q": "Quelle est la capitale du Canada ?", "a": "ottawa"},
+    {"q": "Quel désert est le plus grand du monde ?", "a": "antarctique"},
+    {"q": "Combien d'États composent les États-Unis ?", "a": "50"},
+    {"q": "Quel océan sépare l'Europe de l'Amérique ?", "a": "atlantique"},
+    {"q": "Quelle est la capitale de l'Égypte ?", "a": "le caire"},
+    {"q": "Quel est le plus petit pays d'Amérique du Sud ?", "a": "suriname"},
+    {"q": "En quelle année a eu lieu la chute de l'Empire romain d'Occident ?", "a": "476"},
+    {"q": "Qui était le premier empereur français ?", "a": "napoleon"},
+    {"q": "Quelle civilisation a construit les pyramides de Gizeh ?", "a": "egyptiens"},
+    # ── Sciences ──
+    {"q": "Combien d'os compte le corps humain adulte ?", "a": "206"},
+    {"q": "Quel est l'organe le plus grand du corps humain ?", "a": "peau"},
+    {"q": "Quelle planète est surnommée la planète rouge ?", "a": "mars"},
+    {"q": "Combien de temps met la lumière du Soleil pour atteindre la Terre ?", "a": "8 minutes"},
+    {"q": "Quel gaz les plantes absorbent-elles ?", "a": "dioxyde de carbone"},
+    {"q": "Quel est l'élément le plus abondant dans l'univers ?", "a": "hydrogene"},
+    {"q": "Combien de chromosomes possède l'être humain ?", "a": "46"},
+    {"q": "Quel animal est le plus grand du monde ?", "a": "baleine bleue"},
+    {"q": "À quelle température l'eau bout-elle au niveau de la mer ?", "a": "100"},
+    {"q": "Quel scientifique a formulé la théorie de l'évolution ?", "a": "darwin"},
+    {"q": "Combien de cœurs possède une pieuvre ?", "a": "3"},
+    {"q": "Quel métal est liquide à température ambiante ?", "a": "mercure"},
+    # ── Culture & arts ──
+    {"q": "Qui a composé la Neuvième Symphonie ?", "a": "beethoven"},
+    {"q": "Quel peintre a coupé son oreille ?", "a": "van gogh"},
+    {"q": "Qui a écrit Les Misérables ?", "a": "victor hugo"},
+    {"q": "Quel est le livre le plus vendu au monde ?", "a": "la bible"},
+    {"q": "Combien de touches compte un piano standard ?", "a": "88"},
+    {"q": "Qui a réalisé le film Titanic ?", "a": "james cameron"},
+    {"q": "Dans quel musée se trouve la Joconde ?", "a": "louvre"},
+    {"q": "Qui a écrit Le Petit Prince ?", "a": "saint-exupery"},
+    # ── Corée & Asie ──
+    {"q": "Quel est le plat coréen à base de chou fermenté ?", "a": "kimchi"},
+    {"q": "Comment s'appelle l'alphabet coréen ?", "a": "hangul"},
+    {"q": "Quel est le nom du plat coréen de riz mélangé ?", "a": "bibimbap"},
+    {"q": "Comment dit-on 'merci' en coréen ?", "a": "kamsahamnida"},
+    {"q": "Quel groupe de K-pop a été le premier n°1 au Billboard Hot 100 ?", "a": "bts"},
+    {"q": "Quelle boisson alcoolisée coréenne est la plus connue ?", "a": "soju"},
+    {"q": "Comment s'appelle la fête du Nouvel An coréen ?", "a": "seollal"},
+    # ── Divers & logique ──
+    {"q": "Combien de minutes y a-t-il dans une journée ?", "a": "1440"},
+    {"q": "Combien de secondes dans une heure ?", "a": "3600"},
+    {"q": "Quel est le résultat de 15 × 15 ?", "a": "225"},
+    {"q": "Combien font 144 divisé par 12 ?", "a": "12"},
+    {"q": "Combien de cartes dans un jeu de 52 sans les jokers ?", "a": "52"},
+    {"q": "Combien de joueurs sur un terrain de basket par équipe ?", "a": "5"},
+    {"q": "Combien d'anneaux compte le drapeau olympique ?", "a": "5"},
+    {"q": "Quelle est la seule lettre absente du nom des 50 États américains ?", "a": "q"},
+
     {"q": "Quelle est la capitale de la Corée du Sud ?", "a": "seoul"},
     {"q": "En quelle année a eu lieu la Révolution française ?", "a": "1789"},
     {"q": "Qui a peint la Joconde ?", "a": "leonard de vinci"},
@@ -772,10 +952,11 @@ def build_help_pages(guild, is_admin=False):
         "`.watch retirer <titre>` — Retirer un titre"
     ), inline=False)
     e.add_field(name="🧠 Quiz & Tournois", value=(
-        "`.quiz kdrama` / `.quiz anime` — Quiz solo\n"
-        "`.quizduel <thème> @joueur` — Quiz en duel\n"
+        "`.quiz <thème>` — Quiz solo en continu\n"
+        "`.quizduel <thème> @joueur` — Quiz en duel *(5 manches)*\n"
+        "**Thèmes :** `kdrama` `anime` `gaming` `culture` `harrypotter` `mix`\n"
         "`.quizstop` — Arrêter le quiz en cours\n"
-        "`.bracket kdrama` — Tournoi des meilleurs kdramas\n"
+        "`.bracket kdrama` / `.bracket anime` — Tournoi du serveur\n"
         "`.quote` / `.animequote` — Une citation au hasard"
     ), inline=False)
     pages.append(("🎬", "Kdrama & Anime", e))
@@ -886,7 +1067,9 @@ def build_help_pages(guild, is_admin=False):
         "`.lg` — L'aide complète du jeu\n"
         "`.lgroles` — Les rôles existants\n"
         "`.lgcreate` — Créer une partie • `.lgjoin` — Rejoindre\n"
-        "`.lgstart` — Lancer *(hôte)* • `.lgstatus` — État"
+        "`.lgcompo` — Choisir les rôles *(hôte)*\n"
+        "`.lgstart` — Lancer *(hôte)* • `.lgnext` — Accélérer *(hôte)*\n"
+        "`.lgstatus` — État de la partie"
     ), inline=False)
     e.add_field(name="🖱️ Loup Garou — pendant la partie", value=(
         "**Tout se joue au clic !** Chaque rôle reçoit son menu déroulant "
@@ -994,8 +1177,8 @@ def build_help_pages(guild, is_admin=False):
         "*Raretés : Commun • Rare • Épique • Légendaire • Mythique*"
     ), inline=False)
     e.add_field(name="⚙️ Réglages", value=(
-        "`.setrollreset <heures>` — Recharge des tirages\n"
-        "`.reset gacha` — ⚠️ Remettre le gacha à zéro *(voir `.reset`)*"
+        "`.setrollreset <minutes>` — Recharge des tirages *(150 min par défaut)*\n"
+        "*Pour remettre le gacha à zéro, voir la section Réinitialisation (page Events).*"
     ), inline=False)
     pages.append(("🔧", "Admin — Gacha", e))
 
@@ -1120,11 +1303,26 @@ class HelpView(ui.View):
 
 @bot.command(name="help", aliases=["aide", "commandes"])
 async def help_cmd(ctx):
-    """Affiche l'aide — .help"""
-    is_admin = ctx.author.guild_permissions.administrator if ctx.guild else False
-    pages = build_help_pages(ctx.guild, is_admin)
+    """Affiche l'aide des joueurs — .help"""
+    pages = build_help_pages(ctx.guild, is_admin=False)
     view = HelpView(pages, ctx.author, timeout=180)
     await ctx.send(embed=pages[0][2], view=view)
+    if ctx.guild and ctx.author.guild_permissions.administrator:
+        await ctx.send(embed=discord.Embed(
+            description="🛡️ *Tu es admin — tape `.helpadmin` pour les commandes de modération et de configuration.*",
+            color=0x95a5a6))
+
+@bot.command(name="helpadmin", aliases=["adminhelp", "aideadmin"])
+@commands.has_permissions(administrator=True)
+async def helpadmin_cmd(ctx):
+    """Affiche l'aide administrateur — .helpadmin"""
+    toutes = build_help_pages(ctx.guild, is_admin=True)
+    pages = [p for p in toutes if p[1].startswith("Admin")]
+    if not pages:
+        return await ctx.send("❌ Aucune page admin trouvée.")
+    view = HelpView(pages, ctx.author, timeout=180)
+    await ctx.send(embed=pages[0][2], view=view)
+
 
 @bot.command(name="setimage")
 async def setimage_cmd(ctx, *, args: str = None):
@@ -1282,28 +1480,104 @@ async def removecard_cmd(ctx, membre: discord.Member = None, *, perso: str = Non
 active_quiz = {}
 quiz_duels = {}  # {channel_id: {players, scores, theme, round, total_rounds}}
 
+QUIZ_HARRYPOTTER = [
+    # ── Facile ──
+    {"q": "Quelle est la maison de Harry à Poudlard ?", "a": "gryffondor"},
+    {"q": "Comment s'appelle le hibou de Harry ?", "a": "hedwige"},
+    {"q": "Quel est le sortilège de la mort ?", "a": "avada kedavra"},
+    {"q": "Comment s'appelle le directeur de Poudlard au début ?", "a": "dumbledore"},
+    {"q": "Quel animal représente Serpentard ?", "a": "serpent"},
+    {"q": "Quel est le nom complet de Voldemort ?", "a": "tom jedusor"},
+    {"q": "Quel sport se joue sur des balais ?", "a": "quidditch"},
+    {"q": "Quel poste occupe Harry dans son équipe de Quidditch ?", "a": "attrapeur"},
+    {"q": "Comment s'appelle le rat de Ron ?", "a": "croutard"},
+    {"q": "Quelle est la banque des sorciers ?", "a": "gringotts"},
+    {"q": "Quel sortilège allume la baguette ?", "a": "lumos"},
+    {"q": "Comment s'appelle le chat d'Hermione ?", "a": "pattenrond"},
+    {"q": "Quel est le nom de la rue où vit Harry chez les Dursley ?", "a": "privet drive"},
+    {"q": "Combien de tâches compte le Tournoi des Trois Sorciers ?", "a": "3"},
+    {"q": "Quel est le patronus de Harry ?", "a": "cerf"},
+    # ── Moyen ──
+    {"q": "Quel est le numéro de coffre de la Pierre Philosophale à Gringotts ?", "a": "713"},
+    {"q": "Quel sortilège désarme un adversaire ?", "a": "expelliarmus"},
+    {"q": "Comment s'appelle le sorcier qui a créé la Pierre Philosophale ?", "a": "nicolas flamel"},
+    {"q": "Quel professeur enseigne les Potions dans les 5 premiers tomes ?", "a": "rogue"},
+    {"q": "Quel est le prénom de la sœur de Ron ?", "a": "ginny"},
+    {"q": "Comment s'appelle le journal intime possédé par Voldemort ?", "a": "journal de jedusor"},
+    {"q": "Quel animal garde la Chambre des Secrets ?", "a": "basilic"},
+    {"q": "Comment s'appelle l'elfe de maison des Malefoy ?", "a": "dobby"},
+    {"q": "Quel est le patronus d'Hermione ?", "a": "loutre"},
+    {"q": "Quel est le nom du loup-garou ami de James Potter ?", "a": "remus lupin"},
+    {"q": "Quelle plante crie quand on l'arrache ?", "a": "mandragore"},
+    {"q": "Comment s'appelle le train qui mène à Poudlard ?", "a": "poudlard express"},
+    {"q": "Sur quelle voie part le train de Poudlard ?", "a": "9 3/4"},
+    {"q": "Quel est le sortilège du Patronus ?", "a": "spero patronum"},
+    {"q": "Comment s'appelle le village sorcier près de Poudlard ?", "a": "pré-au-lard"},
+    {"q": "Quel professeur est en réalité un Mangemort déguisé dans le tome 4 ?", "a": "barty croupton jr"},
+    {"q": "Quel est le nom de la prison des sorciers ?", "a": "azkaban"},
+    {"q": "Quelles créatures gardent Azkaban ?", "a": "detraqueurs"},
+    {"q": "Comment s'appelle le balai offert à Harry dans le tome 3 ?", "a": "eclair de feu"},
+    {"q": "Quel est le nom du parrain de Harry ?", "a": "sirius black"},
+    # ── Difficile ──
+    {"q": "Combien d'Horcruxes Voldemort a-t-il créés volontairement ?", "a": "6"},
+    {"q": "Quel objet est le premier Horcruxe détruit par Harry ?", "a": "journal de jedusor"},
+    {"q": "Quels sont les trois Reliques de la Mort ?", "a": "baguette pierre cape"},
+    {"q": "Quel est le vrai nom du Prince de Sang-Mêlé ?", "a": "severus rogue"},
+    {"q": "Quelle est la formule pour ouvrir la Carte du Maraudeur ?", "a": "je jure solennellement que mes intentions sont mauvaises"},
+    {"q": "Quels sont les surnoms des quatre Maraudeurs ?", "a": "lunard queudver patmol cornedrue"},
+    {"q": "Quel animal est l'Animagus de McGonagall ?", "a": "chat"},
+    {"q": "Quel est le nom complet de Dumbledore ?", "a": "albus perceval wulfric brian dumbledore"},
+    {"q": "Quelle potion permet de prendre l'apparence de quelqu'un ?", "a": "polynectar"},
+    {"q": "Quelle potion donne une chance insolente ?", "a": "felix felicis"},
+    {"q": "Qui a tué Dumbledore ?", "a": "rogue"},
+    {"q": "Quel est le dernier Horcruxe détruit ?", "a": "nagini"},
+    {"q": "Comment s'appelle la coupe qui est un Horcruxe ?", "a": "coupe de poufsouffle"},
+    {"q": "Quel élève ouvre la Chambre des Secrets 50 ans avant Harry ?", "a": "tom jedusor"},
+    {"q": "Quelle est la devise de Poudlard (en français) ?", "a": "ne jamais chatouiller un dragon qui dort"},
+    {"q": "Qui est le fondateur de Serdaigle ?", "a": "rowena serdaigle"},
+    {"q": "Quel est le prénom du père de Harry ?", "a": "james"},
+    {"q": "Quel est le nom de jeune fille de la mère de Harry ?", "a": "lily evans"},
+    {"q": "Combien de points vaut le Vif d'Or au Quidditch ?", "a": "150"},
+    {"q": "Quel dragon Harry affronte-t-il dans le tome 4 ?", "a": "magyar a pointes"},
+    {"q": "Comment s'appelle le frère de Dumbledore ?", "a": "abelforth"},
+    {"q": "Quel est le patronus de Rogue ?", "a": "biche"},
+    {"q": "Comment s'appelle la fille de Harry et Ginny ?", "a": "lily luna"},
+    {"q": "Quel objet Dumbledore lègue-t-il à Hermione ?", "a": "contes de beedle le barde"},
+    {"q": "Quel sortilège soigne les blessures causées par Sectumsempra ?", "a": "vulnera sanentur"},
+]
+
 QUIZ_THEMES = {
     "kdrama": QUIZ_KDRAMA,
     "anime": QUIZ_ANIME,
     "gaming": QUIZ_GAMING,
     "culture": QUIZ_CULTURE,
-    "mix": QUIZ_KDRAMA + QUIZ_ANIME + QUIZ_GAMING + QUIZ_CULTURE,
+    "harrypotter": QUIZ_HARRYPOTTER,
+    "mix": QUIZ_KDRAMA + QUIZ_ANIME + QUIZ_GAMING + QUIZ_CULTURE + QUIZ_HARRYPOTTER,
 }
+QUIZ_ALIAS_THEMES = {"hp": "harrypotter", "potter": "harrypotter", "harry": "harrypotter",
+                     "drama": "kdrama", "kdramas": "kdrama", "animes": "anime",
+                     "game": "gaming", "jeux": "gaming", "cg": "culture", "general": "culture"}
 
 THEME_LABELS = {
     "kdrama": "🎬 Kdrama",
     "anime": "✨ Animé",
     "gaming": "🎮 Gaming",
     "culture": "🌍 Culture Générale",
+    "harrypotter": "⚡ Harry Potter",
     "mix": "🎲 Mix",
 }
 
 @bot.command(name="quiz", aliases=["q"])
 async def quiz(ctx, theme: str = "mix"):
-    """Quiz solo en continu — .quiz [kdrama/anime/gaming/culture/mix]"""
-    theme = theme.lower()
+    """Quiz solo en continu — .quiz [thème]"""
+    theme = QUIZ_ALIAS_THEMES.get(theme.lower(), theme.lower())
     if theme not in QUIZ_THEMES:
-        return await ctx.send(f"❌ Thème invalide ! Choisis : `kdrama` `anime` `gaming` `culture` `mix`")
+        return await ctx.send(embed=discord.Embed(
+            title="🎯 Thèmes de quiz disponibles",
+            description=("\n".join(f"`{k}` — {v} *({len(QUIZ_THEMES[k])} questions)*"
+                                   for k, v in THEME_LABELS.items())
+                         + "\n\n*Ex : `.quiz kdrama` · `.quiz harrypotter` · `.quiz mix`*"),
+            color=0xf1c40f))
     if ctx.channel.id in active_quiz or ctx.channel.id in quiz_duels:
         return await ctx.send("❓ Un quiz est déjà en cours ici ! Tape `.quizstop` pour l'arrêter.")
 
@@ -1403,14 +1677,15 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
     """Duel quiz — .quizduel [theme] @joueur1 @joueur2 ...
     Ex: .quizduel kdrama @ami
     Ex: .quizduel anime @ami1 @ami2 @ami3"""
-    theme = theme.lower()
+    theme = QUIZ_ALIAS_THEMES.get(theme.lower(), theme.lower())
     if theme not in QUIZ_THEMES:
-        # Peut-être que c'est une mention pas un thème
-        return await ctx.send(
-            "❌ Utilise : `.quizduel <thème> @joueur1 @joueur2 ...`\n"
-            "Thèmes : `kdrama` `anime` `gaming` `culture` `mix`\n"
-            "Exemple : `.quizduel kdrama @ami`"
-        )
+        return await ctx.send(embed=discord.Embed(
+            title="⚔️ Quiz Duel — choisis un thème",
+            description=("**Usage :** `.quizduel <thème> @joueur1 [@joueur2 …]`\n\n"
+                         + "\n".join(f"`{k}` — {v} *({len(QUIZ_THEMES[k])} questions)*"
+                                     for k, v in THEME_LABELS.items())
+                         + "\n\n*Ex : `.quizduel anime @ami`*"),
+            color=0xff6b9d))
     if not opponents:
         return await ctx.send("❌ Mentionne au moins un adversaire !\nEx: `.quizduel anime @ami`")
     if ctx.channel.id in active_quiz or ctx.channel.id in quiz_duels:
@@ -1522,6 +1797,8 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
         for p in all_players:
             if final_scores[p.id]["score"] == top_score:
                 economy_data[str(p.id)]["coins"] += prize
+                try: missions_progress[str(p.id)]["wins"] += 1
+                except Exception: pass
     else:
         winner = winners[0]
         result = f"🏆 **{winner['name']}** remporte le duel avec **{winner['score']} point{'s' if winner['score'] > 1 else ''}** !"
@@ -1530,6 +1807,8 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
         prize = random.randint(80, 150)
         economy_data[str(winner_id)]["coins"] += prize
         xp_data[str(winner_id)]["xp"] += 50
+        try: missions_progress[str(winner_id)]["wins"] += 1
+        except Exception: pass
         result += f"\n💰 +{prize} pièces & +50 XP !"
 
     embed = discord.Embed(
@@ -2297,12 +2576,12 @@ async def ga_cmd(ctx):
     uid = str(ctx.author.id)
     now = _time_module.time()
     data = roll_data[uid]
-    # Reset rolls toutes les 6h
-    if now - data["last_reset"] >= 21600:
+    # Recharge des rolls
+    if now - data["last_reset"] >= ROLLS_RESET_MINUTES * 60:
         data["rolls"] = ROLLS_MAX
         data["last_reset"] = now
     if data["rolls"] <= 0:
-        reset_in = int((21600 - (now - data["last_reset"])) / 60)
+        reset_in = int((ROLLS_RESET_MINUTES * 60 - (now - data["last_reset"])) / 60)
         return await ctx.send(f"❌ Plus de rolls ! Recharge dans **{reset_in} min** ou utilise `.daily` pour +1 roll.")
     _proll = pet_bonus(uid, "roll")
     if _proll and random.randint(1, 100) <= _proll:
@@ -2339,10 +2618,10 @@ async def rolls_cmd(ctx):
     uid = str(ctx.author.id)
     now = _time_module.time()
     data = roll_data[uid]
-    if now - data["last_reset"] >= 21600:
+    if now - data["last_reset"] >= ROLLS_RESET_MINUTES * 60:
         data["rolls"] = ROLLS_MAX
         data["last_reset"] = now
-    reset_in = max(0, int((21600 - (now - data["last_reset"])) / 60))
+    reset_in = max(0, int((ROLLS_RESET_MINUTES * 60 - (now - data["last_reset"])) / 60))
     await ctx.send(embed=discord.Embed(
         description=f"🎰 **{ctx.author.display_name}** — **{data['rolls']}/{ROLLS_MAX} rolls** disponibles\n⏳ Recharge dans **{reset_in} min**",
         color=0x9b59b6
@@ -4909,6 +5188,8 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
             xp_gain = 40
             economy_data[str(winner["membre"].id)]["coins"] += prize
             track_stat(str(winner["membre"].id), "arene_wins", channel=ctx.channel)
+            try: missions_progress[str(winner["membre"].id)]["wins"] += 1
+            except Exception: pass
             xp_data[str(winner["membre"].id)]["xp"]         += xp_gain
 
             await combat_msg.edit(content=None, embed=build_embed_combat(), view=None)
@@ -5293,7 +5574,9 @@ def build_guide_embeds(guild):
         ), inline=False)
     e.add_field(
         name="🧠 Tester mes connaissances",
-        value="`.quiz kdrama` — un quiz sur les kdramas (bonnes réponses = pièces)\n`.quizduel kdrama @ami` — en duel contre quelqu'un",
+        value="`.quiz kdrama` — un quiz sur les kdramas (bonnes réponses = pièces)\n"
+        "*Thèmes : kdrama · anime · gaming · culture · harrypotter · mix*\n"
+        "`.quizduel kdrama @ami` — en duel contre quelqu'un",
         inline=False)
     e.set_footer(text="Page 2/5 • Guide du QG Kdrama")
     pages.append(e)
@@ -5954,6 +6237,25 @@ BRACKET_ANIME = [
     {"nom": "Chainsaw Man", "emoji": "⛓️"},
 ]
 
+class BracketSkipView(ui.View):
+    """Bouton pour résoudre le match immédiatement — réservé au créateur"""
+    def __init__(self, gid, host_id, match_idx, timeout=86400):
+        super().__init__(timeout=timeout)
+        self.gid, self.host_id, self.match_idx = gid, host_id, match_idx
+
+    @ui.button(label="Résoudre ce match", emoji="⏭️", style=discord.ButtonStyle.primary)
+    async def skip(self, interaction, button):
+        if interaction.user.id != self.host_id and not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message(
+                "❌ Seul le créateur du tournoi peut passer un match.", ephemeral=True)
+        game = active_brackets.get(self.gid)
+        if not game or self.match_idx not in game.get("votes_en_cours", {}):
+            return await interaction.response.send_message("❌ Ce match est déjà résolu.", ephemeral=True)
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+        await bracket_resoudre_match(interaction.guild, self.gid, self.match_idx)
+        self.stop()
+
 async def bracket_lancer_match(ctx, gid, match_idx):
     """Lance le vote pour un match du bracket"""
     if gid not in active_brackets:
@@ -5970,14 +6272,15 @@ async def bracket_lancer_match(ctx, gid, match_idx):
             f"# {a['emoji']} {a['nom']}\n"
             f"## ⚔️ VS ⚔️\n"
             f"# {b['emoji']} {b['nom']}\n\n"
-            f"Votez avec les réactions ! Fin du vote : 1ère majorité ou `.bracketskip` (admin)"
+            f"Votez avec les réactions 🅰️ / 🅱️ !\n*Le créateur peut passer au match suivant avec le bouton.*"
         ),
         color=0xf1c40f
     )
     channel = ctx.guild.get_channel(game["channel"]) if hasattr(ctx, 'guild') else ctx.channel
     if not channel:
         channel = ctx.channel
-    msg = await channel.send(embed=embed)
+    vue = BracketSkipView(gid, game.get("host", 0), match_idx)
+    msg = await channel.send(embed=embed, view=vue)
     await msg.add_reaction("🅰️")
     await msg.add_reaction("🅱️")
     game["votes_en_cours"] = {match_idx: msg.id}
@@ -6333,6 +6636,7 @@ async def bracket_cmd(ctx, theme: str = None):
     matchs = [(participants[i], participants[i+1]) for i in range(0, 8, 2)]
 
     active_brackets[gid] = {
+        "host": ctx.author.id,
         "theme": theme,
         "matchs": matchs,
         "tour": 1,
@@ -7139,6 +7443,8 @@ async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
             xp_data[str(j2_g["membre"].id)]["xp"] += 60
             lvlups_win = card_xp_team(str(j2_g["membre"].id), j2_g["equipe"], won=True)
             track_stat(str(j2_g["membre"].id), "pb_wins", channel=ctx.channel)
+            try: missions_progress[str(j2_g["membre"].id)]["wins"] += 1
+            except Exception: pass
             card_xp_team(str(j1_g["membre"].id), j1_g["equipe"], won=False)
             await combat_msg.edit(embed=build_embed_pb(), view=None, content=None)
             desc_fin = f"🎉 **{j2_g['membre'].mention}** remporte le combat 3v3 !\n💰 **+300 pièces** • ⭐ **+60 XP**"
@@ -7152,6 +7458,8 @@ async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
             xp_data[str(j1_g["membre"].id)]["xp"] += 60
             lvlups_win = card_xp_team(str(j1_g["membre"].id), j1_g["equipe"], won=True)
             track_stat(str(j1_g["membre"].id), "pb_wins", channel=ctx.channel)
+            try: missions_progress[str(j1_g["membre"].id)]["wins"] += 1
+            except Exception: pass
             card_xp_team(str(j2_g["membre"].id), j2_g["equipe"], won=False)
             await combat_msg.edit(embed=build_embed_pb(), view=None, content=None)
             desc_fin = f"🎉 **{j1_g['membre'].mention}** remporte le combat 3v3 !\n💰 **+300 pièces** • ⭐ **+60 XP**"
@@ -7853,7 +8161,7 @@ collection_order = {}  # {uid: [card_key, ...]} — ordre perso de la collection
 
 # Rolls
 ROLLS_MAX = 10
-ROLLS_RESET_HOURS = 6        # Admin peut modifier via .setrollreset
+ROLLS_RESET_MINUTES = 150    # 2 h 30 — modifiable via .setrollreset
 roll_data = defaultdict(lambda: {"rolls": ROLLS_MAX, "last_reset": 0.0, "daily_used": False, "daily_reset": 0.0})
 
 # Claim cooldown
@@ -7940,13 +8248,19 @@ async def role_list(ctx):
 
 @bot.command(name="setrollreset")
 @commands.has_permissions(administrator=True)
-async def setrollreset(ctx, heures: int = None):
-    """Configure le temps de recharge des rolls — .setrollreset <heures>"""
-    global ROLLS_RESET_HOURS
-    if not heures or heures < 1 or heures > 24:
-        return await ctx.send("❌ Précise un nombre d'heures entre 1 et 24 ! Ex: `.setrollreset 6`")
-    ROLLS_RESET_HOURS = heures
-    await ctx.send(f"✅ Rolls rechargés toutes les **{heures}h** maintenant !")
+async def setrollreset(ctx, minutes: int = None):
+    """Configure le temps de recharge des rolls — .setrollreset <minutes>"""
+    global ROLLS_RESET_MINUTES
+    if not minutes or minutes < 10 or minutes > 1440:
+        return await ctx.send(
+            f"❌ Précise une durée entre 10 et 1440 minutes.\n"
+            f"*Actuellement : **{ROLLS_RESET_MINUTES} min** ({ROLLS_RESET_MINUTES//60}h{ROLLS_RESET_MINUTES%60:02d})*\n"
+            f"Ex : `.setrollreset 150` pour 2 h 30")
+    ROLLS_RESET_MINUTES = minutes
+    await ctx.send(embed=discord.Embed(
+        description=f"✅ Les rolls se rechargent maintenant toutes les **{minutes} min** ({minutes//60}h{minutes%60:02d}).",
+        color=0x2ecc71))
+
 
 @bot.command(name="sorties")
 async def sorties_cmd(ctx):
@@ -9072,7 +9386,16 @@ async def lg_narrer(ctx, cle: str):
     embed.set_footer(text="🐺 Loup Garou — QG Kdrama")
     await ctx.send(embed=embed)
 
-def lg_get_compo(n):
+def lg_get_compo(n, custom=None):
+    """Composition des rôles. `custom` = {"Loup Garou": 2, "Voyante": 1, ...}"""
+    if custom:
+        compo = []
+        for role, nb in custom.items():
+            compo += [role] * nb
+        compo = compo[:n]
+        while len(compo) < n:
+            compo.append("Villageois")
+        return compo
     if n <= 5:
         return ["Loup Garou", "Voyante", "Sorcière", "Villageois", "Villageois"]
     elif n <= 7:
@@ -9083,6 +9406,7 @@ def lg_get_compo(n):
         return ["Loup Garou", "Loup Garou", "Loup Blanc", "Voyante", "Sorcière", "Chasseur", "Cupidon", "Petite Fille", "Villageois", "Villageois", "Villageois"][:n]
     else:
         return ["Loup Garou", "Loup Garou", "Loup Blanc", "Voyante", "Sorcière", "Chasseur", "Cupidon", "Petite Fille", "Villageois", "Villageois", "Villageois", "Villageois"][:n]
+
 
 def lg_check_win(game):
     players = game["players"]
@@ -9376,10 +9700,10 @@ async def loup_garou_help(ctx):
     embed.add_field(name="📋 Commandes serveur", value=(
         "`.lgcreate` — Créer une partie\n"
         "`.lgjoin` — Rejoindre la partie\n"
+        "`.lgcompo` — Choisir la composition des rôles *(hôte)*\n"
         "`.lgstart` — Lancer (créateur uniquement)\n"
         "`.lgvote @joueur` — Voter *(ou utilise le menu du jour)*\n"
-        "`.lgnext` — Terminer la nuit tout de suite (hôte)\n"
-        "`.lgpass` — Terminer la phase en cours (hôte)\n"
+        "`.lgnext` — Terminer la nuit ou le vote tout de suite *(hôte)*\n"
         "`.lgstatus` — Voir les joueurs en vie\n"
         "`.lgstop` — Annuler la partie\n"
         "`.lgroles` — Voir tous les rôles"
@@ -9405,6 +9729,97 @@ async def lg_roles_list(ctx):
     for role, data in LG_ROLES.items():
         embed.add_field(name=f"{data['emoji']} {role}", value=data['desc'], inline=False)
     await ctx.send(embed=embed)
+
+
+LG_ROLES_ALIAS = {
+    "loup": "Loup Garou", "loups": "Loup Garou", "lg": "Loup Garou", "loupgarou": "Loup Garou",
+    "blanc": "Loup Blanc", "loupblanc": "Loup Blanc", "lb": "Loup Blanc",
+    "voyante": "Voyante", "voyant": "Voyante",
+    "sorciere": "Sorcière", "sorcière": "Sorcière",
+    "chasseur": "Chasseur", "cupidon": "Cupidon",
+    "petitefille": "Petite Fille", "pf": "Petite Fille", "fille": "Petite Fille",
+    "villageois": "Villageois", "village": "Villageois", "v": "Villageois",
+}
+
+@bot.command(name="lgcompo", aliases=["lgcomposition"])
+async def lgcompo_cmd(ctx, *, args: str = None):
+    """Choisir la composition de la partie — .lgcompo loup:2 voyante:1 …"""
+    gid = ctx.guild.id
+    if gid not in lg_games:
+        return await ctx.send("❌ Crée d'abord une partie avec `.lgcreate`.")
+    game = lg_games[gid]
+    if int(ctx.author.id) != game["host"]:
+        return await ctx.send("❌ Seul le créateur peut choisir la composition.")
+    if game["state"] != "waiting":
+        return await ctx.send("❌ La partie a déjà commencé.")
+
+    n = len(game["players"])
+    if not args:
+        actuelle = game.get("compo_custom")
+        if actuelle:
+            detail = "\n".join(f"{LG_ROLES[r]['emoji']} **{r}** × {nb}" for r, nb in actuelle.items())
+            etat = f"**Composition choisie ({sum(actuelle.values())} rôles) :**\n{detail}"
+        else:
+            from collections import Counter as _C
+            auto = _C(lg_get_compo(max(n, 5)))
+            detail = "\n".join(f"{LG_ROLES[r]['emoji']} **{r}** × {nb}" for r, nb in auto.items())
+            etat = f"**Composition automatique pour {max(n,5)} joueurs :**\n{detail}"
+        return await ctx.send(embed=discord.Embed(
+            title="🃏 Composition de la partie",
+            description=(
+                f"{etat}\n\n"
+                f"**Pour la personnaliser :**\n"
+                f"`.lgcompo loup:2 voyante:1 sorciere:1 chasseur:1 villageois:3`\n\n"
+                f"**Rôles disponibles :** `loup` `blanc` `voyante` `sorciere` "
+                f"`chasseur` `cupidon` `petitefille` `villageois`\n"
+                f"*`.lgcompo auto` pour revenir à la composition automatique.*"),
+            color=0x8e44ad))
+
+    if args.strip().lower() in ("auto", "reset", "defaut", "défaut"):
+        game.pop("compo_custom", None)
+        return await ctx.send("✅ Retour à la composition automatique.")
+
+    custom, erreurs = {}, []
+    for bloc in args.replace(",", " ").split():
+        if ":" not in bloc:
+            erreurs.append(f"`{bloc}` (format attendu : `role:nombre`)")
+            continue
+        nom, _, nb = bloc.partition(":")
+        role = LG_ROLES_ALIAS.get(nom.lower().strip())
+        if not role:
+            erreurs.append(f"`{nom}` — rôle inconnu")
+            continue
+        try:
+            nb = int(nb)
+            if nb < 0 or nb > 12:
+                raise ValueError
+        except ValueError:
+            erreurs.append(f"`{nb}` — nombre invalide")
+            continue
+        if nb:
+            custom[role] = custom.get(role, 0) + nb
+    if erreurs:
+        return await ctx.send("❌ " + "\n❌ ".join(erreurs))
+    if not custom:
+        return await ctx.send("❌ Aucun rôle valide. Ex : `.lgcompo loup:2 voyante:1 villageois:4`")
+
+    total = sum(custom.values())
+    loups = custom.get("Loup Garou", 0) + custom.get("Loup Blanc", 0)
+    if loups == 0:
+        return await ctx.send("❌ Il faut au moins **1 loup** !")
+    if loups >= total - loups:
+        return await ctx.send(f"❌ Trop de loups ({loups}) par rapport au village ({total-loups}) — la partie serait injouable.")
+
+    game["compo_custom"] = custom
+    detail = "\n".join(f"{LG_ROLES[r]['emoji']} **{r}** × {nb}" for r, nb in custom.items())
+    note = ""
+    if total != n:
+        note = (f"\n\n⚠️ Tu as **{n} joueur(s)** inscrit(s) pour **{total} rôle(s)**.\n"
+                f"*Les rôles en trop seront ignorés, les manquants complétés en Villageois.*")
+    await ctx.send(embed=discord.Embed(
+        title="🃏 Composition enregistrée",
+        description=f"{detail}\n\n**Total : {total} rôles** — {loups} loup(s) contre {total-loups} villageois.{note}",
+        color=0x2ecc71))
 
 @bot.command(name="lgcreate")
 async def lg_create(ctx):
@@ -9438,7 +9853,8 @@ async def lg_create(ctx):
         description=(
             f"**{ctx.author.display_name}** ouvre une partie !\n\n"
             "Tape `.lgjoin` pour rejoindre.\n"
-            "Le créateur tape `.lgstart` quand tout le monde est prêt.\n\n"
+            "Le créateur tape `.lgstart` quand tout le monde est prêt.\n"
+            "*Il peut aussi choisir les rôles avec `.lgcompo`.*\n\n"
             f"**Joueurs (1) :** {ctx.author.display_name}"
         ),
         color=0x2c3e50
@@ -9495,7 +9911,7 @@ async def _lg_start_inner(ctx):
 
     # Distribuer les rôles
     import random as _r
-    compo = lg_get_compo(n)
+    compo = lg_get_compo(n, game.get("compo_custom"))
     _r.shuffle(compo)
     player_ids = list(game["players"].keys())
     _r.shuffle(player_ids)
@@ -9836,37 +10252,28 @@ async def lg_love(ctx, j1: discord.Member = None, j2: discord.Member = None):
                 pass
         game["salons_temp"].pop("cupidon", None)
 
-@bot.command(name="lgskip")
-async def lg_skip(ctx):
-    """Passer son action de nuit"""
-    await ctx.send("⏭️ Tu passes cette nuit.", delete_after=5)
 
-@bot.command(name="lgpass")
-async def lg_pass_vote(ctx):
-    """Forcer la résolution du vote (hôte uniquement)"""
+
+@bot.command(name="lgnext", aliases=["lgskip", "lgpass"])
+async def lg_next(ctx):
+    """Termine la nuit ou le vote immédiatement — .lgnext (hôte uniquement)"""
     gid = ctx.guild.id
     if gid not in lg_games:
-        return
+        return await ctx.send("❌ Aucune partie en cours.")
     game = lg_games[gid]
     if int(ctx.author.id) != game["host"]:
-        return await ctx.send("❌ Réservé à l'hôte.")
+        return await ctx.send("❌ Seul le créateur de la partie peut accélérer.", delete_after=6)
     if game["state"] == "night":
+        await ctx.send(embed=discord.Embed(
+            description="⏭️ **L'hôte abrège la nuit** — l'aube se lève !", color=0xf1c40f))
         await lg_resoudre_nuit(ctx, game, gid)
     elif game["state"] == "day":
+        await ctx.send(embed=discord.Embed(
+            description="⏭️ **L'hôte clôt le débat** — dépouillement des votes !", color=0xf1c40f))
         await lg_resolve_vote(ctx, game, gid)
+    else:
+        await ctx.send("❌ La partie n'a pas encore commencé.")
 
-@bot.command(name="lgnext")
-async def lg_next(ctx):
-    """Passer à la résolution de nuit (hôte)"""
-    gid = ctx.guild.id
-    if gid not in lg_games:
-        return
-    game = lg_games[gid]
-    if int(ctx.author.id) != game["host"]:
-        return await ctx.send("❌ Réservé à l'hôte.")
-    if game["state"] != "night":
-        return await ctx.send("❌ C'est pas la nuit !")
-    await lg_resoudre_nuit(ctx, game, gid)
 
 async def lg_resoudre_nuit(ctx, game, gid):
     """Résout la nuit et passe au jour"""
