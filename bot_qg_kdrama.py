@@ -140,10 +140,12 @@ voice_clients = {}
 queues = defaultdict(list)
 double_xp_event_actif = False
 casino_boost_actif = False
-active_pokebattles = {}      # {channel_id: game_data}
+active_gachabattles = {}      # {channel_id: game_data}
 active_boss = {}             # {guild_id: {boss, hp, participants, channel, msg}}
 jackpot_cagnotte = 0         # cagnotte de l'event Jackpot
 inventaire = defaultdict(lambda: defaultdict(int))  # {uid: {item_id: quantité}}
+double_daily = {}            # {uid: True} — prochain daily doublé
+megaphone_actif = {}         # {uid: True} — prochain message annoncé
 amulette_active = {}         # {uid: timestamp de fin}
 oracle_actif = defaultdict(int)      # {uid: rolls restants avec bonus Oracle}
 malediction_active = {}      # {uid: timestamp de fin}
@@ -188,7 +190,7 @@ SALON_EVENT_ID = None     # Salon pour les events
 SALON_GUIDE_ID = None      # Salon pour le guide (invasions, nuit de chasse, coffres, marché noir)
 SALON_BOUTIQUE_ID = None
 SALON_DASHBOARD_ID = None  # salon tableau de bord admin  # Met l'ID du salon boutique ici
-SALON_COMBAT_ID = None    # Met l'ID du salon pokebattle ici
+SALON_GACHABATTLE_ID = None    # Salon des Gacha Battles
 SALON_DUEL_ID = None      # Met l'ID du salon duel/pvp ici
 SALON_BIENVENUE_ID = None # Met l'ID du salon bienvenue ici
 SALON_AUREVOIR_ID = None  # Met l'ID du salon aurevoir ici
@@ -210,7 +212,7 @@ def sauvegarder_salons():
         "SALON_EVENT_ID":     SALON_EVENT_ID,
         "SALON_GUIDE_ID":     SALON_GUIDE_ID,
         "SALON_BOUTIQUE_ID":  SALON_BOUTIQUE_ID,
-        "SALON_COMBAT_ID":    SALON_COMBAT_ID,
+        "SALON_GACHABATTLE_ID":    SALON_GACHABATTLE_ID,
         "SALON_DUEL_ID":      SALON_DUEL_ID,
         "SALON_BIENVENUE_ID": SALON_BIENVENUE_ID,
         "SALON_AUREVOIR_ID":  SALON_AUREVOIR_ID,
@@ -237,7 +239,7 @@ def sauvegarder_salons():
 def charger_salons():
     """Charge les IDs de salons depuis le fichier JSON au démarrage"""
     global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_EVENT_ID, SALON_GUIDE_ID, ROLE_GACHA_ID, ROLE_GIRLS_ID, ROLE_ANIME_ID
-    global SALON_COMBAT_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID
+    global SALON_GACHABATTLE_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID
     global SALON_BOOST_ID, SALON_HOF_ID, SALON_REGLEMENT_ID, ROLE_MEMBRE_NAME, REGLEMENT_ROLE_ID, REGLEMENT_MSG_ID
     if not os.path.exists(CONFIG_FILE):
         return
@@ -250,7 +252,7 @@ def charger_salons():
         SALON_EVENT_ID     = data.get("SALON_EVENT_ID")
         SALON_GUIDE_ID     = data.get("SALON_GUIDE_ID")
         SALON_BOUTIQUE_ID  = data.get("SALON_BOUTIQUE_ID")
-        SALON_COMBAT_ID    = data.get("SALON_COMBAT_ID")
+        SALON_GACHABATTLE_ID    = data.get("SALON_GACHABATTLE_ID")
         SALON_DUEL_ID      = data.get("SALON_DUEL_ID")
         SALON_BIENVENUE_ID = data.get("SALON_BIENVENUE_ID")
         SALON_AUREVOIR_ID  = data.get("SALON_AUREVOIR_ID")
@@ -436,6 +438,32 @@ def _sans_espaces(s: str) -> str:
     """Version ultra-compacte pour comparer 'talkiewalkie' et 'talkie walkie'."""
     return normalize_str(s).replace(" ", "")
 
+
+def _devine_valide(reponse, nom_complet):
+    """Valide une réponse de .devine — mot complet exigé, pas une lettre.
+    « Tanjiro », « tanjiro kamado » et « Tanjirou » passent ; « T » ou « k » non."""
+    rep = normalize_str(reponse)
+    if len(rep) < 3:
+        return False
+    # Le nom sans la parenthèse d'univers : « Gong Woo Jin (Goblin) » → « gong woo jin »
+    base = normalize_str(re.sub(r"\([^)]*\)", "", nom_complet))
+    mots = [m for m in base.split() if len(m) >= 3]
+    if not mots:
+        return False
+    if rep == base or _sans_espaces(reponse) == _sans_espaces(base):
+        return True
+    # Un prénom / nom complet suffit, mais il doit être entier
+    rep_mots = set(rep.split())
+    for m in mots:
+        if m in rep_mots:
+            return True
+        # tolérance à une faute de frappe sur un mot d'au moins 5 lettres
+        if len(m) >= 5:
+            import difflib
+            for r in rep_mots:
+                if abs(len(r) - len(m)) <= 1 and difflib.SequenceMatcher(None, r, m).ratio() >= 0.85:
+                    return True
+    return False
 
 def check_answer(reponse: str, correct: str) -> bool:
     """Vérifie une réponse — tolère accents, tirets, apostrophes, espaces,
@@ -968,6 +996,16 @@ async def on_message(message):
             levelup_channel = message.guild.get_channel(SALON_LEVELUP_ID)
         await (levelup_channel or message.channel).send(embed=embed)
 
+    # 📣 Mégaphone acheté en boutique
+    if megaphone_actif.pop(uid, None) and not message.content.startswith(PREFIX):
+        try:
+            await message.channel.send(embed=discord.Embed(
+                title=f"📣  {message.author.display_name} prend la parole",
+                description=f"# {message.content[:200]}",
+                color=0xf1c40f))
+        except Exception:
+            pass
+
     # Jackpot communautaire
     await process_jackpot(message)
 
@@ -1098,7 +1136,7 @@ def build_help_pages(guild, is_admin=False):
         "`.retirerole` — Retirer un rôle acheté de ton profil *(sans remboursement)*"
     ), inline=False)
     e.add_field(name="🎲 Tenter sa chance", value=(
-        "`.slot` — Machine à sous\n"
+        "`.slot <mise>` — Machine à sous *(`.slot all` pour tout miser)*\n"
         "`.jackpot` — La cagnotte en cours\n"
         "`.loto` — Ticket de loterie (100 pièces)\n"
         "`.braquage @membre` — Tenter un vol *(12 % de réussite, très risqué)*\n"
@@ -1170,13 +1208,13 @@ def build_help_pages(guild, is_admin=False):
     ), inline=False)
     e.add_field(name="⚔️ Combats", value=(
         "`.arene @membre` — Duel d'arène\n"
-        "`.pokebattle @membre` — Combat de cartes\n"
-        "`.pokestop` — Annuler le combat en cours\n"
+        "`.gachabattle @membre` — Combat 3v3 avec tes cartes\n"
+        "`.gachastop` — Annuler le combat en cours\n"
         "`.attaque` — Frapper le boss du serveur *(alias `.attaquerboss`)*"
     ), inline=False)
     e.add_field(name="🎯 Mini-jeux", value=(
-        "`.devine` — Devine le personnage\n"
-        "`.pendu` — Le pendu (dramas & animés)\n"
+        "`.devine` — Devine le personnage *(37 persos — salon privé possible)*\n"
+        "`.pendu` — Le pendu *(185 titres — salon privé possible)*\n"
         "`.rps <choix>` — Pierre / feuille / ciseaux\n"
         "`.dice` — Lancer un dé"
     ), inline=False)
@@ -1188,6 +1226,7 @@ def build_help_pages(guild, is_admin=False):
         description="*Le reste : events, vie du serveur, petites commandes pratiques.*",
         color=0x3498db)
     e.add_field(name="📅 Events", value=(
+        "`.event` — **Tous les events** : durée, règles et récompenses\n"
         "`.planning` — Le planning de la semaine\n"
         "`.planningauto` — Les events programmés\n"
         "`.eventstatus` — Quels events sont actifs\n"
@@ -1274,7 +1313,7 @@ def build_help_pages(guild, is_admin=False):
     e.add_field(name="📍 Salons — `.setsalon <type>`", value=(
         "*Tape la commande **dans** le salon voulu.*\n"
         "`gacha` `boutique` `casino` `event` `levelup` `guide`\n"
-        "`combat` `duel` `dashboard` `bienvenue` `aurevoir`\n"
+        "`gachabattle` `duel` `dashboard` `bienvenue` `aurevoir`\n"
         "`halloffame` `girlsonly` `annonces` `invitation` `boost` `reglement`"
     ), inline=False)
     e.add_field(name="📖 Salons qui publient leur panneau", value=(
@@ -1308,7 +1347,8 @@ def build_help_pages(guild, is_admin=False):
         description="*Lancer, programmer et régler.*",
         color=0x95a5a6)
     e.add_field(name="▶️ Lancer maintenant", value=(
-        "`.lancerevent <nom>` — Démarrer un event\n"
+        "`.lancerevent` — Voir tous les events lançables\n"
+        "`.lancerevent <nom>` — Démarrer un event immédiatement\n"
         "`.stopervent` — Arrêter l'event en cours\n"
         "`.boss` — Faire apparaître un boss\n"
         "`.raidstop` — Arrêter le boss/raid en cours"
@@ -2103,8 +2143,14 @@ SHOP_ITEMS = [
     {"id": "amulette",   "nom": "🪬 Amulette",          "prix": 2500, "cat": "gacha_def", "description": "Renvoie tout sabotage sur l'attaquant pendant 20 min"},
     {"id": "shield",     "nom": "🛡️ Bouclier",         "prix": 600,  "cat": "gacha_def", "description": "Protège du Sceau et des Malédictions pendant 30 min"},
 
-    # ═══ ✨ DIVERS ═══
-    {"id": "double_xp", "nom": "⚡ Double XP (1 h)", "prix": 300, "cat": "divers", "description": "Ton XP de messages est doublée pendant une heure"},
+    # ═══ ✨ DIVERS & FUN ═══
+    {"id": "double_xp",   "nom": "⚡ Double XP (1 h)",   "prix": 300,  "cat": "divers", "description": "Ton XP de messages est doublée pendant une heure"},
+    {"id": "megaphone",   "nom": "📣 Mégaphone",         "prix": 1200, "cat": "divers", "description": "Ton prochain message est annoncé en grand dans le salon"},
+    {"id": "cafe",        "nom": "☕ Café du QG",         "prix": 250,  "cat": "divers", "description": "Recharge instantanément 3 rolls gacha"},
+    {"id": "tirelire",    "nom": "🐷 Tirelire",           "prix": 5000, "cat": "divers", "description": "Dépose 5 000 p et récupère entre 2 000 et 12 000 p — pur hasard"},
+    {"id": "reroll_pet",  "nom": "🔄 Friandise Mystère",  "prix": 3000, "cat": "divers", "description": "Donne 300 XP d'un coup à ton compagnon actif"},
+    {"id": "boost_daily", "nom": "📅 Double Daily",       "prix": 800,  "cat": "divers", "description": "Ton prochain `.daily` rapporte le double", "daily": True},
+    {"id": "loupe",       "nom": "🔍 Loupe du Collectionneur", "prix": 1500, "cat": "divers", "description": "Révèle 3 cartes rares encore disponibles dans le gacha"},
 ]
 
 # Les compagnons sont générés depuis PETS_DB (voir build_shop_pages)
@@ -2131,6 +2177,8 @@ async def daily(ctx):
     _pb = pet_bonus(uid, "coins")
     if _pb:
         gain = int(gain * (1 + _pb / 100))
+    if double_daily.pop(uid, None):
+        gain *= 2
     economy_data[uid]["coins"] += gain
     track_stat(uid, "dailies", channel=ctx.channel)
     check_coins_achievements(uid, ctx.channel)
@@ -2925,16 +2973,25 @@ async def braquage_cmd(ctx, target: discord.Member = None):
         ))
 
 @bot.command(name="slot")
-async def slot_cmd(ctx, mise: int = 50):
-    """Slot machine — .slot [mise]"""
+async def slot_cmd(ctx, mise: str = "50"):
+    """Machine à sous — .slot [mise|all]"""
     if SALON_CASINO_ID and ctx.channel.id != SALON_CASINO_ID:
         salon = ctx.guild.get_channel(SALON_CASINO_ID)
         mention = salon.mention if salon else "le salon casino"
         return await ctx.send(f"🎰 Casino dans {mention} !", delete_after=5)
     uid = str(ctx.author.id)
-    mise = max(10, min(500, mise))
-    if economy_data[uid]["coins"] < mise:
-        return await ctx.send(f"❌ Tu n'as que **{economy_data[uid]['coins']} pièces** !")
+    solde = economy_data[uid]["coins"]
+    if isinstance(mise, str):
+        if mise.lower() in ("all", "max", "tout"):
+            mise = solde
+        else:
+            try: mise = int(mise.replace(" ", "").replace(",", ""))
+            except ValueError:
+                return await ctx.send("❌ Mise invalide ! Ex : `.slot 500` ou `.slot all`")
+    if mise < 10:
+        return await ctx.send("❌ Mise minimum : **10 pièces**.")
+    if mise > solde:
+        return await ctx.send(f"❌ Tu n'as que **{solde:,} pièces** — impossible de miser {mise:,}.")
     economy_data[uid]["coins"] -= mise
     SYMBOLES = ["🌸", "🗡️", "🦊", "👑", "🐉", "💎", "🎭", "⚡"]
     msg = await ctx.send("🎰 | ⏳ | ⏳ | ⏳ |")
@@ -2957,7 +3014,7 @@ async def slot_cmd(ctx, mise: int = 50):
         embed = discord.Embed(title="🎰 Paire !", description=f"**{r1} {r2} {r3}**\n\n✅ **+{gain} pièces !**", color=0x2ecc71)
     else:
         embed = discord.Embed(title="🎰 Raté...", description=f"**{r1} {r2} {r3}**\n\n💸 Perdu **{mise} pièces**", color=0xe74c3c)
-    embed.set_footer(text=f"💰 Solde : {economy_data[uid]['coins']} pièces")
+    embed.set_footer(text=f"💰 Solde : {economy_data[uid]['coins']:,} pièces  •  Mise : {mise:,}")
     await ctx.send(embed=embed)
 
 @bot.command(name="banque")
@@ -3018,7 +3075,7 @@ def build_shop_pages():
             embed = discord.Embed(
                 title="🛒 Boutique — 🐾 Compagnons",
                 description=(
-                    "*Un compagnon te donne un **bonus permanent** et monte de niveau quand tu discutes.*\n"
+                    "*Bonus **permanent**. Chaque niveau gagné ajoute **+1 %** — jusqu'au niveau 10.*\n"
                     "Achète celui que tu veux avec `.acheter <id>`.\n"
                     "Chaque compagnon monte de niveau quand tu discutes."),
                 color=color)
@@ -3027,8 +3084,10 @@ def build_shop_pages():
                 for pid, p in PETS_DB.items():
                     if p["rarete"] != rar:
                         continue
-                    t = {"coins": "💰", "xp": "⭐", "roll": "🎰"}[p["type"]]
-                    lignes.append(f"{p['emoji']} **{p['nom']}** — `{pid}` · {t} +{p['base']}%")
+                    effet = {"coins": f"💰 +{p['base']} % de pièces",
+                             "xp":    f"⭐ +{p['base']} % d'XP",
+                             "roll":  f"🎰 {p['base']} % de roll gratuit"}[p["type"]]
+                    lignes.append(f"{p['emoji']} **{p['nom']}** — `{pid}`\n└ {effet}")
                 if lignes:
                     embed.add_field(
                         name=f"{RARETE_EMOJI.get(rar, '▫️')} {rar} — {PETS_PRIX[rar]:,} pièces",
@@ -3179,11 +3238,11 @@ async def acheter_cmd(ctx, item_id: str = None):
         if not pets_data[uid]["active"]:
             pets_data[uid]["active"] = iid
         unlock_achievement(uid, "pet_1", ctx.channel)
-        t = {"coins": "💰 pièces", "xp": "⭐ XP", "roll": "🎰 rolls gratuits"}[p["type"]]
         couleurs = {"Commun": 0x95a5a6, "Rare": 0x3498db, "Épique": 0x9b59b6, "Légendaire": 0xf1c40f}
         return await ctx.send(embed=discord.Embed(
             title=f"🐾 {p['emoji']} {p['nom']} rejoint ton équipe !",
-            description=(f"**Rareté :** {p['rarete']}\n**Bonus :** +{p['base']}% {t}\n\n"
+            description=(f"**{p['rarete']}**\n\n{pet_bonus_texte(p, 1)}\n"
+                         f"*+1 % par niveau, jusqu'à +{p['base'] + PET_LEVEL_MAX - 1} % au niveau {PET_LEVEL_MAX}.*\n\n"
                          + ("🌟 Équipé automatiquement !" if pets_data[uid]["active"] == iid
                             else f"Utilise `.pet equiper {p['nom']}` pour l'activer.")),
             color=couleurs.get(p["rarete"], 0x95a5a6)))
@@ -3275,6 +3334,66 @@ async def acheter_cmd(ctx, item_id: str = None):
         return await ctx.send(embed=discord.Embed(
             description="🪬 **Amulette active 20 min** — tout sabotage se retournera contre son auteur.",
             color=0x9b59b6))
+
+    # ── ☕ Café : recharge 3 rolls ──
+    if iid == "cafe":
+        roll_data[uid]["rolls"] = min(roll_data[uid]["rolls"] + 3, ROLLS_MAX + 5)
+        return await ctx.send(embed=discord.Embed(
+            description=f"☕ Un café bien serré — **+3 rolls** ! *({roll_data[uid]['rolls']} disponibles)*",
+            color=0x2ecc71))
+
+    # ── 🐷 Tirelire : pari sur soi-même ──
+    if iid == "tirelire":
+        gain = random.choice([2000, 3000, 4000, 5000, 6000, 8000, 12000])
+        economy_data[uid]["coins"] += gain
+        check_coins_achievements(uid, ctx.channel)
+        net = gain - item["prix"]
+        return await ctx.send(embed=discord.Embed(
+            title="🐷 Tu casses la tirelire…",
+            description=(f"Elle contenait **{gain:,} pièces** !\n"
+                         + (f"🎉 Tu gagnes **{net:,} pièces** net." if net > 0
+                            else f"💸 Tu perds **{abs(net):,} pièces**… ça arrive.")),
+            color=0x2ecc71 if net > 0 else 0xe74c3c))
+
+    # ── 🔄 Friandise : 300 XP au compagnon ──
+    if iid == "reroll_pet":
+        pid, pdb, pstate = get_active_pet(uid)
+        if not pid:
+            economy_data[uid]["coins"] += item["prix"]
+            return await ctx.send("❌ Tu n'as aucun compagnon actif ! Achètes-en un dans `.shop`.")
+        leveled, lvl = give_pet_xp(uid, 300)
+        return await ctx.send(embed=discord.Embed(
+            description=(f"🍬 **{pdb['emoji']} {pdb['nom']}** dévore la friandise — **+300 XP** !"
+                         + (f"\n🆙 Il passe **niveau {lvl}** ! {pet_bonus_texte(pdb, lvl)}" if leveled else "")),
+            color=0x2ecc71))
+
+    # ── 📅 Double Daily ──
+    if iid == "boost_daily":
+        double_daily[uid] = True
+        return await ctx.send(embed=discord.Embed(
+            description="📅 Ton **prochain `.daily`** rapportera le **double** !", color=0x2ecc71))
+
+    # ── 🔍 Loupe : révèle 3 cartes disponibles ──
+    if iid == "loupe":
+        dispo = [k for k, cc in ANIME_CARDS_DB.items()
+                 if cc["rarete"] in ("Épique", "Légendaire", "Mythique") and k not in claimed_cards]
+        if not dispo:
+            economy_data[uid]["coins"] += item["prix"]
+            return await ctx.send("❌ Aucune carte rare disponible pour le moment !")
+        tirage = random.sample(dispo, min(3, len(dispo)))
+        lignes = "\n".join(
+            f"{RARETE_EMOJI.get(ANIME_CARDS_DB[k]['rarete'],'')} **{ANIME_CARDS_DB[k]['nom']}** — *{ANIME_CARDS_DB[k]['serie']}*"
+            for k in tirage)
+        return await ctx.send(embed=discord.Embed(
+            title="🔍 La loupe révèle…",
+            description=f"Ces cartes rares n'appartiennent **à personne** :\n\n{lignes}\n\n*À toi de les faire tomber !*",
+            color=0x9b59b6))
+
+    # ── 📣 Mégaphone ──
+    if iid == "megaphone":
+        megaphone_actif[uid] = True
+        return await ctx.send(embed=discord.Embed(
+            description="📣 Ton **prochain message** sera annoncé en grand dans ce salon !", color=0x2ecc71))
 
     # ── Items offensifs : rangés dans l'inventaire ──
     if iid in ("freeze", "curse", "cadenas", "bombe_gacha", "fantome", "malediction", "vol_roll"):
@@ -3413,7 +3532,7 @@ async def stats_cmd(ctx, membre: discord.Member = None):
 
     embed.add_field(name="⚔️ Combats", value=(
         f"🥊 {s.get('arene_wins', 0)} arène\n"
-        f"🎴 {s.get('pb_wins', 0)} pokebattle\n"
+        f"🎴 {s.get('pb_wins', 0)} gachabattle\n"
         f"🦹 {s.get('braquages', 0)} braquage(s)"), inline=True)
 
     nb_cartes = len(gacha_collections.get(uid, {}))
@@ -3746,28 +3865,50 @@ async def run_invasion(channel, guild):
             color=0xe74c3c), salon)
 
 async def run_coffre(channel, gain=None, guild=None):
-    """📦 Coffre — premier à .ouvrir gagne les pièces"""
+    """📦 Coffre — premier à .ouvrir gagne les pièces (salon dédié)"""
     import time as _t
-    gain = gain or random.randint(100, 500)
-    coffre_actif[channel.id] = {"contenu": gain, "expires": _t.time() + 300}
-    ping = get_event_ping(guild, "gacha") if guild else ""
-    await channel.send(ping, embed=discord.Embed(
+    gain = gain or random.randint(300, 1200)
+    salon = await create_event_channel(guild, "📦・coffre") if guild else None
+    cible = salon or channel
+    coffre_actif[cible.id] = {"contenu": gain, "expires": _t.time() + 300}
+    embed = discord.Embed(
         title="📦 Un coffre mystérieux est apparu !",
-        description=(f"Tape `.ouvrir` rapidement pour récupérer les **{gain} pièces** à l'intérieur !\n"
-                     f"⏰ Disponible pendant **5 minutes** — un seul gagnant !"),
-        color=0xf1c40f))
+        description=(f"Tape `.ouvrir` rapidement pour récupérer les **{gain:,} pièces** à l'intérieur !\n"
+                     f"⏰ Disponible **5 minutes** — un seul gagnant !"),
+        color=0xf1c40f)
+    if salon and guild:
+        await annoncer_event(guild, channel, "gacha", discord.Embed(
+            title="📦 Un coffre est apparu !",
+            description=f"**{gain:,} pièces** attendent le premier qui tape `.ouvrir`.",
+            color=0xf1c40f), salon)
+        await salon.send(embed=embed)
+        asyncio.create_task(close_event_channel(salon, 330))
+    else:
+        await cible.send(get_event_ping(guild, "gacha") if guild else "", embed=embed)
+
 
 async def run_colis(channel, guild):
-    """🎁 Colis Mystère — un coffre plus généreux"""
+    """🎁 Colis Mystère — coffre généreux, dans un salon dédié"""
     import time as _t
     gain = random.randint(600, 1500)
-    coffre_actif[channel.id] = {"contenu": gain, "expires": _t.time() + 300}
-    ping = get_event_ping(guild, "everyone")
-    await channel.send(ping, embed=discord.Embed(
+    salon = await create_event_channel(guild, "🎁・colis-mystere")
+    cible = salon or channel
+    coffre_actif[cible.id] = {"contenu": gain, "expires": _t.time() + 300}
+    embed = discord.Embed(
         title="🎁 COLIS MYSTÈRE !",
-        description=(f"Un colis vient d'arriver au QG — il contient **{gain} pièces** !\n"
+        description=(f"Un colis vient d'arriver au QG — il contient **{gain:,} pièces** !\n"
                      f"Tape `.ouvrir` pour le récupérer.\n⏰ **5 minutes** — un seul gagnant !"),
-        color=0x27ae60))
+        color=0x27ae60)
+    if salon:
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title="🎁 COLIS MYSTÈRE !",
+            description=f"**{gain:,} pièces** au premier qui tape `.ouvrir`.",
+            color=0x27ae60), salon)
+        await salon.send(embed=embed)
+        asyncio.create_task(close_event_channel(salon, 330))
+    else:
+        await cible.send(get_event_ping(guild, "everyone"), embed=embed)
+
 
 async def run_nuit_chasse(channel, guild, duree=7200):
     """🌙 Nuit de Chasse — taux Mythique doublés"""
@@ -3933,6 +4074,73 @@ async def annoncer_event(guild, salon_event, ping_type, embed, salon_temp=None):
         await salon_event.send(ping, embed=embed)
     except Exception as e:
         print(f"[Event] Annonce impossible : {e}")
+
+
+class SalonPriveView(ui.View):
+    """Propose de jouer dans un salon temporaire privé"""
+    def __init__(self, auteur, timeout=30):
+        super().__init__(timeout=timeout)
+        self.auteur = auteur
+        self.prive = None
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.auteur.id:
+            await interaction.response.send_message("❌ Lance ta propre partie !", ephemeral=True)
+            return False
+        return True
+
+    @ui.button(label="Salon privé", emoji="🔒", style=discord.ButtonStyle.primary)
+    async def prive_btn(self, interaction, button):
+        self.prive = True
+        for it in self.children: it.disabled = True
+        await interaction.response.edit_message(view=self)
+        self.stop()
+
+    @ui.button(label="Ici, tout le monde peut jouer", emoji="👥", style=discord.ButtonStyle.secondary)
+    async def public_btn(self, interaction, button):
+        self.prive = False
+        for it in self.children: it.disabled = True
+        await interaction.response.edit_message(view=self)
+        self.stop()
+
+async def demander_salon_prive(ctx, nom_jeu, emoji="🎮"):
+    """Demande au joueur s'il veut un salon privé. Retourne (salon, est_temporaire)."""
+    view = SalonPriveView(ctx.author, timeout=30)
+    msg = await ctx.send(embed=discord.Embed(
+        title=f"{emoji} {nom_jeu}",
+        description=("**Où veux-tu jouer ?**\n\n"
+                     "🔒 **Salon privé** — un salon temporaire rien que pour toi, "
+                     "personne ne vient spammer les réponses.\n"
+                     "👥 **Ici** — tout le monde peut participer et tenter de trouver."),
+        color=0x9b59b6), view=view)
+    await view.wait()
+    try: await msg.delete()
+    except Exception: pass
+
+    if not view.prive:
+        return ctx.channel, False
+    try:
+        cat = discord.utils.get(ctx.guild.categories, name=EVENT_CATEGORY_NAME) or \
+              await ctx.guild.create_category(EVENT_CATEGORY_NAME)
+    except Exception:
+        cat = None
+    overwrites = {
+        ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
+        ctx.guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True),
+        ctx.author: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+    }
+    try:
+        salon = await ctx.guild.create_text_channel(
+            f"{emoji}・{nom_jeu.lower().replace(' ', '-')}-{ctx.author.name}"[:95],
+            overwrites=overwrites, category=cat,
+            topic="Salon privé — supprimé à la fin de la partie")
+    except Exception as e:
+        print(f"[SalonPrivé] {e}")
+        await ctx.send("⚠️ Je n'ai pas pu créer de salon privé — on joue ici.", delete_after=8)
+        return ctx.channel, False
+    await ctx.send(embed=discord.Embed(
+        description=f"🔒 Ta partie t'attend dans {salon.mention} !", color=0x2ecc71), delete_after=15)
+    return salon, True
 
 # ============================================================
 #  🎩 LE BANQUIER — Deal or No Deal
@@ -4561,6 +4769,189 @@ async def loto_cmd(ctx):
         description=f"🎟️ **{ctx.author.display_name}** achète un ticket ! *(tu en as {nb})*\n💰 Cagnotte actuelle : **{cagnotte:,} pièces**",
         color=0x2ecc71))
 
+
+# ============================================================
+#  ⚡ EVENTS RAPIDES — courts, fun, récompensent en pièces
+# ============================================================
+async def run_premier_arrive(channel, guild):
+    """🏃 Premier Arrivé — le premier à taper le mot exact gagne"""
+    mots = ["kdrama", "akari", "gacha", "oppa", "daebak", "saranghae", "fighting",
+            "chingu", "aegyo", "ramyeon", "hallyu", "maknae"]
+    mot = random.choice(mots)
+    gain = random.randint(400, 900)
+    salon = await create_event_channel(guild, "🏃・premier-arrive")
+    cible = salon or channel
+    if salon:
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title="🏃 PREMIER ARRIVÉ !",
+            description=f"Un mot va apparaître — le **premier** à le recopier gagne **{gain:,} pièces**.",
+            color=0xe67e22), salon)
+    await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
+                     embed=discord.Embed(title="🏃 PRÊTS ?",
+                                         description="Le mot arrive dans quelques secondes…", color=0xe67e22))
+    await asyncio.sleep(random.randint(3, 8))
+    await cible.send(embed=discord.Embed(
+        title="⚡ MAINTENANT !",
+        description=f"# `{mot}`\n\nRecopie-le le plus vite possible !",
+        color=0xf1c40f))
+    def check(m):
+        return m.channel == cible and not m.author.bot and normalize_str(m.content) == normalize_str(mot)
+    try:
+        msg = await bot.wait_for("message", check=check, timeout=60)
+        economy_data[str(msg.author.id)]["coins"] += gain
+        check_coins_achievements(str(msg.author.id), cible)
+        await cible.send(embed=discord.Embed(
+            description=f"🏆 **{msg.author.display_name}** dégaine le plus vite — **+{gain:,} pièces** !",
+            color=0x2ecc71))
+    except asyncio.TimeoutError:
+        await cible.send(embed=discord.Embed(description="⏰ Personne n'a réagi à temps !", color=0x95a5a6))
+    if salon:
+        await close_event_channel(salon, 90)
+
+async def run_chiffre_mystere(channel, guild):
+    """🔢 Chiffre Mystère — devinez le nombre, indices plus chaud / plus froid"""
+    secret = random.randint(1, 100)
+    gain = random.randint(500, 1200)
+    salon = await create_event_channel(guild, "🔢・chiffre-mystere")
+    cible = salon or channel
+    if salon:
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title="🔢 CHIFFRE MYSTÈRE",
+            description=f"Un nombre entre **1 et 100** est caché. **{gain:,} pièces** à qui le trouve.",
+            color=0x3498db), salon)
+    await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
+                     embed=discord.Embed(
+                         title="🔢 CHIFFRE MYSTÈRE",
+                         description=("J'ai choisi un nombre entre **1 et 100**.\n"
+                                      "Proposez vos nombres — je vous dis si c'est plus haut ou plus bas.\n"
+                                      f"🏆 **{gain:,} pièces** au gagnant  •  ⏰ 3 minutes"),
+                         color=0x3498db))
+    def check(m):
+        return m.channel == cible and not m.author.bot and m.content.strip().isdigit()
+    fin = asyncio.get_event_loop().time() + 180
+    essais = 0
+    while asyncio.get_event_loop().time() < fin:
+        reste = fin - asyncio.get_event_loop().time()
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=reste)
+        except asyncio.TimeoutError:
+            break
+        n = int(msg.content.strip())
+        essais += 1
+        if n == secret:
+            economy_data[str(msg.author.id)]["coins"] += gain
+            check_coins_achievements(str(msg.author.id), cible)
+            await cible.send(embed=discord.Embed(
+                title="🎯 TROUVÉ !",
+                description=f"C'était bien **{secret}** !\n**{msg.author.display_name}** empoche **{gain:,} pièces** "
+                            f"en {essais} essai(s).",
+                color=0x2ecc71))
+            if salon:
+                await close_event_channel(salon, 90)
+            return
+        ecart = abs(n - secret)
+        chaud = "🔥 très chaud" if ecart <= 3 else ("🌡️ chaud" if ecart <= 10 else ("❄️ froid" if ecart <= 25 else "🧊 glacial"))
+        await cible.send(f"{'⬆️ Plus haut' if n < secret else '⬇️ Plus bas'} que **{n}** — {chaud}", delete_after=20)
+    await cible.send(embed=discord.Embed(
+        description=f"⏰ Temps écoulé ! Le nombre était **{secret}**.", color=0xe74c3c))
+    if salon:
+        await close_event_channel(salon, 90)
+
+async def run_pluie_pieces(channel, guild):
+    """💸 Pluie de Pièces — tout le monde clique, tout le monde gagne"""
+    duree = 60
+    salon = await create_event_channel(guild, "💸・pluie-de-pieces")
+    cible = salon or channel
+    gagnants = {}
+
+    class PluieView(ui.View):
+        def __init__(self):
+            super().__init__(timeout=duree)
+        @ui.button(label="Attraper !", emoji="💸", style=discord.ButtonStyle.success)
+        async def attraper(self, interaction, button):
+            uid = str(interaction.user.id)
+            if uid in gagnants:
+                return await interaction.response.send_message(
+                    f"✅ Tu as déjà attrapé **{gagnants[uid]:,} pièces** !", ephemeral=True)
+            gain = random.randint(150, 600)
+            gagnants[uid] = gain
+            economy_data[uid]["coins"] += gain
+            check_coins_achievements(uid, cible)
+            await interaction.response.send_message(f"💸 Tu attrapes **{gain:,} pièces** !", ephemeral=True)
+
+    if salon:
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title="💸 PLUIE DE PIÈCES !",
+            description="Des pièces tombent du ciel — **tout le monde peut en attraper** !",
+            color=0xf1c40f), salon)
+    view = PluieView()
+    await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
+                     embed=discord.Embed(
+                         title="💸 PLUIE DE PIÈCES !",
+                         description=(f"Clique sur le bouton pour attraper ta part !\n"
+                                      f"**150 à 600 pièces** par personne  •  ⏰ {duree} secondes\n"
+                                      f"*Une seule fois chacun.*"),
+                         color=0xf1c40f), view=view)
+    await asyncio.sleep(duree + 2)
+    view.stop()
+    total = sum(gagnants.values())
+    await cible.send(embed=discord.Embed(
+        title="🌤️ La pluie s'arrête",
+        description=(f"**{len(gagnants)} personne(s)** ont attrapé **{total:,} pièces** au total !"
+                     if gagnants else "Personne n'a rien attrapé… dommage !"),
+        color=0x95a5a6))
+    if salon:
+        await close_event_channel(salon, 90)
+
+async def run_morpion_geant(channel, guild):
+    """🎲 Le Chiffre du Jour — 3 tirages, le plus proche gagne"""
+    secret = random.randint(1, 50)
+    gain = random.randint(600, 1400)
+    salon = await create_event_channel(guild, "🎲・chiffre-du-jour")
+    cible = salon or channel
+    if salon:
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title="🎲 LE CHIFFRE DU JOUR",
+            description=f"Un seul essai chacun — le plus proche remporte **{gain:,} pièces**.",
+            color=0x9b59b6), salon)
+    await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
+                     embed=discord.Embed(
+                         title="🎲 LE CHIFFRE DU JOUR",
+                         description=(f"J'ai choisi un nombre entre **1 et 50**.\n"
+                                      f"**Un seul essai chacun** — écris ton nombre.\n"
+                                      f"Le plus proche gagne **{gain:,} pièces**  •  ⏰ 90 secondes"),
+                         color=0x9b59b6))
+    paris = {}
+    def check(m):
+        return (m.channel == cible and not m.author.bot and m.content.strip().isdigit()
+                and str(m.author.id) not in paris)
+    fin = asyncio.get_event_loop().time() + 90
+    while asyncio.get_event_loop().time() < fin:
+        reste = fin - asyncio.get_event_loop().time()
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=reste)
+        except asyncio.TimeoutError:
+            break
+        paris[str(msg.author.id)] = (int(msg.content.strip()), msg.author.display_name)
+        try: await msg.add_reaction("✅")
+        except Exception: pass
+    if not paris:
+        await cible.send(embed=discord.Embed(description="😴 Aucun pari — event annulé.", color=0x95a5a6))
+    else:
+        classement = sorted(paris.items(), key=lambda x: abs(x[1][0] - secret))
+        uid_g, (n_g, nom_g) = classement[0]
+        economy_data[uid_g]["coins"] += gain
+        check_coins_achievements(uid_g, cible)
+        détail = "\n".join(f"{'🥇' if i==0 else '🥈' if i==1 else '🥉' if i==2 else '▪️'} **{v[1]}** — {v[0]} "
+                            f"*(écart {abs(v[0]-secret)})*"
+                            for i, (k, v) in enumerate(classement[:5]))
+        await cible.send(embed=discord.Embed(
+            title=f"🎲 Le nombre était **{secret}** !",
+            description=f"{détail}\n\n🏆 **{nom_g}** remporte **{gain:,} pièces** !",
+            color=0xf1c40f))
+    if salon:
+        await close_event_channel(salon, 120)
+
 # ============================================================
 #  PING INTELLIGENT + DONNÉES DES EVENTS
 # ============================================================
@@ -4649,69 +5040,128 @@ DEBATS = [
     {"sujet": "Team ?", "a": "Chat 🐱", "b": "Chien 🐶", "theme": "everyone"},
 ]
 
-@bot.command(name="lancerevent")
+
+# ============================================================
+#  📋 CATALOGUE DES EVENTS — source unique pour .event et .lancerevent
+# ============================================================
+EVENTS_CATALOGUE = {
+    "questioneclair": {"nom":"⚡ Question Éclair","fn":"run_question_eclair","salon":True,"duree":"1 min",
+        "desc":"Une question tombe, les 3 premiers à répondre gagnent.","gain":"200 / 120 / 80 pièces"},
+    "premierarrive": {"nom":"🏃 Premier Arrivé","fn":"run_premier_arrive","salon":True,"duree":"1 min",
+        "desc":"Un mot apparaît — le premier à le recopier rafle tout.","gain":"400 à 900 pièces"},
+    "chiffremystere": {"nom":"🔢 Chiffre Mystère","fn":"run_chiffre_mystere","salon":True,"duree":"3 min",
+        "desc":"Devinez le nombre caché entre 1 et 100, avec des indices chaud/froid.","gain":"500 à 1 200 pièces"},
+    "pluiepieces": {"nom":"💸 Pluie de Pièces","fn":"run_pluie_pieces","salon":True,"duree":"1 min",
+        "desc":"Des pièces tombent du ciel — tout le monde clique, tout le monde gagne.","gain":"150 à 600 pièces chacun"},
+    "chiffredujour": {"nom":"🎲 Chiffre du Jour","fn":"run_morpion_geant","salon":True,"duree":"90 s",
+        "desc":"Un seul pari chacun — le plus proche du nombre secret gagne.","gain":"600 à 1 400 pièces"},
+    "debatdujour": {"nom":"🎤 Débat du Jour","fn":"run_debat","salon":True,"duree":"1 h",
+        "desc":"Deux camps s'affrontent, le serveur vote et le résultat est annoncé.","gain":"Aucun — fierté uniquement"},
+    "coffre": {"nom":"📦 Coffre","fn":"run_coffre","salon":True,"duree":"5 min",
+        "desc":"Un coffre apparaît, le premier à taper .ouvrir rafle les pièces.","gain":"300 à 1 200 pièces"},
+    "colis": {"nom":"🎁 Colis Mystère","fn":"run_colis","salon":True,"duree":"5 min",
+        "desc":"Comme le coffre, mais bien plus généreux.","gain":"600 à 1 500 pièces"},
+    "loterie": {"nom":"🍀 Loterie","fn":"run_loterie","salon":True,"duree":"5 min",
+        "desc":"Tickets à 100 pièces, un seul gagnant rafle toute la cagnotte.","gain":"Toute la cagnotte"},
+    "banquier": {"nom":"🎩 Le Banquier","fn":"run_banquier","salon":True,"duree":"10 min",
+        "desc":"Deal or No Deal — 12 valises, un candidat, un banquier qui négocie.","gain":"Jusqu'à 9 000 pièces"},
+    "encheres": {"nom":"🏛️ Enchères","fn":"run_encheres","salon":True,"duree":"3 à 15 min",
+        "desc":"Une carte rare, un rôle ou un item mis aux enchères en direct.","gain":"Le lot au plus offrant"},
+    "invasion": {"nom":"🐉 Invasion","fn":"run_invasion","salon":True,"duree":"variable",
+        "desc":"Un boss débarque, tout le monde le frappe avec .attaque.","gain":"250-380 p chacun + 250 au coup fatal"},
+    "jackpot": {"nom":"💰 Jackpot","fn":"run_jackpot","salon":False,"duree":"instantané",
+        "desc":"Le premier à écrire !jackpot empoche toute la cagnotte.","gain":"1 500 à 5 000 pièces"},
+    "cartemystere": {"nom":"🎴 Carte Mystère","fn":"run_carte_mystere","salon":False,"duree":"1 min",
+        "desc":"Une carte Épique ou mieux tombe — premier au cœur, premier servi.","gain":"Une carte rare"},
+    "roicolline": {"nom":"👑 Roi de la Colline","fn":"run_roi_colline","salon":False,"duree":"30 min",
+        "desc":"Affrontez-vous en arène, le dernier vainqueur est couronné.","gain":"500 pièces bonus"},
+    "nuitchasse": {"nom":"🌙 Nuit de Chasse","fn":"run_nuit_chasse","salon":False,"duree":"2 h",
+        "desc":"Taux Mythique ×3 et Légendaire ×2 sur tous les tirages.","gain":"Meilleures cartes"},
+    "doublexp": {"nom":"⚡ Double XP","fn":"run_double_xp","salon":False,"duree":"1 h",
+        "desc":"Chaque message rapporte deux fois plus d'XP.","gain":"XP doublée"},
+    "nuitcasino": {"nom":"🎰 Nuit Casino","fn":"run_nuit_casino","salon":False,"duree":"1 h",
+        "desc":"Les gains de .slot sont doublés.","gain":"Gains ×2 au casino"},
+    "marchenoir": {"nom":"🕶️ Marché Noir","fn":"run_marche_noir","salon":False,"duree":"24 h",
+        "desc":"Trois cartes rares achetables — cher, mais garanties.","gain":"Cartes Épique à Mythique"},
+    "classement": {"nom":"🏆 Classement","fn":"run_classement","salon":False,"duree":"instantané",
+        "desc":"Affiche le top 5 des membres du serveur.","gain":"Aucun"},
+    "heuremaudite": {"nom":"😈 Heure Maudite","fn":"run_heure_maudite","salon":False,"duree":"variable",
+        "desc":"Déclenche un autre event au hasard, sans prévenir lequel.","gain":"Surprise"},
+}
+
+@bot.command(name="event", aliases=["events", "eventinfo"])
+async def event_cmd(ctx, nom: str = None):
+    """Liste des events du serveur — .event [nom]"""
+    if nom:
+        cle = nom.lower().strip()
+        e = EVENTS_CATALOGUE.get(cle)
+        if not e:
+            e = next((v for k, v in EVENTS_CATALOGUE.items() if cle in k or cle in normalize_str(v["nom"])), None)
+        if not e:
+            return await ctx.send(f"❌ Event `{nom}` inconnu — tape `.event` pour la liste.")
+        return await ctx.send(embed=discord.Embed(
+            title=e["nom"],
+            description=e["desc"],
+            color=0x3498db)
+            .add_field(name="⏱️ Durée", value=e["duree"], inline=True)
+            .add_field(name="🏆 Récompense", value=e["gain"], inline=True)
+            .add_field(name="📍 Salon dédié", value="Oui" if e["salon"] else "Non", inline=True))
+
+    pages, groupes = [], {
+        "⚡ Rapides — quelques minutes": ["questioneclair","premierarrive","chiffremystere","pluiepieces","chiffredujour"],
+        "🎁 À récupérer": ["coffre","colis","jackpot","cartemystere"],
+        "🎪 Gros events": ["banquier","encheres","loterie","invasion","roicolline","debatdujour"],
+        "🌙 Bonus temporaires": ["nuitchasse","doublexp","nuitcasino","marchenoir","classement","heuremaudite"],
+    }
+    for titre, cles in groupes.items():
+        e = discord.Embed(
+            title=f"🎪 Events du QG — {titre}",
+            description="*Les events tombent tout seuls ou sont lancés par le staff.*",
+            color=0x3498db)
+        for k in cles:
+            ev = EVENTS_CATALOGUE[k]
+            e.add_field(
+                name=f"{ev['nom']}  ·  {ev['duree']}",
+                value=f"{ev['desc']}\n🏆 **{ev['gain']}**" + ("  •  📍 salon dédié" if ev["salon"] else ""),
+                inline=False)
+        e.set_footer(text=f"{len(EVENTS_CATALOGUE)} events au total  •  `.event <nom>` pour le détail")
+        pages.append(e)
+    view = PageView(pages, ctx.author, timeout=180)
+    await ctx.send(embed=pages[0], view=view)
+
+@bot.command(name="lancerevent", aliases=["startevent"])
 @commands.has_permissions(manage_guild=True)
 async def lancerevent_cmd(ctx, nom: str = None):
+    """Lance un event immédiatement — .lancerevent <nom> (admin)"""
+    ALIAS = {"question":"questioneclair","eclair":"questioneclair","debat":"debatdujour",
+             "roi":"roicolline","colline":"roicolline","loto":"loterie","boss":"invasion",
+             "chasse":"nuitchasse","xp2":"doublexp","casino":"nuitcasino","marche":"marchenoir",
+             "carte":"cartemystere","top":"classement","maudite":"heuremaudite",
+             "deal":"banquier","vente":"encheres","enchere":"encheres","premier":"premierarrive",
+             "chiffre":"chiffremystere","pluie":"pluiepieces","dujour":"chiffredujour"}
     if not nom:
-        await ctx.send(embed=discord.Embed(
-            title="🎪 Events Disponibles",
-            description=(
-                "**👥 Ouverts à tout le monde :**\n"
-                "`questioneclair` `debatdujour` `roicolline` `loterie`\n"
-                "`invasion` `coffre` `colis` `jackpot` `classement`\n"
-                "`banquier` `encheres`\n"
-                "`doublexp` `nuitcasino` `heuremaudite`\n\n"
-                "**🎰 Orientés gacha :**\n"
-                "`nuitchasse` `marchenoir` `cartemystere`\n\n"
-                "*Usage : `.lancerevent <nom>` — tous ont un effet réel.*"
-            ),
-            color=0x3498db
-        ))
-        return
-    nom = nom.lower()
-    channel = ctx.guild.get_channel(SALON_EVENT_ID) if SALON_EVENT_ID else ctx.channel
-    if not channel:
-        channel = ctx.channel
+        lignes = "\n".join(f"`{k}` — {v['nom']}" for k, v in EVENTS_CATALOGUE.items())
+        return await ctx.send(embed=discord.Embed(
+            title="🎪 Events lançables",
+            description=f"{lignes}\n\n*Usage : `.lancerevent <nom>`  •  `.event` pour les détails.*",
+            color=0x3498db))
+    cle = ALIAS.get(nom.lower().strip(), nom.lower().strip())
+    ev = EVENTS_CATALOGUE.get(cle)
+    if not ev:
+        return await ctx.send(f"❌ Event `{nom}` inconnu — tape `.lancerevent` pour la liste.")
+    channel = (ctx.guild.get_channel(SALON_EVENT_ID) if SALON_EVENT_ID else None) or ctx.channel
+    fn = globals().get(ev["fn"])
+    if not fn:
+        return await ctx.send(f"❌ La fonction `{ev['fn']}` est introuvable.")
+    try:
+        if ev["fn"] == "run_coffre":
+            await fn(channel, guild=ctx.guild)
+        else:
+            await fn(channel, ctx.guild)
+    except Exception as e:
+        print(f"[lancerevent] {ev['fn']} : {e}")
+        await ctx.send(f"❌ Erreur au lancement de **{ev['nom']}**.")
 
-    # ── Nouveaux events interactifs ──
-    if nom in ("questioneclair", "question", "eclair"):
-        return await run_question_eclair(channel, ctx.guild)
-    if nom in ("debatdujour", "debat"):
-        return await run_debat(channel, ctx.guild)
-    if nom in ("roicolline", "roi", "colline"):
-        return await run_roi_colline(channel, ctx.guild)
-    if nom in ("loterie", "loto"):
-        return await run_loterie(channel, ctx.guild)
-
-    if nom in ("invasion", "boss", "invasiondemons"):
-        return await run_invasion(channel, ctx.guild)
-
-    # ── Events à effet réel ──
-    if nom in ("coffre",):
-        return await run_coffre(channel, guild=ctx.guild)
-    if nom in ("colis",):
-        return await run_colis(channel, ctx.guild)
-    if nom in ("nuitchasse", "chasse"):
-        return await run_nuit_chasse(channel, ctx.guild)
-    if nom in ("doublexp", "xp2"):
-        return await run_double_xp(channel, ctx.guild)
-    if nom in ("nuitcasino", "casino"):
-        return await run_nuit_casino(channel, ctx.guild)
-    if nom in ("marchenoir", "marche"):
-        return await run_marche_noir(channel, ctx.guild)
-    if nom in ("cartemystere", "carte"):
-        return await run_carte_mystere(channel, ctx.guild)
-    if nom in ("jackpot",):
-        return await run_jackpot(channel, ctx.guild)
-    if nom in ("classement", "top"):
-        return await run_classement(channel, ctx.guild)
-    if nom in ("heuremaudite", "maudite"):
-        return await run_heure_maudite(channel, ctx.guild)
-    if nom in ("banquier", "banque", "deal"):
-        return await run_banquier(channel, ctx.guild)
-    if nom in ("encheres", "enchere", "vente"):
-        return await run_encheres(channel, ctx.guild)
-    await ctx.send(f"❌ Event `{nom}` inconnu — utilise `.lancerevent` sans argument pour la liste !")
 
 @bot.command(name="stopervent", aliases=["stopevent"])
 @commands.has_permissions(manage_guild=True)
@@ -4753,7 +5203,7 @@ async def stopervent_cmd(ctx):
 @commands.has_permissions(administrator=True)
 async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
     global SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_CASINO_ID, SALON_EVENT_ID
-    global SALON_LEVELUP_ID, SALON_COMBAT_ID, SALON_DUEL_ID, SALON_DASHBOARD_ID
+    global SALON_LEVELUP_ID, SALON_GACHABATTLE_ID, SALON_DUEL_ID, SALON_DASHBOARD_ID
     global SALON_BIENVENUE_ID, SALON_AUREVOIR_ID, SALON_HOF_ID, SALON_GUIDE_ID, SALON_INVITATION_ID
     global SALON_BOOST_ID, SALON_REGLEMENT_ID
     if not type_salon:
@@ -4766,7 +5216,7 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
         "gacha": "SALON_GACHA_ID", "boutique": "SALON_BOUTIQUE_ID",
         "casino": "SALON_CASINO_ID", "event": "SALON_EVENT_ID",
         "levelup": "SALON_LEVELUP_ID", "guide": "SALON_GUIDE_ID",
-        "combat": "SALON_COMBAT_ID",
+        "gachabattle": "SALON_GACHABATTLE_ID", "gachabattle": "SALON_GACHABATTLE_ID", "combat": "SALON_GACHABATTLE_ID",
         "duel": "SALON_DUEL_ID", "dashboard": "SALON_DASHBOARD_ID",
         "bienvenue": "SALON_BIENVENUE_ID", "aurevoir": "SALON_AUREVOIR_ID",
         "halloffame": "SALON_HOF_ID", "girlsonly": "SALON_GIRLS_ID",
@@ -4786,7 +5236,7 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
     elif var == "SALON_INVITATION_ID": SALON_INVITATION_ID = ctx.channel.id
     elif var == "SALON_BOOST_ID": SALON_BOOST_ID = ctx.channel.id
     elif var == "SALON_REGLEMENT_ID": SALON_REGLEMENT_ID = ctx.channel.id
-    elif var == "SALON_COMBAT_ID": SALON_COMBAT_ID = ctx.channel.id
+    elif var == "SALON_GACHABATTLE_ID": SALON_GACHABATTLE_ID = ctx.channel.id
     elif var == "SALON_DUEL_ID": SALON_DUEL_ID = ctx.channel.id
     elif var == "SALON_DASHBOARD_ID": SALON_DASHBOARD_ID = ctx.channel.id
     elif var == "SALON_BIENVENUE_ID": SALON_BIENVENUE_ID = ctx.channel.id
@@ -4829,7 +5279,8 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
         "girlsonly": panneau_girlsonly,
         "casino":    panneau_casino,
         "gacha":     panneau_gacha,
-        "combat":    panneau_combat,
+        "gachabattle": panneau_gachabattle,
+        "combat":      panneau_gachabattle,
         "duel":      panneau_duel,
         "event":     panneau_event,
     }
@@ -5008,12 +5459,7 @@ JOURS_MAP = {
 JOURS_NOMS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
 
 # Liste de TOUS les events programmables (validation)
-EVENTS_VALIDES = [
-    "questioneclair", "debatdujour", "roicolline", "loterie",
-    "coffre", "cartemystere", "nuitcasino", "nuitchasse", "marchenoir",
-    "doublexp", "jackpot", "colis", "invasion", "heuremaudite", "classement",
-    "banquier", "encheres",
-]
+# La liste des events programmables est dérivée du catalogue (voir EVENTS_CATALOGUE)
 
 def save_scheduled_events():
     try:
@@ -5038,24 +5484,7 @@ async def trigger_scheduled_event(guild, event_name):
     channel = (guild.get_channel(SALON_EVENT_ID) if SALON_EVENT_ID else None) or guild.system_channel
     if not channel:
         return
-    dispatch = {
-        "questioneclair": run_question_eclair,
-        "debatdujour":    run_debat,
-        "roicolline":     run_roi_colline,
-        "loterie":        run_loterie,
-        "invasion":       run_invasion,
-        "colis":          run_colis,
-        "nuitchasse":     run_nuit_chasse,
-        "doublexp":       run_double_xp,
-        "nuitcasino":     run_nuit_casino,
-        "marchenoir":     run_marche_noir,
-        "cartemystere":   run_carte_mystere,
-        "jackpot":        run_jackpot,
-        "classement":     run_classement,
-        "heuremaudite":   run_heure_maudite,
-        "banquier":       run_banquier,
-        "encheres":       run_encheres,
-    }
+    dispatch = {k: globals().get(v["fn"]) for k, v in EVENTS_CATALOGUE.items()}
     try:
         if event_name == "coffre":
             await run_coffre(channel, guild=guild)
@@ -5090,13 +5519,13 @@ async def addevent_cmd(ctx, event: str = None, jour: str = None, heure: str = No
         return await ctx.send(
             "❌ Usage : `.addevent <event> <jour> <heure>`\n"
             "Ex : `.addevent loterie samedi 20h`\n\n"
-            "📋 Events : `questioneclair` `debatdujour` `roicolline` `loterie` `coffre` `cartemystere` `nuitcasino` `nuitchasse` `marchenoir` `doublexp` `jackpot` `colis` `invasion` `heuremaudite` `classement` `banquier` `encheres`\n"
+            "📋 Tape `.event` pour la liste complète des events\n"
             "📅 Jours : lundi → dimanche\n"
             "🕐 Heure : `20h`, `20h30`, `9h`..."
         )
     event = event.lower()
-    if event not in EVENTS_VALIDES:
-        return await ctx.send(f"❌ Event `{event}` invalide ! Tape `.addevent` pour voir la liste.")
+    if event not in EVENTS_CATALOGUE:
+        return await ctx.send(f"❌ Event `{event}` invalide ! Tape `.event` pour la liste complète.")
     jour = jour.lower()
     if jour not in JOURS_MAP:
         return await ctx.send("❌ Jour invalide ! (lundi, mardi, mercredi, jeudi, vendredi, samedi, dimanche)")
@@ -5487,9 +5916,9 @@ async def attaque_cmd(ctx):
     now = datetime.datetime.utcnow().timestamp()
 
     last = game["participants"].get(uid, {}).get("last_attack", 0)
-    if now - last < 13:
-        restant = int(13 - (now - last))
-        return await ctx.send(f"⏳ Cooldown — **{restant}s** restants !", delete_after=4)
+    if now - last < 4:
+        restant = int(4 - (now - last))
+        return await ctx.send(f"⏳ Encore **{restant}s** avant de refrapper !", delete_after=4)
 
     # Supprimer le message de commande pour garder le salon propre
     try:
@@ -5687,14 +6116,14 @@ def panneau_gacha(guild):
     e.set_footer(text="Tout ça est 100% optionnel — le serveur tourne très bien sans 🌸")
     return [e]
 
-def panneau_combat(guild):
+def panneau_gachabattle(guild):
     e = discord.Embed(
         title="⚔️  Combats de cartes",
         description="*Affronte quelqu'un avec ton équipe de 3 cartes gacha.*",
         color=0xe74c3c)
     e.add_field(name="🎴 Lancer un combat", value=(
-        "`.pokebattle @membre` — défie quelqu'un en 3 contre 3\n"
-        "`.pokestop` — annuler le combat en cours\n\n"
+        "`.gachabattle @membre` — défie quelqu'un en 3 contre 3\n"
+        "`.gachastop` — annuler le combat en cours\n\n"
         "*Il faut posséder au moins 3 cartes pour jouer.*"
     ), inline=False)
     e.add_field(name="🕹️ Comment ça marche", value=(
@@ -5927,8 +6356,8 @@ def build_guide_embeds(guild):
         name="🎮 Jouer à plusieurs",
         value=(
             "`.lg` — le **Loup Garou** sur Discord, avec les vrais rôles (le gros jeu du serveur)\n"
-            "`.pendu` — le pendu avec des titres de dramas et d'animés\n"
-            "`.devine` — devine le personnage\n"
+            "`.pendu` — le pendu, 185 titres *(un salon privé peut t'être proposé)*\n"
+            "`.devine` — devine le personnage à partir d'indices\n"
             "`.arene @membre` — un duel rapide contre quelqu'un\n"
             "`.loto` — un ticket de loterie (100 pièces)"
         ), inline=False)
@@ -6144,7 +6573,7 @@ ACHIEVEMENTS = {
     # ⚔️ COMBAT
     "arene_1":      {"nom": "Premier Sang",       "emoji": "⚔️", "desc": "Gagner un duel d'arène",         "stat": "arene_wins",  "seuil": 1,     "reward": 200,  "cat": "⚔️ Combat"},
     "arene_25":     {"nom": "Gladiateur",         "emoji": "🗡️", "desc": "Gagner 25 duels d'arène",        "stat": "arene_wins",  "seuil": 25,    "reward": 1500, "cat": "⚔️ Combat"},
-    "pb_10":        {"nom": "Maître Dresseur",    "emoji": "🎴", "desc": "Gagner 10 pokebattles",          "stat": "pb_wins",     "seuil": 10,    "reward": 1000, "cat": "⚔️ Combat"},
+    "pb_10":        {"nom": "Maître Dresseur",    "emoji": "🎴", "desc": "Gagner 10 gachabattles",          "stat": "pb_wins",     "seuil": 10,    "reward": 1000, "cat": "⚔️ Combat"},
     "boss_kill":    {"nom": "Tueur de Boss",      "emoji": "👹", "desc": "Porter le coup final à un boss", "stat": None,          "seuil": None,  "reward": 1000, "cat": "⚔️ Combat"},
     # 💰 ÉCONOMIE
     "riche_10k":    {"nom": "Petit Épargnant",    "emoji": "💰", "desc": "Posséder 10 000 pièces",         "stat": None,          "seuil": None,  "reward": 500,  "cat": "💰 Économie"},
@@ -6266,6 +6695,15 @@ PET_XP_PER_LEVEL = 100
 PET_LEVEL_MAX = 10
 pets_data = {}  # {uid: {"owned": {pet_id: {"level": 1, "xp": 0}}, "active": pet_id}}
 
+def pet_bonus_texte(p, niveau=1):
+    """Décrit le bonus d'un compagnon en clair : « +15 % de pièces »"""
+    val = p["base"] + (niveau - 1)
+    if p["type"] == "coins":
+        return f"💰 **+{val} % de pièces** sur `.daily` et `.travailler`"
+    if p["type"] == "xp":
+        return f"⭐ **+{val} % d'XP** sur chaque message"
+    return f"🎰 **{val} % de chance** de roll gratuit *(le roll n'est pas décompté)*"
+
 def get_active_pet(uid):
     """Retourne (pet_id, pet_db, pet_state) du pet actif, ou (None, None, None)"""
     d = pets_data.get(uid)
@@ -6315,17 +6753,18 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
             xp_txt = f"`{bar}` {pstate['xp']}/{PET_XP_PER_LEVEL} XP"
         else:
             xp_txt = "🌟 **NIVEAU MAX !**"
-        type_emoji = {"coins": "💰", "xp": "⭐", "roll": "🎰"}[pdb["type"]]
+        max_bonus = pdb["base"] + PET_LEVEL_MAX - 1
         embed = discord.Embed(
             title=f"{pdb['emoji']} {pdb['nom']}",
-            description=(
-                f"**Rareté :** {pdb['rarete']}\n"
-                f"**Niveau :** {pstate['level']}/{PET_LEVEL_MAX}\n"
-                f"{xp_txt}\n\n"
-                f"{type_emoji} **Bonus actuel :** {bonus}% ({pdb['desc']})"
-            ),
+            description=f"**{pdb['rarete']}**  ·  Niveau **{pstate['level']}** / {PET_LEVEL_MAX}\n{xp_txt}",
             color=0xe91e63)
-        embed.set_footer(text="Ton pet gagne de l'XP quand tu chattes ! • .pet nourrir pour booster")
+        embed.add_field(name="✨ Ce qu'il t'apporte",
+                        value=pet_bonus_texte(pdb, pstate["level"]), inline=False)
+        embed.add_field(name="📈 Progression",
+                        value=(f"Bonus de départ : **+{pdb['base']} %**\n"
+                               f"Bonus actuel : **+{bonus} %**\n"
+                               f"Maximum au niveau {PET_LEVEL_MAX} : **+{max_bonus} %**"), inline=False)
+        embed.set_footer(text="Il gagne de l'XP quand tu discutes  •  `.pet nourrir` pour accélérer (200 p)")
         return await ctx.send(embed=embed)
     action = action.lower()
     if action in ("liste", "list", "collection"):
@@ -6336,8 +6775,10 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
         for pid, st in d["owned"].items():
             p = PETS_DB.get(pid)
             if p:
-                actif = " 🌟" if d.get("active") == pid else ""
-                lignes.append(f"{p['emoji']} **{p['nom']}** — Niv.{st['level']} ({p['rarete']}){actif}")
+                actif = "  🌟 *actif*" if d.get("active") == pid else ""
+                val = p["base"] + st["level"] - 1
+                icone = {"coins": "💰", "xp": "⭐", "roll": "🎰"}[p["type"]]
+                lignes.append(f"{p['emoji']} **{p['nom']}** — Niv.{st['level']} · {icone} +{val} %{actif}")
         return await ctx.send(embed=discord.Embed(
             title=f"🐾 Compagnons de {ctx.author.display_name}",
             description="\n".join(lignes), color=0xe91e63))
@@ -6742,16 +7183,43 @@ async def avis_cmd(ctx, *, titre: str):
 #  DEVINE LE PERSONNAGE
 # ============================================================
 PERSONNAGES = [
-    {"nom": "Gong Woo Jin (Goblin)", "indices": ["Je suis immortel depuis 900 ans", "J'ai une épée plantée dans ma poitrine", "Je cherche ma fiancée pour mourir enfin", "Je suis un goblin coréen"], "univers": "🎬 Goblin"},
-    {"nom": "Vincenzo Cassano", "indices": ["Je suis avocat de la mafia italienne", "Je suis d'origine coréenne adoptée en Italie", "Je combats une corporation corrompue", "Mon style est impeccable en costume"], "univers": "🎬 Vincenzo"},
-    {"nom": "Park Saeroyi", "indices": ["Mon père a été tué par un riche héritier", "J'ai ouvert un bar dans Itaewon pour me venger", "Je suis passionné et têtu", "Mon bar s'appelle DanBam"], "univers": "🎬 Itaewon Class"},
-    {"nom": "Eren Yeager", "indices": ["Je veux détruire tous mes ennemis", "J'ai perdu ma mère enfant", "Je peux me transformer en titan", "Je porte le titan fondateur"], "univers": "✨ Attack on Titan"},
-    {"nom": "Tanjiro Kamado", "indices": ["Ma sœur a été transformée en démon", "J'utilise la respiration de l'eau", "Je suis très empathique même envers les démons", "Mes boucles d'oreilles sont caracteristiques"], "univers": "✨ Demon Slayer"},
-    {"nom": "Light Yagami", "indices": ["Je suis un lycéen brillant", "J'ai trouvé un carnet qui tue", "Je veux créer un monde parfait sans criminels", "Mon alter ego s'appelle Kira"], "univers": "✨ Death Note"},
-    {"nom": "Monkey D. Luffy", "indices": ["Mon corps est en caoutchouc", "Je veux devenir Roi des Pirates", "Mon chapeau de paille est précieux pour moi", "Mon équipage s'appelle les Chapeaux de Paille"], "univers": "✨ One Piece"},
-    {"nom": "Edward Elric", "indices": ["J'ai perdu un bras et une jambe", "Je cherche la pierre philosophale", "Je suis le plus jeune alchimiste d'état de l'histoire", "Ne me dis pas que je suis petit"], "univers": "✨ FMA Brotherhood"},
-    {"nom": "Shoyo Hinata", "indices": ["Je suis petit mais je saute très haut", "Je joue au volleyball", "Mon équipe s'appelle Karasuno", "Je suis un libéro sauteur"], "univers": "✨ Haikyuu!!"},
-    {"nom": "Yuji Itadori", "indices": ["J'ai avalé un doigt maudit", "Je suis physiquement très fort", "Je partage mon corps avec un démon", "J'étudie dans un lycée d'exorcistes"], "univers": "✨ Jujutsu Kaisen"},
+    {"nom":"Tanjiro Kamado","univers":"✨ Demon Slayer","indices":["Ma sœur a été transformée en démon","J'utilise la respiration de l'eau puis celle du soleil","Mon odorat est exceptionnel","Je porte des boucles d'oreilles hanafuda"]},
+    {"nom":"Gojo Satoru","univers":"✨ Jujutsu Kaisen","indices":["Je suis considéré comme le plus fort","Je porte un bandeau sur les yeux","Ma technique s'appelle l'Infini","Mes Six Yeux voient tout"]},
+    {"nom":"Monkey D. Luffy","univers":"✨ One Piece","indices":["Mon corps est en caoutchouc","Je veux devenir le Roi des Pirates","Mon chapeau de paille m'a été confié","Mon équipage me suit partout"]},
+    {"nom":"Eren Yeager","univers":"✨ Attack on Titan","indices":["J'ai vu ma mère dévorée","Je peux me transformer en titan","Je veux la liberté à tout prix","Je déclenche le Grondement"]},
+    {"nom":"Light Yagami","univers":"✨ Death Note","indices":["Je suis un lycéen brillant","J'ai trouvé un carnet qui tue","Je veux purger le monde","On me surnomme Kira"]},
+    {"nom":"Levi Ackerman","univers":"✨ Attack on Titan","indices":["Je suis surnommé le soldat le plus fort","Je suis obsédé par la propreté","Ma technique de rotation est légendaire","Je viens des bas-fonds"]},
+    {"nom":"Saitama","univers":"✨ One Punch Man","indices":["Je suis devenu chauve à force de m'entraîner","Un seul coup me suffit","Je m'ennuie profondément","Mon disciple est un cyborg"]},
+    {"nom":"Denji","univers":"✨ Chainsaw Man","indices":["J'étais criblé de dettes","J'ai fusionné avec mon chien-démon","Des tronçonneuses sortent de mon corps","Je rêve d'une vie normale"]},
+    {"nom":"Anya Forger","univers":"✨ Spy x Family","indices":["Je lis dans les pensées","Mes parents cachent chacun un secret","J'adore les cacahuètes","Heh."]},
+    {"nom":"Sung Jin-Woo","univers":"✨ Solo Leveling","indices":["J'étais le chasseur le plus faible","Un Système me fait monter en niveau","Je commande une armée d'ombres","Je deviens le Monarque des Ombres"]},
+    {"nom":"Edward Elric","univers":"✨ Fullmetal Alchemist","indices":["J'ai perdu un bras et une jambe","Je cherche la Pierre Philosophale","Je suis le plus jeune alchimiste d'État","Ne me traite jamais de petit"]},
+    {"nom":"Naruto Uzumaki","univers":"✨ Naruto","indices":["Un démon renard est scellé en moi","Je veux devenir Hokage","J'adore les ramen","Mon jutsu signature est une sphère tournoyante"]},
+    {"nom":"Sasuke Uchiha","univers":"✨ Naruto","indices":["Mon clan a été massacré","Je veux venger ma famille","Mes yeux copient les techniques","J'ai quitté mon village"]},
+    {"nom":"Goku","univers":"✨ Dragon Ball","indices":["Je viens d'une planète détruite","Je m'entraîne sans arrêt","Ma technique envoie une vague d'énergie","Je cherche toujours plus fort que moi"]},
+    {"nom":"Vegeta","univers":"✨ Dragon Ball","indices":["Je suis le prince d'un peuple guerrier","Mon rival m'obsède","Ma fierté passe avant tout","Je crie souvent avant d'attaquer"]},
+    {"nom":"Ichigo Kurosaki","univers":"✨ Bleach","indices":["Je vois les esprits depuis l'enfance","Une shinigami m'a donné ses pouvoirs","Mon épée s'appelle Zangetsu","Mes cheveux orange me font remarquer"]},
+    {"nom":"Killua Zoldyck","univers":"✨ Hunter x Hunter","indices":["Ma famille est composée d'assassins","Je maîtrise l'électricité","Mon meilleur ami cherche son père","J'adore le chocolat"]},
+    {"nom":"Izuku Midoriya","univers":"✨ My Hero Academia","indices":["Je suis né sans pouvoir","Mon idole m'a légué le sien","Je prends des notes sur tous les héros","On me surnomme Deku"]},
+    {"nom":"Makima","univers":"✨ Chainsaw Man","indices":["Je contrôle ceux que je considère inférieurs","Je dirige une division spéciale","Mes yeux ont des anneaux","Je veux le cœur d'un certain démon"]},
+    {"nom":"Frieren","univers":"✨ Frieren","indices":["Je suis une elfe millénaire","J'ai vaincu le roi démon avec mes amis","Le temps ne signifie rien pour moi","Je collectionne les sorts inutiles"]},
+    {"nom":"Thorfinn","univers":"✨ Vinland Saga","indices":["Je viens d'Islande","L'assassin de mon père m'a élevé","Je me bats avec deux dagues","Je renonce finalement à la violence"]},
+    {"nom":"Guts","univers":"✨ Berserk","indices":["Je porte une épée gigantesque","J'ai perdu un œil et un bras","Une marque me condamne","Je porte une armure qui me dévore"]},
+    {"nom":"Lelouch","univers":"✨ Code Geass","indices":["Je suis un prince exilé","Mon regard impose n'importe quel ordre","Je porte un masque","Je joue aux échecs avec des vies"]},
+    {"nom":"Yuji Itadori","univers":"✨ Jujutsu Kaisen","indices":["J'ai avalé un doigt maudit","Je partage mon corps avec un roi","Ma condition physique est anormale","Je veux offrir une belle mort à tous"]},
+    {"nom":"Mikasa Ackerman","univers":"✨ Attack on Titan","indices":["Une écharpe rouge ne me quitte jamais","Je protège la même personne depuis l'enfance","Ma force dépasse l'ordinaire","Mon clan est particulier"]},
+    {"nom":"Kim Shin","univers":"🎬 Goblin","indices":["Je suis immortel depuis 900 ans","Une épée est plantée dans ma poitrine","Je partage ma maison avec une Faucheuse","Seule ma fiancée peut me libérer"]},
+    {"nom":"Vincenzo Cassano","univers":"🎬 Vincenzo","indices":["Je suis avocat de la mafia italienne","J'ai été adopté enfant","Je cherche de l'or caché sous un immeuble","Mes costumes sont impeccables"]},
+    {"nom":"Park Sae-royi","univers":"🎬 Itaewon Class","indices":["Mon père a été tué par un héritier","J'ai fait de la prison","J'ai ouvert un bar à Itaewon","Je ne plie jamais mes principes"]},
+    {"nom":"Seong Gi-hun","univers":"🎬 Squid Game","indices":["Je suis le joueur numéro 456","Je suis criblé de dettes","J'ai une fille que je vois peu","J'ai gagné un jeu mortel"]},
+    {"nom":"Yoon Se-ri","univers":"🎬 Crash Landing on You","indices":["Je suis une héritière sud-coréenne","Un accident de parapente a tout changé","Je me suis retrouvée au mauvais endroit","Un officier m'a cachée"]},
+    {"nom":"Moon Dong-eun","univers":"🎬 The Glory","indices":["J'ai été martyrisée au lycée","J'ai consacré ma vie à ma vengeance","Je suis devenue institutrice","Je joue très bien au go"]},
+    {"nom":"Woo Young-woo","univers":"🎬 Extraordinary Attorney Woo","indices":["Mon QI est de 164","Je suis passionnée par les baleines","Mon nom se lit dans les deux sens","Je suis avocate"]},
+    {"nom":"Hong Hae-in","univers":"🎬 Queen of Tears","indices":["Je dirige un grand magasin de luxe","Mon mariage bat de l'aile","Un diagnostic bouleverse tout","Ma famille possède le groupe Queens"]},
+    {"nom":"Harry Potter","univers":"⚡ Harry Potter","indices":["Une cicatrice marque mon front","Mon hibou s'appelle Hedwige","Je suis attrapeur à Gryffondor","Mes parents sont morts pour me sauver"]},
+    {"nom":"Hermione Granger","univers":"⚡ Harry Potter","indices":["Je connais tous les sorts par cœur","Mon chat s'appelle Pattenrond","J'ai utilisé un Retourneur de Temps","Mon patronus est une loutre"]},
+    {"nom":"Severus Rogue","univers":"⚡ Harry Potter","indices":["J'enseigne les potions","Mon patronus est une biche","J'ai aimé une femme toute ma vie","On m'a longtemps cru traître"]},
+    {"nom":"Sirius Black","univers":"⚡ Harry Potter","indices":["Je me transforme en grand chien noir","J'ai été enfermé à Azkaban à tort","Je suis le parrain d'un élu","Mon surnom est Patmol"]},
 ]
 
 active_devine = {}
@@ -6780,7 +7248,7 @@ def build_boss_embed(gid, derniere_attaque=None):
         desc += f"⚔️ {derniere_attaque}\n\n"
     desc += (
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "🗡️ Tape `.attaque` pour frapper ! *(cooldown 13s)*\n"
+        "🗡️ Tape `.attaque` pour frapper ! *(cooldown 4 s)*\n"
         f"🏆 **{boss['recompense']} pièces** pour tous les participants "
         "+ **250 bonus** au coup fatal !"
     )
@@ -6900,8 +7368,11 @@ async def devine_cmd(ctx):
     if ctx.channel.id in active_devine:
         return await ctx.send("🎭 Un jeu est déjà en cours ici !")
 
+    salon, temporaire = await demander_salon_prive(ctx, "Devine le personnage", "🎭")
+    if salon.id in active_devine:
+        return await salon.send("🎭 Un jeu est déjà en cours ici !")
     perso = random.choice(PERSONNAGES)
-    active_devine[ctx.channel.id] = {"perso": perso, "indice_idx": 0, "tries": 0}
+    active_devine[salon.id] = {"perso": perso, "indice_idx": 0, "tries": 0}
 
     embed = discord.Embed(
         title=f"🎭 Devine le Personnage ! {perso['univers']}",
@@ -6909,10 +7380,10 @@ async def devine_cmd(ctx):
         color=0x9b59b6
     )
     embed.set_footer(text="⏳ 60 secondes • Tu peux demander un indice en tapant 'indice' !")
-    await ctx.send(embed=embed)
+    await salon.send(embed=embed)
 
     def check(m):
-        return m.channel == ctx.channel and not m.author.bot
+        return m.channel == salon and not m.author.bot
 
     end_time = asyncio.get_event_loop().time() + 60
     while True:
@@ -6921,47 +7392,78 @@ async def devine_cmd(ctx):
             break
         try:
             msg = await bot.wait_for("message", check=check, timeout=remaining)
-            if ctx.channel.id not in active_devine:
+            if salon.id not in active_devine:
                 return
-            game = active_devine[ctx.channel.id]
+            game = active_devine[salon.id]
 
             if msg.content.lower().strip() == "indice":
                 game["indice_idx"] = min(game["indice_idx"] + 1, len(perso["indices"]) - 1)
                 idx = game["indice_idx"]
-                await ctx.send(embed=discord.Embed(
+                await salon.send(embed=discord.Embed(
                     description=f"💡 **Indice {idx+1} :** {perso['indices'][idx]}",
                     color=0xf39c12
                 ))
                 continue
 
-            if perso["nom"].split(" ")[0].lower() in msg.content.lower() or msg.content.lower().strip() in perso["nom"].lower():
-                active_devine.pop(ctx.channel.id, None)
+            if _devine_valide(msg.content, perso["nom"]):
+                active_devine.pop(salon.id, None)
                 prize = max(50, 150 - game["indice_idx"] * 30)
                 economy_data[str(msg.author.id)]["coins"] += prize
                 xp_data[str(msg.author.id)]["xp"] += 20
-                await ctx.send(embed=discord.Embed(
+                await salon.send(embed=discord.Embed(
                     description=f"🎉 **{msg.author.mention}** a trouvé ! C'était **{perso['nom']}** ! +{prize} pièces 🎭",
                     color=0x2ecc71
                 ))
+                if temporaire:
+                    await close_event_channel(salon, 30)
                 return
         except asyncio.TimeoutError:
             break
 
-    active_devine.pop(ctx.channel.id, None)
-    await ctx.send(embed=discord.Embed(
+    active_devine.pop(salon.id, None)
+    await salon.send(embed=discord.Embed(
         description=f"⏰ Temps écoulé ! C'était **{perso['nom']}** ({perso['univers']}) !",
         color=0xe74c3c
     ))
+    if temporaire:
+        await close_event_channel(salon, 30)
 
 # ============================================================
 #  PENDU
 # ============================================================
 PENDU_MOTS = [
-    "goblin", "vincenzo", "squid game", "kingdom", "signal", "itaewon class",
-    "reply 1988", "hospital playlist", "crash landing on you",
-    "attack on titan", "demon slayer", "death note", "one piece", "haikyuu",
-    "jujutsu kaisen", "fullmetal alchemist", "your lie in april", "vinland saga",
-    "naruto", "dragon ball", "pokemon", "one punch man",
+    # ── K-Dramas ──
+    "goblin","vincenzo","squid game","kingdom","signal","itaewon class","reply 1988",
+    "hospital playlist","crash landing on you","the glory","queen of tears","weak hero class",
+    "alchemy of souls","business proposal","start up","sweet home","all of us are dead",
+    "my mister","hometown cha cha cha","reborn rich","mr sunshine","hellbound","lovely runner",
+    "marry my husband","my demon","mask girl","big mouth","stranger","prison playbook",
+    "descendants of the sun","boys over flowers","doctor slump","move to heaven","nevertheless",
+    "twenty five twenty one","extraordinary attorney woo","my love from the star",
+    # ── Animés ──
+    "attack on titan","demon slayer","death note","one piece","haikyuu","jujutsu kaisen",
+    "fullmetal alchemist","your lie in april","naruto shippuden","dragon ball z","bleach",
+    "hunter x hunter","chainsaw man","spy x family","frieren","solo leveling","oshi no ko",
+    "blue lock","vinland saga","tokyo revengers","dandadan","kaiju no huit","mob psycho",
+    "one punch man","code geass","steins gate","re zero","fire force","black clover",
+    "tokyo ghoul","made in abyss","berserk","mushoku tensei","konosuba","overlord",
+    "sakamoto days","wind breaker","hells paradise","doctor stone","cowboy bebop",
+    "my hero academia","dragon ball super",
+    # ── Personnages ──
+    "tanjiro kamado","nezuko","zenitsu","inosuke","rengoku","gojo satoru","sukuna","itadori",
+    "megumi","nobara","luffy","zoro","sanji","nami","shanks","kaido","ace","law","robin",
+    "naruto uzumaki","sasuke","sakura","kakashi","itachi","madara","minato","jiraiya","gaara",
+    "eren yeager","mikasa","levi ackerman","armin","erwin","annie","reiner","historia",
+    "light yagami","ryuk","edward elric","alphonse","roy mustang","saitama","genos","garou",
+    "denji","makima","power","aki","loid forger","anya forger","yor forger",
+    "goku","vegeta","piccolo","frieza","cell","gohan","trunks","broly","beerus","whis",
+    "ichigo","rukia","aizen","byakuya","kenpachi","killua","gon","hisoka","kurapika","leorio",
+    "deku","bakugo","todoroki","all might","shigaraki","dabi","kirishima","uraraka",
+    # ── Univers & concepts ──
+    "chapeau de paille","akatsuki","survey corps","pourfendeur de demons","hashira",
+    "sharingan","rasengan","kamehameha","bankai","domaine","nen","alter",
+    "titan colossal","one for all","hokage","shinigami","quirk","chakra","haki","stand",
+    "vif d or","poudlard","gryffondor","serpentard","dumbledore","voldemort","hermione",
 ]
 
 PENDU_STAGES = ["😵", "😰", "😨", "😟", "😐", "🙂", "😄"]
@@ -7371,6 +7873,9 @@ async def pendu_cmd(ctx):
     if ctx.channel.id in active_pendu:
         return await ctx.send("🎮 Une partie de pendu est déjà en cours !")
 
+    salon, temporaire = await demander_salon_prive(ctx, "Pendu", "🎮")
+    if salon.id in active_pendu:
+        return await salon.send("🎮 Une partie est déjà en cours ici !")
     mot = random.choice(PENDU_MOTS)
     # Révéler la première lettre
     trouve_init = ["_" if c != " " else " " for c in mot]
@@ -7378,7 +7883,7 @@ async def pendu_cmd(ctx):
     for i, c in enumerate(mot):
         if c == premiere:
             trouve_init[i] = c
-    active_pendu[ctx.channel.id] = {
+    active_pendu[salon.id] = {
         "mot": mot,
         "trouve": trouve_init,
         "lettres": [premiere],
@@ -7386,23 +7891,23 @@ async def pendu_cmd(ctx):
         "max_erreurs": 6
     }
 
-    await ctx.send(embed=_pendu_embed(active_pendu[ctx.channel.id]))
+    await salon.send(embed=_pendu_embed(active_pendu[salon.id]))
 
     def check(m):
         return (
-            m.channel == ctx.channel and not m.author.bot and
+            m.channel == salon and not m.author.bot and
             (len(m.content) == 1 and m.content.isalpha() or m.content.lower() == "skip")
         )
 
-    while ctx.channel.id in active_pendu:
-        game = active_pendu[ctx.channel.id]
+    while salon.id in active_pendu:
+        game = active_pendu[salon.id]
         try:
             msg = await bot.wait_for("message", check=check, timeout=60)
             # Skip
             if msg.content.lower() == "skip":
                 mot_cache = game["mot"]
-                active_pendu.pop(ctx.channel.id, None)
-                await ctx.send(embed=discord.Embed(
+                active_pendu.pop(salon.id, None)
+                await salon.send(embed=discord.Embed(
                     description=f"⏭️ Mot passé ! C'était **{mot_cache.upper()}**\nTape `.pendu` pour rejouer !",
 
                     color=0x95a5a6
@@ -7410,7 +7915,7 @@ async def pendu_cmd(ctx):
                 return
             lettre = msg.content.lower()
             if lettre in game["lettres"]:
-                await ctx.send(f"⚠️ La lettre **{lettre}** a déjà été proposée !", delete_after=3)
+                await salon.send(f"⚠️ La lettre **{lettre}** a déjà été proposée !", delete_after=3)
                 continue
             game["lettres"].append(lettre)
             if lettre in game["mot"]:
@@ -7418,28 +7923,34 @@ async def pendu_cmd(ctx):
                     if c == lettre:
                         game["trouve"][i] = lettre
                 if "_" not in game["trouve"]:
-                    active_pendu.pop(ctx.channel.id, None)
+                    active_pendu.pop(salon.id, None)
                     prize = 100
                     economy_data[str(msg.author.id)]["coins"] += prize
-                    await ctx.send(embed=discord.Embed(
+                    await salon.send(embed=discord.Embed(
                         description=f"🎉 **{msg.author.mention}** a trouvé ! C'était **{game['mot'].upper()}** ! +{prize} pièces 🏆",
                         color=0x2ecc71
                     ))
+                    if temporaire:
+                        await close_event_channel(salon, 30)
                     return
-                await ctx.send(embed=_pendu_embed(game))
+                await salon.send(embed=_pendu_embed(game))
             else:
                 game["erreurs"] += 1
                 if game["erreurs"] >= game["max_erreurs"]:
-                    active_pendu.pop(ctx.channel.id, None)
-                    await ctx.send(embed=discord.Embed(
+                    active_pendu.pop(salon.id, None)
+                    await salon.send(embed=discord.Embed(
                         description=f"💀 Perdu ! Le mot était **{game['mot'].upper()}** !",
                         color=0xe74c3c
                     ))
+                    if temporaire:
+                        await close_event_channel(salon, 30)
                     return
-                await ctx.send(embed=_pendu_embed(game))
+                await salon.send(embed=_pendu_embed(game))
         except asyncio.TimeoutError:
-            active_pendu.pop(ctx.channel.id, None)
-            await ctx.send("⏰ Partie de pendu abandonnée !")
+            active_pendu.pop(salon.id, None)
+            await salon.send("⏰ Partie abandonnée !")
+            if temporaire:
+                await close_event_channel(salon, 30)
             return
 
 def _pendu_embed(game):
@@ -7462,16 +7973,16 @@ double_xp_users = {}  # {user_id: end_timestamp}
 voice_time = defaultdict(int)  # {user_id: minutes}
 voice_join_time = {}  # {user_id: join_timestamp}
 
-@bot.command(name="pokebattle", aliases=["pb", "pokefight"])
-async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
-    """⚔️ Combat 3v3 avec tes cartes gacha ! — .pokebattle @joueur"""
-    if SALON_COMBAT_ID and ctx.channel.id != SALON_COMBAT_ID:
-        salon = ctx.guild.get_channel(SALON_COMBAT_ID)
-        mention = salon.mention if salon else "le salon combat"
-        return await ctx.send(f"⚔️ Les combats de cartes c'est dans {mention} !", delete_after=5)
+@bot.command(name="gachabattle", aliases=["gb", "pokebattle", "pb"])
+async def gachabattle_cmd(ctx, adversaire: discord.Member = None):
+    """🎴 Gacha Battle — combat 3v3 avec tes cartes ! — .gachabattle @joueur"""
+    if SALON_GACHABATTLE_ID and ctx.channel.id != SALON_GACHABATTLE_ID:
+        salon = ctx.guild.get_channel(SALON_GACHABATTLE_ID)
+        mention = salon.mention if salon else "le salon gachabattle"
+        return await ctx.send(f"🎴 Les Gacha Battles c'est dans {mention} !", delete_after=5)
     if not adversaire or adversaire.bot or adversaire.id == ctx.author.id:
-        return await ctx.send("❌ Mentionne un adversaire valide ! Ex: `.pokebattle @ami`")
-    if ctx.channel.id in active_pokebattles:
+        return await ctx.send("❌ Mentionne un adversaire valide ! Ex : `.gachabattle @ami`")
+    if ctx.channel.id in active_gachabattles:
         return await ctx.send("⚔️ Un combat est déjà en cours ici !")
 
     uid1 = str(ctx.author.id)
@@ -7569,12 +8080,17 @@ async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
         return chosen if len(chosen) >= 3 else None
 
     await ctx.send(embed=discord.Embed(
+        title="🎴 GACHA BATTLE",
         description=(
-            f"⚡ **{ctx.author.mention}** défie **{adversaire.mention}** — Combat 3v3 !\n"
-            "Chacun choisit son équipe..."
-        ),
-        color=0x7000ff
-    ))
+            f"⚡ **{ctx.author.mention}** défie **{adversaire.mention}** en **3 contre 3** !\n\n"
+            "**Comment ça marche :**\n"
+            "• Chacun choisit **3 cartes** de sa collection\n"
+            "• À ton tour, une **attaque** ou un **changement de carte**\n"
+            "• Les dégâts dépendent de ton **ATK** face à la **DEF** adverse\n"
+            "• Première équipe à perdre ses 3 cartes = défaite\n\n"
+            "🏆 **300 pièces + 60 XP** au vainqueur, et tes cartes gagnent de l'XP.\n\n"
+            "*Chacun choisit son équipe…*"),
+        color=0x9b59b6))
     equipe1 = await choisir_equipe(ctx.author)
     if not equipe1:
         return await ctx.send(f"❌ **{ctx.author.display_name}** n'a pas choisi son équipe !")
@@ -7582,11 +8098,12 @@ async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
     if not equipe2:
         return await ctx.send(f"❌ **{adversaire.display_name}** n'a pas choisi son équipe !")
 
-    active_pokebattles[ctx.channel.id] = {
+    active_gachabattles[ctx.channel.id] = {
         "j1": {"membre": ctx.author,  "equipe": equipe1, "actif": 0},
         "j2": {"membre": adversaire,  "equipe": equipe2, "actif": 0},
         "tour": ctx.author.id,
         "tour_num": 1,
+        "journal": [],
     }
 
     def carte_active(j): return j["equipe"][j["actif"]]
@@ -7602,42 +8119,64 @@ async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
         )
 
     def build_embed_pb():
-        game = active_pokebattles.get(ctx.channel.id, {})
-        j1_g = game.get("j1"); j2_g = game.get("j2")
+        game = active_gachabattles.get(ctx.channel.id, {})
+        j1_g, j2_g = game.get("j1"), game.get("j2")
         if not j1_g or not j2_g:
             return discord.Embed(title="Combat terminé")
-        c1 = carte_active(j1_g); c2 = carte_active(j2_g)
-        pct1 = c1["hp_actuel"] / max(c1["pv"], 1)
-        pct2 = c2["hp_actuel"] / max(c2["pv"], 1)
-        col1 = "🔴" if pct1 < 0.3 else ("🟡" if pct1 < 0.6 else "🟢")
-        col2 = "🔴" if pct2 < 0.3 else ("🟡" if pct2 < 0.6 else "🟢")
+        c1, c2 = carte_active(j1_g), carte_active(j2_g)
+        p1 = c1["hp_actuel"] / max(c1["pv"], 1)
+        p2 = c2["hp_actuel"] / max(c2["pv"], 1)
+        col1 = "🔴" if p1 < 0.3 else ("🟡" if p1 < 0.6 else "🟢")
+        col2 = "🔴" if p2 < 0.3 else ("🟡" if p2 < 0.6 else "🟢")
+        tour_de = game.get("tour")
+        nom_tour = j1_g["membre"].display_name if tour_de == j1_g["membre"].id else j2_g["membre"].display_name
+
         embed = discord.Embed(
-            title=f"⚔️ {j1_g['membre'].display_name}  VS  {j2_g['membre'].display_name}",
-            color=0x9b59b6
-        )
-        embed.add_field(name="\u200b", value=(
-            f"🔴 **{j1_g['membre'].display_name}**\n"
-            f"{c1['emoji']} **{c1['nom']}**\n"
-            f"{col1} {barre_pb(c1['hp_actuel'], c1['pv'])} `{c1['hp_actuel']}/{c1['pv']}HP`\n"
-            f"*Équipe :* {equipe_str(j1_g)}"
-        ), inline=True)
-        embed.add_field(name="\u200b", value=(
-            f"🔵 **{j2_g['membre'].display_name}**\n"
-            f"{c2['emoji']} **{c2['nom']}**\n"
-            f"{col2} {barre_pb(c2['hp_actuel'], c2['pv'])} `{c2['hp_actuel']}/{c2['pv']}HP`\n"
-            f"*Équipe :* {equipe_str(j2_g)}"
-        ), inline=True)
-        embed.set_footer(text=f"Tour {game.get('tour_num', 1)} • Combat 3v3 — QG Kdrama")
+            title="🎴  GACHA BATTLE  —  3 contre 3",
+            description=f"**Tour {game.get('tour_num', 1)}** — au tour de **{nom_tour}**",
+            color=0x9b59b6)
+
+        for j, col, adv in ((j1_g, col1, j2_g), (j2_g, col2, j1_g)):
+            ca = carte_active(j)
+            eff = ca["attaque"] / max(carte_active(adv)["defense"], 1)
+            avantage = "🔺 avantage" if eff >= 1.3 else ("🔻 désavantage" if eff <= 0.75 else "➖ neutre")
+            embed.add_field(
+                name=f"{'🔴' if j is j1_g else '🔵'}  {j['membre'].display_name}",
+                value=(f"{ca['emoji']} **{ca['nom']}**\n"
+                       f"{col} {barre_pb(ca['hp_actuel'], ca['pv'])}\n"
+                       f"❤️ **{ca['hp_actuel']}** / {ca['pv']} PV\n"
+                       f"⚔️ ATK **{ca['attaque']}**  ·  🛡️ DEF **{ca['defense']}**\n"
+                       f"*{avantage} face à {carte_active(adv)['nom']}*"),
+                inline=True)
+
+        embed.add_field(name="\u200b", value="\u200b", inline=False)
+        for j in (j1_g, j2_g):
+            equipe = " ".join(
+                (f"~~{c3['emoji']}~~" if c3["ko"] else
+                 (f"**[{c3['emoji']} {c3['hp_actuel']}]**" if i == j["actif"] else f"{c3['emoji']} {c3['hp_actuel']}"))
+                for i, c3 in enumerate(j["equipe"]))
+            vivants = sum(1 for x in j["equipe"] if not x["ko"])
+            embed.add_field(name=f"Équipe de {j['membre'].display_name}  ({vivants}/3)",
+                            value=equipe, inline=True)
+
+        journal = game.get("journal", [])
+        if journal:
+            embed.add_field(name="📜 Journal de combat",
+                            value="\n".join(journal[-4:]), inline=False)
+
+        embed.set_footer(text="⚔️ Attaques = dégâts fixes modulés par ATK/DEF  •  "
+                              "🔄 Changer = passe ton tour mais protège ta carte")
         return embed
+
 
     combat_msg = await ctx.send(embed=build_embed_pb())
 
-    while ctx.channel.id in active_pokebattles:
-        game = active_pokebattles[ctx.channel.id]
+    while ctx.channel.id in active_gachabattles:
+        game = active_gachabattles[ctx.channel.id]
         j1_g = game["j1"]; j2_g = game["j2"]
 
         if all(c["ko"] for c in j1_g["equipe"]):
-            del active_pokebattles[ctx.channel.id]
+            del active_gachabattles[ctx.channel.id]
             economy_data[str(j2_g["membre"].id)]["coins"] += 300
             xp_data[str(j2_g["membre"].id)]["xp"] += 60
             lvlups_win = card_xp_team(str(j2_g["membre"].id), j2_g["equipe"], won=True)
@@ -7652,7 +8191,7 @@ async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
             await ctx.send(embed=discord.Embed(title="🏆 FIN DU COMBAT !", description=desc_fin, color=0xf1c40f))
             return
         if all(c["ko"] for c in j2_g["equipe"]):
-            del active_pokebattles[ctx.channel.id]
+            del active_gachabattles[ctx.channel.id]
             economy_data[str(j1_g["membre"].id)]["coins"] += 300
             xp_data[str(j1_g["membre"].id)]["xp"] += 60
             lvlups_win = card_xp_team(str(j1_g["membre"].id), j1_g["equipe"], won=True)
@@ -7674,33 +8213,45 @@ async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
 
         chosen_action = asyncio.Event()
         action_result = {"choix": None}
+        carte_cur_pre = carte_active(current)
+        carte_adv_pre = carte_active(other)
 
+        atk_dispo = carte_cur_pre.get("attaques", [])
         class CombatButtons(ui.View):
             def __init__(self):
                 super().__init__(timeout=45)
-            async def check_p(self, interaction):
-                if interaction.user.id != current["membre"].id:
-                    await interaction.response.send_message("❌ Pas ton tour !", ephemeral=True)
-                    return False
-                return True
-            @ui.button(label="Attaque 1 ⚔️", style=discord.ButtonStyle.danger, row=0)
-            async def btn1(self, i, b):
-                if not await self.check_p(i): return
-                action_result["choix"] = 0; chosen_action.set(); self.stop(); await i.response.defer()
-            @ui.button(label="Attaque 2 💥", style=discord.ButtonStyle.danger, row=0)
-            async def btn2(self, i, b):
-                if not await self.check_p(i): return
-                action_result["choix"] = 1; chosen_action.set(); self.stop(); await i.response.defer()
-            @ui.button(label="Attaque 3 🌀", style=discord.ButtonStyle.primary, row=0)
-            async def btn3(self, i, b):
-                if not await self.check_p(i): return
-                action_result["choix"] = 2; chosen_action.set(); self.stop(); await i.response.defer()
-            @ui.button(label="Changer 🔄", style=discord.ButtonStyle.secondary, row=1)
-            async def btn_swap(self, i, b):
-                if not await self.check_p(i): return
-                action_result["choix"] = "swap"; chosen_action.set(); self.stop(); await i.response.defer()
+                for i2, a in enumerate(atk_dispo[:3]):
+                    d = a.get("degats", 30)
+                    ratio = carte_cur_pre["attaque"] / max(carte_adv_pre["defense"], 1)
+                    est = max(5, int(d * min(ratio, 2.0)))
+                    btn = ui.Button(
+                        label=f"{a['nom'][:18]} — ~{est} dégâts",
+                        emoji=a.get("emoji", "⚔️"),
+                        style=discord.ButtonStyle.danger if i2 == 0 else discord.ButtonStyle.primary,
+                        row=i2)
+                    async def cb(interaction, idx=i2):
+                        if interaction.user.id != current["membre"].id:
+                            return await interaction.response.send_message("❌ Ce n'est pas ton tour !", ephemeral=True)
+                        action_result["choix"] = idx
+                        chosen_action.set(); self.stop(); await interaction.response.defer()
+                    btn.callback = cb
+                    self.add_item(btn)
+                dispo_swap = [x for i3, x in enumerate(current["equipe"]) if not x["ko"] and i3 != current["actif"]]
+                swap = ui.Button(
+                    label=(f"Changer pour {dispo_swap[0]['nom'][:14]}" if dispo_swap else "Aucun remplaçant"),
+                    emoji="🔄", style=discord.ButtonStyle.secondary,
+                    disabled=not dispo_swap, row=3)
+                async def cb_swap(interaction):
+                    if interaction.user.id != current["membre"].id:
+                        return await interaction.response.send_message("❌ Ce n'est pas ton tour !", ephemeral=True)
+                    action_result["choix"] = "swap"
+                    chosen_action.set(); self.stop(); await interaction.response.defer()
+                swap.callback = cb_swap
+                self.add_item(swap)
+
             async def on_timeout(self):
-                action_result["choix"] = 0; chosen_action.set()
+                action_result["choix"] = 0
+                chosen_action.set()
 
         view = CombatButtons()
         await combat_msg.edit(
@@ -7720,6 +8271,8 @@ async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
             dispo = [(i3, c) for i3, c in enumerate(current["equipe"]) if not c["ko"] and i3 != current["actif"]]
             if dispo:
                 current["actif"] = dispo[0][0]
+                game.setdefault("journal", []).append(
+                    f"🔄 **{current['membre'].display_name}** envoie {dispo[0][1]['emoji']} **{dispo[0][1]['nom']}**")
             game["tour"] = other["membre"].id
             game["tour_num"] += 1
             await combat_msg.edit(content=None, embed=build_embed_pb(), view=None)
@@ -7738,9 +8291,14 @@ async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
         degats = int(base * min(ratio, 2.0))
         degats = max(5, degats)
         carte_adv["hp_actuel"] = max(0, carte_adv["hp_actuel"] - degats)
+        nom_atk = attaques[choix]["nom"] if (isinstance(choix, int) and choix < len(attaques)) else "Attaque"
+        game.setdefault("journal", []).append(
+            f"{carte_cur['emoji']} **{carte_cur['nom']}** utilise *{nom_atk}* → "
+            f"**-{degats}** sur {carte_adv['nom']}" + (" ✦ **CRITIQUE**" if critique else ""))
 
         if carte_adv["hp_actuel"] <= 0:
             carte_adv["ko"] = True
+            game.setdefault("journal", []).append(f"💀 **{carte_adv['nom']}** est K.O. !")
             next_idx = next((i4 for i4, c in enumerate(other["equipe"]) if not c["ko"]), None)
             if next_idx is not None:
                 other["actif"] = next_idx
@@ -7749,11 +8307,11 @@ async def pokebattle_cmd(ctx, adversaire: discord.Member = None):
         game["tour_num"] += 1
         await combat_msg.edit(content=None, embed=build_embed_pb(), view=None)
 
-@bot.command(name="pokestop", aliases=["stopcombat"])
-async def pokestop(ctx):
-    """Annule le combat en cours — .pokestop"""
-    if ctx.channel.id in active_pokebattles:
-        del active_pokebattles[ctx.channel.id]
+@bot.command(name="gachastop", aliases=["pokestop", "stopcombat"])
+async def gachastop_cmd(ctx):
+    """Annule le Gacha Battle en cours — .gachastop"""
+    if ctx.channel.id in active_gachabattles:
+        del active_gachabattles[ctx.channel.id]
         await ctx.send("🛑 Combat annulé !")
     else:
         await ctx.send("❌ Aucun combat en cours !")
@@ -9062,7 +9620,7 @@ async def cardinfo_cmd(ctx, *, perso: str = None):
             value=f"⭐ Fusion : {fus}/3\n{xp_txt}",
             inline=True
         )
-        embed.set_footer(text="💡 Combats en pokebattle pour faire monter le niveau !")
+        embed.set_footer(text="💡 Combats en gachabattle pour faire monter le niveau !")
     else:
         if owner:
             m = ctx.guild.get_member(int(owner))
@@ -10864,6 +11422,7 @@ def save_all_data():
             "invite_counts": dict(invite_counts),
             "inventaire": {k: dict(v) for k, v in inventaire.items()},
             "claim_reduction": dict(claim_reduction),
+            "double_daily": dict(double_daily),
         }
         with open(DATA_FILES["social"], "w", encoding="utf-8") as f:
             _json.dump(social_save, f, ensure_ascii=False)
@@ -10935,6 +11494,7 @@ def load_all_data():
             for k, v in data.get("inventaire", {}).items():
                 inventaire[k].update(v)
             claim_reduction.update(data.get("claim_reduction", {}))
+            double_daily.update(data.get("double_daily", {}))
             print(f"[Load] ✅ Social chargé")
         except Exception as e:
             print(f"[Load] Erreur social: {e}")
