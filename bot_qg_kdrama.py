@@ -5,6 +5,7 @@ import random
 import json
 import os
 import datetime
+import re
 from collections import defaultdict
 from discord import ui
 import io
@@ -290,31 +291,91 @@ def get_tier(level):
 #  DONNÉES KDRAMA / ANIMÉ / GAMING
 # ============================================================
 KDRAMAS = [
-    {"title": "Crash Landing on You", "genre": "Romance", "note": "⭐ 9.2/10", "emoji": "🪂", "image": "https://cdn.myanimelist.net/images/anime/1/106706.jpg"},
-    {"title": "Goblin", "genre": "Fantasy/Romance", "note": "⭐ 9.5/10", "emoji": "🕯️", "image": "https://cdn.myanimelist.net/images/anime/1/83770.jpg"},
-    {"title": "My Love from the Star", "genre": "Romance/SF", "note": "⭐ 8.9/10", "emoji": "⭐", "image": "https://cdn.myanimelist.net/images/anime/5/65514.jpg"},
-    {"title": "Descendants of the Sun", "genre": "Romance/Action", "note": "⭐ 8.8/10", "emoji": "☀️", "image": "https://cdn.myanimelist.net/images/anime/11/78857.jpg"},
-    {"title": "Reply 1988", "genre": "Slice of Life", "note": "⭐ 9.7/10", "emoji": "📼", "image": "https://cdn.myanimelist.net/images/anime/1/84217.jpg"},
-    {"title": "Vincenzo", "genre": "Thriller/Comédie", "note": "⭐ 9.0/10", "emoji": "🦅", "image": "https://cdn.myanimelist.net/images/anime/1/107945.jpg"},
-    {"title": "Itaewon Class", "genre": "Drama/Romance", "note": "⭐ 8.7/10", "emoji": "🍺", "image": "https://cdn.myanimelist.net/images/anime/1/103593.jpg"},
-    {"title": "Kingdom", "genre": "Historique/Horreur", "note": "⭐ 9.1/10", "emoji": "👑", "image": "https://cdn.myanimelist.net/images/anime/1/96680.jpg"},
-    {"title": "Squid Game", "genre": "Thriller", "note": "⭐ 8.0/10", "emoji": "🦑", "image": "https://cdn.myanimelist.net/images/anime/1/110969.jpg"},
-    {"title": "Signal", "genre": "Policier/Thriller", "note": "⭐ 9.3/10", "emoji": "📻", "image": "https://cdn.myanimelist.net/images/anime/1/82892.jpg"},
-    {"title": "Hospital Playlist", "genre": "Médical/Slice of Life", "note": "⭐ 9.4/10", "emoji": "🩺", "image": "https://cdn.myanimelist.net/images/anime/1/104103.jpg"},
-    {"title": "Weightlifting Fairy Kim Bok-joo", "genre": "Romance/Sport", "note": "⭐ 8.9/10", "emoji": "🏋️", "image": "https://cdn.myanimelist.net/images/anime/1/85566.jpg"},
+    {"title":"Goblin","alt":["guardian","dokkaebi","goblin the lonely and great god"],"emoji":"🕯️","genre":"Fantasy · Romance","note":9.5,"annee":2016,"episodes":16,"statut":"Terminé","synopsis":"Un général maudit devient immortel il y a 900 ans. Pour mourir enfin, il doit trouver la fiancée du Gobelin, seule capable de retirer l'épée plantée dans sa poitrine. Il partage sa maison avec une Faucheuse amnésique.","image":"https://cdn.myanimelist.net/images/anime/1/83770.jpg"},
+    {"title":"Crash Landing on You","alt":["cloy","atterrissage d'urgence sur toi"],"emoji":"🪂","genre":"Romance · Comédie","note":9.2,"annee":2019,"episodes":16,"statut":"Terminé","synopsis":"Une héritière sud-coréenne est emportée par une tornade en parapente et s'écrase en Corée du Nord. Un officier nord-coréen la cache et l'aide à rentrer — au péril de leurs deux vies.","image":"https://cdn.myanimelist.net/images/anime/1/106706.jpg"},
+    {"title":"Squid Game","alt":["squid games","le jeu du calmar"],"emoji":"🦑","genre":"Thriller · Survie","note":8.7,"annee":2021,"episodes":9,"statut":"En cours","synopsis":"456 personnes criblées de dettes acceptent de participer à des jeux d'enfants pour une somme colossale. Le prix de l'échec : la mort.","image":"https://cdn.myanimelist.net/images/anime/1/110969.jpg"},
+    {"title":"Vincenzo","alt":["vincenzo cassano"],"emoji":"🦅","genre":"Thriller · Comédie noire","note":9.0,"annee":2021,"episodes":20,"statut":"Terminé","synopsis":"Un avocat italo-coréen de la mafia revient en Corée pour récupérer de l'or caché sous un immeuble. Il devient malgré lui le protecteur de ses habitants face à une multinationale corrompue.","image":"https://cdn.myanimelist.net/images/anime/1/107945.jpg"},
+    {"title":"Itaewon Class","alt":["itaewon"],"emoji":"🍺","genre":"Drame · Vengeance","note":8.7,"annee":2020,"episodes":16,"statut":"Terminé","synopsis":"Après la mort de son père causée par un héritier tout-puissant, un ex-détenu ouvre un bar à Itaewon avec une équipe de marginaux. Objectif : faire tomber l'empire responsable.","image":"https://cdn.myanimelist.net/images/anime/1/103593.jpg"},
+    {"title":"Reply 1988","alt":["reply1988","응답하라 1988"],"emoji":"📼","genre":"Slice of Life · Nostalgie","note":9.7,"annee":2015,"episodes":20,"statut":"Terminé","synopsis":"Cinq familles voisines du quartier de Ssangmun-dong à Séoul, en 1988. Amitiés d'enfance, premiers amours et petites galères du quotidien — le drama le mieux noté de tous les temps.","image":"https://cdn.myanimelist.net/images/anime/1/84217.jpg"},
+    {"title":"Kingdom","alt":["kingdom korea"],"emoji":"👑","genre":"Historique · Horreur","note":9.1,"annee":2019,"episodes":12,"statut":"Terminé","synopsis":"Dans la Corée de la dynastie Joseon, un prince héritier enquête sur une étrange épidémie qui transforme les morts en créatures assoiffées de chair.","image":"https://cdn.myanimelist.net/images/anime/1/96680.jpg"},
+    {"title":"Signal","alt":["signal 2016"],"emoji":"📻","genre":"Policier · Fantastique","note":9.3,"annee":2016,"episodes":16,"statut":"Terminé","synopsis":"Un profileur découvre un talkie-walkie qui lui permet de communiquer avec un policier de 1989. Ensemble, ils tentent de résoudre des affaires classées — en modifiant le passé.","image":"https://cdn.myanimelist.net/images/anime/1/82892.jpg"},
+    {"title":"Hospital Playlist","alt":["hospital playlist 2"],"emoji":"🩺","genre":"Médical · Slice of Life","note":9.4,"annee":2020,"episodes":12,"statut":"Terminé","synopsis":"Cinq médecins amis depuis la fac travaillent dans le même hôpital et jouent dans un groupe de musique. Un drama tendre sur l'amitié qui dure et les vies qu'on sauve.","image":"https://cdn.myanimelist.net/images/anime/1/104103.jpg"},
+    {"title":"The Glory","alt":["the glory netflix"],"emoji":"🔥","genre":"Thriller · Vengeance","note":8.9,"annee":2022,"episodes":16,"statut":"Terminé","synopsis":"Détruite par le harcèlement scolaire, une femme consacre sa vie entière à préparer sa vengeance. Vingt ans plus tard, elle devient institutrice du fils de son bourreau.","image":""},
+    {"title":"Queen of Tears","alt":["queen of tears 2024"],"emoji":"💧","genre":"Romance · Drame","note":8.8,"annee":2024,"episodes":16,"statut":"Terminé","synopsis":"Un couple au bord du divorce — elle, héritière du groupe Queens, lui, directeur épuisé — voit tout basculer quand elle apprend qu'il lui reste trois mois à vivre.","image":""},
+    {"title":"Extraordinary Attorney Woo","alt":["attorney woo","woo young woo"],"emoji":"🐋","genre":"Juridique · Feel-good","note":9.0,"annee":2022,"episodes":16,"statut":"Terminé","synopsis":"Une jeune avocate autiste au QI de 164 intègre un grand cabinet. Sa façon unique de voir le monde — et sa passion pour les baleines — bouscule les codes du droit.","image":""},
+    {"title":"Weak Hero Class","alt":["weak hero","weak hero class 1","weak hero class 2"],"emoji":"📓","genre":"Action · Drame scolaire","note":8.9,"annee":2022,"episodes":8,"statut":"En cours","synopsis":"Un lycéen brillant mais frêle utilise son intelligence et tout ce qui lui tombe sous la main pour survivre à la violence scolaire. Un drama brutal et nerveux.","image":""},
+    {"title":"Alchemy of Souls","alt":["alchemy of souls 2","hwanhon"],"emoji":"🔮","genre":"Fantasy · Romance","note":8.8,"annee":2022,"episodes":20,"statut":"Terminé","synopsis":"Dans un royaume fictif, une puissante assassine voit son âme transférée dans le corps d'une servante aveugle. Elle devient la maîtresse d'un jeune noble en quête de pouvoir.","image":""},
+    {"title":"Business Proposal","alt":["business proposal 2022","sanae mat sun"],"emoji":"💼","genre":"Romance · Comédie","note":8.6,"annee":2022,"episodes":12,"statut":"Terminé","synopsis":"Une employée se rend à un rendez-vous arrangé à la place de son amie, déguisée. Problème : le prétendant est le PDG de son entreprise.","image":""},
+    {"title":"Twenty-Five Twenty-One","alt":["2521","twenty five twenty one"],"emoji":"🤺","genre":"Romance · Coming of age","note":8.9,"annee":2022,"episodes":16,"statut":"Terminé","synopsis":"1998, crise financière. Une escrimeuse de 18 ans et un jeune homme qui a tout perdu se croisent et s'accrochent l'un à l'autre. Une romance douce-amère sur la jeunesse.","image":""},
+    {"title":"Start-Up","alt":["startup"],"emoji":"🚀","genre":"Drame · Romance","note":8.3,"annee":2020,"episodes":16,"statut":"Terminé","synopsis":"Dans la Silicon Valley coréenne, de jeunes entrepreneurs se battent pour lancer leur startup — et découvrent que réussir coûte parfois plus cher que prévu.","image":""},
+    {"title":"Sweet Home","alt":["sweet home netflix"],"emoji":"👹","genre":"Horreur · Survie","note":8.2,"annee":2020,"episodes":10,"statut":"Terminé","synopsis":"Un adolescent suicidaire emménage dans un immeuble délabré au moment où une épidémie transforme les humains en monstres façonnés par leurs désirs.","image":""},
+    {"title":"All of Us Are Dead","alt":["all of us are dead","now at our school"],"emoji":"🧟","genre":"Horreur · Survie","note":8.1,"annee":2022,"episodes":12,"statut":"Terminé","synopsis":"Un virus se répand dans un lycée. Piégés à l'intérieur, des élèves doivent s'organiser pour survivre — sans aide extérieure.","image":""},
+    {"title":"My Mister","alt":["my ahjussi","mon ahjussi"],"emoji":"🚇","genre":"Drame · Tranche de vie","note":9.6,"annee":2018,"episodes":16,"statut":"Terminé","synopsis":"Un ingénieur usé par la vie et une jeune femme criblée de dettes se rencontrent. Sans romance, juste deux êtres cabossés qui se sauvent mutuellement. Bouleversant.","image":""},
+    {"title":"Hometown Cha-Cha-Cha","alt":["hometown chachacha","gongjin"],"emoji":"🌊","genre":"Romance · Feel-good","note":8.7,"annee":2021,"episodes":16,"statut":"Terminé","synopsis":"Une dentiste de Séoul ouvre son cabinet dans un village de bord de mer et croise un homme à tout faire adoré de tous. Le drama parfait pour se réconforter.","image":""},
+    {"title":"Reborn Rich","alt":["reborn rich 2022"],"emoji":"💰","genre":"Fantastique · Business","note":8.7,"annee":2022,"episodes":16,"statut":"Terminé","synopsis":"Assassiné par la famille qu'il servait, un homme se réveille en 1987 dans le corps du plus jeune petit-fils de ce même clan. Il connaît l'avenir — et compte s'en servir.","image":""},
+    {"title":"D.P.","alt":["dp","deserter pursuit"],"emoji":"🎖️","genre":"Drame militaire","note":8.9,"annee":2021,"episodes":6,"statut":"Terminé","synopsis":"Deux soldats sont chargés de retrouver les déserteurs de l'armée coréenne. Chaque fuite cache une histoire — et un système qui broie.","image":""},
+    {"title":"Mr. Sunshine","alt":["mr sunshine"],"emoji":"🌅","genre":"Historique · Romance","note":9.2,"annee":2018,"episodes":24,"statut":"Terminé","synopsis":"Corée, 1900. Un enfant d'esclaves devenu officier américain revient dans son pays natal et tombe amoureux d'une aristocrate devenue tireuse d'élite pour la résistance.","image":""},
+    {"title":"Hellbound","alt":["hellbound netflix","jiok"],"emoji":"😈","genre":"Fantastique · Thriller","note":7.9,"annee":2021,"episodes":6,"statut":"Terminé","synopsis":"Des créatures surgissent de nulle part pour envoyer des gens en enfer, à l'heure annoncée. Une secte y voit la volonté divine et prend le pouvoir.","image":""},
+    {"title":"Lovely Runner","alt":["lovely runner 2024","sunjae"],"emoji":"🏃","genre":"Romance · Voyage temporel","note":9.1,"annee":2024,"episodes":16,"statut":"Terminé","synopsis":"Une fan remonte le temps pour sauver son idole du suicide. À chaque tentative, elle change un peu plus leur histoire commune.","image":""},
+    {"title":"Marry My Husband","alt":["marry my husband 2024"],"emoji":"💍","genre":"Romance · Vengeance","note":8.5,"annee":2024,"episodes":16,"statut":"Terminé","synopsis":"Assassinée par son mari et sa meilleure amie, une femme revient dix ans en arrière. Cette fois, elle compte bien leur offrir le mariage qu'ils méritent.","image":""},
+    {"title":"My Demon","alt":["my demon 2023"],"emoji":"😈","genre":"Fantasy · Romance","note":8.2,"annee":2023,"episodes":16,"statut":"Terminé","synopsis":"Un démon perd ses pouvoirs au contact d'une héritière glaciale. Pour les récupérer, il doit rester collé à elle — et signe un contrat de mariage.","image":""},
+    {"title":"Mask Girl","alt":["mask girl netflix"],"emoji":"🎭","genre":"Thriller · Drame","note":8.3,"annee":2023,"episodes":7,"statut":"Terminé","synopsis":"Complexée par son apparence, une employée de bureau devient streameuse masquée la nuit. Une spirale qui la mène bien plus loin qu'elle ne l'imaginait.","image":""},
+    {"title":"Big Mouth","alt":["big mouth 2022"],"emoji":"🐭","genre":"Thriller · Crime","note":8.4,"annee":2022,"episodes":16,"statut":"Terminé","synopsis":"Un avocat médiocre est pris pour un escroc légendaire et jeté en prison. Pour survivre, il doit jouer le rôle — et devenir le monstre qu'on croit qu'il est.","image":""},
+    {"title":"It's Okay to Not Be Okay","atl":[],"alt":["its okay to not be okay","psycho but its okay"],"emoji":"🦋","genre":"Romance · Psychologie","note":8.9,"annee":2020,"episodes":16,"statut":"Terminé","synopsis":"Un infirmier psychiatrique dévoué à son frère autiste croise une autrice de contes pour enfants au comportement antisocial. Deux blessures qui se répondent.","image":""},
+    {"title":"Stranger","alt":["secret forest","stranger 2017"],"emoji":"🔍","genre":"Policier · Thriller","note":9.2,"annee":2017,"episodes":16,"statut":"Terminé","synopsis":"Un procureur incapable de ressentir des émotions fait équipe avec une policière chaleureuse pour démanteler la corruption du parquet. Le meilleur thriller coréen.","image":""},
+    {"title":"Prison Playbook","alt":["prison playbook","wise prison life"],"emoji":"⚾","genre":"Comédie · Drame","note":9.2,"annee":2017,"episodes":16,"statut":"Terminé","synopsis":"Une star du baseball est incarcérée la veille de signer aux États-Unis. En prison, il découvre une galerie de personnages plus humains qu'on ne le croirait.","image":""},
+    {"title":"Descendants of the Sun","alt":["dots","descendants of the sun"],"emoji":"☀️","genre":"Romance · Action","note":8.6,"annee":2016,"episodes":16,"statut":"Terminé","synopsis":"Un capitaine des forces spéciales et une chirurgienne s'aiment entre deux missions humanitaires dans un pays en guerre.","image":"https://cdn.myanimelist.net/images/anime/11/78857.jpg"},
+    {"title":"My Love from the Star","alt":["my love from another star","you who came from the stars"],"emoji":"⭐","genre":"Romance · Science-fiction","note":8.9,"annee":2013,"episodes":21,"statut":"Terminé","synopsis":"Un extraterrestre vit sur Terre depuis 400 ans. Trois mois avant son départ, il tombe amoureux d'une actrice capricieuse.","image":"https://cdn.myanimelist.net/images/anime/5/65514.jpg"},
+    {"title":"Boys Over Flowers","alt":["boys before flowers","f4","kkotboda namja"],"emoji":"🌸","genre":"Romance · Scolaire","note":8.0,"annee":2009,"episodes":25,"statut":"Terminé","synopsis":"Une lycéenne modeste entre dans une école de riches et affronte le F4, quatre héritiers qui règnent sur l'établissement. Le classique qui a lancé la vague hallyu.","image":""},
+    {"title":"Doctor Slump","alt":["doctor slump 2024"],"emoji":"🩹","genre":"Romance · Comédie","note":8.4,"annee":2024,"episodes":16,"statut":"Terminé","synopsis":"Deux anciens rivaux de lycée se retrouvent au fond du trou, dix ans plus tard. Ensemble, ils réapprennent à respirer.","image":""},
+    {"title":"Crash Course in Romance","alt":["crash course in romance 2023"],"emoji":"📐","genre":"Romance · Comédie","note":8.4,"annee":2023,"episodes":16,"statut":"Terminé","synopsis":"Une ancienne athlète devenue restauratrice croise un professeur de maths star, incapable de manger normalement. Deux mondes qui n'auraient jamais dû se croiser.","image":""},
+    {"title":"Move to Heaven","alt":["move to heaven netflix"],"emoji":"📦","genre":"Drame · Émotion","note":9.0,"annee":2021,"episodes":10,"statut":"Terminé","synopsis":"Un jeune homme autiste et son oncle ex-détenu nettoient les logements de personnes décédées seules. Chaque objet raconte une vie.","image":""},
+    {"title":"Nevertheless","alt":["nevertheless 2021"],"emoji":"🦋","genre":"Romance · Jeunesse","note":7.6,"annee":2021,"episodes":10,"statut":"Terminé","synopsis":"Une étudiante en art qui ne croit plus à l'amour tombe pour un sculpteur charmeur qui ne veut surtout pas de relation. Une romance qui fait mal.","image":""},
 ]
 
 ANIMES = [
-    {"title": "Attack on Titan", "genre": "Action/Drame", "note": "⭐ 9.1/10", "emoji": "⚔️", "image": "https://cdn.myanimelist.net/images/anime/10/47347.jpg"},
-    {"title": "Demon Slayer", "genre": "Action/Aventure", "note": "⭐ 8.7/10", "emoji": "🗡️", "image": "https://cdn.myanimelist.net/images/anime/1/96652.jpg"},
-    {"title": "One Piece", "genre": "Aventure", "note": "⭐ 9.0/10", "emoji": "🏴‍☠️", "image": "https://cdn.myanimelist.net/images/anime/6/73245.jpg"},
-    {"title": "Death Note", "genre": "Psychologique/Thriller", "note": "⭐ 9.0/10", "emoji": "📓", "image": "https://cdn.myanimelist.net/images/anime/9/9453.jpg"},
-    {"title": "Fullmetal Alchemist: Brotherhood", "genre": "Action/Fantasy", "note": "⭐ 9.5/10", "emoji": "⚗️", "image": "https://cdn.myanimelist.net/images/anime/1/27482.jpg"},
-    {"title": "Haikyuu!!", "genre": "Sport/Drame", "note": "⭐ 9.1/10", "emoji": "🏐", "image": "https://cdn.myanimelist.net/images/anime/7/76014.jpg"},
-    {"title": "Jujutsu Kaisen", "genre": "Action/Dark Fantasy", "note": "⭐ 8.8/10", "emoji": "💥", "image": "https://cdn.myanimelist.net/images/anime/1/105764.jpg"},
-    {"title": "Vinland Saga", "genre": "Historique/Action", "note": "⭐ 9.0/10", "emoji": "🪓", "image": "https://cdn.myanimelist.net/images/anime/1/98922.jpg"},
-    {"title": "Your Lie in April", "genre": "Romance/Musique", "note": "⭐ 9.3/10", "emoji": "🎹", "image": "https://cdn.myanimelist.net/images/anime/3/67177.jpg"},
-    {"title": "Naruto Shippuden", "genre": "Action/Aventure", "note": "⭐ 8.7/10", "emoji": "🍥", "image": "https://cdn.myanimelist.net/images/anime/4/50361.jpg"},
+    {"title":"Attack on Titan","alt":["snk","aot","shingeki no kyojin","l'attaque des titans","attaque des titans"],"emoji":"⚔️","genre":"Action · Dark Fantasy","note":9.0,"annee":2013,"episodes":94,"statut":"Terminé","synopsis":"L'humanité survit derrière d'immenses murs, traquée par des géants mangeurs d'hommes. Quand le mur cède, Eren jure d'exterminer les Titans — et découvre une vérité bien plus vertigineuse.","image":"https://cdn.myanimelist.net/images/anime/10/47347.jpg"},
+    {"title":"Demon Slayer","alt":["kimetsu no yaiba","kny","demon slayers"],"emoji":"🗡️","genre":"Action · Surnaturel","note":8.6,"annee":2019,"episodes":63,"statut":"En cours","synopsis":"Sa famille massacrée par un démon et sa sœur transformée, Tanjiro rejoint les Pourfendeurs pour la rendre humaine. Une animation d'exception signée Ufotable.","image":"https://cdn.myanimelist.net/images/anime/1/96652.jpg"},
+    {"title":"One Piece","alt":["op","onepiece"],"emoji":"🏴‍☠️","genre":"Aventure · Shonen","note":9.0,"annee":1999,"episodes":1100,"statut":"En cours","synopsis":"Luffy, garçon au corps élastique, part avec son équipage à la recherche du One Piece pour devenir le Roi des Pirates. La plus longue aventure de l'animation.","image":"https://cdn.myanimelist.net/images/anime/6/73245.jpg"},
+    {"title":"Dragon Ball Z","alt":["dbz","dragonball z","dragon ball"],"emoji":"🐉","genre":"Action · Arts martiaux","note":8.2,"annee":1989,"episodes":291,"statut":"Terminé","synopsis":"Son Goku découvre ses origines saiyan et défend la Terre contre des menaces toujours plus puissantes. Le monument qui a formé des générations.","image":""},
+    {"title":"Dragon Ball Super","alt":["dbs","dragonball super"],"emoji":"🔵","genre":"Action · Arts martiaux","note":7.4,"annee":2015,"episodes":131,"statut":"Terminé","synopsis":"Après Boo, Goku affronte des dieux de la destruction et des univers entiers dans le Tournoi du Pouvoir.","image":""},
+    {"title":"Naruto Shippuden","alt":["naruto","shippuden","naruto shippuuden"],"emoji":"🍥","genre":"Action · Aventure","note":8.7,"annee":2007,"episodes":500,"statut":"Terminé","synopsis":"Naruto revient après deux ans d'entraînement pour sauver Sasuke et affronter l'Akatsuki. Amitié, guerre ninja et destins qui se croisent.","image":"https://cdn.myanimelist.net/images/anime/4/50361.jpg"},
+    {"title":"Jujutsu Kaisen","alt":["jjk","jujutsu"],"emoji":"💥","genre":"Action · Dark Fantasy","note":8.7,"annee":2020,"episodes":47,"statut":"En cours","synopsis":"Yuji avale un doigt maudit et devient l'hôte de Sukuna, roi des fléaux. Il rejoint une école d'exorcistes où chaque combat peut être le dernier.","image":"https://cdn.myanimelist.net/images/anime/1/105764.jpg"},
+    {"title":"Death Note","alt":["dn","deathnote"],"emoji":"📓","genre":"Thriller · Psychologique","note":8.6,"annee":2006,"episodes":37,"statut":"Terminé","synopsis":"Light Yagami trouve un carnet qui tue quiconque y voit son nom inscrit. Il décide de purger le monde — et affronte L, le meilleur détective du monde.","image":"https://cdn.myanimelist.net/images/anime/9/9453.jpg"},
+    {"title":"Fullmetal Alchemist Brotherhood","alt":["fma","fmab","fullmetal alchemist"],"emoji":"⚗️","genre":"Aventure · Fantasy","note":9.1,"annee":2009,"episodes":64,"statut":"Terminé","synopsis":"Deux frères ont violé le tabou de l'alchimie et payé le prix fort. Leur quête de la Pierre Philosophale les mène au cœur d'un complot d'État.","image":"https://cdn.myanimelist.net/images/anime/1/27482.jpg"},
+    {"title":"Haikyuu","alt":["haikyu","haikyuu!!"],"emoji":"🏐","genre":"Sport · Comédie","note":8.7,"annee":2014,"episodes":85,"statut":"Terminé","synopsis":"Hinata, petit mais explosif, veut devenir le prochain Petit Géant du volley. Avec Kageyama, ils forment un duo redoutable à Karasuno.","image":"https://cdn.myanimelist.net/images/anime/7/76014.jpg"},
+    {"title":"My Hero Academia","alt":["mha","bnha","boku no hero academia","hero academia"],"emoji":"💚","genre":"Action · Super-héros","note":7.9,"annee":2016,"episodes":159,"statut":"En cours","synopsis":"Dans un monde où 80 % des gens ont un pouvoir, Izuku est né sans rien. All Might lui lègue le sien et l'envoie à Yuei, l'école des héros.","image":""},
+    {"title":"Chainsaw Man","alt":["csm","chainsawman"],"emoji":"⛓️","genre":"Action · Horreur","note":8.5,"annee":2022,"episodes":12,"statut":"En cours","synopsis":"Denji, criblé de dettes, fusionne avec son chien-démon tronçonneuse. Recruté comme chasseur de démons, il ne rêve que d'une vie normale.","image":""},
+    {"title":"Spy x Family","alt":["spy family","sxf"],"emoji":"🕵️","genre":"Comédie · Action","note":8.5,"annee":2022,"episodes":37,"statut":"En cours","synopsis":"Un espion doit fonder une famille pour sa mission. Il adopte une petite fille télépathe et épouse une assassine — chacun ignorant le secret des autres.","image":""},
+    {"title":"Frieren","alt":["sousou no frieren","frieren beyond journey's end"],"emoji":"🧝","genre":"Aventure · Fantasy","note":9.3,"annee":2023,"episodes":28,"statut":"En cours","synopsis":"Une elfe millénaire réalise, après la mort de ses compagnons, qu'elle n'a jamais pris le temps de les connaître. Elle repart sur leurs traces.","image":""},
+    {"title":"Solo Leveling","alt":["ore dake level up na ken","only i level up"],"emoji":"🗡️","genre":"Action · Fantasy","note":8.3,"annee":2024,"episodes":25,"statut":"En cours","synopsis":"Le chasseur le plus faible du monde obtient un Système qui lui permet de monter en niveau sans limite. Sa progression va terrifier la planète entière.","image":""},
+    {"title":"Oshi no Ko","alt":["oshi no ko","my star"],"emoji":"⭐","genre":"Drame · Thriller","note":8.6,"annee":2023,"episodes":24,"statut":"En cours","synopsis":"Un médecin est réincarné en fils de son idole préférée. Quand elle est assassinée, il grandit avec un seul but : trouver le coupable dans le monde impitoyable du show business.","image":""},
+    {"title":"Blue Lock","alt":["bluelock"],"emoji":"⚽","genre":"Sport · Thriller","note":8.3,"annee":2022,"episodes":38,"statut":"En cours","synopsis":"300 attaquants japonais sont enfermés dans un centre pour qu'un seul en sorte : le buteur le plus égoïste du monde.","image":""},
+    {"title":"Vinland Saga","alt":["vinland"],"emoji":"🪓","genre":"Historique · Drame","note":8.8,"annee":2019,"episodes":48,"statut":"En cours","synopsis":"Thorfinn suit l'assassin de son père pour le défier en duel. Une fresque viking sur la vengeance et ce qu'on devient quand elle n'a plus de sens.","image":"https://cdn.myanimelist.net/images/anime/1/98922.jpg"},
+    {"title":"Hunter x Hunter","alt":["hxh","hunter hunter"],"emoji":"🎯","genre":"Aventure · Shonen","note":9.0,"annee":2011,"episodes":148,"statut":"Terminé","synopsis":"Gon part retrouver son père en devenant Hunter. Derrière ses airs enfantins, l'un des shonen les plus sombres et intelligents jamais écrits.","image":""},
+    {"title":"Bleach","alt":["bleach tybw","thousand year blood war"],"emoji":"🌙","genre":"Action · Surnaturel","note":8.2,"annee":2004,"episodes":392,"statut":"En cours","synopsis":"Ichigo devient Shinigami et protège les vivants des Hollows. La saga finale, Thousand-Year Blood War, est saluée comme un chef-d'œuvre d'animation.","image":""},
+    {"title":"Tokyo Revengers","alt":["tokyo revengers","toman"],"emoji":"🕰️","genre":"Action · Voyage temporel","note":7.8,"annee":2021,"episodes":61,"statut":"En cours","synopsis":"Takemichi remonte douze ans en arrière pour sauver son ex d'un gang. À chaque retour, le futur change — rarement en mieux.","image":""},
+    {"title":"Dandadan","alt":["dan da dan"],"emoji":"👽","genre":"Action · Comédie","note":8.5,"annee":2024,"episodes":12,"statut":"En cours","synopsis":"Elle croit aux fantômes, lui aux extraterrestres. Chacun veut prouver que l'autre a tort — et découvre que les deux existent.","image":""},
+    {"title":"Kaiju No. 8","alt":["kaiju no 8","kaijuu 8gou"],"emoji":"🦖","genre":"Action · Science-fiction","note":8.2,"annee":2024,"episodes":12,"statut":"En cours","synopsis":"Kafka, nettoyeur de carcasses de kaiju, se transforme lui-même en monstre. Il doit cacher son secret tout en intégrant les Forces de Défense.","image":""},
+    {"title":"Mob Psycho 100","alt":["mob psycho","mobpsycho"],"emoji":"🔮","genre":"Action · Comédie","note":8.6,"annee":2016,"episodes":37,"statut":"Terminé","synopsis":"Un collégien à la puissance psychique démesurée veut juste être normal. Son mentor escroc l'exploite gentiment. Drôle, sincère et visuellement fou.","image":""},
+    {"title":"One Punch Man","alt":["opm","one punch"],"emoji":"👊","genre":"Action · Parodie","note":8.5,"annee":2015,"episodes":24,"statut":"En cours","synopsis":"Saitama est devenu si fort qu'il tue n'importe quel adversaire d'un seul coup — et s'ennuie profondément.","image":""},
+    {"title":"Code Geass","alt":["code geass","lelouch"],"emoji":"♟️","genre":"Mecha · Stratégie","note":8.7,"annee":2006,"episodes":50,"statut":"Terminé","synopsis":"Un prince exilé reçoit le pouvoir de commander à quiconque croise son regard. Il masque son identité pour faire tomber un empire.","image":""},
+    {"title":"Steins;Gate","alt":["steins gate","steinsgate"],"emoji":"🧪","genre":"Science-fiction · Thriller","note":9.0,"annee":2011,"episodes":24,"statut":"Terminé","synopsis":"Un scientifique autoproclamé découvre comment envoyer des messages dans le passé. Chaque modification a un prix, et il va le payer très cher.","image":""},
+    {"title":"Your Lie in April","alt":["shigatsu wa kimi no uso","shigatsu"],"emoji":"🎹","genre":"Romance · Musique","note":8.6,"annee":2014,"episodes":22,"statut":"Terminé","synopsis":"Un pianiste prodige n'entend plus les notes depuis la mort de sa mère. Une violoniste lumineuse le ramène vers la musique.","image":"https://cdn.myanimelist.net/images/anime/3/67177.jpg"},
+    {"title":"Re:Zero","alt":["rezero","re zero","re:zero kara hajimeru isekai seikatsu"],"emoji":"💀","genre":"Isekai · Drame","note":8.3,"annee":2016,"episodes":50,"statut":"En cours","synopsis":"Subaru est transporté dans un autre monde avec un seul pouvoir : revenir au dernier point de sauvegarde en mourant. Chaque mort le détruit un peu plus.","image":""},
+    {"title":"Fire Force","alt":["enen no shouboutai","fireforce"],"emoji":"🔥","genre":"Action · Surnaturel","note":7.6,"annee":2019,"episodes":48,"statut":"Terminé","synopsis":"Des humains s'embrasent spontanément et deviennent des Infernaux. Shinra rejoint la brigade chargée de les libérer — et enquête sur l'incendie qui a tué sa mère.","image":""},
+    {"title":"Black Clover","alt":["black clover","bc"],"emoji":"🍀","genre":"Action · Fantasy","note":8.1,"annee":2017,"episodes":170,"statut":"Terminé","synopsis":"Asta est né sans une once de magie dans un monde qui ne jure que par elle. Son grimoire à cinq feuilles va tout changer.","image":""},
+    {"title":"Tokyo Ghoul","alt":["tokyo ghoul","tg"],"emoji":"🕷️","genre":"Horreur · Dark Fantasy","note":7.8,"annee":2014,"episodes":48,"statut":"Terminé","synopsis":"Un étudiant devient mi-humain mi-goule après une greffe. Il doit apprendre à vivre entre deux mondes qui se détestent.","image":""},
+    {"title":"Made in Abyss","alt":["made in abyss","mia"],"emoji":"🕳️","genre":"Aventure · Dark Fantasy","note":8.7,"annee":2017,"episodes":25,"statut":"En cours","synopsis":"Un gouffre immense abrite des reliques et des créatures. Riko y descend chercher sa mère — sachant que remonter est une malédiction.","image":""},
+    {"title":"Berserk","alt":["berserk","kenpuu denki berserk"],"emoji":"⚫","genre":"Dark Fantasy · Seinen","note":8.6,"annee":1997,"episodes":25,"statut":"Terminé","synopsis":"Guts, mercenaire à l'épée gigantesque, rejoint la Bande du Faucon. Une descente inexorable vers l'un des récits les plus sombres du média.","image":""},
+    {"title":"Mushoku Tensei","alt":["mushoku tensei","jobless reincarnation"],"emoji":"🪄","genre":"Isekai · Fantasy","note":8.4,"annee":2021,"episodes":47,"statut":"En cours","synopsis":"Un homme brisé se réincarne dans un monde de magie et décide de vivre pleinement cette seconde chance. L'isekai le mieux réalisé du genre.","image":""},
+    {"title":"Konosuba","alt":["konosuba","kono subarashii sekai ni shukufuku wo"],"emoji":"💥","genre":"Comédie · Isekai","note":8.1,"annee":2016,"episodes":30,"statut":"En cours","synopsis":"Mort ridiculement, Kazuma repart dans un monde de fantasy avec une déesse inutile, une magicienne mono-sort et une chevalière masochiste.","image":""},
+    {"title":"Overlord","alt":["overlord","ainz"],"emoji":"💀","genre":"Isekai · Dark Fantasy","note":7.9,"annee":2015,"episodes":52,"statut":"En cours","synopsis":"Un joueur reste coincé dans son MMO sous les traits d'un seigneur squelette tout-puissant, entouré de PNJ qui le vénèrent.","image":""},
+    {"title":"Sakamoto Days","alt":["sakamoto days"],"emoji":"🔫","genre":"Action · Comédie","note":8.0,"annee":2025,"episodes":11,"statut":"En cours","synopsis":"Le meilleur tueur à gages du Japon a raccroché pour tenir une supérette et fonder une famille. Son passé ne l'entend pas ainsi.","image":""},
+    {"title":"Wind Breaker","alt":["wind breaker","windbreaker"],"emoji":"🌸","genre":"Action · Scolaire","note":8.0,"annee":2024,"episodes":13,"statut":"En cours","synopsis":"Sakura arrive au lycée Furin pour devenir le plus fort. Il découvre que les délinquants du coin protègent en réalité toute la ville.","image":""},
+    {"title":"Hell's Paradise","alt":["hells paradise","jigokuraku"],"emoji":"🏝️","genre":"Action · Dark Fantasy","note":8.1,"annee":2023,"episodes":13,"statut":"En cours","synopsis":"Des condamnés à mort sont envoyés sur une île mystérieuse chercher l'élixir de vie. Un seul en reviendra gracié.","image":""},
+    {"title":"Dr. Stone","alt":["dr stone","doctor stone"],"emoji":"🧬","genre":"Science-fiction · Aventure","note":8.2,"annee":2019,"episodes":60,"statut":"En cours","synopsis":"Toute l'humanité est pétrifiée pendant 3700 ans. Senku se réveille et entreprend de reconstruire la civilisation entière avec la science.","image":""},
+    {"title":"Cowboy Bebop","alt":["cowboy bebop","bebop"],"emoji":"🚀","genre":"Science-fiction · Action","note":8.7,"annee":1998,"episodes":26,"statut":"Terminé","synopsis":"Des chasseurs de primes désabusés sillonnent le système solaire. Jazz, solitude et style — un intemporel.","image":""},
 ]
 
 GAMES = [
@@ -358,44 +419,66 @@ ANIME_ALIASES = {
 }
 
 def normalize_str(s: str) -> str:
-    """Normalise une chaîne : minuscules, sans accents, sans ponctuation"""
+    """Normalise : minuscules, sans accents, sans ponctuation ni tirets, espaces réduits.
+    « Talkie-walkie », « talkie walkie » et « TALKIE WALKIE ! » deviennent identiques."""
     import unicodedata, re as _re
-    s = s.lower().strip()
-    # Supprimer les accents
+    s = str(s).lower().strip()
     s = unicodedata.normalize('NFD', s)
-    s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
-    # Supprimer ponctuation sauf tirets
-    s = _re.sub(r"[^\w\s-]", "", s)
-    # Espaces multiples
+    s = ''.join(ch for ch in s if unicodedata.category(ch) != 'Mn')
+    s = s.replace("œ", "oe").replace("æ", "ae")
+    # tirets, apostrophes, underscores et ponctuation → espace
+    s = _re.sub(r"[-_'’`´.,;:!?()\[\]{}\"«»/\\|]+", " ", s)
+    s = _re.sub(r"[^\w\s]", "", s)
     s = _re.sub(r"\s+", " ", s).strip()
     return s
 
+def _sans_espaces(s: str) -> str:
+    """Version ultra-compacte pour comparer 'talkiewalkie' et 'talkie walkie'."""
+    return normalize_str(s).replace(" ", "")
+
+
 def check_answer(reponse: str, correct: str) -> bool:
-    """Vérifie si la réponse est correcte — tolère accents, ponctuation, abréviations"""
-    rep_raw = reponse.lower().strip()
-    cor_raw = correct.lower().strip()
-    if rep_raw == cor_raw:
-        return True
-    # Normalisation accents/ponctuation
-    rep_n = normalize_str(reponse)
-    cor_n = normalize_str(correct)
+    """Vérifie une réponse — tolère accents, tirets, apostrophes, espaces,
+    majuscules, ponctuation et alias connus."""
+    rep_n, cor_n = normalize_str(reponse), normalize_str(correct)
+    if not rep_n:
+        return False
     if rep_n == cor_n:
         return True
-    # Réponse contenue dans la bonne (ou inverse) pour réponses partielles
-    if rep_n and cor_n and (rep_n in cor_n or cor_n in rep_n):
-        # Éviter faux positifs trop courts
-        if len(rep_n) >= 3:
+
+    # Même chose sans aucun espace : « talkie-walkie » = « talkiewalkie »
+    if _sans_espaces(reponse) == _sans_espaces(correct):
+        return True
+
+    # Réponses multiples séparées par / ou |
+    for alt in re.split(r"[/|]", correct):
+        alt = alt.strip()
+        if alt and (_sans_espaces(reponse) == _sans_espaces(alt) or rep_n == normalize_str(alt)):
             return True
-    # Chercher dans les alias
+
+    # Réponse contenue dans la bonne (ou l'inverse) — pour les réponses partielles
+    if len(rep_n) >= 3 and (rep_n in cor_n or cor_n in rep_n):
+        return True
+
+    # Tous les mots-clés de la réponse attendue sont présents
+    mots_cor = [m for m in cor_n.split() if len(m) > 2]
+    if mots_cor and all(m in rep_n for m in mots_cor):
+        return True
+
+    # Alias d'animes / dramas
     for canonical, aliases in ANIME_ALIASES.items():
-        groupe = [normalize_str(x) for x in [canonical] + aliases]
-        if normalize_str(correct) in groupe and normalize_str(reponse) in groupe:
+        groupe = {_sans_espaces(x) for x in [canonical] + aliases}
+        if _sans_espaces(correct) in groupe and _sans_espaces(reponse) in groupe:
             return True
-    # Accepter réponses multiples séparées par / ou |
-    for alt in correct.split("/"):
-        if normalize_str(reponse) == normalize_str(alt.strip()):
+
+    # Tolérance à une faute de frappe pour les réponses d'au moins 5 lettres
+    a, b = _sans_espaces(reponse), _sans_espaces(correct)
+    if len(b) >= 5 and abs(len(a) - len(b)) <= 1:
+        import difflib
+        if difflib.SequenceMatcher(None, a, b).ratio() >= 0.9:
             return True
     return False
+
 
 QUIZ_KDRAMA = [
     # ── Kdramas incontournables & récents ──
@@ -934,8 +1017,7 @@ def build_help_pages(guild, is_admin=False):
         color=0xff6b9d)
     e.add_field(name="🍿 Trouver quoi regarder", value=(
         "`.dramarec` — Un kdrama au hasard\n"
-        "`.animerec` — Un animé au hasard\n"
-        "`.sorties` — Les prochaines sorties"
+        "`.animerec` — Un animé au hasard"
     ), inline=False)
     e.add_field(name="🔎 Se renseigner", value=(
         "`.drama <titre>` — Fiche d'un kdrama\n"
@@ -948,8 +1030,9 @@ def build_help_pages(guild, is_admin=False):
     ), inline=False)
     e.add_field(name="📝 Ta watchlist", value=(
         "`.watch ajouter <titre>` — Ajouter à ta liste\n"
-        "`.watch liste` — Voir ta liste\n"
-        "`.watch retirer <titre>` — Retirer un titre"
+        "`.watch liste [@membre]` — Voir une watchlist *(animés / kdramas séparés)*\n"
+        "`.watch vu <titre>` — Marquer comme **vu** ✅ *(garde l'historique)*\n"
+        "`.watch supprimer <titre>` — Retirer complètement"
     ), inline=False)
     e.add_field(name="🧠 Quiz & Tournois", value=(
         "`.quiz <thème>` — Quiz solo en continu\n"
@@ -969,7 +1052,8 @@ def build_help_pages(guild, is_admin=False):
     e.add_field(name="👤 Ton profil", value=(
         "`.profil [@membre]` — Ta carte de membre en image\n"
         "`.rank [@membre]` — Niveau et XP en texte\n"
-        "`.stats` — Tes statistiques complètes\n"
+        "`.stats [@membre]` — Statistiques complètes *(XP, combats, gacha, quiz…)*\n"
+        "`.serverstats` — Les stats du serveur\n"
         "`.leaderboard` — Top 10 du serveur"
     ), inline=False)
     e.add_field(name="🏆 Objectifs", value=(
@@ -977,8 +1061,8 @@ def build_help_pages(guild, is_admin=False):
         "`.missions` — Tes missions du jour"
     ), inline=False)
     e.add_field(name="🐾 Ton compagnon", value=(
-        "`.adopter <rareté>` — Adopter un compagnon\n"
-        "`.pet` — Le voir • `.pet liste` — Tous les tiens\n"
+        "`.pet` — Voir ton compagnon • `.pet liste` — Tous les tiens\n"
+        "*Pour en obtenir un : `.shop` → page 🐾 Compagnons, puis `.acheter <nom>`*\n"
         "`.pet equiper <nom>` • `.pet nourrir` — +25 XP"
     ), inline=False)
     e.add_field(name="💪 Stats de combat", value=(
@@ -1017,8 +1101,8 @@ def build_help_pages(guild, is_admin=False):
         "`.slot` — Machine à sous\n"
         "`.jackpot` — La cagnotte en cours\n"
         "`.loto` — Ticket de loterie (100 pièces)\n"
-        "`.braquage` — Braquer la banque *(risqué)*\n"
-        "`.steal @membre` — Voler un membre *(risqué)*"
+        "`.braquage @membre` — Tenter un vol *(12 % de réussite, très risqué)*\n"
+        "*Alias : `.steal` · `.voler`*"
     ), inline=False)
     pages.append(("💰", "Économie", e))
 
@@ -2819,21 +2903,24 @@ async def braquage_cmd(ctx, target: discord.Member = None):
     cible_coins = economy_data[tid]["coins"]
     if cible_coins < 100:
         return await ctx.send(f"💸 **{target.display_name}** est trop pauvre !")
-    if random.random() < 0.35:
-        montant = random.randint(50, min(300, cible_coins))
+    # 12 % de réussite — le braquage doit rester un événement rare
+    if random.random() < 0.12:
+        montant = random.randint(200, min(1200, cible_coins))
         economy_data[uid]["coins"] += montant
         track_stat(uid, "braquages", channel=ctx.channel)
         economy_data[tid]["coins"] -= montant
         await ctx.send(embed=discord.Embed(
-            description=f"🦹 **{ctx.author.mention}** a volé **{montant} pièces** à {target.mention} ! 💰",
+            title="🦹 BRAQUAGE RÉUSSI !",
+            description=f"Contre toute attente, **{ctx.author.mention}** repart avec **{montant:,} pièces** volées à {target.mention} !\n*Une chance sur huit… il l'a saisie.*",
             color=0x2ecc71
         ))
     else:
-        amende = min(random.randint(100, 200), economy_data[uid]["coins"])
+        amende = min(random.randint(200, 500), economy_data[uid]["coins"])
         economy_data[uid]["coins"] -= amende
         economy_data[tid]["coins"] += amende
         await ctx.send(embed=discord.Embed(
-            description=f"🚨 **{ctx.author.mention}** s'est fait attraper ! Amende : **{amende} pièces** 😂",
+            title="🚨 Braquage raté",
+            description=f"**{ctx.author.mention}** s'est fait attraper !\n💸 Amende de **{amende:,} pièces** versée à {target.mention}. 😂",
             color=0xe74c3c
         ))
 
@@ -2932,8 +3019,8 @@ def build_shop_pages():
                 title="🛒 Boutique — 🐾 Compagnons",
                 description=(
                     "*Un compagnon te donne un **bonus permanent** et monte de niveau quand tu discutes.*\n"
-                    "Achète-le avec `.acheter <id>` pour choisir exactement lequel,\n"
-                    "ou tente ta chance moins cher avec `.adopter <rareté>` *(aléatoire)*."),
+                    "Achète celui que tu veux avec `.acheter <id>`.\n"
+                    "Chaque compagnon monte de niveau quand tu discutes."),
                 color=color)
             for rar in ordre:
                 lignes = []
@@ -3292,14 +3379,88 @@ async def avatar_cmd(ctx, member: discord.Member = None):
     embed.set_image(url=m.display_avatar.url)
     await ctx.send(embed=embed)
 
-@bot.command(name="stats")
-async def stats_cmd(ctx):
-    guild = ctx.guild
-    embed = discord.Embed(title=f"📊 Stats — {guild.name}", color=0x5865F2)
-    embed.add_field(name="👥 Membres", value=f"Total: {guild.member_count}", inline=True)
-    embed.add_field(name="💬 Salons", value=f"Texte: {len(guild.text_channels)} | Vocal: {len(guild.voice_channels)}", inline=True)
-    embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
+@bot.command(name="stats", aliases=["messtats", "statistiques"])
+async def stats_cmd(ctx, membre: discord.Member = None):
+    """Tes statistiques complètes — .stats [@membre]"""
+    cible = membre or ctx.author
+    uid = str(cible.id)
+    s = user_stats[uid]
+    lvl = xp_data[uid]["level"]
+    xp = xp_data[uid]["xp"]
+    coins = economy_data[uid]["coins"]
+    depot = bank_data[uid].get("depot", 0)
+
+    embed = discord.Embed(
+        title=f"📊  Statistiques de {cible.display_name}",
+        description=f"**{get_tier(lvl)}**",
+        color=0x5865F2)
+    embed.set_thumbnail(url=cible.display_avatar.url)
+
+    embed.add_field(name="⭐ Progression", value=(
+        f"Niveau **{lvl}**\n"
+        f"{xp}/{lvl*100} XP\n"
+        f"💬 {s.get('messages', 0):,} messages"), inline=True)
+
+    embed.add_field(name="💰 Économie", value=(
+        f"**{coins:,}** pièces\n"
+        f"🏦 {depot:,} en banque\n"
+        f"📅 {s.get('dailies', 0)} daily"), inline=True)
+
+    nb_succes = len(achievements_data[uid])
+    embed.add_field(name="🏆 Succès", value=(
+        f"**{nb_succes}/{len(ACHIEVEMENTS)}**\n"
+        f"{'▰' * int(nb_succes/len(ACHIEVEMENTS)*8)}{'▱' * (8-int(nb_succes/len(ACHIEVEMENTS)*8))}"), inline=True)
+
+    embed.add_field(name="⚔️ Combats", value=(
+        f"🥊 {s.get('arene_wins', 0)} arène\n"
+        f"🎴 {s.get('pb_wins', 0)} pokebattle\n"
+        f"🦹 {s.get('braquages', 0)} braquage(s)"), inline=True)
+
+    nb_cartes = len(gacha_collections.get(uid, {}))
+    embed.add_field(name="🎰 Gacha", value=(
+        f"🎴 **{nb_cartes}** cartes\n"
+        f"🎲 {s.get('rolls', 0):,} rolls\n"
+        f"🔥 {s.get('burns', 0)} recyclées"), inline=True)
+
+    embed.add_field(name="🎬 Kdrama & Quiz", value=(
+        f"⭐ {s.get('notes', 0)} note(s)\n"
+        f"🧠 {s.get('quiz_ok', 0)} bonnes réponses\n"
+        f"📋 {len(watchlist_data.get(uid, []))} en watchlist"), inline=True)
+
+    # Compagnon actif
+    pid, pdb, pstate = get_active_pet(uid)
+    if pid:
+        embed.add_field(name="🐾 Compagnon",
+                        value=f"{pdb['emoji']} **{pdb['nom']}** — Niveau {pstate['level']}", inline=False)
+
+    # Mariage
+    if uid in mariages:
+        conjoint = ctx.guild.get_member(int(mariages[uid]))
+        if conjoint:
+            embed.add_field(name="💍 Marié(e) à", value=conjoint.display_name, inline=False)
+
+    embed.set_footer(text="`.profil` pour ta carte visuelle  •  `.succes` pour le détail des trophées")
     await ctx.send(embed=embed)
+
+@bot.command(name="serverstats", aliases=["serveur", "infoserveur"])
+async def serverstats_cmd(ctx):
+    """Statistiques du serveur — .serverstats"""
+    g = ctx.guild
+    total_coins = sum(v["coins"] for v in economy_data.values())
+    embed = discord.Embed(title=f"🏯 {g.name}", color=0x5865F2)
+    if g.icon:
+        embed.set_thumbnail(url=g.icon.url)
+    embed.add_field(name="👥 Membres", value=f"{g.member_count}", inline=True)
+    embed.add_field(name="💬 Salons", value=f"{len(g.text_channels)} texte\n{len(g.voice_channels)} vocal", inline=True)
+    embed.add_field(name="🎭 Rôles", value=f"{len(g.roles)}", inline=True)
+    embed.add_field(name="💰 Pièces en circulation", value=f"{total_coins:,}", inline=True)
+    embed.add_field(name="🎴 Cartes claimées", value=f"{len(claimed_cards)}/{len(ANIME_CARDS_DB)}", inline=True)
+    embed.add_field(name="🎬 Catalogue", value=f"{len(KDRAMAS)} dramas\n{len(ANIMES)} animés", inline=True)
+    embed.add_field(name="📅 Créé le", value=g.created_at.strftime("%d/%m/%Y"), inline=True)
+    if g.premium_subscription_count:
+        embed.add_field(name="💎 Boosts", value=f"{g.premium_subscription_count}", inline=True)
+    await ctx.send(embed=embed)
+
 
 @bot.command(name="sondage")
 async def sondage_cmd(ctx, *, question: str = None):
@@ -3347,40 +3508,141 @@ async def choisir_cmd(ctx, *, args: str = None):
 #  DRAMA & ANIMÉ INFO
 # ============================================================
 
-@bot.command(name="drama")
+# ============================================================
+#  🔎 RECHERCHE DRAMA / ANIMÉ — tolérante aux fautes et alias
+# ============================================================
+def chercher_oeuvre(query, base):
+    """Trouve une œuvre par titre, alias, sous-chaîne ou proximité.
+    Retourne (meilleur_resultat, [suggestions])."""
+    import difflib
+    q = normalize_str(query)
+    qc = _sans_espaces(query)
+    if not q:
+        return None, []
+
+    scores = []
+    for o in base:
+        titres = [o["title"]] + o.get("alt", [])
+        meilleur = 0
+        for t in titres:
+            tn, tc = normalize_str(t), _sans_espaces(t)
+            if q == tn or qc == tc:
+                meilleur = 100; break
+            if tn.startswith(q) or tc.startswith(qc):
+                meilleur = max(meilleur, 92)
+            if q in tn or qc in tc:
+                meilleur = max(meilleur, 85)
+            if tn in q or tc in qc:
+                meilleur = max(meilleur, 80)
+            # tous les mots de la recherche présents dans le titre
+            mots = [m for m in q.split() if len(m) > 1]
+            if mots and all(m in tn for m in mots):
+                meilleur = max(meilleur, 78)
+            meilleur = max(meilleur, int(difflib.SequenceMatcher(None, qc, tc).ratio() * 75))
+        scores.append((meilleur, o))
+
+    scores.sort(key=lambda x: -x[0])
+    if not scores or scores[0][0] < 45:
+        return None, [o for s, o in scores[:3] if s >= 30]
+    return scores[0][1], [o for s, o in scores[1:4] if s >= 45]
+
+def build_oeuvre_embed(o, kind):
+    """Fiche complète d'un drama ou d'un animé"""
+    couleur = 0xff6b9d if kind == "drama" else 0x9b59b6
+    note = o.get("note", 0)
+    etoiles = "⭐" * max(1, round(note / 2))
+    embed = discord.Embed(
+        title=f"{o.get('emoji','🎬')}  {o['title']}",
+        description=f"*{o.get('synopsis','Pas de synopsis disponible.')}*",
+        color=couleur)
+    embed.add_field(name="🎭 Genre", value=o.get("genre", "—"), inline=True)
+    embed.add_field(name="⭐ Note", value=f"**{note}/10**\n{etoiles}", inline=True)
+    embed.add_field(name="📅 Sortie", value=str(o.get("annee", "—")), inline=True)
+    eps = o.get("episodes")
+    embed.add_field(name="📺 Épisodes", value=f"{eps} épisodes" if eps else "—", inline=True)
+    statut = o.get("statut", "—")
+    embed.add_field(name="📌 Statut",
+                    value=("🟢 En cours" if statut == "En cours" else "✅ Terminé"), inline=True)
+
+    # Note du serveur si des membres l'ont notée
+    key = o["title"].lower().strip()
+    if key in reviews_data and reviews_data[key]:
+        notes = [v["note"] for v in reviews_data[key].values()]
+        moy = sum(notes) / len(notes)
+        embed.add_field(name="🏯 Note du QG",
+                        value=f"**{moy:.1f}/10**\n*{len(notes)} vote(s)*", inline=True)
+    else:
+        embed.add_field(name="🏯 Note du QG", value="*Aucun vote*", inline=True)
+
+    if o.get("image"):
+        embed.set_thumbnail(url=o["image"])
+    embed.set_footer(text=f"`.noter <1-10> {o['title']}` pour donner ton avis  •  "
+                          f"`.watch ajouter {o['title']}` pour l'ajouter à ta liste")
+    return embed
+
+
+
+@bot.command(name="drama", aliases=["kdrama", "dramainfo"])
 async def drama_cmd(ctx, *, titre: str = None):
-    if not titre: return await ctx.send("❌ `.drama <titre>`")
-    match = next((d for d in KDRAMAS if titre.lower() in d["title"].lower()), None)
-    if not match: return await ctx.send(f"❌ Drama `{titre}` non trouvé !")
-    embed = discord.Embed(title=f"{match['emoji']} {match['title']}", color=0xff6b9d)
-    embed.add_field(name="Genre", value=match["genre"])
-    embed.add_field(name="Note", value=match["note"])
-    if match.get("image"): embed.set_thumbnail(url=match["image"])
+    """Fiche complète d'un kdrama — .drama <titre>"""
+    if not titre:
+        return await ctx.send(embed=discord.Embed(
+            description=("❌ Précise un titre : `.drama Goblin`\n"
+                         f"*{len(KDRAMAS)} dramas référencés — `.dramarec` pour une suggestion au hasard.*"),
+            color=0xe74c3c))
+    match, suggestions = chercher_oeuvre(titre, KDRAMAS)
+    if not match:
+        txt = f"❌ Aucun drama trouvé pour **{titre}**."
+        if suggestions:
+            txt += "\n\n**Tu cherchais peut-être :**\n" + "\n".join(
+                f"{s.get('emoji','🎬')} {s['title']}" for s in suggestions)
+        return await ctx.send(embed=discord.Embed(description=txt, color=0xe74c3c))
+    embed = build_oeuvre_embed(match, "drama")
+    if suggestions:
+        embed.add_field(name="🔎 Aussi disponibles",
+                        value=" · ".join(f"**{s['title']}**" for s in suggestions), inline=False)
     await ctx.send(embed=embed)
 
-@bot.command(name="dramarec")
+
+@bot.command(name="dramarec", aliases=["randomdrama"])
 async def dramarec_cmd(ctx):
+    """Un kdrama au hasard — .dramarec"""
     d = random.choice(KDRAMAS)
-    embed = discord.Embed(title=f"🎬 Recommandation : {d['emoji']} {d['title']}", color=0xff6b9d)
-    embed.add_field(name="Genre", value=d["genre"]); embed.add_field(name="Note", value=d["note"])
-    if d.get("image"): embed.set_thumbnail(url=d["image"])
+    embed = build_oeuvre_embed(d, "drama")
+    embed.set_author(name="🎬  Recommandation du QG")
     await ctx.send(embed=embed)
 
-@bot.command(name="anime")
+
+@bot.command(name="anime", aliases=["animeinfo", "manga"])
 async def anime_cmd(ctx, *, titre: str = None):
-    if not titre: return await ctx.send("❌ `.anime <titre>`")
-    match = next((a for a in ANIMES if titre.lower() in a["title"].lower()), None)
-    if not match: return await ctx.send(f"❌ Animé `{titre}` non trouvé !")
-    embed = discord.Embed(title=f"{match['emoji']} {match['title']}", color=0x9b59b6)
-    embed.add_field(name="Genre", value=match["genre"]); embed.add_field(name="Note", value=match["note"])
+    """Fiche complète d'un animé — .anime <titre>"""
+    if not titre:
+        return await ctx.send(embed=discord.Embed(
+            description=("❌ Précise un titre : `.anime Dragon Ball Z`\n"
+                         f"*{len(ANIMES)} animés référencés — `.animerec` pour une suggestion au hasard.*"),
+            color=0xe74c3c))
+    match, suggestions = chercher_oeuvre(titre, ANIMES)
+    if not match:
+        txt = f"❌ Aucun animé trouvé pour **{titre}**."
+        if suggestions:
+            txt += "\n\n**Tu cherchais peut-être :**\n" + "\n".join(
+                f"{s.get('emoji','✨')} {s['title']}" for s in suggestions)
+        return await ctx.send(embed=discord.Embed(description=txt, color=0xe74c3c))
+    embed = build_oeuvre_embed(match, "anime")
+    if suggestions:
+        embed.add_field(name="🔎 Aussi disponibles",
+                        value=" · ".join(f"**{s['title']}**" for s in suggestions), inline=False)
     await ctx.send(embed=embed)
 
-@bot.command(name="animerec")
+
+@bot.command(name="animerec", aliases=["randomanime"])
 async def animerec_cmd(ctx):
+    """Un animé au hasard — .animerec"""
     a = random.choice(ANIMES)
-    embed = discord.Embed(title=f"✨ Recommandation : {a['emoji']} {a['title']}", color=0x9b59b6)
-    embed.add_field(name="Genre", value=a["genre"]); embed.add_field(name="Note", value=a["note"])
+    embed = build_oeuvre_embed(a, "anime")
+    embed.set_author(name="✨  Recommandation du QG")
     await ctx.send(embed=embed)
+
 
 @bot.command(name="quote")
 async def quote_cmd(ctx):
@@ -5550,8 +5812,7 @@ def build_guide_embeds(guild):
         name="🍿 Je ne sais pas quoi regarder",
         value=(
             "`.dramarec` — un drama au hasard, proposé par Akari\n"
-            "`.animerec` — pareil pour les animés\n"
-            "`.sorties` — les prochaines sorties à ne pas manquer"
+            "`.animerec` — pareil pour les animés"
         ), inline=False)
     e.add_field(
         name="🔎 Je veux des infos sur un titre",
@@ -5570,7 +5831,8 @@ def build_guide_embeds(guild):
         name="📝 Ma liste « à regarder »",
         value=(
             "`.watch ajouter Vincenzo` — ajoute un titre à ta liste\n"
-            "`.watch liste` — revoir ta liste quand tu cherches quoi lancer"
+            "`.watch liste` — revoir ta liste quand tu cherches quoi lancer\n"
+            "`.watch vu Vincenzo` — coche-le une fois terminé (il reste dans ton historique)"
         ), inline=False)
     e.add_field(
         name="🧠 Tester mes connaissances",
@@ -5613,7 +5875,7 @@ def build_guide_embeds(guild):
     e.add_field(
         name="🐾 Un compagnon",
         value=(
-            "`.adopter commun` — adopte un animal de compagnie (1 000 pièces)\n"
+            "Va dans `.shop` → page **🐾 Compagnons** et achète celui qui te plaît.\n"
             "Il te donne un **bonus permanent** (plus de pièces, ou plus d'expérience) et "
             "monte de niveau quand tu discutes. `.pet` pour le voir."
         ), inline=False)
@@ -5806,7 +6068,7 @@ async def generate_profile_card(member):
     if pid:
         pet_txt = f"Compagnon : {pdb['nom']}  (Niv.{pstate['level']} • +{pdb['base'] + pstate['level'] - 1}% {pdb['type']})"
     else:
-        pet_txt = "Aucun compagnon — .adopter pour en obtenir un !"
+        pet_txt = "Aucun compagnon — voir .shop !"
     draw.rounded_rectangle([250, 245, 860, 292], radius=12, outline=(120, 200, 255), width=2)
     draw.text((266, 256), pet_txt[:60], font=f_small, fill=(180, 230, 255))
 
@@ -6036,58 +6298,6 @@ def give_pet_xp(uid, amount=1):
         leveled = True
     return leveled, pstate["level"]
 
-@bot.command(name="adopter", aliases=["adopt"])
-async def adopter_cmd(ctx, rarete: str = None):
-    """Adopter un compagnon — .adopter <commun|rare|epique|legendaire>"""
-    prix_map = {"commun": 1000, "rare": 3000, "epique": 8000, "legendaire": 20000}
-    if not rarete or rarete.lower() not in prix_map:
-        return await ctx.send(embed=discord.Embed(
-            title="🐾 Adoption de Compagnon",
-            description=(
-                "Adopte un compagnon qui te donne des **bonus passifs** !\n\n"
-                "🥚 `.adopter commun` — **1 000p** (bonus +5%/+3%)\n"
-                "🥚 `.adopter rare` — **3 000p** (bonus +10%/+5%)\n"
-                "🥚 `.adopter epique` — **8 000p** (bonus +15%/+8%)\n"
-                "🥚 `.adopter legendaire` — **20 000p** (bonus +25%/+12%)\n\n"
-                "Le pet obtenu est **aléatoire** parmi 3 de la rareté choisie !\n"
-                "Types de bonus : 💰 pièces • ⭐ XP • 🎰 rolls gratuits\n"
-                "*Ton pet gagne de l'XP quand tu chattes et monte de niveau (+1% bonus/niveau) !*"
-            ),
-            color=0xe91e63))
-    rarete = rarete.lower()
-    rarete_label = {"commun": "Commun", "rare": "Rare", "epique": "Épique", "legendaire": "Légendaire"}[rarete]
-    prix = prix_map[rarete]
-    uid = str(ctx.author.id)
-    if economy_data[uid]["coins"] < prix:
-        return await ctx.send(f"❌ Il te faut **{prix:,} pièces** pour cet œuf !")
-    economy_data[uid]["coins"] -= prix
-    pool = [pid for pid, p in PETS_DB.items() if p["rarete"] == rarete_label]
-    pid = random.choice(pool)
-    p = PETS_DB[pid]
-    if uid not in pets_data:
-        pets_data[uid] = {"owned": {}, "active": None}
-    if pid in pets_data[uid]["owned"]:
-        # Doublon → +50 XP au pet existant
-        pets_data[uid]["owned"][pid]["xp"] += 50
-        give_pet_xp(uid, 0)  # recalcul niveau si actif
-        return await ctx.send(embed=discord.Embed(
-            title="🥚 L'œuf éclot...",
-            description=f"{p['emoji']} **{p['nom']}** — tu l'as déjà !\nIl gagne **+50 XP** à la place. 💫",
-            color=0x9b59b6))
-    pets_data[uid]["owned"][pid] = {"level": 1, "xp": 0}
-    if not pets_data[uid]["active"]:
-        pets_data[uid]["active"] = pid
-    unlock_achievement(uid, "pet_1", ctx.channel)
-    couleurs = {"Commun": 0x95a5a6, "Rare": 0x3498db, "Épique": 0x9b59b6, "Légendaire": 0xf1c40f}
-    await ctx.send(embed=discord.Embed(
-        title="🥚 L'œuf éclot... ✨",
-        description=(
-            f"# {p['emoji']} {p['nom']}\n"
-            f"**Rareté :** {p['rarete']}\n"
-            f"**Bonus :** {p['desc']} ({p['base']}%)\n\n"
-            f"{'🌟 Équipé automatiquement !' if pets_data[uid]['active'] == pid else 'Utilise `.pet equiper` pour l’équiper !'}"
-        ),
-        color=couleurs.get(p["rarete"], 0x95a5a6)))
 
 @bot.command(name="pet", aliases=["compagnon"])
 async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
@@ -6097,7 +6307,7 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
         # Afficher le pet actif
         pid, pdb, pstate = get_active_pet(uid)
         if not pid:
-            return await ctx.send("🐾 Tu n'as pas de compagnon actif ! `.adopter` pour en obtenir un.")
+            return await ctx.send("🐾 Tu n'as pas de compagnon actif !\nRends-toi dans `.shop` → page **Compagnons** pour en acheter un.")
         bonus = pdb["base"] + (pstate["level"] - 1)
         if pstate["level"] < PET_LEVEL_MAX:
             filled = int((pstate["xp"] / PET_XP_PER_LEVEL) * 10)
@@ -6121,7 +6331,7 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
     if action in ("liste", "list", "collection"):
         d = pets_data.get(uid)
         if not d or not d.get("owned"):
-            return await ctx.send("🐾 Tu n'as aucun compagnon ! `.adopter` pour commencer.")
+            return await ctx.send("🐾 Tu n'as aucun compagnon !\nRends-toi dans `.shop` → page **Compagnons** pour en acheter un.")
         lignes = []
         for pid, st in d["owned"].items():
             p = PETS_DB.get(pid)
@@ -6527,17 +6737,6 @@ async def avis_cmd(ctx, *, titre: str):
         embed.add_field(name="🏆 Top votes", value=details, inline=False)
     await ctx.send(embed=embed)
 
-# ============================================================
-#  CALENDRIER DES SORTIES
-# ============================================================
-SORTIES = [
-    {"titre": "When the Stars Gossip", "type": "🎬 Kdrama", "date": "Mars 2026", "plateforme": "Netflix"},
-    {"titre": "Queen of Tears S2", "type": "🎬 Kdrama", "date": "Avril 2026", "plateforme": "Netflix"},
-    {"titre": "Demon Slayer S5", "type": "✨ Animé", "date": "Printemps 2026", "plateforme": "Crunchyroll"},
-    {"titre": "Solo Leveling S2", "type": "✨ Animé", "date": "Janvier 2026", "plateforme": "Crunchyroll"},
-    {"titre": "My Mister S2", "type": "🎬 Kdrama", "date": "2026", "plateforme": "Netflix"},
-    {"titre": "Jujutsu Kaisen S3", "type": "✨ Animé", "date": "2026", "plateforme": "Crunchyroll"},
-]
 
 # ============================================================
 #  DEVINE LE PERSONNAGE
@@ -8262,35 +8461,11 @@ async def setrollreset(ctx, minutes: int = None):
         color=0x2ecc71))
 
 
-@bot.command(name="sorties")
-async def sorties_cmd(ctx):
-    """Affiche les prochaines sorties dramas & animés — .sorties"""
-    animes = [s for s in SORTIES if "Animé" in s["type"]]
-    kdramas = [s for s in SORTIES if "Kdrama" in s["type"] or "drama" in s["type"].lower()]
-    embed = discord.Embed(
-        title="📅 Prochaines Sorties",
-        color=0xff6b9d
-    )
-    if animes:
-        embed.add_field(
-            name="✨ ANIMÉS",
-            value="\n".join(f"**{s['titre']}** — {s['date']} • {s['plateforme']}" for s in animes),
-            inline=False
-        )
-    if kdramas:
-        embed.add_field(
-            name="🎬 KDRAMAS",
-            value="\n".join(f"**{s['titre']}** — {s['date']} • {s['plateforme']}" for s in kdramas),
-            inline=False
-        )
-    embed.set_footer(text="💡 Liste mise à jour manuellement")
-    await ctx.send(embed=embed)
 
 # ─── Système d'invitations ───────────────────────────────────
-
 invite_counts   = defaultdict(int)   # {inviter_user_id: count}
-guild_invites   = {}   # cache {guild_id: {code: uses}}
-SALON_INVITATION_ID = None  # salon où afficher les invitations
+guild_invites   = {}                 # cache {guild_id: {code: uses}}
+SALON_INVITATION_ID = None           # salon où afficher les invitations
 
 @bot.command(name="topinvitations", aliases=["topinvites"])
 async def topinvitations_cmd(ctx):
@@ -8443,67 +8618,108 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
 #  GESTION GLOBALE DES ERREURS — anti-crash
 # ============================================================
 
-@bot.command(name="watch")
+def _watch_type(titre):
+    """Devine si un titre est un animé ou un kdrama"""
+    if chercher_oeuvre(titre, ANIMES)[0]:
+        return "anime"
+    if chercher_oeuvre(titre, KDRAMAS)[0]:
+        return "kdrama"
+    return "autre"
+
+@bot.command(name="watch", aliases=["watchlist", "wl"])
 async def watch_cmd(ctx, action: str = None, *, title: str = None):
-    """
-    .watch ajouter <titre> — Ajoute à ta watchlist
-    .watch liste — Voir ta watchlist
-    .watch vu <titre> — Marquer comme vu
-    .watch supprimer <titre> — Supprimer de la liste
-    """
+    """Ta watchlist — .watch ajouter/liste/vu/supprimer <titre>"""
     uid = str(ctx.author.id)
     if not action:
-        return await ctx.send("📋 Usage: `.watch ajouter <titre>` | `.watch liste` | `.watch vu <titre>` | `.watch supprimer <titre>`")
-
+        return await ctx.send(embed=discord.Embed(
+            title="📋 Ta Watchlist",
+            description=("`.watch ajouter <titre>` — ajouter à ta liste\n"
+                         "`.watch liste [@membre]` — voir une watchlist\n"
+                         "`.watch vu <titre>` — marquer comme **vu** ✅\n"
+                         "`.watch revoir <titre>` — remettre à voir\n"
+                         "`.watch supprimer <titre>` — retirer complètement"),
+            color=0xff6b9d))
     action = action.lower()
 
-    if action == "ajouter":
+    # ── AJOUTER ──
+    if action in ("ajouter", "add", "+"):
         if not title:
-            return await ctx.send("❌ Précise un titre ! Ex: `.watch ajouter Goblin`")
+            return await ctx.send("❌ Précise un titre ! Ex : `.watch ajouter Goblin`")
         for item in watchlist_data[uid]:
-            if item["title"].lower() == title.lower():
-                return await ctx.send(f"❌ **{title}** est déjà dans ta watchlist !")
-        watchlist_data[uid].append({"title": title, "status": "À voir"})
-        await ctx.send(embed=discord.Embed(
-            description=f"✅ **{title}** ajouté à ta watchlist ! 🎬",
-            color=0xff6b9d
-        ))
+            if normalize_str(item["title"]) == normalize_str(title):
+                return await ctx.send(f"❌ **{item['title']}** est déjà dans ta watchlist !")
+        # Titre officiel si on le connaît
+        officiel, kind = title, _watch_type(title)
+        if kind == "anime":
+            officiel = chercher_oeuvre(title, ANIMES)[0]["title"]
+        elif kind == "kdrama":
+            officiel = chercher_oeuvre(title, KDRAMAS)[0]["title"]
+        watchlist_data[uid].append({"title": officiel, "status": "À voir", "type": kind})
+        icone = {"anime": "📺", "kdrama": "🎭"}.get(kind, "📌")
+        return await ctx.send(embed=discord.Embed(
+            description=f"✅ {icone} **{officiel}** ajouté à ta watchlist !",
+            color=0x2ecc71))
 
-    elif action == "liste":
-        items = watchlist_data[uid]
+    # ── LISTE ──
+    if action in ("liste", "list", "voir"):
+        cible = ctx.message.mentions[0] if ctx.message.mentions else ctx.author
+        cid = str(cible.id)
+        items = watchlist_data[cid]
         if not items:
-            return await ctx.send("📋 Ta watchlist est vide ! Ajoute des titres avec `.watch ajouter <titre>`")
-        embed = discord.Embed(title=f"📋 Watchlist de {ctx.author.display_name}", color=0xff6b9d)
-        a_voir = [i["title"] for i in items if i["status"] == "À voir"]
-        vus = [i["title"] for i in items if i["status"] == "Vu ✅"]
-        if a_voir:
-            embed.add_field(name="🎬 À voir", value="\n".join([f"• {t}" for t in a_voir]), inline=False)
-        if vus:
-            embed.add_field(name="✅ Vus", value="\n".join([f"• {t}" for t in vus]), inline=False)
-        embed.set_footer(text=f"{len(items)} titre(s) au total")
-        await ctx.send(embed=embed)
+            return await ctx.send(
+                f"📋 {'Ta watchlist est vide' if cible == ctx.author else f'{cible.display_name} n a rien dans sa watchlist'} ! "
+                f"`.watch ajouter <titre>` pour commencer.")
+        embed = discord.Embed(
+            title=f"📋 Watchlist de {cible.display_name}",
+            color=0xff6b9d)
+        embed.set_thumbnail(url=cible.display_avatar.url)
+        for kind, titre_sec in (("anime", "📺 Animés"), ("kdrama", "🎭 K-Dramas"), ("autre", "📌 Autres")):
+            lot = [i for i in items if i.get("type", "autre") == kind]
+            if not lot:
+                continue
+            a_voir = [i["title"] for i in lot if i["status"] != "Vu"]
+            vus    = [i["title"] for i in lot if i["status"] == "Vu"]
+            txt = ""
+            if a_voir:
+                txt += "**À voir**\n" + "\n".join(f"• {t}" for t in a_voir[:12])
+                if len(a_voir) > 12:
+                    txt += f"\n*…et {len(a_voir)-12} autre(s)*"
+            if vus:
+                txt += ("\n\n" if txt else "") + "**Vus ✅**\n" + "\n".join(f"• ~~{t}~~" for t in vus[:12])
+                if len(vus) > 12:
+                    txt += f"\n*…et {len(vus)-12} autre(s)*"
+            embed.add_field(name=f"{titre_sec}  ({len(lot)})", value=txt[:1024] or "—", inline=False)
+        total, nb_vus = len(items), sum(1 for i in items if i["status"] == "Vu")
+        embed.set_footer(text=f"{total} titre(s) • {nb_vus} vu(s) • {total - nb_vus} à voir")
+        return await ctx.send(embed=embed)
 
-    elif action == "vu":
+    # ── VU / REVOIR / SUPPRIMER ──
+    if action in ("vu", "termine", "terminé", "fini", "revoir", "supprimer", "retirer", "remove", "-"):
         if not title:
-            return await ctx.send("❌ Précise un titre ! Ex: `.watch vu Goblin`")
+            return await ctx.send(f"❌ Précise un titre ! Ex : `.watch {action} Goblin`")
         for item in watchlist_data[uid]:
-            if item["title"].lower() == title.lower():
-                item["status"] = "Vu ✅"
+            if normalize_str(title) in normalize_str(item["title"]) or \
+               normalize_str(item["title"]) in normalize_str(title):
+                if action in ("vu", "termine", "terminé", "fini"):
+                    if item["status"] == "Vu":
+                        return await ctx.send(f"✅ **{item['title']}** est déjà marqué comme vu !")
+                    item["status"] = "Vu"
+                    return await ctx.send(embed=discord.Embed(
+                        description=f"✅ **{item['title']}** marqué comme **vu** ! 🎉\n*Il reste dans ta liste — ton historique est conservé.*",
+                        color=0x2ecc71))
+                if action == "revoir":
+                    item["status"] = "À voir"
+                    return await ctx.send(embed=discord.Embed(
+                        description=f"🔄 **{item['title']}** est de nouveau dans les titres à voir.",
+                        color=0x3498db))
+                watchlist_data[uid].remove(item)
                 return await ctx.send(embed=discord.Embed(
-                    description=f"✅ **{item['title']}** marqué comme vu ! 🎉",
-                    color=0x2ecc71
-                ))
-        await ctx.send(f"❌ **{title}** n'est pas dans ta watchlist.")
+                    description=f"🗑️ **{item['title']}** retiré de ta watchlist.",
+                    color=0xe74c3c))
+        return await ctx.send(f"❌ **{title}** n'est pas dans ta watchlist.")
 
-    elif action == "supprimer":
-        if not title:
-            return await ctx.send("❌ Précise un titre !")
-        before = len(watchlist_data[uid])
-        watchlist_data[uid] = [i for i in watchlist_data[uid] if i["title"].lower() != title.lower()]
-        if len(watchlist_data[uid]) < before:
-            await ctx.send(embed=discord.Embed(description=f"🗑️ **{title}** supprimé de ta watchlist.", color=0xe74c3c))
-        else:
-            await ctx.send(f"❌ **{title}** n'est pas dans ta watchlist.")
+    await ctx.send("❌ Action inconnue. Tape `.watch` pour voir les options.")
+
 
 # ============================================================
 #  AVIS & NOTES
