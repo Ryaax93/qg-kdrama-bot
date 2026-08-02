@@ -9,12 +9,6 @@ import re
 from collections import defaultdict
 from discord import ui
 import io
-try:
-    from PIL import Image, ImageDraw, ImageFont, ImageFilter
-    PIL_OK = True
-except ImportError:
-    PIL_OK = False
-    print("[Profil] ⚠️ Pillow non installé — .profil utilisera un embed classique. Ajoute 'Pillow' au requirements.txt !")
 
 # ============================================================
 #  PERSISTANCE — Volume Railway (survit aux redéploiements)
@@ -1164,7 +1158,8 @@ def build_help_pages(guild, is_admin=False):
         "`.gacha ordre <série> <n°>` — Ranger ta collection"
     ), inline=False)
     e.add_field(name="🔧 Faire évoluer", value=(
-        "`.fusionner <perso>` — Fusionner des doublons (⭐)\n"
+        "`.fusionner <perso>` — **2 doublons → +1 ⭐** *(+20 PV, +15 ATK, +10 DEF et +200 p de valeur)*\n"
+        "*Un ⚡ apparaît quand ta propre carte retombe — clique pour un doublon gratuit*\n"
         "`.burn <perso>` — Recycler une carte contre des pièces\n"
         "`.setimage <perso> <url imgur>` — Changer l'image *(tes cartes)*"
     ), inline=False)
@@ -2568,8 +2563,11 @@ def build_card_embed(key, uid_claimer=None, claimed=False):
     if lvl > 1:
         embed.add_field(name="📈 Niveau", value=f"**{lvl}** / 10", inline=False)
 
-    if owner_uid:
-        embed.set_footer(text="✅ Carte déjà possédée")
+    if owner_uid and uid_claimer and owner_uid == uid_claimer:
+        nb = doublons[owner_uid].get(key, 0)
+        embed.set_footer(text=f"⚡ Tu possèdes déjà cette carte — doublons : {nb}")
+    elif owner_uid:
+        embed.set_footer(text="✅ Carte déjà possédée par un autre membre")
     elif claimed:
         embed.set_footer(text="✅ Claimée !")
     else:
@@ -2635,6 +2633,48 @@ class ClaimView(ui.View):
                 embed = build_card_embed(self.key)
                 embed.set_footer(text="⏰ Claim expiré — personne n'a réclamé cette carte")
                 await self.message.edit(embed=embed, view=self)
+            except Exception:
+                pass
+
+
+class DoublonView(ui.View):
+    """⚡ Bouton doublon — réservé au propriétaire, n'utilise pas le claim"""
+    def __init__(self, key, owner_uid, timeout=30):
+        super().__init__(timeout=timeout)
+        self.key = key
+        self.owner_uid = owner_uid
+        self.message = None
+
+    @ui.button(emoji="⚡", style=discord.ButtonStyle.primary)
+    async def doublon_btn(self, interaction, button):
+        uid = str(interaction.user.id)
+        if uid != self.owner_uid:
+            proprio = interaction.guild.get_member(int(self.owner_uid))
+            return await interaction.response.send_message(
+                f"❌ Cette carte appartient à **{proprio.display_name if proprio else 'quelqu\'un d\'autre'}** — "
+                f"seul son propriétaire peut récupérer le doublon.", ephemeral=True)
+        doublons[uid][self.key] += 1
+        nb = doublons[uid][self.key]
+        cc = ANIME_CARDS_DB[self.key]
+        etoiles = fusion_levels[uid].get(self.key, 0)
+        button.disabled = True
+        embed = build_card_embed(self.key, uid)
+        embed.set_author(name=f"⚡  {interaction.user.display_name} récupère un doublon !")
+        reste = max(0, 2 - nb)
+        embed.set_footer(
+            text=(f"⚡ Doublons de cette carte : {nb}  •  "
+                  + (f"Encore {reste} pour fusionner (.fusionner {cc['nom']})" if etoiles < 3 and reste
+                     else (f"Tu peux fusionner ! → .fusionner {cc['nom']}" if etoiles < 3
+                           else "Fusion maximale atteinte ⭐⭐⭐"))))
+        await interaction.response.edit_message(embed=embed, view=self)
+        self.stop()
+
+    async def on_timeout(self):
+        for it in self.children:
+            it.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(view=self)
             except Exception:
                 pass
 
@@ -2727,10 +2767,16 @@ async def ga_cmd(ctx):
     except: pass
     key = gacha_tirer(uid)
     c = ANIME_CARDS_DB[key]
-    already_owned = key in claimed_cards
-    embed = build_card_embed(key)
+    embed = build_card_embed(key, uid)
     embed.set_author(name=f"🎰  Roll de {ctx.author.display_name}  •  {data['rolls']} rolls restants")
-    if key in claimed_cards:
+    proprio = claimed_cards.get(key)
+    if proprio == uid:
+        # Ta propre carte revient → doublon gratuit, sans toucher au claim
+        embed.set_footer(text="⚡ Clique sur l'éclair pour récupérer un DOUBLON — "
+                              "gratuit, ça n'utilise pas ton claim ! (2 doublons = fusion)")
+        view = DoublonView(key, uid, timeout=30)
+        view.message = await ctx.send(embed=embed, view=view)
+    elif proprio:
         await ctx.send(embed=embed)
     else:
         view = ClaimView(key, timeout=30)
@@ -2811,40 +2857,90 @@ async def gachastock_cmd(ctx, member: discord.Member = None):
                 except: pass
                 break
 
-@bot.command(name="fusionner", aliases=["fusion"])
+@bot.command(name="fusionner", aliases=["fusion", "upgrade_carte"])
 async def fusionner_cmd(ctx, *, perso: str = None):
-    """Fusionner des doublons pour améliorer une carte — .fusionner <perso>"""
-    if not perso:
-        return await ctx.send("❌ Usage : `.fusionner <nom du perso>`")
+    """Fusionne 2 doublons pour améliorer une carte — .fusionner <perso>"""
     uid = str(ctx.author.id)
+    if not perso:
+        # Liste les cartes fusionnables
+        pretes = [(k, doublons[uid][k]) for k in gacha_collections[uid]
+                  if doublons[uid].get(k, 0) >= 2 and fusion_levels[uid].get(k, 0) < 3]
+        embed = discord.Embed(
+            title="✨ Fusion de cartes",
+            description=(
+                "**À quoi ça sert ?**\n"
+                "Fusionner ajoute une **⭐ étoile** à ta carte, et chaque étoile lui donne :\n"
+                "❤️ **+20 PV**  ·  ⚔️ **+15 ATK**  ·  🛡️ **+10 DEF**\n"
+                "💰 et **+200 pièces** de valeur au recyclage (`.burn`)\n\n"
+                "**Comment faire ?**\n"
+                "Quand une carte que tu possèdes déjà retombe au tirage, clique sur le **⚡**\n"
+                "pour récupérer un **doublon** *(gratuit, ça n'utilise pas ton claim)*.\n"
+                "Avec **2 doublons** de la même carte → `.fusionner <nom>`\n\n"
+                "*Maximum : ⭐⭐⭐ par carte.*"),
+            color=0xf1c40f)
+        if pretes:
+            embed.add_field(
+                name="✅ Prêtes à fusionner",
+                value="\n".join(f"{RARETE_EMOJI.get(ANIME_CARDS_DB[k]['rarete'],'')} "
+                                 f"**{ANIME_CARDS_DB[k]['nom']}** — {n} doublon(s)"
+                                 for k, n in pretes[:10]), inline=False)
+        else:
+            en_cours = [(k, doublons[uid][k]) for k in gacha_collections[uid] if doublons[uid].get(k, 0) > 0]
+            embed.add_field(
+                name="⚡ Tes doublons",
+                value=("\n".join(f"**{ANIME_CARDS_DB[k]['nom']}** — {n}/2" for k, n in en_cours[:10])
+                       if en_cours else "*Aucun doublon pour l'instant. Continue à roll !*"), inline=False)
+        return await ctx.send(embed=embed)
+
     key = perso.lower().strip().replace(" ", "")
     if key not in ANIME_CARDS_DB:
         matches = [k for k in ANIME_CARDS_DB if perso.lower() in ANIME_CARDS_DB[k]["nom"].lower()]
-        if not matches: return await ctx.send(f"❌ `{perso}` introuvable !")
+        if not matches:
+            return await ctx.send(f"❌ `{perso}` introuvable !")
         key = matches[0]
+    cc = ANIME_CARDS_DB[key]
     if claimed_cards.get(key) != uid:
-        return await ctx.send("❌ Tu ne possèdes pas cette carte !")
+        return await ctx.send(f"❌ Tu ne possèdes pas **{cc['nom']}** !")
+
     lv = fusion_levels[uid].get(key, 0)
     if lv >= 3:
-        return await ctx.send("❌ Fusion max atteinte (⭐⭐⭐) !")
-    # Coût : 2 cartes de même rareté
-    c = ANIME_CARDS_DB[key]
-    meme_rarete = [k2 for k2 in gacha_collections[uid] if k2 != key and ANIME_CARDS_DB.get(k2,{}).get("rarete") == c["rarete"]]
-    if len(meme_rarete) < 2:
-        return await ctx.send(f"❌ Il te faut 2 autres cartes **{c['rarete']}** pour fusionner !")
-    # Retirer 2 cartes
-    for k2 in meme_rarete[:2]:
-        del gacha_collections[uid][k2]
-        if k2 in claimed_cards and claimed_cards[k2] == uid:
-            del claimed_cards[k2]
-    fusion_levels[uid][key] += 1
-    if fusion_levels[uid].get(key, 0) >= 3:
+        return await ctx.send(f"⭐⭐⭐ **{cc['nom']}** est déjà au maximum de fusion !")
+
+    dispo = doublons[uid].get(key, 0)
+    if dispo < 2:
+        return await ctx.send(embed=discord.Embed(
+            description=(f"❌ Il te faut **2 doublons** de **{cc['nom']}** — tu en as **{dispo}**.\n\n"
+                         f"*Quand cette carte retombe dans un tirage, clique sur le **⚡** "
+                         f"pour récupérer un doublon (c'est gratuit).*"),
+            color=0xe74c3c))
+
+    doublons[uid][key] -= 2
+    fusion_levels[uid][key] = lv + 1
+    new_lv = lv + 1
+    if new_lv >= 3:
         unlock_achievement(uid, "fusion_max", ctx.channel)
-    new_lv = fusion_levels[uid][key]
-    await ctx.send(embed=discord.Embed(
-        description=f"✨ **{c['nom']}** fusionné ! Niveau {'⭐'*new_lv} !",
-        color=RARETE_COULEURS.get(c["rarete"], 0x9b59b6)
-    ))
+
+    b_pv, b_atk, b_def = new_lv * 20, new_lv * 15, new_lv * 10
+    embed = discord.Embed(
+        title=f"✨ FUSION RÉUSSIE — {'⭐' * new_lv}",
+        description=(f"{RARETE_EMOJI.get(cc['rarete'],'')} **{cc['nom']}** passe à **{new_lv} étoile(s)** !\n"
+                     f"*2 doublons consommés — il t'en reste {doublons[uid][key]}.*"),
+        color=RARETE_COULEURS.get(cc["rarete"], 0xf1c40f))
+    embed.add_field(name="📊 Nouvelles stats", value=(
+        f"❤️ **{cc['pv'] + b_pv}** PV  *(+{b_pv})*\n"
+        f"⚔️ **{cc['attaque'] + b_atk}** ATK  *(+{b_atk})*\n"
+        f"🛡️ **{cc['defense'] + b_def}** DEF  *(+{b_def})*"), inline=True)
+    burn = {"Commun":100,"Rare":300,"Épique":700,"Légendaire":1500,"Mythique":4000}.get(cc["rarete"],100)
+    embed.add_field(name="💰 Valeur au recyclage",
+                    value=f"**{burn + new_lv*200:,} pièces**\n*(+{new_lv*200} grâce aux étoiles)*", inline=True)
+    if new_lv < 3:
+        embed.set_footer(text=f"Encore 2 doublons pour atteindre {'⭐'*(new_lv+1)}")
+    else:
+        embed.set_footer(text="⭐⭐⭐ Fusion maximale atteinte !")
+    if cc.get("image"):
+        embed.set_thumbnail(url=cc["image"])
+    await ctx.send(embed=embed)
+
 
 @bot.command(name="gachagive")
 async def gachagive_cmd(ctx, target: discord.Member = None, *, perso: str = None):
@@ -6114,6 +6210,15 @@ def panneau_gacha(guild):
         "🎴 **Carte Mystère** — une carte rare tombe, premier au cœur la garde"
     ), inline=False)
     e.set_footer(text="Tout ça est 100% optionnel — le serveur tourne très bien sans 🌸")
+    e.add_field(name="⚡ Les doublons et la fusion", value=(
+        "Quand une carte que **tu possèdes déjà** retombe dans un tirage, "
+        "un bouton **⚡** apparaît : clique dessus pour récupérer un **doublon**.\n"
+        "*C'est gratuit — ça n'utilise pas ton claim.*\n\n"
+        "**2 doublons de la même carte** → `.fusionner <nom>` pour ajouter une **⭐ étoile** :\n"
+        "❤️ +20 PV  ·  ⚔️ +15 ATK  ·  🛡️ +10 DEF par étoile\n"
+        "💰 et **+200 pièces** de valeur au recyclage\n"
+        "*Jusqu'à ⭐⭐⭐ — une carte 3 étoiles est bien plus forte en Gacha Battle.*"
+    ), inline=False)
     return [e]
 
 def panneau_gachabattle(guild):
@@ -6332,6 +6437,7 @@ def build_guide_embeds(guild):
     e.add_field(
         name="🔧 Ensuite, si ça t'accroche",
         value=(
+            "`.fusionner <perso>` — 2 doublons ⚡ = une ⭐ de plus (stats et valeur en hausse)\n"
             "`.serie Naruto` — ta progression sur une série + récompense si tu la complètes\n"
             "`.burn <perso>` — détruire une carte qui ne t'intéresse pas contre des pièces\n"
             "`.gachatrade @membre <ta carte> <sa carte>` — échanger avec quelqu'un\n"
@@ -6398,145 +6504,74 @@ def build_guide_embeds(guild):
 
     return pages
 
-# ============================================================
-#  🖼️ CARTE DE PROFIL — Image générée (style néon futuriste)
-# ============================================================
-def _pf_font(size, bold=True):
-    """Charge une police avec fallback"""
-    paths = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    ]
-    for p in paths:
-        try:
-            return ImageFont.truetype(p, size)
-        except Exception:
-            continue
-    return ImageFont.load_default()
 
-async def generate_profile_card(member):
-    """Génère la carte de profil en image. Retourne un BytesIO PNG."""
-    uid = str(member.id)
-    W, H = 900, 380
-    img = Image.new("RGB", (W, H), (12, 10, 28))
-    draw = ImageDraw.Draw(img)
-
-    # ── Fond dégradé violet → rose (style néon kdrama) ──
-    for y in range(H):
-        t = y / H
-        r = int(18 + t * 40)
-        g = int(10 + t * 8)
-        b = int(38 + t * 42)
-        draw.line([(0, y), (W, y)], fill=(r, g, b))
-
-    # Déco : cercles néon flous
-    glow = Image.new("RGB", (W, H), (0, 0, 0))
-    gd = ImageDraw.Draw(glow)
-    gd.ellipse([W-260, -120, W+80, 220], fill=(120, 40, 160))
-    gd.ellipse([-140, H-160, 180, H+140], fill=(40, 60, 180))
-    glow = glow.filter(ImageFilter.GaussianBlur(80))
-    img = Image.blend(img, glow, 0.45)
-    draw = ImageDraw.Draw(img)
-
-    # ── Avatar circulaire avec anneau néon ──
-    try:
-        avatar_bytes = await member.display_avatar.replace(size=256, static_format="png").read()
-        av = Image.open(io.BytesIO(avatar_bytes)).convert("RGB").resize((170, 170))
-        mask = Image.new("L", (170, 170), 0)
-        ImageDraw.Draw(mask).ellipse([0, 0, 170, 170], fill=255)
-        # Anneau
-        draw.ellipse([32, 32, 214, 214], outline=(255, 80, 200), width=5)
-        draw.ellipse([36, 36, 210, 210], outline=(120, 200, 255), width=2)
-        img.paste(av, (40, 40), mask)
-    except Exception:
-        draw.ellipse([40, 40, 210, 210], fill=(60, 40, 100), outline=(255, 80, 200), width=5)
-
-    # ── Infos texte ──
-    f_big   = _pf_font(42)
-    f_med   = _pf_font(26)
-    f_small = _pf_font(20)
-    f_tiny  = _pf_font(16, bold=False)
-
-    pseudo = member.display_name[:20]
-    draw.text((250, 42), pseudo, font=f_big, fill=(255, 255, 255))
-
-    lvl = xp_data[uid]["level"]
-    xp  = xp_data[uid]["xp"]
-    needed = lvl * 100
-    coins = economy_data[uid]["coins"]
-    nb_cartes = len(gacha_collections.get(uid, {}))
-    nb_succes = len(achievements_data.get(uid, set()))
-    nb_badges = len(serie_badges.get(uid, set()))
-
-    # Ligne stats
-    draw.text((252, 100), f"Niveau {lvl}", font=f_med, fill=(255, 200, 80))
-    draw.text((420, 100), f"💰 {coins:,}", font=f_med, fill=(150, 255, 170))
-
-    # ── Barre d'XP néon ──
-    bx, by, bw, bh = 250, 145, 610, 26
-    draw.rounded_rectangle([bx, by, bx+bw, by+bh], radius=13, fill=(30, 22, 55))
-    ratio = min(1.0, xp / max(1, needed))
-    if ratio > 0.02:
-        draw.rounded_rectangle([bx, by, bx+int(bw*ratio), by+bh], radius=13, fill=(255, 80, 200))
-    draw.text((bx+8, by+3), f"{xp}/{needed} XP", font=f_tiny, fill=(255, 255, 255))
-
-    # ── Ligne badges/statistiques ──
-    yb = 200
-    stats_line = [
-        ("🏆", f"{nb_succes}/{len(ACHIEVEMENTS)} succès"),
-        ("🎴", f"{nb_cartes} cartes"),
-        ("🏅", f"{nb_badges} badges série"),
-    ]
-    x = 252
-    for emoji_txt, txt in stats_line:
-        draw.text((x, yb), txt, font=f_small, fill=(220, 220, 255))
-        x += len(txt) * 12 + 60
-
-    # ── Compagnon actif ──
-    pid, pdb, pstate = get_active_pet(uid)
-    if pid:
-        pet_txt = f"Compagnon : {pdb['nom']}  (Niv.{pstate['level']} • +{pdb['base'] + pstate['level'] - 1}% {pdb['type']})"
-    else:
-        pet_txt = "Aucun compagnon — voir .shop !"
-    draw.rounded_rectangle([250, 245, 860, 292], radius=12, outline=(120, 200, 255), width=2)
-    draw.text((266, 256), pet_txt[:60], font=f_small, fill=(180, 230, 255))
-
-    # ── Footer : drama points ou titre serveur ──
-    draw.text((250, 315), "QG KDRAMA", font=f_med, fill=(255, 80, 200))
-    draw.text((440, 322), "• Profil de membre •", font=f_tiny, fill=(160, 150, 200))
-
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    buf.seek(0)
-    return buf
-
-@bot.command(name="profil", aliases=["profile", "carte_profil"])
+@bot.command(name="profil", aliases=["profile", "p"])
 async def profil_cmd(ctx, membre: discord.Member = None):
-    """Ta carte de profil visuelle — .profil [@membre]"""
+    """Ta fiche de membre — .profil [@membre]"""
     target = membre or ctx.author
     uid = str(target.id)
-    if PIL_OK:
-        async with ctx.typing():
-            try:
-                buf = await generate_profile_card(target)
-                return await ctx.send(file=discord.File(buf, filename=f"profil_{target.name}.png"))
-            except Exception as e:
-                print(f"[Profil] Erreur génération image : {e}")
-    # Fallback embed si Pillow absent ou erreur
+
     lvl = xp_data[uid]["level"]
+    xp = xp_data[uid]["xp"]
+    needed = lvl * 100
     coins = economy_data[uid]["coins"]
+    depot = bank_data[uid].get("depot", 0)
     nb_cartes = len(gacha_collections.get(uid, {}))
     nb_succes = len(achievements_data.get(uid, set()))
-    pid, pdb, pstate = get_active_pet(uid)
-    pet_txt = f"{pdb['emoji']} {pdb['nom']} Niv.{pstate['level']}" if pid else "Aucun"
-    embed = discord.Embed(title=f"🪪 Profil de {target.display_name}", color=0xe91e63)
+    s = user_stats[uid]
+
+    # Barre de progression
+    ratio = min(1.0, xp / max(needed, 1))
+    filled = int(ratio * 12)
+    barre = "▰" * filled + "▱" * (12 - filled)
+
+    # Rang dans le serveur
+    classement = sorted(xp_data.items(), key=lambda x: (x[1]["level"], x[1]["xp"]), reverse=True)
+    rang = next((i + 1 for i, (u, _) in enumerate(classement) if u == uid), None)
+    medaille = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rang, f"#{rang}" if rang else "—")
+
+    embed = discord.Embed(color=0xe91e63)
+    embed.set_author(name=f"Profil de {target.display_name}", icon_url=target.display_avatar.url)
     embed.set_thumbnail(url=target.display_avatar.url)
-    embed.add_field(name="⭐ Niveau", value=str(lvl), inline=True)
-    embed.add_field(name="💰 Pièces", value=f"{coins:,}", inline=True)
-    embed.add_field(name="🎴 Cartes", value=str(nb_cartes), inline=True)
-    embed.add_field(name="🏆 Succès", value=f"{nb_succes}/{len(ACHIEVEMENTS)}", inline=True)
-    embed.add_field(name="🐾 Compagnon", value=pet_txt, inline=True)
+
+    embed.add_field(
+        name=f"⭐  Niveau {lvl}",
+        value=f"`{barre}`\n**{xp} / {needed} XP**\n{get_tier(lvl)}",
+        inline=False)
+
+    embed.add_field(name="💰 Pièces",
+                    value=f"**{coins:,}**" + (f"\n🏦 {depot:,} en banque" if depot else ""), inline=True)
+    embed.add_field(name="🏆 Classement", value=f"**{medaille}**\n*sur {len(classement)} membres*", inline=True)
+    embed.add_field(name="🎖️ Succès", value=f"**{nb_succes}** / {len(ACHIEVEMENTS)}", inline=True)
+
+    embed.add_field(name="🎴 Collection", value=f"**{nb_cartes}** cartes", inline=True)
+    embed.add_field(name="💬 Messages", value=f"**{s.get('messages', 0):,}**", inline=True)
+    embed.add_field(name="⚔️ Victoires",
+                    value=f"**{s.get('arene_wins', 0) + s.get('pb_wins', 0)}**", inline=True)
+
+    # Compagnon
+    pid, pdb, pstate = get_active_pet(uid)
+    if pid:
+        embed.add_field(name="🐾 Compagnon",
+                        value=f"{pdb['emoji']} **{pdb['nom']}** — Niv. {pstate['level']}\n{pet_bonus_texte(pdb, pstate['level'])}",
+                        inline=False)
+
+    # Mariage
+    if uid in mariages:
+        conjoint = ctx.guild.get_member(int(mariages[uid])) if ctx.guild else None
+        if conjoint:
+            embed.add_field(name="💍 Marié(e) à", value=conjoint.display_name, inline=True)
+
+    # Rôles boutique portés
+    noms_boutique = {n for n, _ in ROLES_BOUTIQUE.values()}
+    portes = [r.name for r in getattr(target, "roles", []) if r.name in noms_boutique]
+    if portes:
+        embed.add_field(name="🎭 Titres", value=" · ".join(portes[:4]), inline=False)
+
+    embed.set_footer(text=f"Membre depuis le {target.joined_at.strftime('%d/%m/%Y')}"
+                          if getattr(target, "joined_at", None) else "QG Kdrama")
     await ctx.send(embed=embed)
+
 
 # ============================================================
 #  🏆 SUCCÈS / ACHIEVEMENTS — 30 succès pour tout le serveur
@@ -7682,7 +7717,7 @@ async def reset_cmd(ctx, cible: str = None, membre: discord.Member = None):
         if cible in ("gacha", "tout"):
             for k in [k for k, v in claimed_cards.items() if v == uid]:
                 del claimed_cards[k]
-            for d in (gacha_collections, fusion_levels, card_xp, card_level, serie_badges,
+            for d in (gacha_collections, fusion_levels, doublons, card_xp, card_level, serie_badges,
                       fav_slots, roll_data, claim_cooldown, claim_reduction,
                       gacha_wishlist, collection_order):
                 d.pop(uid, None)
@@ -8900,6 +8935,7 @@ ANIME_CARDS_DB = {
 # Collections et fusions
 gacha_collections = defaultdict(dict)   # {uid: {card_key: {"fusion": 0}}}
 fusion_levels = defaultdict(lambda: defaultdict(int))  # {uid: {card_key: level}}
+doublons = defaultdict(lambda: defaultdict(int))       # {uid: {card_key: nb de doublons}}
 # ── D. Niveau de carte (XP de combat) ──────────────────────
 card_xp = defaultdict(lambda: defaultdict(int))      # {uid: {card_key: xp}}
 card_level = defaultdict(lambda: defaultdict(lambda: 1))  # {uid: {card_key: level}}
@@ -9308,7 +9344,12 @@ async def invoke_cmd(ctx):
     key = random.choice(pool)
     embed = build_card_embed(key)
     embed.set_author(name=f"✨  Invocation Garantie de {ctx.author.display_name}")
-    if key in claimed_cards:
+    proprio = claimed_cards.get(key)
+    if proprio == uid:
+        # Ta propre carte revient → doublon gratuit
+        view = DoublonView(key, uid, timeout=30)
+        view.message = await ctx.send(embed=embed, view=view)
+    elif proprio:
         await ctx.send(embed=embed)
     else:
         view = ClaimView(key, timeout=30)
@@ -9473,6 +9514,7 @@ async def burn_cmd(ctx, *, perso: str = None):
         del claimed_cards[key]
         gacha_collections[uid].pop(key, None)
         fusion_levels[uid].pop(key, None)
+        doublons[uid].pop(key, None)
         card_level[uid].pop(key, None)
         card_xp[uid].pop(key, None)
         economy_data[uid]["coins"] += total
@@ -11402,6 +11444,7 @@ def save_all_data():
             "collections": {k: dict(v) for k, v in gacha_collections.items()},
             "claimed":     dict(claimed_cards),
             "fusion":      {k: dict(v) for k, v in fusion_levels.items()},
+            "doublons":    {k: dict(v) for k, v in doublons.items()},
             "card_xp":     {k: dict(v) for k, v in card_xp.items()},
             "card_level":  {k: dict(v) for k, v in card_level.items()},
             "serie_badges": {k: list(v) for k, v in serie_badges.items()},
@@ -11468,6 +11511,8 @@ def load_all_data():
             claimed_cards.update(data.get("claimed", {}))
             for uid, fus in data.get("fusion", {}).items():
                 fusion_levels[uid].update(fus)
+            for uid, db in data.get("doublons", {}).items():
+                doublons[uid].update(db)
             for uid, cx in data.get("card_xp", {}).items():
                 card_xp[uid].update(cx)
             for uid, cl in data.get("card_level", {}).items():
