@@ -1071,6 +1071,7 @@ def build_help_pages(guild, is_admin=False):
         "`.quizduel <thème> @joueur` — Quiz en duel *(5 manches)*\n"
         "**Thèmes :** `kdrama` `anime` `gaming` `culture` `harrypotter` `mix`\n"
         "`.quizstop` — Arrêter le quiz en cours\n"
+        "*Un salon privé peut t'être proposé au lancement*\n"
         "`.bracket kdrama` / `.bracket anime` — Tournoi du serveur\n"
         "`.quote` / `.animequote` — Une citation au hasard"
     ), inline=False)
@@ -1208,8 +1209,10 @@ def build_help_pages(guild, is_admin=False):
         "`.attaque` — Frapper le boss du serveur *(alias `.attaquerboss`)*"
     ), inline=False)
     e.add_field(name="🎯 Mini-jeux", value=(
-        "`.devine` — Devine le personnage *(37 persos — salon privé possible)*\n"
-        "`.pendu` — Le pendu *(185 titres — salon privé possible)*\n"
+        "`.devine` — Devine le personnage, manches en continu *(37 persos)*\n"
+        "`.devinerstop` — Arrêter la partie\n"
+        "`.pendu` — Le pendu, manches en continu *(185 titres)*\n"
+        "`.pendustop` — Arrêter la partie de pendu\n"
         "`.rps <choix>` — Pierre / feuille / ciseaux\n"
         "`.dice` — Lancer un dé"
     ), inline=False)
@@ -1691,7 +1694,7 @@ async def quiz(ctx, theme: str = "mix"):
     """Quiz solo en continu — .quiz [thème]"""
     theme = QUIZ_ALIAS_THEMES.get(theme.lower(), theme.lower())
     if theme not in QUIZ_THEMES:
-        return await ctx.send(embed=discord.Embed(
+        return await salon.send(embed=discord.Embed(
             title="🎯 Thèmes de quiz disponibles",
             description=("\n".join(f"`{k}` — {v} *({len(QUIZ_THEMES[k])} questions)*"
                                    for k, v in THEME_LABELS.items())
@@ -1700,18 +1703,25 @@ async def quiz(ctx, theme: str = "mix"):
     if ctx.channel.id in active_quiz or ctx.channel.id in quiz_duels:
         return await ctx.send("❓ Un quiz est déjà en cours ici ! Tape `.quizstop` pour l'arrêter.")
 
-    active_quiz[ctx.channel.id] = {"theme": theme, "running": True}
+    salon, temporaire = await demander_salon_prive(ctx, f"Quiz {THEME_LABELS[theme]}", "🎯")
+    if salon.id in active_quiz or salon.id in quiz_duels:
+        return await salon.send("❓ Un quiz est déjà en cours ici !")
+
+    active_quiz[salon.id] = {"theme": theme, "running": True}
     questions_posees = []
 
-    await ctx.send(embed=discord.Embed(
-        description=f"🎯 Quiz **{THEME_LABELS[theme]}** lancé ! Tape `.quizstop` pour arrêter.\n⏳ 30 secondes par question — les questions s'enchaînent automatiquement !",
-        color=0xf1c40f
-    ))
+    await salon.send(embed=discord.Embed(
+        title=f"🎯 Quiz {THEME_LABELS[theme]}",
+        description=(f"**{len(QUIZ_THEMES[theme])} questions** dans ce thème.\n"
+                     f"⏳ 30 secondes par question — elles s'enchaînent automatiquement.\n"
+                     f"💰 **30 à 80 pièces** + 30 XP par bonne réponse.\n\n"
+                     f"Tape **`.quizstop`** pour arrêter."),
+        color=0xf1c40f))
 
     def check(m):
-        return m.channel == ctx.channel and not m.author.bot
+        return m.channel == salon and not m.author.bot
 
-    while ctx.channel.id in active_quiz and active_quiz[ctx.channel.id].get("running"):
+    while salon.id in active_quiz and active_quiz[salon.id].get("running"):
         # Piocher une question pas encore posée
         disponibles = [q for q in QUIZ_THEMES[theme] if q["q"] not in questions_posees]
         if not disponibles:
@@ -1720,7 +1730,7 @@ async def quiz(ctx, theme: str = "mix"):
 
         q = random.choice(disponibles)
         questions_posees.append(q["q"])
-        active_quiz[ctx.channel.id]["answer"] = q["a"]
+        active_quiz[salon.id]["answer"] = q["a"]
 
         embed = discord.Embed(
             title=f"🎯 Quiz {THEME_LABELS[theme]}",
@@ -1728,27 +1738,27 @@ async def quiz(ctx, theme: str = "mix"):
             color=0xf1c40f
         )
         embed.set_footer(text="⏳ 30 secondes • Tape `.quizstop` pour arrêter")
-        await ctx.send(embed=embed)
+        await salon.send(embed=embed)
 
         try:
             while True:
                 msg = await bot.wait_for("message", check=check, timeout=30)
 
                 # Vérifier si le quiz a été stoppé pendant l'attente
-                if ctx.channel.id not in active_quiz:
+                if salon.id not in active_quiz:
                     return
 
-                correct = active_quiz[ctx.channel.id].get("answer", "")
+                correct = active_quiz[salon.id].get("answer", "")
 
                 reponse = msg.content.lower().strip()
                 if check_answer(reponse, correct):
                     prize = random.randint(30, 80)
                     economy_data[str(msg.author.id)]["coins"] += prize
-                    track_stat(str(msg.author.id) if isinstance(str(msg.author.id), str) else str(str(msg.author.id)), "quiz_ok", channel=ctx.channel)
+                    track_stat(str(msg.author.id), "quiz_ok", channel=salon)
                     xp_data[str(msg.author.id)]["xp"] += 30
                     try: missions_progress[str(msg.author.id)]["quiz"] += 1
                     except: pass
-                    await ctx.send(embed=discord.Embed(
+                    await salon.send(embed=discord.Embed(
                         description=f"✅ **{msg.author.display_name}** a trouvé ! **+{prize} pièces & +30 XP** 🎉\n*Prochaine question dans 3 secondes...*",
                         color=0x2ecc71
                     ))
@@ -1756,28 +1766,32 @@ async def quiz(ctx, theme: str = "mix"):
                 else:
                     # Mauvaise réponse → skip direct
                     await msg.add_reaction("❌")
-                    await ctx.send(embed=discord.Embed(
+                    await salon.send(embed=discord.Embed(
                         description=f"❌ Mauvaise réponse ! La bonne réponse était : **{correct}**\n*Prochaine question dans 3 secondes...*",
                         color=0xe74c3c
                     ))
                     break
 
         except asyncio.TimeoutError:
-            if ctx.channel.id not in active_quiz:
+            if salon.id not in active_quiz:
                 return
-            correct = active_quiz[ctx.channel.id].get("answer", "")
-            await ctx.send(embed=discord.Embed(
+            correct = active_quiz[salon.id].get("answer", "")
+            await salon.send(embed=discord.Embed(
                 description=f"⏰ Temps écoulé ! La réponse était : **{correct}**\n*Prochaine question dans 3 secondes...*",
                 color=0xe74c3c
             ))
 
         await asyncio.sleep(3)
 
+    active_quiz.pop(salon.id, None)
+    if temporaire:
+        await close_event_channel(salon, 60)
+
 @bot.command(name="quizstop")
 async def quiz_stop(ctx):
     """Arrête le quiz en cours — .quizstop"""
     if ctx.channel.id in active_quiz:
-        active_quiz.pop(ctx.channel.id, None)
+        active_quiz[ctx.channel.id]["running"] = False
         await ctx.send(embed=discord.Embed(
             description="🛑 Quiz arrêté !",
             color=0xe74c3c
@@ -1798,7 +1812,7 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
     Ex: .quizduel anime @ami1 @ami2 @ami3"""
     theme = QUIZ_ALIAS_THEMES.get(theme.lower(), theme.lower())
     if theme not in QUIZ_THEMES:
-        return await ctx.send(embed=discord.Embed(
+        return await salon.send(embed=discord.Embed(
             title="⚔️ Quiz Duel — choisis un thème",
             description=("**Usage :** `.quizduel <thème> @joueur1 [@joueur2 …]`\n\n"
                          + "\n".join(f"`{k}` — {v} *({len(QUIZ_THEMES[k])} questions)*"
@@ -1810,15 +1824,17 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
     if ctx.channel.id in active_quiz or ctx.channel.id in quiz_duels:
         return await ctx.send("❓ Un quiz est déjà en cours ici !")
 
-    # Liste des joueurs : auteur + adversaires
-    all_players = [ctx.author] + list(opponents)
-    # Filtrer les bots
-    all_players = [p for p in all_players if not p.bot]
+    all_players = [p for p in [ctx.author] + list(opponents) if not p.bot]
     if len(all_players) < 2:
         return await ctx.send("❌ Il faut au moins 2 joueurs humains !")
 
+    salon, temporaire = await demander_salon_prive(
+        ctx, f"Quiz Duel {THEME_LABELS[theme]}", "⚔️", invites=all_players[1:])
+    if salon.id in active_quiz or salon.id in quiz_duels:
+        return await salon.send("❓ Un quiz est déjà en cours ici !")
+
     TOTAL_ROUNDS = 5
-    quiz_duels[ctx.channel.id] = {
+    quiz_duels[salon.id] = {
         "players": {p.id: {"name": p.display_name, "score": 0} for p in all_players},
         "theme": theme,
         "round": 0,
@@ -1836,22 +1852,22 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
         ),
         color=0xff6b9d
     )
-    await ctx.send(embed=embed)
+    await salon.send(embed=embed)
     await asyncio.sleep(3)
 
     # Boucle des rounds
     player_ids = set(p.id for p in all_players)
 
     for round_num in range(1, TOTAL_ROUNDS + 1):
-        if ctx.channel.id not in quiz_duels:
+        if salon.id not in quiz_duels:
             break
 
         # Choisir une question pas encore posée
-        available = [q for q in QUIZ_THEMES[theme] if q["a"] not in quiz_duels[ctx.channel.id]["questions_used"]]
+        available = [q for q in QUIZ_THEMES[theme] if q["a"] not in quiz_duels[salon.id]["questions_used"]]
         if not available:
             available = QUIZ_THEMES[theme]
         q = random.choice(available)
-        quiz_duels[ctx.channel.id]["questions_used"].append(q["a"])
+        quiz_duels[salon.id]["questions_used"].append(q["a"])
 
         embed = discord.Embed(
             title=f"🎯 Round {round_num}/{TOTAL_ROUNDS} — {THEME_LABELS[theme]}",
@@ -1859,39 +1875,39 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
             color=0xf1c40f
         )
         # Afficher le score actuel
-        scores = quiz_duels[ctx.channel.id]["players"]
+        scores = quiz_duels[salon.id]["players"]
         score_str = " | ".join([f"{data['name']}: {data['score']}" for data in scores.values()])
         embed.set_footer(text=f"⏳ 20 secondes • Scores: {score_str}")
-        await ctx.send(embed=embed)
+        await salon.send(embed=embed)
 
         def check_duel(m):
-            return m.channel == ctx.channel and m.author.id in player_ids and not m.author.bot
+            return m.channel == salon and m.author.id in player_ids and not m.author.bot
 
         answered = False
         end_time = asyncio.get_event_loop().time() + 20
         while not answered:
             remaining = end_time - asyncio.get_event_loop().time()
             if remaining <= 0:
-                await ctx.send(embed=discord.Embed(
+                await salon.send(embed=discord.Embed(
                     description=f"⏰ Temps écoulé ! La réponse était : **{q['a']}**",
                     color=0x95a5a6
                 ))
                 break
             try:
                 msg = await bot.wait_for("message", check=check_duel, timeout=remaining)
-                if ctx.channel.id not in quiz_duels:
+                if salon.id not in quiz_duels:
                     break
                 if check_answer(msg.content, q["a"]):
-                    quiz_duels[ctx.channel.id]["players"][msg.author.id]["score"] += 1
-                    score = quiz_duels[ctx.channel.id]["players"][msg.author.id]["score"]
-                    await ctx.send(embed=discord.Embed(
+                    quiz_duels[salon.id]["players"][msg.author.id]["score"] += 1
+                    score = quiz_duels[salon.id]["players"][msg.author.id]["score"]
+                    await salon.send(embed=discord.Embed(
                         description=f"✅ **{msg.author.display_name}** a trouvé ! ({score} pt{'s' if score > 1 else ''})",
                         color=0x2ecc71
                     ))
                     answered = True
                 # Mauvaise réponse → on continue à écouter les autres
             except asyncio.TimeoutError:
-                await ctx.send(embed=discord.Embed(
+                await salon.send(embed=discord.Embed(
                     description=f"⏰ Temps écoulé ! La réponse était : **{q['a']}**",
                     color=0x95a5a6
                 ))
@@ -1900,10 +1916,10 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
         await asyncio.sleep(2)
 
     # Fin du duel
-    if ctx.channel.id not in quiz_duels:
+    if salon.id not in quiz_duels:
         return
 
-    final_scores = quiz_duels.pop(ctx.channel.id)["players"]
+    final_scores = quiz_duels.pop(salon.id)["players"]
     sorted_scores = sorted(final_scores.values(), key=lambda x: x["score"], reverse=True)
 
     # Trouver le gagnant
@@ -1937,7 +1953,9 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
     )
     scores_final = "\n".join([f"{'🥇' if i==0 else '🥈' if i==1 else '🥉' if i==2 else '▪️'} **{p['name']}** — {p['score']} pt{'s' if p['score'] > 1 else ''}" for i, p in enumerate(sorted_scores)])
     embed.add_field(name="📊 Classement final", value=scores_final, inline=False)
-    await ctx.send(embed=embed)
+    await salon.send(embed=embed)
+    if temporaire:
+        await close_event_channel(salon, 90)
 
 # ============================================================
 #  NIVEAUX / XP
@@ -2113,39 +2131,39 @@ SHOP_ITEMS = [
     {"id": "coquette",   "nom": "🎀 Coquette",    "prix": 3000, "cat": "girly", "description": "Rose poudré, nœuds et rubans"},
 
     # ═══ 🎰 GACHA — BOOSTS ═══
-    {"id": "fav_slot_10",  "nom": "🔓 Slots Favoris (10)", "prix": 8000, "cat": "gacha_boost", "description": "Passe ta limite de cartes favorites à 10 (nécessite le slot 5)"},
-    {"id": "claim_10",     "nom": "⚡ Claim 10 min",        "prix": 3000, "cat": "gacha_boost", "description": "Réduit ton cooldown de claim à 10 min — permanent"},
-    {"id": "fav_slot_5",   "nom": "🔓 Slots Favoris (5)",   "prix": 3000, "cat": "gacha_boost", "description": "Passe ta limite de cartes favorites de 3 à 5"},
-    {"id": "boost_rarete", "nom": "🎯 Boost Rareté",        "prix": 1500, "cat": "gacha_boost", "description": "Chances Épique+ fortement augmentées pour 5 rolls", "daily": True},
-    {"id": "claim_15",     "nom": "⚡ Claim 15 min",        "prix": 1500, "cat": "gacha_boost", "description": "Réduit ton cooldown de claim à 15 min — permanent"},
-    {"id": "cadeau",       "nom": "🎁 Cadeau Mystère",      "prix": 900,  "cat": "gacha_boost", "description": "Une carte aléatoire Rare ou supérieure, offerte"},
-    {"id": "claim_20",     "nom": "⚡ Claim 20 min",        "prix": 800,  "cat": "gacha_boost", "description": "Réduit ton cooldown de claim à 20 min — permanent"},
-    {"id": "rolls_5",      "nom": "🎰 +5 Rolls",            "prix": 700,  "cat": "gacha_boost", "description": "Cinq tirages supplémentaires immédiatement"},
-    {"id": "oracle",       "nom": "🔮 Oracle",              "prix": 499,  "cat": "gacha_boost", "description": "Tes 3 prochains rolls ont 1 chance sur 5 de faire tomber une carte bonus"},
-    {"id": "double_rien",  "nom": "🎰 Double ou Rien",      "prix": 200,  "cat": "gacha_boost", "description": "Double tes rolls… ou les perd tous (4 rolls max)"},
+    {"id": "fav_slot_10",  "nom": "🔓 Slots Favoris (10)", "prix": 15000, "cat": "gacha_boost", "description": "Passe ta limite de cartes favorites à 10 (nécessite le slot 5)"},
+    {"id": "claim_10",     "nom": "⚡ Claim 10 min",        "prix": 20000, "cat": "gacha_boost", "description": "Réduit ton cooldown de claim à 10 min — permanent"},
+    {"id": "fav_slot_5",   "nom": "🔓 Slots Favoris (5)",   "prix": 5000, "cat": "gacha_boost", "description": "Passe ta limite de cartes favorites de 3 à 5"},
+    {"id": "boost_rarete", "nom": "🎯 Boost Rareté",        "prix": 3500, "cat": "gacha_boost", "description": "Chances Épique+ fortement augmentées pour 5 rolls", "daily": True},
+    {"id": "claim_15",     "nom": "⚡ Claim 15 min",        "prix": 12000, "cat": "gacha_boost", "description": "Réduit ton cooldown de claim à 15 min — permanent"},
+    {"id": "cadeau",       "nom": "🎁 Cadeau Mystère",      "prix": 6000,  "cat": "gacha_boost", "description": "Une carte aléatoire Rare ou supérieure, offerte"},
+    {"id": "claim_20",     "nom": "⚡ Claim 20 min",        "prix": 6000,  "cat": "gacha_boost", "description": "Réduit ton cooldown de claim à 20 min — permanent"},
+    {"id": "rolls_5",      "nom": "🎰 +5 Rolls",            "prix": 3500,  "cat": "gacha_boost", "description": "Cinq tirages supplémentaires immédiatement"},
+    {"id": "oracle",       "nom": "🔮 Oracle",              "prix": 2500,  "cat": "gacha_boost", "description": "Tes 3 prochains rolls ont 1 chance sur 5 de faire tomber une carte bonus"},
+    {"id": "double_rien",  "nom": "🎰 Double ou Rien",      "prix": 800,  "cat": "gacha_boost", "description": "Double tes rolls… ou les perd tous (4 rolls max)"},
 
     # ═══ ⚔️ GACHA — SABOTAGE ═══
-    {"id": "bombe_gacha", "nom": "💣 Bombe Gacha",       "prix": 8000, "cat": "gacha_pvp", "description": "Fait perdre à un joueur sa dernière carte claimée"},
-    {"id": "cadenas",     "nom": "🔒 Cadenas",           "prix": 4000, "cat": "gacha_pvp", "description": "Empêche un joueur de claim pendant 30 min"},
-    {"id": "fantome",     "nom": "👻 Fantôme",           "prix": 800,  "cat": "gacha_pvp", "description": "Rend une carte d'un joueur invisible 30 min"},
-    {"id": "malediction", "nom": "🎭 Malédiction Rare",  "prix": 700,  "cat": "gacha_pvp", "description": "Force le prochain tirage d'un joueur à être Commun", "daily": True},
-    {"id": "vol_roll",    "nom": "🎯 Vol de Roll",       "prix": 500,  "cat": "gacha_pvp", "description": "Vole 1 roll à un joueur (3 fois maximum par cible)"},
-    {"id": "freeze",      "nom": "🧊 Sceau des Ombres",  "prix": 500,  "cat": "gacha_pvp", "description": "Bloque le claim d'un joueur 10 secondes", "daily": True},
-    {"id": "curse",       "nom": "⏳ Malédiction Claim", "prix": 400,  "cat": "gacha_pvp", "description": "Ajoute 5 min au cooldown de claim d'un joueur", "daily": True},
+    {"id": "bombe_gacha", "nom": "💣 Bombe Gacha",       "prix": 12000, "cat": "gacha_pvp", "description": "Fait perdre à un joueur sa dernière carte claimée"},
+    {"id": "cadenas",     "nom": "🔒 Cadenas",           "prix": 5000, "cat": "gacha_pvp", "description": "Empêche un joueur de claim pendant 30 min"},
+    {"id": "fantome",     "nom": "👻 Fantôme",           "prix": 1800,  "cat": "gacha_pvp", "description": "Rend une carte d'un joueur invisible 30 min"},
+    {"id": "malediction", "nom": "🎭 Malédiction Rare",  "prix": 900,  "cat": "gacha_pvp", "description": "Force le prochain tirage d'un joueur à être Commun", "daily": True},
+    {"id": "vol_roll",    "nom": "🎯 Vol de Roll",       "prix": 1000,  "cat": "gacha_pvp", "description": "Vole 1 roll à un joueur (3 fois maximum par cible)"},
+    {"id": "freeze",      "nom": "🧊 Sceau des Ombres",  "prix": 1500,  "cat": "gacha_pvp", "description": "Bloque le claim d'un joueur 10 secondes", "daily": True},
+    {"id": "curse",       "nom": "⏳ Malédiction Claim", "prix": 3000,  "cat": "gacha_pvp", "description": "Ajoute 5 min au cooldown de claim d'un joueur", "daily": True},
 
     # ═══ 🛡️ GACHA — PROTECTION ═══
-    {"id": "protection", "nom": "🌟 Protection Divine", "prix": 5000, "cat": "gacha_def", "description": "Immunité totale contre tout sabotage pendant 2 h"},
-    {"id": "amulette",   "nom": "🪬 Amulette",          "prix": 2500, "cat": "gacha_def", "description": "Renvoie tout sabotage sur l'attaquant pendant 20 min"},
-    {"id": "shield",     "nom": "🛡️ Bouclier",         "prix": 600,  "cat": "gacha_def", "description": "Protège du Sceau et des Malédictions pendant 30 min"},
+    {"id": "protection", "nom": "🌟 Protection Divine", "prix": 7500, "cat": "gacha_def", "description": "Immunité totale contre tout sabotage pendant 2 h"},
+    {"id": "amulette",   "nom": "🪬 Amulette",          "prix": 3500, "cat": "gacha_def", "description": "Renvoie tout sabotage sur l'attaquant pendant 20 min"},
+    {"id": "shield",     "nom": "🛡️ Bouclier",         "prix": 2000,  "cat": "gacha_def", "description": "Protège du Sceau et des Malédictions pendant 30 min"},
 
     # ═══ ✨ DIVERS & FUN ═══
-    {"id": "double_xp",   "nom": "⚡ Double XP (1 h)",   "prix": 300,  "cat": "divers", "description": "Ton XP de messages est doublée pendant une heure"},
-    {"id": "megaphone",   "nom": "📣 Mégaphone",         "prix": 1200, "cat": "divers", "description": "Ton prochain message est annoncé en grand dans le salon"},
-    {"id": "cafe",        "nom": "☕ Café du QG",         "prix": 250,  "cat": "divers", "description": "Recharge instantanément 3 rolls gacha"},
-    {"id": "tirelire",    "nom": "🐷 Tirelire",           "prix": 5000, "cat": "divers", "description": "Dépose 5 000 p et récupère entre 2 000 et 12 000 p — pur hasard"},
-    {"id": "reroll_pet",  "nom": "🔄 Friandise Mystère",  "prix": 3000, "cat": "divers", "description": "Donne 300 XP d'un coup à ton compagnon actif"},
-    {"id": "boost_daily", "nom": "📅 Double Daily",       "prix": 800,  "cat": "divers", "description": "Ton prochain `.daily` rapporte le double", "daily": True},
-    {"id": "loupe",       "nom": "🔍 Loupe du Collectionneur", "prix": 1500, "cat": "divers", "description": "Révèle 3 cartes rares encore disponibles dans le gacha"},
+    {"id": "double_xp",   "nom": "⚡ Double XP (1 h)",   "prix": 3000,  "cat": "divers", "description": "Ton XP de messages est doublée pendant une heure"},
+    {"id": "megaphone",   "nom": "📣 Mégaphone",         "prix": 2000, "cat": "divers", "description": "Ton prochain message est annoncé en grand dans le salon"},
+    {"id": "cafe",        "nom": "☕ Café du QG",         "prix": 5000,  "cat": "divers", "description": "Recharge instantanément 3 rolls gacha"},
+    {"id": "tirelire",    "nom": "🐷 Tirelire",           "prix": 5000, "cat": "divers", "description": "Mise 5 000 p et récupère entre **0 et 20 000 p** — la maison est légèrement gagnante"},
+    {"id": "reroll_pet",  "nom": "🔄 Friandise Mystère",  "prix": 4000, "cat": "divers", "description": "Donne 300 XP d'un coup à ton compagnon actif"},
+    {"id": "boost_daily", "nom": "📅 Double Daily",       "prix": 4000,  "cat": "divers", "description": "Ton prochain `.daily` rapporte le double", "daily": True},
+    {"id": "loupe",       "nom": "🔍 Loupe du Collectionneur", "prix": 2500, "cat": "divers", "description": "Révèle 3 cartes rares encore disponibles dans le gacha"},
 ]
 
 # Les compagnons sont générés depuis PETS_DB (voir build_shop_pages)
@@ -3440,15 +3458,24 @@ async def acheter_cmd(ctx, item_id: str = None):
 
     # ── 🐷 Tirelire : pari sur soi-même ──
     if iid == "tirelire":
-        gain = random.choice([2000, 3000, 4000, 5000, 6000, 8000, 12000])
+        # Espérance ≈ 4 550 p pour 5 000 misés — on perd plus souvent qu'on ne gagne
+        gain = random.choices(
+            [0, 1500, 3000, 4500, 5500, 8000, 12000, 25000],
+            weights=[8, 16, 22, 20, 14, 12, 6, 2])[0]
         economy_data[uid]["coins"] += gain
         check_coins_achievements(uid, ctx.channel)
         net = gain - item["prix"]
+        if gain == 0:
+            txt = "💀 Elle était **vide**. Tu perds tes 5 000 pièces."
+        elif net > 0:
+            txt = f"Elle contenait **{gain:,} pièces** !\n🎉 Tu gagnes **{net:,} pièces** net."
+        elif net == 0:
+            txt = f"Elle contenait **{gain:,} pièces** — tu rentres exactement dans tes frais."
+        else:
+            txt = f"Elle contenait **{gain:,} pièces**.\n💸 Tu perds **{abs(net):,} pièces**… ça arrive."
         return await ctx.send(embed=discord.Embed(
             title="🐷 Tu casses la tirelire…",
-            description=(f"Elle contenait **{gain:,} pièces** !\n"
-                         + (f"🎉 Tu gagnes **{net:,} pièces** net." if net > 0
-                            else f"💸 Tu perds **{abs(net):,} pièces**… ça arrive.")),
+            description=txt + "\n\n*Espérance de gain : environ 4 550 p pour 5 000 misés — la maison gagne.*",
             color=0x2ecc71 if net > 0 else 0xe74c3c))
 
     # ── 🔄 Friandise : 300 XP au compagnon ──
@@ -4199,15 +4226,23 @@ class SalonPriveView(ui.View):
         await interaction.response.edit_message(view=self)
         self.stop()
 
-async def demander_salon_prive(ctx, nom_jeu, emoji="🎮"):
-    """Demande au joueur s'il veut un salon privé. Retourne (salon, est_temporaire)."""
+async def demander_salon_prive(ctx, nom_jeu, emoji="🎮", invites=None):
+    """Demande au joueur s'il veut un salon privé. Retourne (salon, est_temporaire).
+    `invites` : membres supplémentaires ayant accès au salon."""
+    invites = invites or []
     view = SalonPriveView(ctx.author, timeout=30)
+    if invites:
+        noms = ", ".join(m.display_name for m in invites)
+        detail = (f"🔒 **Salon privé** — un salon temporaire réservé à toi et **{noms}**, "
+                  f"personne d'autre ne pourra y écrire.\n"
+                  f"👥 **Ici** — tout le monde peut suivre la partie.")
+    else:
+        detail = ("🔒 **Salon privé** — un salon temporaire rien que pour toi, "
+                  "personne ne vient spammer les réponses.\n"
+                  "👥 **Ici** — tout le monde peut participer et tenter de trouver.")
     msg = await ctx.send(embed=discord.Embed(
         title=f"{emoji} {nom_jeu}",
-        description=("**Où veux-tu jouer ?**\n\n"
-                     "🔒 **Salon privé** — un salon temporaire rien que pour toi, "
-                     "personne ne vient spammer les réponses.\n"
-                     "👥 **Ici** — tout le monde peut participer et tenter de trouver."),
+        description=f"**Où veux-tu jouer ?**\n\n{detail}",
         color=0x9b59b6), view=view)
     await view.wait()
     try: await msg.delete()
@@ -4225,6 +4260,8 @@ async def demander_salon_prive(ctx, nom_jeu, emoji="🎮"):
         ctx.guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True),
         ctx.author: discord.PermissionOverwrite(read_messages=True, send_messages=True),
     }
+    for m in invites:
+        overwrites[m] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
     try:
         salon = await ctx.guild.create_text_channel(
             f"{emoji}・{nom_jeu.lower().replace(' ', '-')}-{ctx.author.name}"[:95],
@@ -4234,8 +4271,11 @@ async def demander_salon_prive(ctx, nom_jeu, emoji="🎮"):
         print(f"[SalonPrivé] {e}")
         await ctx.send("⚠️ Je n'ai pas pu créer de salon privé — on joue ici.", delete_after=8)
         return ctx.channel, False
-    await ctx.send(embed=discord.Embed(
-        description=f"🔒 Ta partie t'attend dans {salon.mention} !", color=0x2ecc71), delete_after=15)
+    mentions = " ".join(m.mention for m in invites)
+    await ctx.send(f"{mentions}" if mentions else "", embed=discord.Embed(
+        description=f"🔒 La partie vous attend dans {salon.mention} !" if invites
+                    else f"🔒 Ta partie t'attend dans {salon.mention} !",
+        color=0x2ecc71), delete_after=20)
     return salon, True
 
 # ============================================================
@@ -6725,7 +6765,7 @@ PETS_DB = {
     "cerf":     {"nom": "Cerf Sacré",            "emoji": "🦌", "rarete": "Légendaire", "type": "xp",    "base": 25, "desc": "+% XP sur les messages"},
     "fenrir":   {"nom": "Fenrir",                "emoji": "🐺", "rarete": "Légendaire", "type": "roll",  "base": 12, "desc": "% chance de roll gratuit"},
 }
-PETS_PRIX = {"Commun": 2000, "Rare": 6000, "Épique": 14000, "Légendaire": 35000}
+PETS_PRIX = {"Commun": 2000, "Rare": 5000, "Épique": 10000, "Légendaire": 20000}
 PET_XP_PER_LEVEL = 100
 PET_LEVEL_MAX = 10
 pets_data = {}  # {uid: {"owned": {pet_id: {"level": 1, "xp": 0}}, "active": pet_id}}
@@ -7397,71 +7437,108 @@ SLOT_GAINS = {
     2: 20,
 }
 
-@bot.command(name="devine")
+@bot.command(name="devine", aliases=["deviner", "guess"])
 async def devine_cmd(ctx):
-    """Lance un jeu Devine le Personnage"""
+    """Devine le personnage — enchaîne les manches jusqu'à `.devinerstop`"""
     if ctx.channel.id in active_devine:
-        return await ctx.send("🎭 Un jeu est déjà en cours ici !")
+        return await ctx.send("🎭 Un jeu est déjà en cours ici ! Tape `.devinerstop` pour l'arrêter.")
 
     salon, temporaire = await demander_salon_prive(ctx, "Devine le personnage", "🎭")
     if salon.id in active_devine:
         return await salon.send("🎭 Un jeu est déjà en cours ici !")
-    perso = random.choice(PERSONNAGES)
-    active_devine[salon.id] = {"perso": perso, "indice_idx": 0, "tries": 0}
 
-    embed = discord.Embed(
-        title=f"🎭 Devine le Personnage ! {perso['univers']}",
-        description=f"**Indice 1 :** {perso['indices'][0]}\n\n_Tape le nom du personnage !_",
-        color=0x9b59b6
-    )
-    embed.set_footer(text="⏳ 60 secondes • Tu peux demander un indice en tapant 'indice' !")
-    await salon.send(embed=embed)
+    active_devine[salon.id] = {"running": True, "manche": 0, "scores": {}, "vus": []}
+    await salon.send(embed=discord.Embed(
+        title="🎭 Devine le Personnage",
+        description=("Je te donne des indices, tu trouves le personnage.\n"
+                     "Écris **`indice`** pour en obtenir un de plus *(mais tu gagnes moins)*.\n\n"
+                     f"🏆 **150 pièces** au premier indice, puis **-30** par indice supplémentaire.\n"
+                     f"Les manches s'enchaînent — tape **`.devinerstop`** quand tu veux arrêter."),
+        color=0x9b59b6))
+    await asyncio.sleep(2)
 
     def check(m):
         return m.channel == salon and not m.author.bot
 
-    end_time = asyncio.get_event_loop().time() + 60
-    while True:
-        remaining = end_time - asyncio.get_event_loop().time()
-        if remaining <= 0:
-            break
-        try:
-            msg = await bot.wait_for("message", check=check, timeout=remaining)
+    while salon.id in active_devine and active_devine[salon.id].get("running"):
+        game = active_devine[salon.id]
+        game["manche"] += 1
+        dispo = [p for p in PERSONNAGES if p["nom"] not in game["vus"]]
+        if not dispo:
+            game["vus"] = []
+            dispo = PERSONNAGES
+        perso = random.choice(dispo)
+        game["vus"].append(perso["nom"])
+        game["perso"] = perso
+        game["indice_idx"] = 0
+
+        await salon.send(embed=discord.Embed(
+            title=f"🎭 Manche {game['manche']} — {perso['univers']}",
+            description=f"**Indice 1 :** {perso['indices'][0]}\n\n*Qui suis-je ?*",
+            color=0x9b59b6
+        ).set_footer(text="⏳ 90 s • `indice` pour un indice de plus • `.devinerstop` pour arrêter"))
+
+        trouve = False
+        fin = asyncio.get_event_loop().time() + 90
+        while asyncio.get_event_loop().time() < fin:
+            reste = fin - asyncio.get_event_loop().time()
+            try:
+                msg = await bot.wait_for("message", check=check, timeout=reste)
+            except asyncio.TimeoutError:
+                break
             if salon.id not in active_devine:
                 return
-            game = active_devine[salon.id]
-
-            if msg.content.lower().strip() == "indice":
+            contenu = msg.content.lower().strip()
+            if contenu.startswith("."):
+                continue
+            if contenu == "indice":
                 game["indice_idx"] = min(game["indice_idx"] + 1, len(perso["indices"]) - 1)
                 idx = game["indice_idx"]
                 await salon.send(embed=discord.Embed(
-                    description=f"💡 **Indice {idx+1} :** {perso['indices'][idx]}",
-                    color=0xf39c12
-                ))
+                    description=f"💡 **Indice {idx+1} :** {perso['indices'][idx]}", color=0xf39c12))
                 continue
-
             if _devine_valide(msg.content, perso["nom"]):
-                active_devine.pop(salon.id, None)
-                prize = max(50, 150 - game["indice_idx"] * 30)
-                economy_data[str(msg.author.id)]["coins"] += prize
-                xp_data[str(msg.author.id)]["xp"] += 20
+                prize = max(60, 150 - game["indice_idx"] * 30)
+                uid = str(msg.author.id)
+                economy_data[uid]["coins"] += prize
+                xp_data[uid]["xp"] += 20
+                check_coins_achievements(uid, salon)
+                game["scores"][msg.author.display_name] = game["scores"].get(msg.author.display_name, 0) + 1
                 await salon.send(embed=discord.Embed(
-                    description=f"🎉 **{msg.author.mention}** a trouvé ! C'était **{perso['nom']}** ! +{prize} pièces 🎭",
-                    color=0x2ecc71
-                ))
-                if temporaire:
-                    await close_event_channel(salon, 30)
-                return
-        except asyncio.TimeoutError:
+                    description=(f"🎉 **{msg.author.display_name}** trouve ! C'était **{perso['nom']}** "
+                                 f"*({perso['univers']})*\n💰 **+{prize} pièces** · ⭐ +20 XP"),
+                    color=0x2ecc71))
+                trouve = True
+                break
+        if not trouve and salon.id in active_devine:
+            await salon.send(embed=discord.Embed(
+                description=f"⏰ Temps écoulé ! C'était **{perso['nom']}** *({perso['univers']})*",
+                color=0xe74c3c))
+        if salon.id not in active_devine:
             break
+        await asyncio.sleep(3)
 
-    active_devine.pop(salon.id, None)
-    await salon.send(embed=discord.Embed(
-        description=f"⏰ Temps écoulé ! C'était **{perso['nom']}** ({perso['univers']}) !",
-        color=0xe74c3c
-    ))
+    # Fin de partie
+    game = active_devine.pop(salon.id, None)
+    if game and game.get("scores"):
+        classement = sorted(game["scores"].items(), key=lambda x: -x[1])
+        detail = "\n".join(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{n}** — {s} trouvé(s)"
+                            for i, (n, s) in enumerate(classement[:5]))
+        await salon.send(embed=discord.Embed(
+            title="🎭 Partie terminée",
+            description=f"**{game['manche']} manche(s) jouée(s)**\n\n{detail}", color=0x9b59b6))
     if temporaire:
-        await close_event_channel(salon, 30)
+        await close_event_channel(salon, 60)
+
+@bot.command(name="devinerstop", aliases=["devinestop", "stopdevine"])
+async def devinerstop_cmd(ctx):
+    """Arrête la partie de Devine en cours — .devinerstop"""
+    if ctx.channel.id in active_devine:
+        active_devine[ctx.channel.id]["running"] = False
+        return await ctx.send(embed=discord.Embed(
+            description="🛑 Partie arrêtée — résultats à la fin de la manche.", color=0xe74c3c))
+    await ctx.send("❌ Aucune partie de Devine en cours ici !")
+
 
 # ============================================================
 #  PENDU
@@ -7902,96 +7979,137 @@ async def noter_cmd(ctx, note: int, *, titre: str):
     )
     await ctx.send(embed=embed)
 
-@bot.command(name="pendu")
+@bot.command(name="pendu", aliases=["hangman"])
 async def pendu_cmd(ctx):
-    """Lance une partie de Pendu avec des titres d'animés/dramas"""
+    """Le pendu — enchaîne les manches jusqu'à `.pendustop`"""
     if ctx.channel.id in active_pendu:
-        return await ctx.send("🎮 Une partie de pendu est déjà en cours !")
+        return await ctx.send("🎮 Une partie est déjà en cours ici ! Tape `.pendustop` pour l'arrêter.")
 
     salon, temporaire = await demander_salon_prive(ctx, "Pendu", "🎮")
     if salon.id in active_pendu:
         return await salon.send("🎮 Une partie est déjà en cours ici !")
-    mot = random.choice(PENDU_MOTS)
-    # Révéler la première lettre
-    trouve_init = ["_" if c != " " else " " for c in mot]
-    premiere = mot[0]
-    for i, c in enumerate(mot):
-        if c == premiere:
-            trouve_init[i] = c
-    active_pendu[salon.id] = {
-        "mot": mot,
-        "trouve": trouve_init,
-        "lettres": [premiere],
-        "erreurs": 0,
-        "max_erreurs": 6
-    }
 
-    await salon.send(embed=_pendu_embed(active_pendu[salon.id]))
+    active_pendu[salon.id] = {"running": True, "manche": 0, "scores": {}, "vus": []}
+    await salon.send(embed=discord.Embed(
+        title="🎮 Le Pendu",
+        description=("Devine le titre ou le personnage, **lettre par lettre**.\n"
+                     "Écris **`skip`** pour passer un mot.\n\n"
+                     "🏆 **100 pièces** par mot trouvé · ❌ 6 erreurs maximum\n"
+                     "Les manches s'enchaînent — tape **`.pendustop`** quand tu veux arrêter."),
+        color=0x2ecc71))
+    await asyncio.sleep(2)
 
     def check(m):
-        return (
-            m.channel == salon and not m.author.bot and
-            (len(m.content) == 1 and m.content.isalpha() or m.content.lower() == "skip")
-        )
+        return (m.channel == salon and not m.author.bot
+                and (len(m.content.strip()) == 1 and m.content.strip().isalpha()
+                     or m.content.lower().strip() in ("skip", "passer")
+                     or len(m.content.strip()) > 2))
 
-    while salon.id in active_pendu:
-        game = active_pendu[salon.id]
-        try:
-            msg = await bot.wait_for("message", check=check, timeout=60)
-            # Skip
-            if msg.content.lower() == "skip":
-                mot_cache = game["mot"]
-                active_pendu.pop(salon.id, None)
+    while salon.id in active_pendu and active_pendu[salon.id].get("running"):
+        etat = active_pendu[salon.id]
+        etat["manche"] += 1
+        dispo = [m for m in PENDU_MOTS if m not in etat["vus"]]
+        if not dispo:
+            etat["vus"] = []
+            dispo = PENDU_MOTS
+        mot = random.choice(dispo)
+        etat["vus"].append(mot)
+
+        trouve_init = ["_" if ch != " " else " " for ch in mot]
+        premiere = mot[0]
+        for i, ch in enumerate(mot):
+            if ch == premiere:
+                trouve_init[i] = ch
+        game = {"mot": mot, "trouve": trouve_init, "lettres": [premiere],
+                "erreurs": 0, "max_erreurs": 6, "manche": etat["manche"]}
+        etat["game"] = game
+        await salon.send(embed=_pendu_embed(game))
+
+        fini = False
+        while not fini and salon.id in active_pendu:
+            try:
+                msg = await bot.wait_for("message", check=check, timeout=120)
+            except asyncio.TimeoutError:
                 await salon.send(embed=discord.Embed(
-                    description=f"⏭️ Mot passé ! C'était **{mot_cache.upper()}**\nTape `.pendu` pour rejouer !",
-
-                    color=0x95a5a6
-                ))
+                    description=f"⏰ Temps écoulé ! Le mot était **{mot.upper()}**", color=0xe74c3c))
+                break
+            if salon.id not in active_pendu:
                 return
-            lettre = msg.content.lower()
+            contenu = msg.content.lower().strip()
+            if contenu.startswith("."):
+                continue
+            if contenu in ("skip", "passer"):
+                await salon.send(embed=discord.Embed(
+                    description=f"⏭️ Mot passé ! C'était **{mot.upper()}**", color=0x95a5a6))
+                break
+            # Proposition du mot entier
+            if len(contenu) > 2:
+                if normalize_str(contenu) == normalize_str(mot):
+                    uid = str(msg.author.id)
+                    economy_data[uid]["coins"] += 150
+                    check_coins_achievements(uid, salon)
+                    etat["scores"][msg.author.display_name] = etat["scores"].get(msg.author.display_name, 0) + 1
+                    await salon.send(embed=discord.Embed(
+                        description=f"🎉 **{msg.author.display_name}** trouve le mot entier — **{mot.upper()}** !\n💰 **+150 pièces**",
+                        color=0x2ecc71))
+                    fini = True
+                continue
+            lettre = contenu
             if lettre in game["lettres"]:
-                await salon.send(f"⚠️ La lettre **{lettre}** a déjà été proposée !", delete_after=3)
+                await salon.send(f"⚠️ La lettre **{lettre}** a déjà été proposée !", delete_after=4)
                 continue
             game["lettres"].append(lettre)
             if lettre in game["mot"]:
-                for i, c in enumerate(game["mot"]):
-                    if c == lettre:
+                for i, ch in enumerate(game["mot"]):
+                    if ch == lettre:
                         game["trouve"][i] = lettre
                 if "_" not in game["trouve"]:
-                    active_pendu.pop(salon.id, None)
-                    prize = 100
-                    economy_data[str(msg.author.id)]["coins"] += prize
+                    uid = str(msg.author.id)
+                    economy_data[uid]["coins"] += 100
+                    check_coins_achievements(uid, salon)
+                    etat["scores"][msg.author.display_name] = etat["scores"].get(msg.author.display_name, 0) + 1
                     await salon.send(embed=discord.Embed(
-                        description=f"🎉 **{msg.author.mention}** a trouvé ! C'était **{game['mot'].upper()}** ! +{prize} pièces 🏆",
-                        color=0x2ecc71
-                    ))
-                    if temporaire:
-                        await close_event_channel(salon, 30)
-                    return
+                        description=f"🎉 **{msg.author.display_name}** complète **{mot.upper()}** !\n💰 **+100 pièces**",
+                        color=0x2ecc71))
+                    fini = True
+                    continue
                 await salon.send(embed=_pendu_embed(game))
             else:
                 game["erreurs"] += 1
                 if game["erreurs"] >= game["max_erreurs"]:
-                    active_pendu.pop(salon.id, None)
                     await salon.send(embed=discord.Embed(
-                        description=f"💀 Perdu ! Le mot était **{game['mot'].upper()}** !",
-                        color=0xe74c3c
-                    ))
-                    if temporaire:
-                        await close_event_channel(salon, 30)
-                    return
+                        description=f"💀 Perdu ! Le mot était **{mot.upper()}**", color=0xe74c3c))
+                    break
                 await salon.send(embed=_pendu_embed(game))
-        except asyncio.TimeoutError:
-            active_pendu.pop(salon.id, None)
-            await salon.send("⏰ Partie abandonnée !")
-            if temporaire:
-                await close_event_channel(salon, 30)
-            return
+        if salon.id not in active_pendu:
+            break
+        await asyncio.sleep(3)
+
+    etat = active_pendu.pop(salon.id, None)
+    if etat and etat.get("scores"):
+        classement = sorted(etat["scores"].items(), key=lambda x: -x[1])
+        detail = "\n".join(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{n}** — {s} mot(s)"
+                            for i, (n, s) in enumerate(classement[:5]))
+        await salon.send(embed=discord.Embed(
+            title="🎮 Partie terminée",
+            description=f"**{etat['manche']} manche(s) jouée(s)**\n\n{detail}", color=0x2ecc71))
+    if temporaire:
+        await close_event_channel(salon, 60)
+
+@bot.command(name="pendustop", aliases=["stoppendu"])
+async def pendustop_cmd(ctx):
+    """Arrête la partie de Pendu en cours — .pendustop"""
+    if ctx.channel.id in active_pendu:
+        active_pendu[ctx.channel.id]["running"] = False
+        return await ctx.send(embed=discord.Embed(
+            description="🛑 Partie arrêtée — résultats à la fin de la manche.", color=0xe74c3c))
+    await ctx.send("❌ Aucune partie de Pendu en cours ici !")
+
 
 def _pendu_embed(game):
     stage = PENDU_STAGES[max(0, len(PENDU_STAGES) - 1 - game["erreurs"])]
     embed = discord.Embed(
-        title=f"🎮 Pendu {stage}",
+        title=f"🎮 Pendu — Manche {game.get('manche', 1)}  {stage}",
         description=(
             f"**`{' '.join(game['trouve'])}`**\n\n"
             f"❌ Erreurs : **{game['erreurs']}/{game['max_erreurs']}**\n"
@@ -7999,7 +8117,7 @@ def _pendu_embed(game):
         ),
         color=0xe74c3c if game["erreurs"] >= 4 else 0xf39c12 if game["erreurs"] >= 2 else 0x2ecc71
     )
-    embed.set_footer(text="Tape une lettre pour jouer !")
+    embed.set_footer(text="Tape une lettre · le mot entier · `skip` pour passer · `.pendustop` pour arrêter")
     return embed
 
 # ============================================================
