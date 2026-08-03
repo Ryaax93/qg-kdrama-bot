@@ -503,7 +503,6 @@ def check_answer(reponse: str, correct: str) -> bool:
 
 
 QUIZ_KDRAMA = [
-    # ── Kdramas incontournables & récents ──
     {"q": "Dans Squid Game, quel est le numéro du joueur principal ?", "a": "456"},
     {"q": "Dans Squid Game, quel est le premier jeu ?", "a": "1 2 3 soleil"},
     {"q": "Dans Squid Game, combien de joueurs participent au début ?", "a": "456"},
@@ -550,14 +549,12 @@ QUIZ_KDRAMA = [
     {"q": "Dans My Mister, quel âge sépare les deux protagonistes ?", "a": "20 ans"},
     {"q": "Dans Prison Playbook, quel sport pratique le protagoniste ?", "a": "baseball"},
     {"q": "Dans Guardian, combien d'années le gobelin a-t-il vécu ?", "a": "939"},
-
     {"q": "Dans quel drama joue Lee Min-ho dans le rôle de Gu Jun-pyo ?", "a": "boys over flowers"},
     {"q": "Comment s'appelle le goblin dans le drama 'Goblin' ?", "a": "kim shin"},
     {"q": "Dans 'Crash Landing on You', dans quel pays atterrit Yoon Se-ri ?", "a": "corée du nord"},
     {"q": "Quel drama coréen a été le premier à entrer dans le top 1 mondial Netflix ?", "a": "squid game"},
     {"q": "Dans 'Reply 1988', dans quel quartier de Séoul vivent les personnages ?", "a": "ssangmun-dong"},
     {"q": "Dans quel drama Park Seo-joon tient un restaurant après avoir été viré ?", "a": "itaewon class"},
-    {"q": "Quel acteur joue le rôle principal dans Vincenzo ?", "a": "song joong-ki"},
     {"q": "Dans Goblin, quelle est la profession de Ji Eun-tak ?", "a": "lycéenne"},
     {"q": "Combien d'épisodes compte la saison 1 de Squid Game ?", "a": "9"},
     {"q": "Dans Kingdom, quel est le nom du prince héritier ?", "a": "lee chang"},
@@ -568,7 +565,6 @@ QUIZ_KDRAMA = [
     {"q": "Dans Hospital Playlist, combien d'amis médecins forment le groupe principal ?", "a": "5"},
     {"q": "Dans Signal, quel objet permet aux personnages de communiquer à travers le temps ?", "a": "talkie walkie"},
     {"q": "Dans Weightlifting Fairy Kim Bok-joo, quel sport pratique l'héroïne ?", "a": "haltérophilie"},
-    {"q": "Quel acteur joue dans Crash Landing on You et Descendants of the Sun ?", "a": "hyun bin"},
     {"q": "Dans 'It's Okay to Not Be Okay', quel est le métier de la protagoniste féminine ?", "a": "auteure"},
     {"q": "Dans Goblin, qui est la fiancée du goblin ?", "a": "ji eun-tak"},
     {"q": "Quel drama coréen historique parle d'une épidémie de zombies pendant la période Joseon ?", "a": "kingdom"},
@@ -578,7 +574,6 @@ QUIZ_KDRAMA = [
     {"q": "Dans quel drama Song Hye-kyo joue une femme qui se venge après son divorce ?", "a": "the glory"},
     {"q": "Dans Juvenile Justice, quel est le métier de la protagoniste ?", "a": "juge"},
     {"q": "Dans Hometown Cha-Cha-Cha, dans quelle ville se passe l'histoire ?", "a": "gongjin"},
-    {"q": "Dans My Mister, quel acteur joue le personnage principal masculin ?", "a": "lee sun-kyun"},
     {"q": "Dans Arthdal Chronicles, quel est le nom de la tribu principale ?", "a": "igutu"},
     {"q": "Dans Start-Up, comment s'appelle la startup que crée l'héroïne ?", "a": "samsan tech"},
     {"q": "Dans Move to Heaven, que fait le personnage principal comme métier ?", "a": "trauma cleaner"},
@@ -601,6 +596,59 @@ QUIZ_KDRAMA = [
     {"q": "Dans Queen of Tears, quelle est la famille riche du drama ?", "a": "queens group"},
     {"q": "Dans My Demon, qui est le démon ?", "a": "do hyeok-nu"},
     {"q": "Dans Mask Girl, quel est le complexe principal de l'héroïne ?", "a": "son apparence physique"},
+    {"q": "Dans The Penthouse, comment s'appelle l'immeuble de luxe où vivent les personnages ?", "a": "hera palace"},
+    {"q": "Dans The Penthouse, que cherche Shim Su-ryeon tout au long de la série ?", "a": "la verite sur sa fille"},
+    {"q": "Dans Descendants of the Sun, quelle catastrophe frappe Uruk ?", "a": "un tremblement de terre"},
+    {"q": "Dans Vagabond, quel événement bouleverse la vie de Cha Dal-geon ?", "a": "le crash de l avion"},
+    {"q": "Dans Vagabond, qui meurt dans le crash au début ?", "a": "son neveu"},
+    {"q": "Dans Goblin, que doit faire la fiancée du gobelin pour le libérer ?", "a": "retirer l epee"},
+    {"q": "Dans Goblin, avec qui le gobelin partage-t-il sa maison ?", "a": "la faucheuse"},
+    {"q": "Dans Crash Landing on You, comment Se-ri arrive-t-elle en Corée du Nord ?", "a": "une tornade en parapente"},
+    {"q": "Dans Itaewon Class, pourquoi Sae-royi va-t-il en prison ?", "a": "il a frappe le fils de jangga"},
+    {"q": "Dans Itaewon Class, quel est le nom de l'entreprise ennemie ?", "a": "jangga"},
+    {"q": "Dans Squid Game, que doit-on faire lors du jeu du dalgona ?", "a": "decouper la forme"},
+    {"q": "Dans Squid Game, qui se révèle être le joueur 001 ?", "a": "le createur du jeu"},
+    {"q": "Dans Squid Game, combien de billes reçoit chaque joueur au 4ème jeu ?", "a": "10"},
+    {"q": "Dans The Glory, quel jeu Dong-eun apprend-elle pour approcher son bourreau ?", "a": "le go"},
+    {"q": "Dans The Glory, avec quoi Dong-eun était-elle brûlée au lycée ?", "a": "un fer a friser"},
+    {"q": "Dans Vincenzo, qu'est-ce qui est caché sous le bâtiment Geumga ?", "a": "de l or"},
+    {"q": "Dans Vincenzo, quelle entreprise Vincenzo affronte-t-il ?", "a": "babel"},
+    {"q": "Dans Reply 1988, quel événement rassemble tout le quartier au début ?", "a": "les jeux olympiques"},
+    {"q": "Dans Signal, quel objet relie les deux époques ?", "a": "un talkie walkie"},
+    {"q": "Dans Signal, en quelle année se trouve le policier du passé ?", "a": "1989"},
+    {"q": "Dans Kingdom, comment se propage l'épidémie ?", "a": "en mangeant de la chair"},
+    {"q": "Dans Kingdom, quelle plante ramène les morts à la vie ?", "a": "la plante de resurrection"},
+    {"q": "Dans Extraordinary Attorney Woo, quel animal passionne l'héroïne ?", "a": "les baleines"},
+    {"q": "Dans Extraordinary Attorney Woo, quelle particularité a son nom ?", "a": "il se lit dans les deux sens"},
+    {"q": "Dans Queen of Tears, de quelle maladie souffre Hae-in ?", "a": "une tumeur au cerveau"},
+    {"q": "Dans Queen of Tears, quel est le nom du groupe familial ?", "a": "queens"},
+    {"q": "Dans Sweet Home, en quoi les habitants se transforment-ils ?", "a": "des monstres"},
+    {"q": "Dans Sweet Home, qu'est-ce qui détermine la forme du monstre ?", "a": "leurs desirs"},
+    {"q": "Dans All of Us Are Dead, d'où vient le virus ?", "a": "le laboratoire du lycee"},
+    {"q": "Dans Reborn Rich, en quelle année le héros se réveille-t-il ?", "a": "1987"},
+    {"q": "Dans Reborn Rich, quel groupe veut-il récupérer ?", "a": "soonyang"},
+    {"q": "Dans D.P., que traquent les deux protagonistes ?", "a": "les deserteurs"},
+    {"q": "Dans Move to Heaven, quel est le métier de l'oncle et du neveu ?", "a": "nettoyeurs de scenes"},
+    {"q": "Dans Alchemy of Souls, en quoi consiste l'alchimie des âmes ?", "a": "changer de corps"},
+    {"q": "Dans Business Proposal, pourquoi Ha-ri va-t-elle au rendez-vous ?", "a": "a la place de son amie"},
+    {"q": "Dans Twenty-Five Twenty-One, quelle crise sert de toile de fond ?", "a": "la crise financiere"},
+    {"q": "Dans Start-Up, comment s'appelle l'incubateur de startups ?", "a": "sandbox"},
+    {"q": "Dans My Mister, comment Ji-an écoute-t-elle Dong-hoon ?", "a": "elle met son telephone sur ecoute"},
+    {"q": "Dans Hometown Cha-Cha-Cha, dans quel village se passe l'histoire ?", "a": "gongjin"},
+    {"q": "Dans Lovely Runner, pourquoi l'héroïne remonte-t-elle le temps ?", "a": "pour sauver sunjae"},
+    {"q": "Dans Marry My Husband, qui trahit l'héroïne ?", "a": "son mari et sa meilleure amie"},
+    {"q": "Dans Mask Girl, pourquoi l'héroïne porte-t-elle un masque ?", "a": "elle complexe sur son visage"},
+    {"q": "Dans Big Mouth, pour qui l'avocat est-il pris ?", "a": "big mouse"},
+    {"q": "Dans Stranger, quelle particularité a le procureur Hwang Si-mok ?", "a": "il ne ressent pas d emotions"},
+    {"q": "Dans Weak Hero Class, comment Si-eun compense-t-il sa faiblesse physique ?", "a": "par son intelligence"},
+    {"q": "Dans Prison Playbook, pourquoi le héros est-il emprisonné ?", "a": "il a defendu sa soeur"},
+    {"q": "Dans Boys Over Flowers, comment s'appelle le groupe des 4 héritiers ?", "a": "f4"},
+    {"q": "Dans My Love from the Star, depuis combien de temps l'alien vit sur Terre ?", "a": "400 ans"},
+    {"q": "Dans It's Okay to Not Be Okay, quel est le métier de Ko Moon-young ?", "a": "autrice de contes"},
+    {"q": "Dans Hospital Playlist, que font les cinq amis en dehors de l'hôpital ?", "a": "un groupe de musique"},
+    {"q": "Dans Doctor Slump, qu'ont en commun les deux protagonistes ?", "a": "un burnout"},
+    {"q": "Dans My Demon, que perd le démon au contact de l'héroïne ?", "a": "ses pouvoirs"},
+    {"q": "Dans Nevertheless, quel est le passe-temps de Jae-eon ?", "a": "la sculpture"},
 ]
 
 QUIZ_ANIME = [
@@ -934,6 +982,11 @@ ROASTS_QG = [
 async def on_message(message):
     if message.author.bot:
         return
+    # Activité dans les salons temporaires
+    if message.channel.id in salons_temporaires:
+        import time as _t
+        salons_temporaires[message.channel.id] = _t.time()
+
     # XP passif
     uid = str(message.author.id)
     message_count[uid] += 1
@@ -1070,6 +1123,8 @@ def build_help_pages(guild, is_admin=False):
         "`.quiz <thème>` — Quiz solo en continu\n"
         "`.quizduel <thème> @joueur` — Quiz en duel *(5 manches)*\n"
         "**Thèmes :** `kdrama` `anime` `gaming` `culture` `harrypotter` `mix`\n"
+        "`.drapeaux` — Quiz des drapeaux **à boutons** *(70 pays)*\n"
+        "`.drapeauxskip` / `.drapeauxstop` — Passer / arrêter\n"
         "`.quizstop` — Arrêter le quiz en cours\n"
         "*Un salon privé peut t'être proposé au lancement*\n"
         "`.bracket kdrama` / `.bracket anime` — Tournoi du serveur\n"
@@ -1094,7 +1149,9 @@ def build_help_pages(guild, is_admin=False):
         "`.missions` — Tes missions du jour"
     ), inline=False)
     e.add_field(name="🐾 Ton compagnon", value=(
-        "`.pet` — Voir ton compagnon • `.pet liste` — Tous les tiens\n"
+        "`.pet` — Son état complet • `.pet liste` — Tous les tiens\n"
+        "`.nourrir` 🍖 `.laver` 🛁 `.promener` 🚶 `.jouer` 🎾 `.dormir` 😴 `.caresser` 🫶\n"
+        "*Un compagnon négligé voit son bonus divisé par deux !*\n"
         "*Pour en obtenir un : `.shop` → page 🐾 Compagnons, puis `.acheter <nom>`*\n"
         "`.pet equiper <nom>` • `.pet nourrir` — +25 XP"
     ), inline=False)
@@ -1151,11 +1208,11 @@ def build_help_pages(guild, is_admin=False):
         "`.invoke` — Invocation Légendaire+ garantie (10 000p)"
     ), inline=False)
     e.add_field(name="📦 Ta collection", value=(
-        "`.gachastock [@membre]` — Voir une collection\n"
+        "`.gachastock [@membre]` — Collection **avec images** ⬅️➡️ et tri\n"
         "`.cardinfo <perso>` — Détails d'une carte\n"
         "`.serie <nom>` — Progression sur une série\n"
-        "`.cartefav add/remove/voir <perso>` — Favoris\n"
-        "`.wishlist` — Ta liste de souhaits\n"
+        "`.wish <carte>` — Wishlist : tu es **ping** dès qu'elle tombe\n"
+        "`.wish` — Voir ta wishlist  ·  `.wish remove <carte>` — en retirer une\n"
         "`.gacha ordre <série> <n°>` — Ranger ta collection"
     ), inline=False)
     e.add_field(name="🔧 Faire évoluer", value=(
@@ -1210,7 +1267,7 @@ def build_help_pages(guild, is_admin=False):
     ), inline=False)
     e.add_field(name="🎯 Mini-jeux", value=(
         "`.devine` — Devine le personnage, manches en continu *(37 persos)*\n"
-        "`.devinerstop` — Arrêter la partie\n"
+        "`.devinetteskip` — Passer la devinette · `.devinerstop` — Arrêter\n"
         "`.pendu` — Le pendu, manches en continu *(185 titres)*\n"
         "`.pendustop` — Arrêter la partie de pendu\n"
         "`.rps <choix>` — Pierre / feuille / ciseaux\n"
@@ -1321,6 +1378,7 @@ def build_help_pages(guild, is_admin=False):
     ), inline=False)
     e.add_field(name="🌸 Girls Only", value=(
         "`.setgirlsrole @role` — Définir le rôle filles\n"
+        "`.girlspanel` — Publier le **bouton d'auto-attribution**\n"
         "`.setsalon girlsonly` — Définir le salon *(publie aussi les commandes dedans)*\n"
         "`.setsalon annonces` — Salon des annonces\n"
         "💫 Star of the Week — lundi 10 h  •  💎 Diamond Girl — le 1er du mois"
@@ -1491,6 +1549,8 @@ async def setimage_cmd(ctx, *, args: str = None):
                 return await ctx.send(f"❌ Tu ne possèdes pas **{c['nom']}** — personne ne la possède !")
 
     ANIME_CARDS_DB[key]["image"] = url
+    images_custom[key] = url
+    save_all_data()
     c = ANIME_CARDS_DB[key]
     embed = discord.Embed(
         description=f"🖼️ L'image de **{c['nom']}** a été mise à jour !",
@@ -1600,6 +1660,7 @@ async def removecard_cmd(ctx, membre: discord.Member = None, *, perso: str = Non
 #  QUIZ QG — Par catégorie + Mode Duel 1v1 + Multijoueur
 # ============================================================
 active_quiz = {}
+active_drapeaux = {}
 quiz_duels = {}  # {channel_id: {players, scores, theme, round, total_rounds}}
 
 QUIZ_HARRYPOTTER = [
@@ -1786,6 +1847,153 @@ async def quiz(ctx, theme: str = "mix"):
     active_quiz.pop(salon.id, None)
     if temporaire:
         await close_event_channel(salon, 60)
+
+
+# ============================================================
+#  🌍 QUIZ DRAPEAUX — reconnaissance à boutons
+# ============================================================
+DRAPEAUX = [
+    ("France","🇫🇷"),("Italie","🇮🇹"),("Espagne","🇪🇸"),("Belgique","🇧🇪"),("Allemagne","🇩🇪"),
+    ("Portugal","🇵🇹"),("Pays-Bas","🇳🇱"),("Suisse","🇨🇭"),("Autriche","🇦🇹"),("Suède","🇸🇪"),
+    ("Norvège","🇳🇴"),("Danemark","🇩🇰"),("Finlande","🇫🇮"),("Irlande","🇮🇪"),("Royaume-Uni","🇬🇧"),
+    ("Pologne","🇵🇱"),("Grèce","🇬🇷"),("Turquie","🇹🇷"),("Russie","🇷🇺"),("Ukraine","🇺🇦"),
+    ("Roumanie","🇷🇴"),("Hongrie","🇭🇺"),("Tchéquie","🇨🇿"),("Croatie","🇭🇷"),("Serbie","🇷🇸"),
+    ("Corée du Sud","🇰🇷"),("Corée du Nord","🇰🇵"),("Japon","🇯🇵"),("Chine","🇨🇳"),("Thaïlande","🇹🇭"),
+    ("Vietnam","🇻🇳"),("Inde","🇮🇳"),("Indonésie","🇮🇩"),("Philippines","🇵🇭"),("Malaisie","🇲🇾"),
+    ("Singapour","🇸🇬"),("Pakistan","🇵🇰"),("Bangladesh","🇧🇩"),("Népal","🇳🇵"),("Mongolie","🇲🇳"),
+    ("États-Unis","🇺🇸"),("Canada","🇨🇦"),("Mexique","🇲🇽"),("Brésil","🇧🇷"),("Argentine","🇦🇷"),
+    ("Chili","🇨🇱"),("Colombie","🇨🇴"),("Pérou","🇵🇪"),("Cuba","🇨🇺"),("Jamaïque","🇯🇲"),
+    ("Maroc","🇲🇦"),("Algérie","🇩🇿"),("Tunisie","🇹🇳"),("Égypte","🇪🇬"),("Sénégal","🇸🇳"),
+    ("Nigeria","🇳🇬"),("Kenya","🇰🇪"),("Afrique du Sud","🇿🇦"),("Éthiopie","🇪🇹"),("Ghana","🇬🇭"),
+    ("Australie","🇦🇺"),("Nouvelle-Zélande","🇳🇿"),("Arabie Saoudite","🇸🇦"),("Israël","🇮🇱"),("Iran","🇮🇷"),
+    ("Irak","🇮🇶"),("Liban","🇱🇧"),("Qatar","🇶🇦"),("Émirats arabes unis","🇦🇪"),("Jordanie","🇯🇴"),
+]
+
+class DrapeauView(ui.View):
+    """4 boutons — un seul est le bon"""
+    def __init__(self, bonne, options, salon, timeout=25):
+        super().__init__(timeout=timeout)
+        self.bonne, self.salon = bonne, salon
+        self.repondu = set()
+        self.gagnant = None
+        for i, pays in enumerate(options):
+            btn = ui.Button(label=pays[:70], style=discord.ButtonStyle.secondary,
+                            emoji=["🅰️","🅱️","🇨","🇩"][i], row=i // 2)
+            async def cb(interaction, p=pays):
+                uid = interaction.user.id
+                if uid in self.repondu:
+                    return await interaction.response.send_message("❌ Tu as déjà répondu !", ephemeral=True)
+                self.repondu.add(uid)
+                if p == self.bonne:
+                    if self.gagnant is None:
+                        self.gagnant = interaction.user
+                        gain = random.randint(40, 90)
+                        economy_data[str(uid)]["coins"] += gain
+                        xp_data[str(uid)]["xp"] += 25
+                        track_stat(str(uid), "quiz_ok", channel=self.salon)
+                        for it in self.children:
+                            it.disabled = True
+                            if getattr(it, "label", None) == self.bonne:
+                                it.style = discord.ButtonStyle.success
+                        await interaction.response.edit_message(view=self)
+                        await self.salon.send(embed=discord.Embed(
+                            description=f"✅ **{interaction.user.display_name}** trouve — c'était **{self.bonne}** !\n"
+                                        f"💰 +{gain} pièces · ⭐ +25 XP",
+                            color=0x2ecc71))
+                        self.stop()
+                    else:
+                        await interaction.response.send_message("✅ Bonne réponse, mais trop tard !", ephemeral=True)
+                else:
+                    await interaction.response.send_message(f"❌ Raté, ce n'est pas **{p}**.", ephemeral=True)
+            btn.callback = cb
+            self.add_item(btn)
+
+@bot.command(name="drapeaux", aliases=["drapeau", "flags"])
+async def drapeaux_cmd(ctx):
+    """Quiz des drapeaux — .drapeaux (`.drapeauxstop` pour arrêter)"""
+    if ctx.channel.id in active_drapeaux:
+        return await ctx.send("🌍 Un quiz drapeaux est déjà en cours ici ! `.drapeauxstop` pour l'arrêter.")
+
+    salon, temporaire = await demander_salon_prive(ctx, "Quiz Drapeaux", "🌍")
+    if salon.id in active_drapeaux:
+        return await salon.send("🌍 Un quiz est déjà en cours ici !")
+
+    active_drapeaux[salon.id] = {"running": True, "manche": 0, "scores": {}, "vus": []}
+    await salon.send(embed=discord.Embed(
+        title="🌍 Quiz Drapeaux",
+        description=(f"Je te montre un drapeau, tu cliques sur le bon pays parmi **4 propositions**.\n\n"
+                     f"🏆 **40 à 90 pièces** + 25 XP par bonne réponse\n"
+                     f"⏱️ 25 secondes par drapeau · une seule réponse chacun\n\n"
+                     f"`.drapeauxskip` pour passer · `.drapeauxstop` pour arrêter"),
+        color=0x3498db))
+    await asyncio.sleep(2)
+
+    while salon.id in active_drapeaux and active_drapeaux[salon.id].get("running"):
+        etat = active_drapeaux[salon.id]
+        etat["manche"] += 1
+        dispo = [d for d in DRAPEAUX if d[0] not in etat["vus"]]
+        if not dispo:
+            etat["vus"] = []
+            dispo = DRAPEAUX
+        pays, emoji = random.choice(dispo)
+        etat["vus"].append(pays)
+        leurres = random.sample([p for p, _ in DRAPEAUX if p != pays], 3)
+        options = leurres + [pays]
+        random.shuffle(options)
+
+        view = DrapeauView(pays, options, salon, timeout=25)
+        etat["view"] = view
+        embed = discord.Embed(
+            title=f"🌍 Manche {etat['manche']} — Quel est ce drapeau ?",
+            description=f"# {emoji}\n\n*Clique sur la bonne réponse.*",
+            color=0x3498db)
+        embed.set_footer(text="⏱️ 25 secondes · une seule réponse par personne")
+        await salon.send(embed=embed, view=view)
+        await view.wait()
+
+        if salon.id not in active_drapeaux:
+            break
+        if view.gagnant:
+            n = view.gagnant.display_name
+            etat["scores"][n] = etat["scores"].get(n, 0) + 1
+        elif not etat.get("skip"):
+            await salon.send(embed=discord.Embed(
+                description=f"⏰ Personne n'a trouvé — c'était **{emoji} {pays}** !", color=0xe74c3c))
+        etat["skip"] = False
+        await asyncio.sleep(3)
+
+    etat = active_drapeaux.pop(salon.id, None)
+    if etat and etat.get("scores"):
+        classement = sorted(etat["scores"].items(), key=lambda x: -x[1])
+        detail = "\n".join(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{n}** — {s}"
+                            for i, (n, s) in enumerate(classement[:5]))
+        await salon.send(embed=discord.Embed(
+            title="🌍 Quiz terminé",
+            description=f"**{etat['manche']} drapeau(x)**\n\n{detail}", color=0x3498db))
+    if temporaire:
+        await close_event_channel(salon, 60)
+
+@bot.command(name="drapeauxstop", aliases=["stopdrapeaux"])
+async def drapeauxstop_cmd(ctx):
+    """Arrête le quiz drapeaux — .drapeauxstop"""
+    etat = active_drapeaux.get(ctx.channel.id)
+    if not etat:
+        return await ctx.send("❌ Aucun quiz drapeaux en cours ici !")
+    etat["running"] = False
+    if etat.get("view"):
+        etat["view"].stop()
+    await ctx.send(embed=discord.Embed(description="🛑 Quiz drapeaux arrêté.", color=0xe74c3c))
+
+@bot.command(name="drapeauxskip", aliases=["skipdrapeau"])
+async def drapeauxskip_cmd(ctx):
+    """Passe le drapeau en cours — .drapeauxskip"""
+    etat = active_drapeaux.get(ctx.channel.id)
+    if not etat:
+        return await ctx.send("❌ Aucun quiz drapeaux en cours ici !")
+    etat["skip"] = True
+    if etat.get("view"):
+        etat["view"].stop()
+    await ctx.send(embed=discord.Embed(description="⏭️ Drapeau passé !", color=0x95a5a6))
 
 @bot.command(name="quizstop")
 async def quiz_stop(ctx):
@@ -2499,11 +2707,13 @@ claim_freeze = {}
 claim_curse = {}
 
 RARETE_POIDS = {
-    "Mythique":   5,
-    "Légendaire": 70,
-    "Épique":     500,
-    "Rare":       2200,
-    "Commun":     7215,
+    # Poids par carte. Rééquilibrés pour que la collection entière soit visible :
+    # avant, Épique+ (299 cartes sur 498) ne représentait que 5,8 % des tirages.
+    "Mythique":   30,
+    "Légendaire": 180,
+    "Épique":     700,
+    "Rare":       2400,
+    "Commun":     6690,
 }
 
 def gacha_tirer(uid=None):
@@ -2799,14 +3009,17 @@ async def ga_cmd(ctx):
     else:
         view = ClaimView(key, timeout=30)
         view.message = await ctx.send(embed=embed, view=view)
-    # Notif wishlist
-    for wuid, wset in gacha_wishlist.items():
-        if key in wset and wuid != uid:
-            try:
-                m = ctx.guild.get_member(int(wuid))
+    # 🌟 Ping automatique des joueurs qui ont wish cette carte
+    if key not in claimed_cards:
+        interesses = [w for w, s in gacha_wishlist.items() if key in s and w != uid]
+        if interesses:
+            mentions = []
+            for w in interesses[:10]:
+                m = ctx.guild.get_member(int(w))
                 if m:
-                    await m.send(f"🌟 **{c['nom']}** de ta wishlist vient de drop dans {ctx.channel.mention} !")
-            except: pass
+                    mentions.append(m.mention)
+            if mentions:
+                await ctx.send(f"🌟 {' '.join(mentions)} — **{c['nom']}** est dans votre wishlist !")
 
 @bot.command(name="rolls")
 async def rolls_cmd(ctx):
@@ -2823,57 +3036,135 @@ async def rolls_cmd(ctx):
         color=0x9b59b6
     ))
 
-@bot.command(name="gachastock", aliases=["collection","col"])
-async def gachastock_cmd(ctx, member: discord.Member = None):
-    """Voir ta collection — .gachastock [@joueur]"""
-    target = member or ctx.author
-    uid = str(target.id)
-    col = gacha_collections[uid]
-    if not col:
-        return await ctx.send(f"❌ **{target.display_name}** n'a aucune carte !")
-    # Trier par rareté
-    order = ["Mythique","Légendaire","Épique","Rare","Commun"]
-    sorted_cards = sorted(col.keys(), key=lambda k: (order.index(ANIME_CARDS_DB[k]["rarete"]) if k in ANIME_CARDS_DB else 99))
-    pages = []
-    per_page = 10
-    for i in range(0, len(sorted_cards), per_page):
-        chunk = sorted_cards[i:i+per_page]
-        lines = []
-        for k in chunk:
-            if k not in ANIME_CARDS_DB: continue
-            c = ANIME_CARDS_DB[k]
-            r_emoji = RARETE_EMOJI.get(c["rarete"], "⚪")
-            lv = fusion_levels[uid].get(k, 0)
-            stars = "⭐"*lv if lv else ""
-            clvl = card_level[uid].get(k, 1)
-            niv = f" `Niv.{clvl}`" if clvl > 1 else ""
-            lines.append(f"{r_emoji} **{c['nom']}** {stars}{niv} — *{c['serie']}*")
+class CollectionView(ui.View):
+    """Collection carte par carte, avec image et tri"""
+    ORDRES = {
+        "rarete":  "💎 Rareté",
+        "nom":     "🔤 Nom",
+        "serie":   "📚 Série",
+        "etoiles": "⭐ Fusions",
+        "recent":  "🕐 Récentes",
+    }
+
+    def __init__(self, cles, cible, uid, auteur, timeout=180):
+        super().__init__(timeout=timeout)
+        self.brut = list(cles)
+        self.cible, self.uid, self.auteur = cible, uid, auteur
+        self.ordre = "rarete"
+        self.index = 0
+        self.cles = self._trier()
+        select = ui.Select(placeholder="🔀 Trier par…", row=0, options=[
+            discord.SelectOption(label=v, value=k, default=(k == "rarete"))
+            for k, v in self.ORDRES.items()])
+        select.callback = self._trier_cb
+        self.select = select
+        self.add_item(select)
+
+    def _trier(self):
+        ordre_rar = ["Mythique", "Légendaire", "Épique", "Rare", "Commun"]
+        k = self.ordre
+        if k == "rarete":
+            return sorted(self.brut, key=lambda x: (ordre_rar.index(ANIME_CARDS_DB[x]["rarete"]),
+                                                    ANIME_CARDS_DB[x]["nom"]))
+        if k == "nom":
+            return sorted(self.brut, key=lambda x: ANIME_CARDS_DB[x]["nom"].lower())
+        if k == "serie":
+            return sorted(self.brut, key=lambda x: (ANIME_CARDS_DB[x]["serie"].lower(),
+                                                    ANIME_CARDS_DB[x]["nom"]))
+        if k == "etoiles":
+            return sorted(self.brut, key=lambda x: (-fusion_levels[self.uid].get(x, 0),
+                                                    -card_level[self.uid].get(x, 1)))
+        return list(reversed(self.brut))   # récentes
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.auteur.id:
+            await interaction.response.send_message(
+                "❌ Utilise `.gachastock` pour voir ta propre collection !", ephemeral=True)
+            return False
+        return True
+
+    async def _trier_cb(self, interaction):
+        self.ordre = self.select.values[0]
+        for o in self.select.options:
+            o.default = (o.value == self.ordre)
+        self.cles = self._trier()
+        self.index = 0
+        await interaction.response.edit_message(embed=self.build(), view=self)
+
+    def build(self):
+        key = self.cles[self.index]
+        cc = ANIME_CARDS_DB[key]
+        fus = fusion_levels[self.uid].get(key, 0)
+        lvl = card_level[self.uid].get(key, 1)
+        db = doublons[self.uid].get(key, 0)
+        b_pv, b_atk, b_def = fus * 20 + (lvl-1)*5, fus * 15 + (lvl-1)*3, fus * 10 + (lvl-1)*2
         embed = discord.Embed(
-            title=f"📦 Collection de {target.display_name} ({len(col)} cartes)",
-            description="\n".join(lines),
-            color=0x9b59b6
-        )
-        embed.set_footer(text=f"Page {i//per_page+1}/{(len(sorted_cards)-1)//per_page+1}")
-        pages.append(embed)
-    if len(pages) == 1:
-        return await ctx.send(embed=pages[0])
-    msg = await ctx.send(embed=pages[0])
-    if len(pages) > 1:
-        await msg.add_reaction("◀️")
-        await msg.add_reaction("▶️")
-        idx = [0]
-        def check(r, u): return u == ctx.author and r.message.id == msg.id and str(r.emoji) in ["◀️","▶️"]
-        while True:
-            try:
-                r, u = await bot.wait_for("reaction_add", timeout=60, check=check)
-                idx[0] = (idx[0]+1) % len(pages) if str(r.emoji)=="▶️" else (idx[0]-1) % len(pages)
-                await msg.edit(embed=pages[idx[0]])
-                try: await msg.remove_reaction(r.emoji, u)
-                except: pass
-            except asyncio.TimeoutError:
-                try: await msg.clear_reactions()
-                except: pass
-                break
+            title=f"{cc.get('emoji','🎴')} {cc['nom']}" + ("  " + "⭐"*fus if fus else ""),
+            description=f"*{cc['serie']}*  {RARETE_EMOJI.get(cc['rarete'],'')} **{cc['rarete']}**",
+            color=RARETE_COULEURS.get(cc["rarete"], 0x9b59b6))
+        if cc.get("image"):
+            embed.set_image(url=cc["image"])
+        embed.add_field(name="📊 Stats", value=(
+            f"❤️ **{cc.get('pv',100)+b_pv}** PV\n"
+            f"⚔️ **{cc.get('attaque',50)+b_atk}** ATK\n"
+            f"🛡️ **{cc.get('defense',50)+b_def}** DEF"), inline=True)
+        infos = f"⭐ Fusion **{fus}**/3\n📈 Niveau **{lvl}**/10"
+        if db:
+            infos += f"\n⚡ **{db}** doublon(s)"
+        embed.add_field(name="🔧 Progression", value=infos, inline=True)
+        embed.set_author(name=f"Collection de {self.cible.display_name}  ·  {len(self.cles)} cartes",
+                         icon_url=self.cible.display_avatar.url)
+        embed.set_footer(text=f"Carte {self.index+1}/{len(self.cles)}  ·  Tri : {self.ORDRES[self.ordre]}")
+        return embed
+
+    async def _go(self, interaction, delta):
+        self.index = (self.index + delta) % len(self.cles)
+        await interaction.response.edit_message(embed=self.build(), view=self)
+
+    @ui.button(emoji="⏮️", style=discord.ButtonStyle.secondary, row=1)
+    async def first(self, interaction, button):
+        self.index = 0
+        await interaction.response.edit_message(embed=self.build(), view=self)
+
+    @ui.button(emoji="⬅️", style=discord.ButtonStyle.primary, row=1)
+    async def prev(self, interaction, button):
+        await self._go(interaction, -1)
+
+    @ui.button(emoji="➡️", style=discord.ButtonStyle.primary, row=1)
+    async def next(self, interaction, button):
+        await self._go(interaction, 1)
+
+    @ui.button(emoji="🔀", style=discord.ButtonStyle.secondary, row=1)
+    async def alea(self, interaction, button):
+        self.index = random.randrange(len(self.cles))
+        await interaction.response.edit_message(embed=self.build(), view=self)
+
+    @ui.button(emoji="📋", label="Vue liste", style=discord.ButtonStyle.secondary, row=2)
+    async def liste(self, interaction, button):
+        lignes = []
+        for k in self.cles[:40]:
+            cc = ANIME_CARDS_DB[k]
+            fus = fusion_levels[self.uid].get(k, 0)
+            lignes.append(f"{RARETE_EMOJI.get(cc['rarete'],'')} **{cc['nom']}**"
+                          + ("⭐"*fus if fus else "") + f" — *{cc['serie']}*")
+        e = discord.Embed(
+            title=f"📋 Collection de {self.cible.display_name}  ({len(self.cles)} cartes)",
+            description="\n".join(lignes) + (f"\n\n*…et {len(self.cles)-40} autres*" if len(self.cles) > 40 else ""),
+            color=0x9b59b6)
+        e.set_footer(text=f"Tri : {self.ORDRES[self.ordre]}")
+        await interaction.response.send_message(embed=e, ephemeral=True)
+
+@bot.command(name="gachastock", aliases=["collection", "col", "cartes"])
+async def gachastock_cmd(ctx, membre: discord.Member = None):
+    """Ta collection, carte par carte — .gachastock [@membre]"""
+    target = membre or ctx.author
+    uid = str(target.id)
+    cles = [k for k in gacha_collections[uid] if k in ANIME_CARDS_DB]
+    if not cles:
+        return await ctx.send(f"❌ **{target.display_name}** n'a aucune carte !")
+    view = CollectionView(cles, target, uid, ctx.author)
+    await ctx.send(embed=view.build(), view=view)
+
 
 @bot.command(name="fusionner", aliases=["fusion", "upgrade_carte"])
 async def fusionner_cmd(ctx, *, perso: str = None):
@@ -2960,6 +3251,91 @@ async def fusionner_cmd(ctx, *, perso: str = None):
     await ctx.send(embed=embed)
 
 
+@bot.command(name="wish", aliases=["wishlist", "cartefav"])
+async def wish_cmd(ctx, action: str = None, *, perso: str = None):
+    """Ta wishlist — .wish <carte> pour être prévenu quand elle tombe"""
+    uid = str(ctx.author.id)
+    limite = fav_slots[uid] if fav_slots[uid] else 3
+
+    # .wish sans rien → afficher la liste
+    if not action or action.lower() in ("liste", "voir", "list"):
+        wl = list(gacha_wishlist[uid])
+        if not wl:
+            return await ctx.send(embed=discord.Embed(
+                title="🌟 Ta wishlist est vide",
+                description=(f"`.wish <nom de carte>` — ajoute une carte à ta wishlist.\n\n"
+                             f"**À quoi ça sert ?** Dès que cette carte apparaît dans le tirage "
+                             f"de **n'importe qui**, tu es **mentionné automatiquement** pour "
+                             f"pouvoir la réclamer avant les autres.\n\n"
+                             f"*Tu peux en suivre **{limite}** — augmente la limite dans `.shop`.*"),
+                color=0xf1c40f))
+        lignes = []
+        for k in wl:
+            if k not in ANIME_CARDS_DB:
+                continue
+            cc = ANIME_CARDS_DB[k]
+            proprio = claimed_cards.get(k)
+            if proprio == uid:
+                etat = "✅ *tu la possèdes*"
+            elif proprio:
+                m = ctx.guild.get_member(int(proprio)) if ctx.guild else None
+                etat = f"🔒 *chez {m.display_name if m else 'un membre'}*"
+            else:
+                etat = "🟢 **disponible !**"
+            lignes.append(f"{RARETE_EMOJI.get(cc['rarete'],'')} **{cc['nom']}** — *{cc['serie']}*\n└ {etat}")
+        return await ctx.send(embed=discord.Embed(
+            title=f"🌟 Wishlist de {ctx.author.display_name}  ({len(wl)}/{limite})",
+            description="\n".join(lignes) + "\n\n*Tu es mentionné dès qu'une de ces cartes tombe.*",
+            color=0xf1c40f))
+
+    # .wish remove <carte>
+    if action.lower() in ("remove", "retirer", "supprimer", "-"):
+        if not perso:
+            return await ctx.send("❌ `.wish remove <carte>`")
+        cible = perso
+    else:
+        # .wish <carte>  ou  .wish add <carte>
+        cible = perso if action.lower() in ("add", "ajouter", "+") and perso else \
+                (f"{action} {perso}" if perso else action)
+
+    key = cible.lower().strip().replace(" ", "")
+    if key not in ANIME_CARDS_DB:
+        matches = [k for k in ANIME_CARDS_DB if normalize_str(cible) in normalize_str(ANIME_CARDS_DB[k]["nom"])]
+        if not matches:
+            return await ctx.send(f"❌ Carte `{cible}` introuvable !")
+        key = matches[0]
+    cc = ANIME_CARDS_DB[key]
+
+    if action.lower() in ("remove", "retirer", "supprimer", "-"):
+        if key not in gacha_wishlist[uid]:
+            return await ctx.send(f"❌ **{cc['nom']}** n'est pas dans ta wishlist.")
+        gacha_wishlist[uid].discard(key)
+        return await ctx.send(embed=discord.Embed(
+            description=f"🗑️ **{cc['nom']}** retirée de ta wishlist.", color=0x95a5a6))
+
+    if key in gacha_wishlist[uid]:
+        return await ctx.send(f"❌ **{cc['nom']}** est déjà dans ta wishlist !")
+    if len(gacha_wishlist[uid]) >= limite:
+        return await ctx.send(embed=discord.Embed(
+            description=(f"❌ Ta wishlist est pleine (**{limite}** cartes).\n"
+                         f"Retire-en une avec `.wish remove <carte>`, ou achète des "
+                         f"**Slots Favoris** dans `.shop`."),
+            color=0xe74c3c))
+    gacha_wishlist[uid].add(key)
+    proprio = claimed_cards.get(key)
+    etat = ("🟢 Elle est **libre** — tu seras prévenu dès qu'elle tombe !" if not proprio
+            else ("✅ Tu la possèdes déjà." if proprio == uid
+                  else "🔒 Elle appartient à un membre — tu seras prévenu si elle se libère."))
+    embed = discord.Embed(
+        title="🌟 Ajoutée à ta wishlist",
+        description=(f"{RARETE_EMOJI.get(cc['rarete'],'')} **{cc['nom']}** — *{cc['serie']}*\n\n{etat}\n\n"
+                     f"*Tu seras **mentionné automatiquement** dès qu'elle apparaît dans un tirage.*"),
+        color=RARETE_COULEURS.get(cc["rarete"], 0xf1c40f))
+    if cc.get("image"):
+        embed.set_thumbnail(url=cc["image"])
+    embed.set_footer(text=f"Wishlist : {len(gacha_wishlist[uid])}/{limite}")
+    await ctx.send(embed=embed)
+
 @bot.command(name="gachagive")
 async def gachagive_cmd(ctx, target: discord.Member = None, *, perso: str = None):
     """Donner une carte à quelqu'un — .gachagive @joueur <perso>"""
@@ -2981,29 +3357,6 @@ async def gachagive_cmd(ctx, target: discord.Member = None, *, perso: str = None
         color=0x2ecc71
     ))
 
-@bot.command(name="wishlist")
-async def wishlist_cmd(ctx, action: str = None, *, perso: str = None):
-    """Gérer ta wishlist — .wishlist add/remove/voir <perso>"""
-    uid = str(ctx.author.id)
-    if not action or action == "voir":
-        wl = gacha_wishlist[uid]
-        if not wl: return await ctx.send("📋 Ta wishlist est vide !")
-        names = [ANIME_CARDS_DB[k]["nom"] for k in wl if k in ANIME_CARDS_DB]
-        await ctx.send(embed=discord.Embed(title="🌟 Ta Wishlist", description="\n".join(names), color=0xf1c40f))
-        return
-    if not perso: return await ctx.send("❌ Précise un personnage !")
-    key = perso.lower().strip().replace(" ","")
-    if key not in ANIME_CARDS_DB:
-        matches = [k for k in ANIME_CARDS_DB if perso.lower() in ANIME_CARDS_DB[k]["nom"].lower()]
-        if not matches: return await ctx.send(f"❌ `{perso}` introuvable !")
-        key = matches[0]
-    c = ANIME_CARDS_DB[key]
-    if action == "add":
-        gacha_wishlist[uid].add(key)
-        await ctx.send(f"🌟 **{c['nom']}** ajouté à ta wishlist !")
-    elif action == "remove":
-        gacha_wishlist[uid].discard(key)
-        await ctx.send(f"❌ **{c['nom']}** retiré de ta wishlist !")
 
 # ============================================================
 #  ÉCONOMIE — COMMANDES COMPLÈTES
@@ -3137,7 +3490,14 @@ async def banque_cmd(ctx, action: str = None, montant: int = None):
     uid = str(ctx.author.id)
     now = _time_module.time()
     if not action:
-        return await ctx.send("🏦 Usage: `.banque depot <montant>` | `.banque retrait` | `.banque solde`")
+        return await ctx.send(embed=discord.Embed(
+            title="🏦 Banque du QG",
+            description=("`.banque depot <montant>` — placer des pièces\n"
+                         "`.banque retrait <montant>` — retirer une somme précise\n"
+                         "`.banque retrait` — tout récupérer\n"
+                         "`.banque solde` — voir ton compte\n\n"
+                         "📈 **+5 % d'intérêts par jour** sur ce qui dort en banque."),
+            color=0xf1c40f))
     action = action.lower()
     if action == "depot":
         if not montant or montant <= 0: return await ctx.send("❌ Précise un montant !")
@@ -3146,15 +3506,37 @@ async def banque_cmd(ctx, action: str = None, montant: int = None):
         bank_data[uid]["depot"] += montant
         bank_data[uid]["depot_time"] = now
         await ctx.send(embed=discord.Embed(description=f"🏦 **{montant} pièces** déposées ! +5% intérêts/24h 📈", color=0x2ecc71))
-    elif action == "retrait":
+    elif action in ("retrait", "retirer"):
         depot = bank_data[uid]["depot"]
-        if depot == 0: return await ctx.send("❌ Rien en banque !")
+        if depot == 0:
+            return await ctx.send("❌ Tu n'as rien en banque !")
         elapsed = (now - bank_data[uid]["depot_time"]) / 86400
         interets = int(depot * 0.05 * elapsed)
-        total = depot + interets
-        economy_data[uid]["coins"] += total
-        bank_data[uid] = {"depot": 0, "depot_time": 0}
-        await ctx.send(embed=discord.Embed(description=f"🏦 Retrait **{total} pièces** (dépôt: {depot} + intérêts: {interets}) 💰", color=0x2ecc71))
+        total_dispo = depot + interets
+
+        # Sans montant → on retire tout
+        if montant is None or montant >= total_dispo:
+            economy_data[uid]["coins"] += total_dispo
+            bank_data[uid] = {"depot": 0, "depot_time": 0}
+            return await ctx.send(embed=discord.Embed(
+                title="🏦 Retrait total",
+                description=(f"Tu récupères **{total_dispo:,} pièces**\n"
+                             f"*(dépôt {depot:,} + intérêts {interets:,})*\n\n"
+                             f"💰 Nouveau solde : **{economy_data[uid]['coins']:,} pièces**"),
+                color=0x2ecc71))
+        if montant <= 0:
+            return await ctx.send("❌ Précise un montant positif.")
+
+        # Retrait partiel : les intérêts partent en priorité
+        economy_data[uid]["coins"] += montant
+        reste = total_dispo - montant
+        bank_data[uid] = {"depot": reste, "depot_time": now}
+        await ctx.send(embed=discord.Embed(
+            title="🏦 Retrait partiel",
+            description=(f"Tu retires **{montant:,} pièces**.\n"
+                         f"🏦 Il reste **{reste:,} pièces** en banque *(les intérêts repartent de zéro)*\n\n"
+                         f"💰 Nouveau solde : **{economy_data[uid]['coins']:,} pièces**"),
+            color=0x2ecc71))
     elif action == "solde":
         depot = bank_data[uid]["depot"]
         if depot == 0: return await ctx.send("🏦 Rien en banque !")
@@ -4168,24 +4550,60 @@ async def create_event_channel(guild, nom):
         except Exception:
             cat = None
     try:
-        return await guild.create_text_channel(nom, category=cat,
-                                               topic="Salon temporaire — supprimé à la fin de l'event")
+        ch = await guild.create_text_channel(nom, category=cat,
+                                             topic="Salon temporaire — supprimé à la fin de l'event")
+        marquer_salon_temporaire(ch)
+        return ch
     except Exception as e:
         print(f"[Event] Salon '{nom}' non créé : {e}")
         return None
 
-async def close_event_channel(channel, delai=120):
-    """Prévient puis supprime le salon d'event"""
+async def close_event_channel(channel, delai=60):
+    """Prévient puis supprime le salon temporaire"""
     if not channel:
         return
     try:
         await channel.send(embed=discord.Embed(
-            description=f"🚪 Ce salon sera supprimé dans **{delai//60} minute(s)**.",
+            description=f"🚪 Ce salon sera supprimé dans **{delai} secondes**.",
             color=0x95a5a6))
         await asyncio.sleep(delai)
-        await channel.delete(reason="Fin de l'event")
+        await channel.delete(reason="Fin de la partie")
     except Exception:
         pass
+
+# Salons temporaires surveillés : {channel_id: timestamp du dernier message}
+salons_temporaires = {}
+
+def marquer_salon_temporaire(channel):
+    """Enregistre un salon temporaire pour la surveillance d'inactivité"""
+    import time as _t
+    if channel:
+        salons_temporaires[channel.id] = _t.time()
+
+@tasks.loop(minutes=1)
+async def nettoyer_salons_inactifs():
+    """Supprime les salons temporaires sans activité depuis 4 minutes"""
+    import time as _t
+    now = _t.time()
+    for cid, dernier in list(salons_temporaires.items()):
+        if now - dernier < 240:
+            continue
+        salons_temporaires.pop(cid, None)
+        for guild in bot.guilds:
+            ch = guild.get_channel(cid)
+            if not ch:
+                continue
+            # Couper les parties encore en cours dans ce salon
+            for reg in (active_quiz, quiz_duels, active_pendu, active_devine):
+                reg.pop(cid, None)
+            try:
+                await ch.send(embed=discord.Embed(
+                    description="🚪 Salon inactif depuis 4 minutes — suppression.", color=0x95a5a6))
+                await asyncio.sleep(5)
+                await ch.delete(reason="Salon temporaire inactif")
+            except Exception:
+                pass
+            break
 
 async def annoncer_event(guild, salon_event, ping_type, embed, salon_temp=None):
     """Annonce l'event dans le salon events avec le bon ping + lien vers le salon dédié"""
@@ -4271,6 +4689,7 @@ async def demander_salon_prive(ctx, nom_jeu, emoji="🎮", invites=None):
         print(f"[SalonPrivé] {e}")
         await ctx.send("⚠️ Je n'ai pas pu créer de salon privé — on joue ici.", delete_after=8)
         return ctx.channel, False
+    marquer_salon_temporaire(salon)
     mentions = " ".join(m.mention for m in invites)
     await ctx.send(f"{mentions}" if mentions else "", embed=discord.Embed(
         description=f"🔒 La partie vous attend dans {salon.mention} !" if invites
@@ -4718,7 +5137,12 @@ async def run_encheres(channel, guild):
 # ============================================================
 async def run_question_eclair(channel, guild):
     """⚡ Question Éclair — 3 premiers à répondre gagnent, dans un salon dédié"""
-    q = random.choice(QUESTIONS_ECLAIR)
+    dispo = [x for x in QUESTIONS_ECLAIR if x["q"] not in eclair_vues]
+    if not dispo:
+        eclair_vues.clear()
+        dispo = QUESTIONS_ECLAIR
+    q = random.choice(dispo)
+    eclair_vues.append(q["q"])
     salon_principal = channel
     salon = await create_event_channel(guild, "⚡・question-eclair")
     if salon:
@@ -4911,10 +5335,28 @@ async def loto_cmd(ctx):
 # ============================================================
 async def run_premier_arrive(channel, guild):
     """🏃 Premier Arrivé — le premier à taper le mot exact gagne"""
-    mots = ["kdrama", "akari", "gacha", "oppa", "daebak", "saranghae", "fighting",
-            "chingu", "aegyo", "ramyeon", "hallyu", "maknae"]
-    mot = random.choice(mots)
-    gain = random.randint(400, 900)
+    MOTS_PREMIER = [
+        # ── faciles ──
+        "kdrama", "akari", "gacha", "oppa", "daebak", "chingu", "aegyo", "ramyeon",
+        "hallyu", "maknae", "unnie", "noona", "sunbae", "hyung", "manhwa", "bingsu",
+        "kimchi", "soju", "hanbok", "bibimbap", "tteokbokki", "sarang", "jjigae",
+        # ── moyens ──
+        "saranghae", "annyeong", "kamsahamnida", "jinjja", "omona", "mianhae",
+        "gomawo", "hwaiting", "chimaek", "makgeolli", "samgyeopsal", "japchae",
+        "pourfendeur", "shinigami", "jinchuriki", "quirk", "nakama", "senpai",
+        # ── difficiles ──
+        "kkotboda-namja", "annyeonghaseyo", "jeongmal-gomawoyo", "bulgogi-jeongsik",
+        "tteokbokki-jjigae", "hwaiting-oppa", "chingu-saranghae", "maknae-line",
+        "shingeki-no-kyojin", "kimetsu-no-yaiba", "jujutsu-kaisen", "sousou-no-frieren",
+        "gomawoyo-chingu", "bangtan-sonyeondan", "gwenchana-yo",
+    ]
+    dispo_mots = [m for m in MOTS_PREMIER if m not in premier_vus]
+    if not dispo_mots:
+        premier_vus.clear()
+        dispo_mots = MOTS_PREMIER
+    mot = random.choice(dispo_mots)
+    premier_vus.append(mot)
+    gain = random.randint(400, 900) + (len(mot) * 15)   # les mots longs rapportent plus
     salon = await create_event_channel(guild, "🏃・premier-arrive")
     cible = salon or channel
     if salon:
@@ -5180,6 +5622,9 @@ DEBATS = [
 # ============================================================
 #  📋 CATALOGUE DES EVENTS — source unique pour .event et .lancerevent
 # ============================================================
+eclair_vues = []       # questions déjà posées en Question Éclair
+premier_vus = []       # mots déjà utilisés en Premier Arrivé
+
 EVENTS_CATALOGUE = {
     "questioneclair": {"nom":"⚡ Question Éclair","fn":"run_question_eclair","salon":True,"duree":"1 min",
         "desc":"Une question tombe, les 3 premiers à répondre gagnent.","gain":"200 / 120 / 80 pièces"},
@@ -5429,6 +5874,56 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
             await ctx.send("❌ Je n'ai pas la permission d'écrire ici !")
         except Exception as e:
             print(f"[Panneau {t}] Erreur : {e}")
+
+class GirlsRoleView(ui.View):
+    """Bouton d'auto-attribution du rôle Girls Only"""
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @ui.button(label="Rejoindre le Girls Only", emoji="🌸",
+               style=discord.ButtonStyle.success, custom_id="girls_only_role")
+    async def rejoindre(self, interaction, button):
+        if not ROLE_GIRLS_ID:
+            return await interaction.response.send_message(
+                "❌ Le rôle n'est pas configuré — préviens un admin.", ephemeral=True)
+        role = interaction.guild.get_role(ROLE_GIRLS_ID)
+        if not role:
+            return await interaction.response.send_message("❌ Rôle introuvable.", ephemeral=True)
+        if role in interaction.user.roles:
+            try:
+                await interaction.user.remove_roles(role, reason="Quitte le Girls Only")
+                return await interaction.response.send_message(
+                    "👋 Tu as quitté le Girls Only. Reclique quand tu veux !", ephemeral=True)
+            except discord.Forbidden:
+                return await interaction.response.send_message(
+                    "❌ Je ne peux pas retirer ce rôle — mon rôle est trop bas.", ephemeral=True)
+        try:
+            await interaction.user.add_roles(role, reason="Rejoint le Girls Only")
+        except discord.Forbidden:
+            return await interaction.response.send_message(
+                "❌ Je ne peux pas attribuer ce rôle — mon rôle est trop bas.", ephemeral=True)
+        salon = interaction.guild.get_channel(SALON_GIRLS_ID) if SALON_GIRLS_ID else None
+        await interaction.response.send_message(
+            f"🌸 Bienvenue dans le Girls Only !" + (f" Ça se passe dans {salon.mention}." if salon else ""),
+            ephemeral=True)
+
+@bot.command(name="girlspanel", aliases=["panelgirls"])
+@commands.has_permissions(administrator=True)
+async def girlspanel_cmd(ctx):
+    """Publie le panneau d'auto-attribution Girls Only — .girlspanel (admin)"""
+    if not ROLE_GIRLS_ID:
+        return await ctx.send("❌ Configure d'abord le rôle avec `.setgirlsrole @role`.")
+    role = ctx.guild.get_role(ROLE_GIRLS_ID)
+    embed = discord.Embed(
+        title="🌸  Girls Only",
+        description=(f"Un espace réservé aux filles du serveur : discussions, fit checks, "
+                     f"questions du soir et titres à gagner.\n\n"
+                     f"Clique sur le bouton pour obtenir le rôle **{role.name if role else 'Girls Only'}** "
+                     f"et accéder au salon.\n"
+                     f"*Reclique dessus si tu veux le retirer.*"),
+        color=0xff9ec7)
+    embed.set_footer(text="QG Kdrama • Girls Only 🌸")
+    await ctx.send(embed=embed, view=GirlsRoleView())
 
 @bot.command(name="setgirlsrole")
 @commands.has_permissions(administrator=True)
@@ -6790,11 +7285,17 @@ def get_active_pet(uid):
     return pid, PETS_DB[pid], d["owned"][pid]
 
 def pet_bonus(uid, bonus_type):
-    """Retourne le bonus % du pet actif pour un type donné (coins/xp/roll)"""
+    """Bonus % du compagnon actif — réduit s'il est malheureux"""
     pid, pdb, pstate = get_active_pet(uid)
     if not pid or pdb["type"] != bonus_type:
         return 0
-    return pdb["base"] + (pstate["level"] - 1)  # +1% par niveau
+    base = pdb["base"] + (pstate["level"] - 1)
+    st = pet_etat(uid)
+    if st and st["humeur"] < 30:
+        return max(1, int(base * 0.5))    # compagnon négligé → bonus divisé par deux
+    if st and st["humeur"] < 55:
+        return max(1, int(base * 0.8))
+    return base
 
 def give_pet_xp(uid, amount=1):
     """Donne de l'XP au pet actif. Retourne (levelup, new_level) ou (False, 0)"""
@@ -6812,6 +7313,138 @@ def give_pet_xp(uid, amount=1):
     return leveled, pstate["level"]
 
 
+
+# ============================================================
+#  🐾 INTERACTIONS AVEC LES COMPAGNONS
+# ============================================================
+PET_ACTIONS = {
+    "nourrir": {"emoji": "🍖", "xp": 25, "cout": 200, "cd": 4,
+        "humeur": 25, "faim": -40,
+        "textes": ["{e} **{n}** engloutit sa gamelle en trois bouchées et te réclame déjà la suite.",
+                   "{e} **{n}** mange proprement, puis vient frotter sa tête contre ta main.",
+                   "{e} **{n}** renifle son repas… puis le dévore d'un coup. Il adore ça.",
+                   "{e} **{n}** trie ses croquettes avant de manger. Difficile, mais rassasié."]},
+    "laver": {"emoji": "🛁", "xp": 20, "cout": 150, "cd": 8,
+        "humeur": 10, "proprete": 60,
+        "textes": ["{e} **{n}** proteste dans l'eau tiède… puis se laisse faire et ferme les yeux.",
+                   "{e} **{n}** s'ébroue et te trempe entièrement. Ça valait le coup, il brille.",
+                   "{e} **{n}** joue avec la mousse et en met partout. Propre, mais la salle de bain non.",
+                   "{e} **{n}** sort du bain tout gonflé et fier de lui."]},
+    "promener": {"emoji": "🚶", "xp": 35, "cout": 0, "cd": 6,
+        "humeur": 30, "energie": -25,
+        "textes": ["{e} **{n}** tire sur la laisse pendant tout le trajet. Vous avez fait le double du chemin prévu.",
+                   "{e} **{n}** salue tous les passants du quartier. Vous rentrez tard, mais heureux.",
+                   "{e} **{n}** s'arrête devant chaque vitrine de ramyeon. Impossible de le faire avancer.",
+                   "{e} **{n}** découvre une flaque. Tu regrettes déjà le bain d'hier."]},
+    "jouer": {"emoji": "🎾", "xp": 30, "cout": 0, "cd": 3,
+        "humeur": 35, "energie": -20,
+        "textes": ["{e} **{n}** rapporte la balle… puis refuse catégoriquement de la lâcher.",
+                   "{e} **{n}** court en cercles pendant dix minutes sans raison apparente.",
+                   "{e} **{n}** te bat trois fois de suite à cache-cache. Tu ne comprends pas comment.",
+                   "{e} **{n}** s'endort sur le jouet au milieu de la partie."]},
+    "dormir": {"emoji": "😴", "xp": 15, "cout": 0, "cd": 8,
+        "humeur": 10, "energie": 70,
+        "textes": ["{e} **{n}** se roule en boule contre toi et s'endort en quelques secondes.",
+                   "{e} **{n}** ronfle doucement. Tu n'oses plus bouger.",
+                   "{e} **{n}** rêve — ses pattes s'agitent dans le vide.",
+                   "{e} **{n}** occupe les trois quarts du lit. Tu dormiras sur le bord."]},
+    "caresser": {"emoji": "🫶", "xp": 10, "cout": 0, "cd": 1,
+        "humeur": 15,
+        "textes": ["{e} **{n}** ferme les yeux et se laisse aller complètement.",
+                   "{e} **{n}** ronronne — enfin, à sa manière.",
+                   "{e} **{n}** réclame encore en poussant ta main du museau.",
+                   "{e} **{n}** te fixe intensément. Tu es maintenant obligé de continuer."]},
+}
+
+def pet_etat(uid):
+    """Retourne l'état vivant du compagnon actif (humeur, faim, énergie, propreté)"""
+    import time as _t
+    d = pets_data.get(uid, {})
+    pid = d.get("active")
+    if not pid:
+        return None
+    st = d["owned"].setdefault(pid, {"level": 1, "xp": 0})
+    st.setdefault("humeur", 70)
+    st.setdefault("faim", 30)
+    st.setdefault("energie", 80)
+    st.setdefault("proprete", 80)
+    st.setdefault("dernier", {})
+    # Dégradation naturelle : 1 point par heure écoulée
+    maj = st.setdefault("maj", _t.time())
+    heures = int((_t.time() - maj) / 3600)
+    if heures > 0:
+        st["faim"] = min(100, st["faim"] + heures * 3)
+        st["energie"] = max(0, st["energie"] - heures * 2)
+        st["proprete"] = max(0, st["proprete"] - heures * 2)
+        st["humeur"] = max(0, st["humeur"] - heures * (3 if st["faim"] > 70 else 1))
+        st["maj"] = _t.time()
+    return st
+
+def _jauge(v, plein="🟩", vide="⬜", n=10):
+    f = max(0, min(n, round(v / 100 * n)))
+    return plein * f + vide * (n - f)
+
+def pet_humeur_texte(st):
+    h = st["humeur"]
+    if h >= 85: return "🥰 Rayonnant"
+    if h >= 65: return "😊 Heureux"
+    if h >= 40: return "🙂 Ça va"
+    if h >= 20: return "😕 Boudeur"
+    return "😢 Malheureux"
+
+@bot.command(name="petaction", aliases=["nourrir", "laver", "promener", "jouer", "dormir", "caresser"])
+async def petaction_cmd(ctx):
+    """Interagis avec ton compagnon — .nourrir .laver .promener .jouer .dormir .caresser"""
+    import time as _t
+    action = ctx.invoked_with.lower()
+    if action == "petaction":
+        return await ctx.send(embed=discord.Embed(
+            title="🐾 S'occuper de son compagnon",
+            description=("`.nourrir` 🍖 — 200 p · calme la faim, +25 XP\n"
+                         "`.laver` 🛁 — 150 p · le rend propre, +20 XP\n"
+                         "`.promener` 🚶 — gratuit · le rend heureux, +35 XP\n"
+                         "`.jouer` 🎾 — gratuit · le meilleur pour l'humeur, +30 XP\n"
+                         "`.dormir` 😴 — gratuit · récupère de l'énergie, +15 XP\n"
+                         "`.caresser` 🫶 — gratuit · un petit plus, +10 XP\n\n"
+                         "*`.pet` pour voir son état complet.*"),
+            color=0xe91e63))
+
+    uid = str(ctx.author.id)
+    pid, pdb, _ = get_active_pet(uid)
+    if not pid:
+        return await ctx.send("🐾 Tu n'as pas de compagnon actif ! Rends-toi dans `.shop` → page **Compagnons**.")
+    st = pet_etat(uid)
+    conf = PET_ACTIONS[action]
+
+    dernier = st["dernier"].get(action, 0)
+    reste = conf["cd"] * 3600 - (_t.time() - dernier)
+    if reste > 0:
+        h, m = divmod(int(reste) // 60, 60)
+        return await ctx.send(f"⏳ **{pdb['nom']}** n'a pas besoin de ça tout de suite — reviens dans **{h}h{m:02d}**.",
+                              delete_after=8)
+    if conf["cout"] and economy_data[uid]["coins"] < conf["cout"]:
+        return await ctx.send(f"❌ Il te faut **{conf['cout']} pièces** pour ça !")
+    if conf["cout"]:
+        economy_data[uid]["coins"] -= conf["cout"]
+
+    st["dernier"][action] = _t.time()
+    for cle in ("humeur", "faim", "energie", "proprete"):
+        if cle in conf:
+            st[cle] = max(0, min(100, st[cle] + conf[cle]))
+    leveled, lvl = give_pet_xp(uid, conf["xp"])
+
+    texte = random.choice(conf["textes"]).format(e=pdb["emoji"], n=pdb["nom"])
+    embed = discord.Embed(
+        title=f"{conf['emoji']}  {action.capitalize()}",
+        description=f"*{texte}*",
+        color=0xe91e63)
+    embed.add_field(name="❤️ Humeur", value=f"{_jauge(st['humeur'])}\n{pet_humeur_texte(st)}", inline=False)
+    embed.add_field(name="✨ Gain", value=f"+{conf['xp']} XP" + (f" · −{conf['cout']} p" if conf["cout"] else ""), inline=True)
+    if leveled:
+        embed.add_field(name="🆙 Niveau supérieur !",
+                        value=f"**{pdb['nom']}** passe **niveau {lvl}**\n{pet_bonus_texte(pdb, lvl)}", inline=False)
+    await ctx.send(embed=embed)
+
 @bot.command(name="pet", aliases=["compagnon"])
 async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
     """Voir/gérer ton compagnon — .pet | .pet liste | .pet equiper <nom> | .pet nourrir"""
@@ -6828,18 +7461,30 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
             xp_txt = f"`{bar}` {pstate['xp']}/{PET_XP_PER_LEVEL} XP"
         else:
             xp_txt = "🌟 **NIVEAU MAX !**"
+        st = pet_etat(uid)
         max_bonus = pdb["base"] + PET_LEVEL_MAX - 1
         embed = discord.Embed(
             title=f"{pdb['emoji']} {pdb['nom']}",
-            description=f"**{pdb['rarete']}**  ·  Niveau **{pstate['level']}** / {PET_LEVEL_MAX}\n{xp_txt}",
+            description=(f"**{pdb['rarete']}**  ·  Niveau **{pstate['level']}** / {PET_LEVEL_MAX}\n{xp_txt}\n\n"
+                         f"### {pet_humeur_texte(st)}"),
             color=0xe91e63)
+        embed.add_field(name="❤️ Humeur", value=_jauge(st["humeur"]), inline=False)
+        embed.add_field(name="🍖 Faim", value=_jauge(100 - st["faim"], "🟧", "⬜"), inline=True)
+        embed.add_field(name="⚡ Énergie", value=_jauge(st["energie"], "🟨", "⬜"), inline=True)
+        embed.add_field(name="🛁 Propreté", value=_jauge(st["proprete"], "🟦", "⬜"), inline=True)
         embed.add_field(name="✨ Ce qu'il t'apporte",
                         value=pet_bonus_texte(pdb, pstate["level"]), inline=False)
         embed.add_field(name="📈 Progression",
-                        value=(f"Bonus de départ : **+{pdb['base']} %**\n"
-                               f"Bonus actuel : **+{bonus} %**\n"
-                               f"Maximum au niveau {PET_LEVEL_MAX} : **+{max_bonus} %**"), inline=False)
-        embed.set_footer(text="Il gagne de l'XP quand tu discutes  •  `.pet nourrir` pour accélérer (200 p)")
+                        value=(f"Départ **+{pdb['base']} %** · Actuel **+{bonus} %** · "
+                               f"Max **+{max_bonus} %** au niveau {PET_LEVEL_MAX}"), inline=False)
+        besoins = []
+        if st["faim"] > 60: besoins.append("🍖 `.nourrir`")
+        if st["proprete"] < 40: besoins.append("🛁 `.laver`")
+        if st["energie"] < 35: besoins.append("😴 `.dormir`")
+        if st["humeur"] < 50: besoins.append("🎾 `.jouer`")
+        if besoins:
+            embed.add_field(name="⚠️ Il a besoin de toi", value="  ·  ".join(besoins), inline=False)
+        embed.set_footer(text="`.nourrir` `.laver` `.promener` `.jouer` `.dormir` `.caresser`")
         return await ctx.send(embed=embed)
     action = action.lower()
     if action in ("liste", "list", "collection"):
@@ -6868,7 +7513,7 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
         p = PETS_DB[match]
         return await ctx.send(embed=discord.Embed(
             description=f"🌟 **{p['emoji']} {p['nom']}** est maintenant ton compagnon actif !", color=0x2ecc71))
-    if action in ("nourrir", "feed"):
+    if action in ("feed",):
         pid, pdb, pstate = get_active_pet(uid)
         if not pid:
             return await ctx.send("🐾 Aucun compagnon actif à nourrir !")
@@ -7479,8 +8124,9 @@ async def devine_cmd(ctx):
         ).set_footer(text="⏳ 90 s • `indice` pour un indice de plus • `.devinerstop` pour arrêter"))
 
         trouve = False
+        game["skip"] = False
         fin = asyncio.get_event_loop().time() + 90
-        while asyncio.get_event_loop().time() < fin:
+        while asyncio.get_event_loop().time() < fin and not game.get("skip"):
             reste = fin - asyncio.get_event_loop().time()
             try:
                 msg = await bot.wait_for("message", check=check, timeout=reste)
@@ -7510,7 +8156,7 @@ async def devine_cmd(ctx):
                     color=0x2ecc71))
                 trouve = True
                 break
-        if not trouve and salon.id in active_devine:
+        if not trouve and salon.id in active_devine and not game.get("skip"):
             await salon.send(embed=discord.Embed(
                 description=f"⏰ Temps écoulé ! C'était **{perso['nom']}** *({perso['univers']})*",
                 color=0xe74c3c))
@@ -7530,6 +8176,18 @@ async def devine_cmd(ctx):
     if temporaire:
         await close_event_channel(salon, 60)
 
+@bot.command(name="devinetteskip", aliases=["devineskip", "skipdevine"])
+async def devinetteskip_cmd(ctx):
+    """Passe la devinette en cours — .devinetteskip"""
+    game = active_devine.get(ctx.channel.id)
+    if not game or not game.get("perso"):
+        return await ctx.send("❌ Aucune devinette en cours ici !")
+    game["skip"] = True
+    perso = game["perso"]
+    await ctx.send(embed=discord.Embed(
+        description=f"⏭️ Devinette passée — c'était **{perso['nom']}** *({perso['univers']})*",
+        color=0x95a5a6))
+
 @bot.command(name="devinerstop", aliases=["devinestop", "stopdevine"])
 async def devinerstop_cmd(ctx):
     """Arrête la partie de Devine en cours — .devinerstop"""
@@ -7544,38 +8202,195 @@ async def devinerstop_cmd(ctx):
 #  PENDU
 # ============================================================
 PENDU_MOTS = [
-    # ── K-Dramas ──
-    "goblin","vincenzo","squid game","kingdom","signal","itaewon class","reply 1988",
-    "hospital playlist","crash landing on you","the glory","queen of tears","weak hero class",
-    "alchemy of souls","business proposal","start up","sweet home","all of us are dead",
-    "my mister","hometown cha cha cha","reborn rich","mr sunshine","hellbound","lovely runner",
-    "marry my husband","my demon","mask girl","big mouth","stranger","prison playbook",
-    "descendants of the sun","boys over flowers","doctor slump","move to heaven","nevertheless",
-    "twenty five twenty one","extraordinary attorney woo","my love from the star",
-    # ── Animés ──
-    "attack on titan","demon slayer","death note","one piece","haikyuu","jujutsu kaisen",
-    "fullmetal alchemist","your lie in april","naruto shippuden","dragon ball z","bleach",
-    "hunter x hunter","chainsaw man","spy x family","frieren","solo leveling","oshi no ko",
-    "blue lock","vinland saga","tokyo revengers","dandadan","kaiju no huit","mob psycho",
-    "one punch man","code geass","steins gate","re zero","fire force","black clover",
-    "tokyo ghoul","made in abyss","berserk","mushoku tensei","konosuba","overlord",
-    "sakamoto days","wind breaker","hells paradise","doctor stone","cowboy bebop",
-    "my hero academia","dragon ball super",
-    # ── Personnages ──
-    "tanjiro kamado","nezuko","zenitsu","inosuke","rengoku","gojo satoru","sukuna","itadori",
-    "megumi","nobara","luffy","zoro","sanji","nami","shanks","kaido","ace","law","robin",
-    "naruto uzumaki","sasuke","sakura","kakashi","itachi","madara","minato","jiraiya","gaara",
-    "eren yeager","mikasa","levi ackerman","armin","erwin","annie","reiner","historia",
-    "light yagami","ryuk","edward elric","alphonse","roy mustang","saitama","genos","garou",
-    "denji","makima","power","aki","loid forger","anya forger","yor forger",
-    "goku","vegeta","piccolo","frieza","cell","gohan","trunks","broly","beerus","whis",
-    "ichigo","rukia","aizen","byakuya","kenpachi","killua","gon","hisoka","kurapika","leorio",
-    "deku","bakugo","todoroki","all might","shigaraki","dabi","kirishima","uraraka",
-    # ── Univers & concepts ──
-    "chapeau de paille","akatsuki","survey corps","pourfendeur de demons","hashira",
-    "sharingan","rasengan","kamehameha","bankai","domaine","nen","alter",
-    "titan colossal","one for all","hokage","shinigami","quirk","chakra","haki","stand",
-    "vif d or","poudlard","gryffondor","serpentard","dumbledore","voldemort","hermione",
+    # ── 🎭 K-Drama ──
+    {"mot": "goblin", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "vincenzo", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "squid game", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "kingdom", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "signal", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "itaewon class", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "reply 1988", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "hospital playlist", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "crash landing on you", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "the glory", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "queen of tears", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "weak hero class", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "alchemy of souls", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "business proposal", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "start up", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "sweet home", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "all of us are dead", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "my mister", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "hometown cha cha cha", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "reborn rich", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "mr sunshine", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "hellbound", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "lovely runner", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "marry my husband", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "my demon", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "mask girl", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "big mouth", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "stranger", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "prison playbook", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "descendants of the sun", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "boys over flowers", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "doctor slump", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "move to heaven", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "nevertheless", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "twenty five twenty one", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "extraordinary attorney woo", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    {"mot": "my love from the star", "theme": "🎭 K-Drama", "indice": "Une série coréenne"},
+    # ── 📺 Animé ──
+    {"mot": "attack on titan", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "demon slayer", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "death note", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "one piece", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "haikyuu", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "jujutsu kaisen", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "fullmetal alchemist", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "your lie in april", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "naruto shippuden", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "dragon ball z", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "bleach", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "hunter x hunter", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "chainsaw man", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "spy x family", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "frieren", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "solo leveling", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "oshi no ko", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "blue lock", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "vinland saga", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "tokyo revengers", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "dandadan", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "kaiju no huit", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "mob psycho", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "one punch man", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "code geass", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "steins gate", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "re zero", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "fire force", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "black clover", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "tokyo ghoul", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "made in abyss", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "berserk", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "mushoku tensei", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "konosuba", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "overlord", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "sakamoto days", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "wind breaker", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "hells paradise", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "doctor stone", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "cowboy bebop", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "my hero academia", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    {"mot": "dragon ball super", "theme": "📺 Animé", "indice": "Une série d'animation japonaise"},
+    # ── 👤 Personnage ──
+    {"mot": "tanjiro kamado", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "nezuko", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "zenitsu", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "inosuke", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "rengoku", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "gojo satoru", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "sukuna", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "itadori", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "megumi", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "nobara", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "luffy", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "zoro", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "sanji", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "nami", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "shanks", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "kaido", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "ace", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "law", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "robin", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "naruto uzumaki", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "sasuke", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "sakura", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "kakashi", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "itachi", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "madara", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "minato", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "jiraiya", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "gaara", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "eren yeager", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "mikasa", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "levi ackerman", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "armin", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "erwin", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "annie", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "reiner", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "historia", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "light yagami", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "ryuk", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "edward elric", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "alphonse", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "roy mustang", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "saitama", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "genos", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "garou", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "denji", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "makima", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "power", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "aki", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "loid forger", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "anya forger", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "yor forger", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "goku", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "vegeta", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "piccolo", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "frieza", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "cell", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "gohan", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "trunks", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "broly", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "beerus", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "whis", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "ichigo", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "rukia", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "aizen", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "byakuya", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "kenpachi", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "killua", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "gon", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "hisoka", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "kurapika", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "leorio", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "deku", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "bakugo", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "todoroki", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "all might", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "shigaraki", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "dabi", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "kirishima", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    {"mot": "uraraka", "theme": "👤 Personnage", "indice": "Un personnage d'animé ou de drama"},
+    # ── 🌍 Univers ──
+    {"mot": "chapeau de paille", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "akatsuki", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "survey corps", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "pourfendeur de demons", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "hashira", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "sharingan", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "rasengan", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "kamehameha", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "bankai", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "domaine", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "nen", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "alter", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "titan colossal", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "one for all", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "hokage", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "shinigami", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "quirk", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "chakra", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "haki", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "stand", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "vif d or", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "poudlard", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "gryffondor", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "serpentard", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "dumbledore", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "voldemort", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
+    {"mot": "hermione", "theme": "🌍 Univers", "indice": "Un lieu, un pouvoir ou un concept"},
 ]
 
 PENDU_STAGES = ["😵", "😰", "😨", "😟", "😐", "🙂", "😄"]
@@ -8002,17 +8817,18 @@ async def pendu_cmd(ctx):
     def check(m):
         return (m.channel == salon and not m.author.bot
                 and (len(m.content.strip()) == 1 and m.content.strip().isalpha()
-                     or m.content.lower().strip() in ("skip", "passer")
+                     or m.content.lower().strip() in ("skip", "passer", "indice", ".indice")
                      or len(m.content.strip()) > 2))
 
     while salon.id in active_pendu and active_pendu[salon.id].get("running"):
         etat = active_pendu[salon.id]
         etat["manche"] += 1
-        dispo = [m for m in PENDU_MOTS if m not in etat["vus"]]
+        dispo = [m for m in PENDU_MOTS if m["mot"] not in etat["vus"]]
         if not dispo:
             etat["vus"] = []
             dispo = PENDU_MOTS
-        mot = random.choice(dispo)
+        entree = random.choice(dispo)
+        mot = entree["mot"]
         etat["vus"].append(mot)
 
         trouve_init = ["_" if ch != " " else " " for ch in mot]
@@ -8021,7 +8837,8 @@ async def pendu_cmd(ctx):
             if ch == premiere:
                 trouve_init[i] = ch
         game = {"mot": mot, "trouve": trouve_init, "lettres": [premiere],
-                "erreurs": 0, "max_erreurs": 6, "manche": etat["manche"]}
+                "erreurs": 0, "max_erreurs": 6, "manche": etat["manche"],
+                "theme": entree["theme"], "indice": entree["indice"], "indice_donne": False}
         etat["game"] = game
         await salon.send(embed=_pendu_embed(game))
 
@@ -8037,6 +8854,19 @@ async def pendu_cmd(ctx):
                 return
             contenu = msg.content.lower().strip()
             if contenu.startswith("."):
+                continue
+            if contenu in ("indice", ".indice"):
+                if game["indice_donne"]:
+                    await salon.send("💡 Tu as déjà eu ton indice pour ce mot !", delete_after=5)
+                    continue
+                game["indice_donne"] = True
+                nb_lettres = len(mot.replace(" ", ""))
+                await salon.send(embed=discord.Embed(
+                    title="💡 Indice",
+                    description=(f"**{game['indice']}**\n"
+                                 f"📏 {nb_lettres} lettres · {len(mot.split())} mot(s)\n"
+                                 f"🔤 Commence par **{mot[0].upper()}** et finit par **{mot[-1].upper()}**"),
+                    color=0xf39c12))
                 continue
             if contenu in ("skip", "passer"):
                 await salon.send(embed=discord.Embed(
@@ -8108,16 +8938,17 @@ async def pendustop_cmd(ctx):
 
 def _pendu_embed(game):
     stage = PENDU_STAGES[max(0, len(PENDU_STAGES) - 1 - game["erreurs"])]
+    couleur = 0xe74c3c if game["erreurs"] >= 4 else (0xf39c12 if game["erreurs"] >= 2 else 0x2ecc71)
     embed = discord.Embed(
-        title=f"🎮 Pendu — Manche {game.get('manche', 1)}  {stage}",
+        title=f"🎮 Pendu — Manche {game.get('manche', 1)}   {stage}",
         description=(
-            f"**`{' '.join(game['trouve'])}`**\n\n"
+            f"📂 **Thème : {game.get('theme', 'Divers')}**\n\n"
+            f"# `{' '.join(game['trouve'])}`\n"
             f"❌ Erreurs : **{game['erreurs']}/{game['max_erreurs']}**\n"
-            f"📝 Lettres proposées : {', '.join(game['lettres']) if game['lettres'] else 'Aucune'}"
+            f"📝 Lettres proposées : {', '.join(sorted(game['lettres'])) if game['lettres'] else 'aucune'}"
         ),
-        color=0xe74c3c if game["erreurs"] >= 4 else 0xf39c12 if game["erreurs"] >= 2 else 0x2ecc71
-    )
-    embed.set_footer(text="Tape une lettre · le mot entier · `skip` pour passer · `.pendustop` pour arrêter")
+        color=couleur)
+    embed.set_footer(text="Tape une lettre · le mot entier · `indice` · `skip` · `.pendustop` pour arrêter")
     return embed
 
 # ============================================================
@@ -9054,6 +9885,7 @@ ANIME_CARDS_DB = {
 gacha_collections = defaultdict(dict)   # {uid: {card_key: {"fusion": 0}}}
 fusion_levels = defaultdict(lambda: defaultdict(int))  # {uid: {card_key: level}}
 doublons = defaultdict(lambda: defaultdict(int))       # {uid: {card_key: nb de doublons}}
+images_custom = {}                                    # {card_key: url} — images définies via .setimage
 # ── D. Niveau de carte (XP de combat) ──────────────────────
 card_xp = defaultdict(lambda: defaultdict(int))      # {uid: {card_key: xp}}
 card_level = defaultdict(lambda: defaultdict(lambda: 1))  # {uid: {card_key: level}}
@@ -9473,47 +10305,6 @@ async def invoke_cmd(ctx):
         view = ClaimView(key, timeout=30)
         view.message = await ctx.send(embed=embed, view=view)
 
-@bot.command(name="cartefav")
-async def cartefav_cmd(ctx, action: str = None, *, perso: str = None):
-    """Gérer tes cartes favorites — .cartefav add/remove/voir <perso>"""
-    uid = str(ctx.author.id)
-    if not hasattr(bot, 'cartes_fav'):
-        bot.cartes_fav = {}
-    if uid not in bot.cartes_fav:
-        bot.cartes_fav[uid] = []
-    favs = bot.cartes_fav[uid]
-    if not action or action == "voir":
-        if not favs:
-            return await ctx.send(f"⭐ Tu n'as aucune carte favorite ! *(limite : {fav_slots[uid]} slots)*")
-        lines = []
-        for k in favs:
-            if k in ANIME_CARDS_DB:
-                c = ANIME_CARDS_DB[k]
-                lines.append(f"{RARETE_EMOJI.get(c['rarete'],'⚪')} **{c['nom']}** — *{c['serie']}*")
-        return await ctx.send(embed=discord.Embed(title="⭐ Tes Cartes Favorites", description="\n".join(lines), color=0xf1c40f))
-    if not perso:
-        return await ctx.send("❌ `.cartefav add/remove/voir <perso>`")
-    key = perso.lower().strip().replace(" ","")
-    if key not in ANIME_CARDS_DB:
-        matches = [k for k in ANIME_CARDS_DB if perso.lower() in ANIME_CARDS_DB[k]["nom"].lower()]
-        if not matches:
-            return await ctx.send(f"❌ `{perso}` introuvable !")
-        key = matches[0]
-    c = ANIME_CARDS_DB[key]
-    if action == "add":
-        limite = fav_slots[uid]
-        if len(favs) >= limite:
-            return await ctx.send(f"❌ Maximum {limite} cartes favorites ! Achète des **Slots Favoris** en boutique pour augmenter la limite 🔓")
-        if key in favs:
-            return await ctx.send("❌ Déjà dans tes favoris !")
-        favs.append(key)
-        await ctx.send(f"⭐ **{c['nom']}** ajouté à tes favoris !")
-    elif action == "remove":
-        if key in favs:
-            favs.remove(key)
-            await ctx.send(f"❌ **{c['nom']}** retiré des favoris !")
-        else:
-            await ctx.send("❌ Cette carte n'est pas dans tes favoris !")
 
 @bot.command(name="liga")
 async def liga_cmd(ctx):
@@ -11431,15 +12222,30 @@ girls_message_count = defaultdict(lambda: defaultdict(int))  # {guild_id: {uid: 
 # Questions Ritual du Soir (21h chaque soir dans le salon girls)
 RITUAL_QUESTIONS = [
     "🌙 **Ritual du Soir** — Quel drama vous fait vibrer en ce moment ? 🎬",
-    "🌙 **Ritual du Soir** — Si vous étiez l'héroïne d'un Kdrama, votre drama serait un romance ou un thriller ? 💜",
-    "🌙 **Ritual du Soir** — Quel acteur coréen vous ferait tomber amoureuse en 5 secondes ? 😍",
-    "🌙 **Ritual du Soir** — Drama de la semaine : coup de cœur ou déception ? Partagez vos avis ! ⭐",
-    "🌙 **Ritual du Soir** — Si vous deviez recommander UN drama à quelqu'un qui n'en a jamais regardé, lequel ce serait ? 🌸",
+    "🌙 **Ritual du Soir** — Le personnage masculin qui vous a le plus marquées, et pourquoi ? 💜",
     "🌙 **Ritual du Soir** — Scène de drama qui vous a fait pleurer comme une madeleine ? 😭",
-    "🌙 **Ritual du Soir** — Votre OST de drama préféré en ce moment ? 🎵",
-    "🌙 **Ritual du Soir** — Second lead syndrome : vous en souffrez en ce moment pour quel drama ? 💔",
+    "🌙 **Ritual du Soir** — Votre OST de drama préférée du moment ? 🎵",
+    "🌙 **Ritual du Soir** — Second lead syndrome : sur quel drama vous l'avez le plus mal vécu ? 💔",
     "🌙 **Ritual du Soir** — Un drama que vous avez abandonné mais que vous voulez reprendre ? 📺",
-    "🌙 **Ritual du Soir** — Votre drama comfort — celui que vous regardez quand vous êtes triste ? 🤗",
+    "🌙 **Ritual du Soir** — Votre drama comfort, celui que vous relancez quand ça va pas ? 🤗",
+    "🌙 **Ritual du Soir** — Si vous pouviez vivre dans l'univers d'un drama, lequel ? ✨",
+    "🌙 **Ritual du Soir** — Le pire cliché de kdrama que vous adorez quand même ? 😂",
+    "🌙 **Ritual du Soir** — Quel drama recommanderiez-vous à quelqu'un qui n'en a jamais vu ? 🌸",
+    "🌙 **Ritual du Soir** — Team fin heureuse ou team fin ouverte ? 💭",
+    "🌙 **Ritual du Soir** — Le plat coréen que vous rêvez de goûter après l'avoir vu à l'écran ? 🍜",
+    "🌙 **Ritual du Soir** — Un drama surcoté selon vous ? Soyez honnêtes 👀",
+    "🌙 **Ritual du Soir** — Votre plus longue session de binge-watching ? Avouez tout 😅",
+    "🌙 **Ritual du Soir** — Quelle héroïne de drama vous ressemble le plus ? 💫",
+    "🌙 **Ritual du Soir** — La réplique de drama que vous n'avez jamais oubliée ? 💌",
+    "🌙 **Ritual du Soir** — Vous êtes plutôt drama historique ou drama moderne ? 🏯",
+    "🌙 **Ritual du Soir** — Le couple de drama que vous shippez le plus fort ? 💞",
+    "🌙 **Ritual du Soir** — Un drama que vous avez commencé juste pour l'acteur, assumez 😌",
+    "🌙 **Ritual du Soir** — Votre routine idéale pour une soirée drama ? Plaid, snacks, tout ✨",
+    "🌙 **Ritual du Soir** — Le méchant de drama le mieux écrit selon vous ? 😈",
+    "🌙 **Ritual du Soir** — Si votre vie était un drama, quel serait le titre ? 🎬",
+    "🌙 **Ritual du Soir** — Un drama qui vous a fait changer d'avis sur quelque chose ? 💭",
+    "🌙 **Ritual du Soir** — Vous préférez regarder seule ou en groupe ? 👯",
+    "🌙 **Ritual du Soir** — Le drama le plus stressant que vous ayez tenu jusqu'au bout ? 😰",
 ]
 
 # Tracking Girls Only — géré directement dans on_message
@@ -11567,6 +12373,8 @@ def save_all_data():
             "card_level":  {k: dict(v) for k, v in card_level.items()},
             "serie_badges": {k: list(v) for k, v in serie_badges.items()},
             "fav_slots":   dict(fav_slots),
+            "images_custom": dict(images_custom),
+            "wishlist": {k: list(v) for k, v in gacha_wishlist.items() if v},
         }
         with open(DATA_FILES["gacha"], "w", encoding="utf-8") as f:
             _json.dump(gacha_save, f, ensure_ascii=False)
@@ -11639,6 +12447,12 @@ def load_all_data():
                 serie_badges[uid] = set(sb)
             for uid, fs in data.get("fav_slots", {}).items():
                 fav_slots[uid] = fs
+            for k, w in data.get("wishlist", {}).items():
+                gacha_wishlist[k] = set(w)
+            for k, url in data.get("images_custom", {}).items():
+                images_custom[k] = url
+                if k in ANIME_CARDS_DB:
+                    ANIME_CARDS_DB[k]["image"] = url
             print(f"[Load] ✅ Gacha: {len(claimed_cards)} cartes claimées")
         except Exception as e:
             print(f"[Load] Erreur gacha: {e}")
@@ -12080,12 +12894,14 @@ async def on_ready():
     load_all_data()
     load_autorole()
     load_scheduled_events()
+    bot.add_view(GirlsRoleView())
     for g in bot.guilds:
         await _refresh_invite_cache(g)
     check_anniversaires.start()
     scheduler_task.start()
     girls_auto_tasks.start()
     autosave.start()
+    nettoyer_salons_inactifs.start()
     spawn_coffre.start()
     nuit_de_chasse.start()
     marche_noir_task.start()
