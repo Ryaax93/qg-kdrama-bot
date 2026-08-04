@@ -13388,4 +13388,4 @@ while True:
         print(f"❌ CRASH BOT: {e}")
         traceback.print_exc()
         print("🔄 Redémarrage dans 5 secondes...")
-        time.sleep(5)
+        time.sleep(5) 
