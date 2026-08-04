@@ -1123,6 +1123,8 @@ def build_help_pages(guild, is_admin=False):
         "`.quiz <thème>` — Quiz solo en continu\n"
         "`.quizduel <thème> @joueur` — Quiz en duel *(5 manches)*\n"
         "**Thèmes :** `kdrama` `anime` `gaming` `culture` `harrypotter` `mix`\n"
+        "`.emoji` — Devine l'œuvre à partir de 3 emojis *(78 énigmes)*\n"
+        "`.emojistop` — Arrêter l'Emoji Quiz\n"
         "`.drapeaux` — Quiz des drapeaux **à boutons** *(70 pays)*\n"
         "`.drapeauxskip` / `.drapeauxstop` — Passer / arrêter\n"
         "`.quizstop` — Arrêter le quiz en cours\n"
@@ -1209,6 +1211,8 @@ def build_help_pages(guild, is_admin=False):
     ), inline=False)
     e.add_field(name="📦 Ta collection", value=(
         "`.gachastock [@membre]` — Collection **avec images** ⬅️➡️ et tri\n"
+        "`.cartes [série]` — **Catalogue complet** : qui possède quoi, filtres\n"
+        "`.series` — Toutes les séries et ta progression\n"
         "`.cardinfo <perso>` — Détails d'une carte\n"
         "`.serie <nom>` — Progression sur une série\n"
         "`.wish <carte>` — Wishlist : tu es **ping** dès qu'elle tombe\n"
@@ -1270,6 +1274,8 @@ def build_help_pages(guild, is_admin=False):
         "`.devinetteskip` — Passer la devinette · `.devinerstop` — Arrêter\n"
         "`.pendu` — Le pendu, manches en continu *(185 titres)*\n"
         "`.pendustop` — Arrêter la partie de pendu\n"
+        "`.puissance4 @membre` — Puissance 4 en duel *(250-450 p au vainqueur)*\n"
+        "`.p4stop` — Annuler la partie\n"
         "`.rps <choix>` — Pierre / feuille / ciseaux\n"
         "`.dice` — Lancer un dé"
     ), inline=False)
@@ -1338,6 +1344,9 @@ def build_help_pages(guild, is_admin=False):
     ), inline=False)
     e.add_field(name="📢 Communication", value=(
         "`.announce <message>` — Annonce officielle"
+    ), inline=False)
+    e.add_field(name="📖 Aide", value=(
+        "`.helpadmin` — Cette aide staff  ·  `.help` — L'aide des joueurs"
     ), inline=False)
     pages.append(("🛡️", "Admin — Modération", e))
 
@@ -1848,6 +1857,294 @@ async def quiz(ctx, theme: str = "mix"):
     if temporaire:
         await close_event_channel(salon, 60)
 
+
+
+# ============================================================
+#  🎬 EMOJI QUIZ — devine l'œuvre à partir d'emojis
+# ============================================================
+EMOJI_QUIZ = [
+    # ── Animés ──
+    ("🍥🦊🍜", "Naruto", "📺 Animé"), ("🗡️👹🌸", "Demon Slayer", "📺 Animé"),
+    ("🏴‍☠️👒🍖", "One Piece", "📺 Animé"), ("🧱👣😱", "Attack on Titan", "📺 Animé"),
+    ("📓💀🍎", "Death Note", "📺 Animé"), ("👊🦲🥋", "One Punch Man", "📺 Animé"),
+    ("🐉⚡🥋", "Dragon Ball", "📺 Animé"), ("⚗️🤖👦", "Fullmetal Alchemist", "📺 Animé"),
+    ("🏐🍊⚡", "Haikyuu", "📺 Animé"), ("💚🦴💪", "My Hero Academia", "📺 Animé"),
+    ("⛓️🐶🍞", "Chainsaw Man", "📺 Animé"), ("🕵️🔫👧", "Spy x Family", "📺 Animé"),
+    ("🧝⏳🪄", "Frieren", "📺 Animé"), ("⚽🔒🥅", "Blue Lock", "📺 Animé"),
+    ("🌑👑🗡️", "Solo Leveling", "📺 Animé"), ("♟️👁️🎭", "Code Geass", "📺 Animé"),
+    ("🧪⏰📱", "Steins;Gate", "📺 Animé"), ("🎹🎻🌸", "Your Lie in April", "📺 Animé"),
+    ("🪓⚔️🛶", "Vinland Saga", "📺 Animé"), ("🕷️☕🍽️", "Tokyo Ghoul", "📺 Animé"),
+    ("🔮🧠💯", "Mob Psycho 100", "📺 Animé"), ("🍀📖⚔️", "Black Clover", "📺 Animé"),
+    ("💀🎮👑", "Overlord", "📺 Animé"), ("💥🧙‍♀️💣", "Konosuba", "📺 Animé"),
+    ("🕳️🤖🔦", "Made in Abyss", "📺 Animé"), ("🚀🎷🐕", "Cowboy Bebop", "📺 Animé"),
+    ("💀🔄👻", "Re:Zero", "📺 Animé"), ("🔥🚒👹", "Fire Force", "📺 Animé"),
+    ("🎯🃏🕷️", "Hunter x Hunter", "📺 Animé"), ("🌙⚔️👻", "Bleach", "📺 Animé"),
+    ("👽👻🏃", "Dandadan", "📺 Animé"), ("🦖🛡️💥", "Kaiju No. 8", "📺 Animé"),
+    ("🕰️🏍️😭", "Tokyo Revengers", "📺 Animé"), ("🧬🗿🔬", "Dr. Stone", "📺 Animé"),
+    ("🔫🏪👨‍👩‍👧", "Sakamoto Days", "📺 Animé"), ("⭐🎤👶", "Oshi no Ko", "📺 Animé"),
+    ("💥👁️♾️", "Jujutsu Kaisen", "📺 Animé"), ("⚫🗡️🐺", "Berserk", "📺 Animé"),
+    # ── K-Dramas ──
+    ("🕯️⚔️👻", "Goblin", "🎭 K-Drama"), ("🪂💚🎖️", "Crash Landing on You", "🎭 K-Drama"),
+    ("🦑🔴🟢", "Squid Game", "🎭 K-Drama"), ("🦅💼🇮🇹", "Vincenzo", "🎭 K-Drama"),
+    ("🍺👊🌃", "Itaewon Class", "🎭 K-Drama"), ("📼🏘️1️⃣9️⃣8️⃣8️⃣", "Reply 1988", "🎭 K-Drama"),
+    ("👑🧟🏯", "Kingdom", "🎭 K-Drama"), ("📻⏰🔍", "Signal", "🎭 K-Drama"),
+    ("🩺🎸5️⃣", "Hospital Playlist", "🎭 K-Drama"), ("🔥📚♟️", "The Glory", "🎭 K-Drama"),
+    ("💧👑💔", "Queen of Tears", "🎭 K-Drama"), ("🐋⚖️👩‍⚖️", "Extraordinary Attorney Woo", "🎭 K-Drama"),
+    ("👹🏢😱", "Sweet Home", "🎭 K-Drama"), ("🧟🏫📚", "All of Us Are Dead", "🎭 K-Drama"),
+    ("☀️🎖️🏥", "Descendants of the Sun", "🎭 K-Drama"), ("⭐👽🎬", "My Love from the Star", "🎭 K-Drama"),
+    ("🌸💰4️⃣", "Boys Over Flowers", "🎭 K-Drama"), ("💰⏮️🏢", "Reborn Rich", "🎭 K-Drama"),
+    ("🎖️🏃🔍", "D.P.", "🎭 K-Drama"), ("😈📜🔥", "Hellbound", "🎭 K-Drama"),
+    ("🏃⏰🎤", "Lovely Runner", "🎭 K-Drama"), ("💍⏮️😡", "Marry My Husband", "🎭 K-Drama"),
+    ("🎭📱💄", "Mask Girl", "🎭 K-Drama"), ("🐭⚖️🔒", "Big Mouth", "🎭 K-Drama"),
+    ("🚇☕😢", "My Mister", "🎭 K-Drama"), ("🌊🦷🏖️", "Hometown Cha-Cha-Cha", "🎭 K-Drama"),
+    ("📦🧹💙", "Move to Heaven", "🎭 K-Drama"), ("💼🍜🤥", "Business Proposal", "🎭 K-Drama"),
+    ("🤺📻1️⃣9️⃣9️⃣8️⃣", "Twenty-Five Twenty-One", "🎭 K-Drama"), ("🚀💡👩‍💻", "Start-Up", "🎭 K-Drama"),
+    ("🔮👻🏯", "Alchemy of Souls", "🎭 K-Drama"), ("📓👊🏫", "Weak Hero Class", "🎭 K-Drama"),
+    ("🔍🧊⚖️", "Stranger", "🎭 K-Drama"), ("⚾🔒😂", "Prison Playbook", "🎭 K-Drama"),
+    ("🦋🏥📖", "It's Okay to Not Be Okay", "🎭 K-Drama"), ("🌅🔫🇰🇷", "Mr. Sunshine", "🎭 K-Drama"),
+    ("📐🍱💘", "Crash Course in Romance", "🎭 K-Drama"), ("🩹😔💕", "Doctor Slump", "🎭 K-Drama"),
+    ("😈💍🏢", "My Demon", "🎭 K-Drama"), ("🦋🎨💔", "Nevertheless", "🎭 K-Drama"),
+]
+active_emoji = {}
+
+@bot.command(name="emoji", aliases=["emojiquiz", "devineemoji"])
+async def emoji_cmd(ctx):
+    """Devine l'œuvre à partir d'emojis — .emoji (`.emojistop` pour arrêter)"""
+    if ctx.channel.id in active_emoji:
+        return await ctx.send("🎬 Un Emoji Quiz est déjà en cours ! `.emojistop` pour l'arrêter.")
+
+    salon, temporaire = await demander_salon_prive(ctx, "Emoji Quiz", "🎬")
+    if salon.id in active_emoji:
+        return await salon.send("🎬 Un quiz est déjà en cours ici !")
+
+    active_emoji[salon.id] = {"running": True, "manche": 0, "scores": {}, "vus": []}
+    await salon.send(embed=discord.Embed(
+        title="🎬 Emoji Quiz",
+        description=(f"Je te donne **3 emojis**, tu devines l'animé ou le k-drama !\n\n"
+                     f"🏆 **80 à 140 pièces** + 25 XP par bonne réponse\n"
+                     f"⏱️ 45 secondes par manche\n\n"
+                     f"`skip` pour passer · `.emojistop` pour arrêter"),
+        color=0xe67e22))
+    await asyncio.sleep(2)
+
+    def check(m):
+        return m.channel == salon and not m.author.bot
+
+    while salon.id in active_emoji and active_emoji[salon.id].get("running"):
+        etat = active_emoji[salon.id]
+        etat["manche"] += 1
+        dispo = [e for e in EMOJI_QUIZ if e[1] not in etat["vus"]]
+        if not dispo:
+            etat["vus"] = []
+            dispo = EMOJI_QUIZ
+        emojis, reponse, theme = random.choice(dispo)
+        etat["vus"].append(reponse)
+
+        await salon.send(embed=discord.Embed(
+            title=f"🎬 Manche {etat['manche']}  —  {theme}",
+            description=f"# {emojis}\n\n*Quel titre se cache derrière ces emojis ?*",
+            color=0xe67e22
+        ).set_footer(text="⏱️ 45 s · `skip` pour passer · `.emojistop` pour arrêter"))
+
+        trouve, passe = False, False
+        fin = asyncio.get_event_loop().time() + 45
+        while asyncio.get_event_loop().time() < fin:
+            reste = fin - asyncio.get_event_loop().time()
+            try:
+                msg = await bot.wait_for("message", check=check, timeout=reste)
+            except asyncio.TimeoutError:
+                break
+            if salon.id not in active_emoji:
+                return
+            contenu = msg.content.lower().strip()
+            if contenu in ("skip", "passer", ".emojiskip"):
+                passe = True
+                await salon.send(embed=discord.Embed(
+                    description=f"⏭️ Passé — c'était **{reponse}**", color=0x95a5a6))
+                break
+            if contenu.startswith("."):
+                continue
+            if check_answer(msg.content, reponse):
+                gain = random.randint(80, 140)
+                uid = str(msg.author.id)
+                economy_data[uid]["coins"] += gain
+                xp_data[uid]["xp"] += 25
+                track_stat(uid, "quiz_ok", channel=salon)
+                check_coins_achievements(uid, salon)
+                etat["scores"][msg.author.display_name] = etat["scores"].get(msg.author.display_name, 0) + 1
+                await salon.send(embed=discord.Embed(
+                    description=f"🎉 **{msg.author.display_name}** trouve — **{reponse}** !\n💰 +{gain} pièces · ⭐ +25 XP",
+                    color=0x2ecc71))
+                trouve = True
+                break
+        if not trouve and not passe and salon.id in active_emoji:
+            await salon.send(embed=discord.Embed(
+                description=f"⏰ Temps écoulé — c'était **{reponse}**", color=0xe74c3c))
+        if salon.id not in active_emoji:
+            break
+        await asyncio.sleep(3)
+
+    etat = active_emoji.pop(salon.id, None)
+    if etat and etat.get("scores"):
+        cl = sorted(etat["scores"].items(), key=lambda x: -x[1])
+        detail = "\n".join(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{n}** — {s}" for i, (n, s) in enumerate(cl[:5]))
+        await salon.send(embed=discord.Embed(
+            title="🎬 Emoji Quiz terminé",
+            description=f"**{etat['manche']} manche(s)**\n\n{detail}", color=0xe67e22))
+    if temporaire:
+        await close_event_channel(salon, 60)
+
+@bot.command(name="emojistop", aliases=["stopemoji"])
+async def emojistop_cmd(ctx):
+    """Arrête l'Emoji Quiz — .emojistop"""
+    if ctx.channel.id in active_emoji:
+        active_emoji[ctx.channel.id]["running"] = False
+        return await ctx.send(embed=discord.Embed(description="🛑 Emoji Quiz arrêté.", color=0xe74c3c))
+    await ctx.send("❌ Aucun Emoji Quiz en cours ici !")
+
+
+# ============================================================
+#  🔴 PUISSANCE 4 — duel à boutons
+# ============================================================
+active_p4 = {}
+
+class Puissance4View(ui.View):
+    """Grille 7×6, deux joueurs, boutons de colonne"""
+    def __init__(self, j1, j2, channel, timeout=600):
+        super().__init__(timeout=timeout)
+        self.grille = [[0]*7 for _ in range(6)]
+        self.joueurs = {1: j1, 2: j2}
+        self.tour = 1
+        self.channel = channel
+        self.fini = False
+        self.message = None
+        for col in range(7):
+            btn = ui.Button(label=str(col+1), style=discord.ButtonStyle.secondary, row=col // 4)
+            async def cb(interaction, cc=col):
+                await self.jouer(interaction, cc)
+            btn.callback = cb
+            self.add_item(btn)
+
+    def _poser(self, col):
+        for ligne in range(5, -1, -1):
+            if self.grille[ligne][col] == 0:
+                self.grille[ligne][col] = self.tour
+                return ligne
+        return None
+
+    def _gagne(self, l, c2):
+        j = self.grille[l][c2]
+        for dl, dc in ((0,1),(1,0),(1,1),(1,-1)):
+            n = 1
+            for sens in (1,-1):
+                x, y = l+dl*sens, c2+dc*sens
+                while 0 <= x < 6 and 0 <= y < 7 and self.grille[x][y] == j:
+                    n += 1
+                    x, y = x+dl*sens, y+dc*sens
+            if n >= 4:
+                return True
+        return False
+
+    def build(self, fin=None):
+        P = {0: "⚪", 1: "🔴", 2: "🟡"}
+        plateau = "\n".join("".join(P[v] for v in ligne) for ligne in self.grille)
+        plateau += "\n1️⃣2️⃣3️⃣4️⃣5️⃣6️⃣7️⃣"
+        if fin:
+            desc = f"{plateau}\n\n{fin}"
+            col = 0xf1c40f
+        else:
+            j = self.joueurs[self.tour]
+            desc = f"{plateau}\n\n{'🔴' if self.tour == 1 else '🟡'} Au tour de **{j.display_name}**"
+            col = 0xe74c3c if self.tour == 1 else 0xf1c40f
+        e = discord.Embed(title="🔴 Puissance 4", description=desc, color=col)
+        e.set_footer(text=f"🔴 {self.joueurs[1].display_name}   vs   🟡 {self.joueurs[2].display_name}")
+        return e
+
+    async def jouer(self, interaction, col):
+        if self.fini:
+            return await interaction.response.send_message("❌ La partie est terminée.", ephemeral=True)
+        if interaction.user.id != self.joueurs[self.tour].id:
+            if interaction.user.id in (self.joueurs[1].id, self.joueurs[2].id):
+                return await interaction.response.send_message("⏳ Ce n'est pas ton tour !", ephemeral=True)
+            return await interaction.response.send_message("❌ Tu ne joues pas cette partie.", ephemeral=True)
+        ligne = self._poser(col)
+        if ligne is None:
+            return await interaction.response.send_message("❌ Cette colonne est pleine !", ephemeral=True)
+
+        if self._gagne(ligne, col):
+            self.fini = True
+            gagnant = self.joueurs[self.tour]
+            gain = random.randint(250, 450)
+            economy_data[str(gagnant.id)]["coins"] += gain
+            xp_data[str(gagnant.id)]["xp"] += 40
+            check_coins_achievements(str(gagnant.id), self.channel)
+            try: missions_progress[str(gagnant.id)]["wins"] += 1
+            except Exception: pass
+            for it in self.children: it.disabled = True
+            active_p4.pop(self.channel.id, None)
+            await interaction.response.edit_message(
+                embed=self.build(f"🏆 **{gagnant.display_name}** aligne 4 jetons !\n💰 +{gain} pièces · ⭐ +40 XP"),
+                view=self)
+            return self.stop()
+
+        if all(self.grille[0][x] != 0 for x in range(7)):
+            self.fini = True
+            for it in self.children: it.disabled = True
+            active_p4.pop(self.channel.id, None)
+            await interaction.response.edit_message(
+                embed=self.build("🤝 **Match nul !** La grille est pleine."), view=self)
+            return self.stop()
+
+        self.tour = 2 if self.tour == 1 else 1
+        await interaction.response.edit_message(embed=self.build(), view=self)
+
+    async def on_timeout(self):
+        active_p4.pop(self.channel.id, None)
+        for it in self.children: it.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(embed=self.build("⏰ Partie abandonnée — trop d'attente."), view=self)
+            except Exception:
+                pass
+
+@bot.command(name="puissance4", aliases=["p4", "connect4"])
+async def puissance4_cmd(ctx, adversaire: discord.Member = None):
+    """Puissance 4 en duel — .puissance4 @joueur"""
+    if not adversaire or adversaire.bot or adversaire.id == ctx.author.id:
+        return await ctx.send("❌ Mentionne un adversaire ! Ex : `.puissance4 @ami`")
+    if ctx.channel.id in active_p4:
+        return await ctx.send("🔴 Une partie est déjà en cours dans ce salon !")
+
+    view = AcceptView(adversaire, timeout=60)
+    msg = await ctx.send(
+        f"{adversaire.mention}",
+        embed=discord.Embed(
+            title="🔴 Défi Puissance 4",
+            description=(f"**{ctx.author.display_name}** défie **{adversaire.display_name}** !\n\n"
+                         f"🏆 **250 à 450 pièces** + 40 XP au vainqueur\n"
+                         f"*60 secondes pour accepter.*"),
+            color=0xe74c3c), view=view)
+    await view.wait()
+    if not view.value:
+        return await msg.edit(embed=discord.Embed(
+            description=f"❌ **{adversaire.display_name}** n'a pas relevé le défi.", color=0x95a5a6), view=None)
+
+    jeu = Puissance4View(ctx.author, adversaire, ctx.channel)
+    active_p4[ctx.channel.id] = jeu
+    jeu.message = await ctx.send(embed=jeu.build(), view=jeu)
+
+@bot.command(name="p4stop", aliases=["stopp4"])
+async def p4stop_cmd(ctx):
+    """Annule la partie de Puissance 4 — .p4stop"""
+    jeu = active_p4.get(ctx.channel.id)
+    if not jeu:
+        return await ctx.send("❌ Aucune partie en cours ici !")
+    if ctx.author.id not in (jeu.joueurs[1].id, jeu.joueurs[2].id) and not ctx.author.guild_permissions.manage_messages:
+        return await ctx.send("❌ Seuls les joueurs peuvent annuler la partie.")
+    jeu.fini = True
+    jeu.stop()
+    active_p4.pop(ctx.channel.id, None)
+    await ctx.send(embed=discord.Embed(description="🛑 Partie de Puissance 4 annulée.", color=0xe74c3c))
 
 # ============================================================
 #  🌍 QUIZ DRAPEAUX — reconnaissance à boutons
@@ -3154,7 +3451,172 @@ class CollectionView(ui.View):
         e.set_footer(text=f"Tri : {self.ORDRES[self.ordre]}")
         await interaction.response.send_message(embed=e, ephemeral=True)
 
-@bot.command(name="gachastock", aliases=["collection", "col", "cartes"])
+class CartesListeView(ui.View):
+    """Catalogue complet des cartes, filtrable et paginé"""
+    PAR_PAGE = 15
+
+    def __init__(self, auteur, guild, timeout=240):
+        super().__init__(timeout=timeout)
+        self.auteur, self.guild = auteur, guild
+        self.rarete = "toutes"
+        self.statut = "toutes"
+        self.serie = None
+        self.page = 0
+        self.cles = self._filtrer()
+
+        s1 = ui.Select(placeholder="💎 Rareté…", row=0, options=[
+            discord.SelectOption(label="Toutes les raretés", value="toutes", default=True),
+            discord.SelectOption(label="Mythique", value="Mythique", emoji="💎"),
+            discord.SelectOption(label="Légendaire", value="Légendaire", emoji="👑"),
+            discord.SelectOption(label="Épique", value="Épique", emoji="🔮"),
+            discord.SelectOption(label="Rare", value="Rare", emoji="💠"),
+            discord.SelectOption(label="Commun", value="Commun", emoji="▫️"),
+        ])
+        s1.callback = self._cb_rarete
+        self.s1 = s1
+        self.add_item(s1)
+
+        s2 = ui.Select(placeholder="🔎 Disponibilité…", row=1, options=[
+            discord.SelectOption(label="Toutes", value="toutes", default=True),
+            discord.SelectOption(label="🟢 Libres uniquement", value="libres"),
+            discord.SelectOption(label="🔒 Déjà prises", value="prises"),
+            discord.SelectOption(label="✅ Les miennes", value="miennes"),
+        ])
+        s2.callback = self._cb_statut
+        self.s2 = s2
+        self.add_item(s2)
+
+    def _filtrer(self):
+        uid = str(self.auteur.id)
+        out = []
+        for k, cc in ANIME_CARDS_DB.items():
+            if self.rarete != "toutes" and cc["rarete"] != self.rarete:
+                continue
+            proprio = claimed_cards.get(k)
+            if self.statut == "libres" and proprio:
+                continue
+            if self.statut == "prises" and not proprio:
+                continue
+            if self.statut == "miennes" and proprio != uid:
+                continue
+            if self.serie and normalize_str(self.serie) not in normalize_str(cc["serie"]):
+                continue
+            out.append(k)
+        ordre = ["Mythique", "Légendaire", "Épique", "Rare", "Commun"]
+        return sorted(out, key=lambda x: (ordre.index(ANIME_CARDS_DB[x]["rarete"]),
+                                          ANIME_CARDS_DB[x]["serie"], ANIME_CARDS_DB[x]["nom"]))
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.auteur.id:
+            await interaction.response.send_message("❌ Tape `.cartes` pour ta propre liste !", ephemeral=True)
+            return False
+        return True
+
+    async def _cb_rarete(self, interaction):
+        self.rarete = self.s1.values[0]
+        for o in self.s1.options: o.default = (o.value == self.rarete)
+        self.cles, self.page = self._filtrer(), 0
+        await interaction.response.edit_message(embed=self.build(), view=self)
+
+    async def _cb_statut(self, interaction):
+        self.statut = self.s2.values[0]
+        for o in self.s2.options: o.default = (o.value == self.statut)
+        self.cles, self.page = self._filtrer(), 0
+        await interaction.response.edit_message(embed=self.build(), view=self)
+
+    def build(self):
+        uid = str(self.auteur.id)
+        total = len(ANIME_CARDS_DB)
+        prises = len(claimed_cards)
+        pages = max(1, (len(self.cles) - 1) // self.PAR_PAGE + 1)
+        self.page = max(0, min(self.page, pages - 1))
+        lot = self.cles[self.page * self.PAR_PAGE:(self.page + 1) * self.PAR_PAGE]
+
+        lignes = []
+        for k in lot:
+            cc = ANIME_CARDS_DB[k]
+            proprio = claimed_cards.get(k)
+            if proprio == uid:
+                etat = "✅ **à toi**"
+            elif proprio:
+                m = self.guild.get_member(int(proprio)) if self.guild else None
+                etat = f"🔒 {m.display_name if m else 'un membre'}"
+            else:
+                etat = "🟢 **libre**"
+            lignes.append(f"{RARETE_EMOJI.get(cc['rarete'],'')} **{cc['nom']}** — *{cc['serie']}*\n└ {etat}")
+
+        filtres = []
+        if self.rarete != "toutes": filtres.append(self.rarete)
+        if self.statut != "toutes": filtres.append({"libres":"libres","prises":"prises","miennes":"les miennes"}[self.statut])
+        if self.serie: filtres.append(f"série « {self.serie} »")
+
+        embed = discord.Embed(
+            title="🎴 Catalogue des cartes",
+            description=("\n".join(lignes) if lignes else "*Aucune carte ne correspond à ces filtres.*"),
+            color=0x9b59b6)
+        embed.set_author(name=f"{prises}/{total} cartes déjà prises sur le serveur")
+        embed.set_footer(text=(f"Page {self.page+1}/{pages}  ·  {len(self.cles)} carte(s)"
+                               + (f"  ·  Filtres : {', '.join(filtres)}" if filtres else "")))
+        return embed
+
+    @ui.button(emoji="⏮️", style=discord.ButtonStyle.secondary, row=2)
+    async def first(self, interaction, button):
+        self.page = 0
+        await interaction.response.edit_message(embed=self.build(), view=self)
+
+    @ui.button(emoji="⬅️", style=discord.ButtonStyle.primary, row=2)
+    async def prev(self, interaction, button):
+        pages = max(1, (len(self.cles) - 1) // self.PAR_PAGE + 1)
+        self.page = (self.page - 1) % pages
+        await interaction.response.edit_message(embed=self.build(), view=self)
+
+    @ui.button(emoji="➡️", style=discord.ButtonStyle.primary, row=2)
+    async def next(self, interaction, button):
+        pages = max(1, (len(self.cles) - 1) // self.PAR_PAGE + 1)
+        self.page = (self.page + 1) % pages
+        await interaction.response.edit_message(embed=self.build(), view=self)
+
+    @ui.button(emoji="⏭️", style=discord.ButtonStyle.secondary, row=2)
+    async def last(self, interaction, button):
+        self.page = max(0, (len(self.cles) - 1) // self.PAR_PAGE)
+        await interaction.response.edit_message(embed=self.build(), view=self)
+
+@bot.command(name="cartes", aliases=["cardlist", "listecartes", "catalogue"])
+async def cartes_cmd(ctx, *, serie: str = None):
+    """Catalogue complet des cartes — .cartes [série]"""
+    view = CartesListeView(ctx.author, ctx.guild)
+    if serie:
+        view.serie = serie
+        view.cles = view._filtrer()
+        if not view.cles:
+            return await ctx.send(f"❌ Aucune carte trouvée pour la série `{serie}`.")
+    await ctx.send(embed=view.build(), view=view)
+
+@bot.command(name="series", aliases=["listeseries"])
+async def series_cmd(ctx):
+    """Toutes les séries du gacha — .series"""
+    from collections import Counter as _C
+    cnt = _C(cc["serie"] for cc in ANIME_CARDS_DB.values())
+    uid = str(ctx.author.id)
+    lignes = []
+    for serie, n in sorted(cnt.items(), key=lambda x: (-x[1], x[0])):
+        possede = sum(1 for k, cc in ANIME_CARDS_DB.items()
+                      if cc["serie"] == serie and claimed_cards.get(k) == uid)
+        libres = sum(1 for k, cc in ANIME_CARDS_DB.items()
+                     if cc["serie"] == serie and k not in claimed_cards)
+        coche = "🏅" if possede == n else ""
+        lignes.append(f"**{serie}** — {n} carte(s) · tu en as **{possede}** · {libres} libre(s) {coche}")
+    pages = []
+    for i in range(0, len(lignes), 15):
+        pages.append(discord.Embed(
+            title="📚 Séries du gacha",
+            description="\n".join(lignes[i:i+15]),
+            color=0x9b59b6).set_footer(
+                text=f"{len(cnt)} séries · {len(ANIME_CARDS_DB)} cartes · `.cartes <série>` pour le détail"))
+    view = PageView(pages, ctx.author, timeout=180) if len(pages) > 1 else None
+    await ctx.send(embed=pages[0], view=view)
+
+@bot.command(name="gachastock", aliases=["collection", "col"])
 async def gachastock_cmd(ctx, membre: discord.Member = None):
     """Ta collection, carte par carte — .gachastock [@membre]"""
     target = membre or ctx.author
@@ -8135,6 +8597,12 @@ async def devine_cmd(ctx):
             if salon.id not in active_devine:
                 return
             contenu = msg.content.lower().strip()
+            if contenu in ("skip", "passer", ".devinetteskip", ".devineskip", ".skipdevine"):
+                game["skip"] = True
+                await salon.send(embed=discord.Embed(
+                    description=f"⏭️ Passé — c'était **{perso['nom']}** *({perso['univers']})*",
+                    color=0x95a5a6))
+                break
             if contenu.startswith("."):
                 continue
             if contenu == "indice":
@@ -10441,7 +10909,7 @@ async def burn_cmd(ctx, *, perso: str = None):
 # ============================================================
 #  F. COLLECTION PAR SÉRIE — Voir progression & récompenses
 # ============================================================
-@bot.command(name="serie", aliases=["series", "collectionserie"])
+@bot.command(name="serie", aliases=["collectionserie", "maserie"])
 async def serie_cmd(ctx, *, nom_serie: str = None):
     """Voir ta progression sur une série et réclamer la récompense — .serie <nom>"""
     uid = str(ctx.author.id)
