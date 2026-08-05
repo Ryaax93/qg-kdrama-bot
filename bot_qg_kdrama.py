@@ -1274,6 +1274,9 @@ def build_help_pages(guild, is_admin=False):
         "`.devinetteskip` — Passer la devinette · `.devinerstop` — Arrêter\n"
         "`.pendu` — Le pendu, manches en continu *(185 titres)*\n"
         "`.pendustop` — Arrêter la partie de pendu\n"
+        "`.memory [facile|normal|difficile]` — Retrouve les paires 🃏\n"
+        "`.memorystop` — Abandonner la partie\n"
+        "`.risque` — Double ou perds tout, jusqu'à 6 paliers *(1×/heure)*\n"
         "`.puissance4 @membre` — Puissance 4 en duel *(250-450 p au vainqueur)*\n"
         "`.p4stop` — Annuler la partie\n"
         "`.rps <choix>` — Pierre / feuille / ciseaux\n"
@@ -1432,7 +1435,9 @@ def build_help_pages(guild, is_admin=False):
     ), inline=False)
     e.add_field(name="💰 Économie", value=(
         "`.givepieces @membre <montant>` — Donner des pièces\n"
-        "`.givexp @membre <montant>` — Donner de l'XP"
+        "`.givexp @membre <montant>` — Donner de l'XP\n"
+        "`.giveamelioration @membre <n>` — Donner des points d'amélioration\n"
+        "`.recalcamelioration [@membre]` — Recalculer les points selon le niveau"
     ), inline=False)
     e.add_field(name="🔄 Réinitialisation", value=(
         "`.reset` — Voir les cibles disponibles\n"
@@ -1537,13 +1542,9 @@ async def setimage_cmd(ctx, *, args: str = None):
 
     uid = str(ctx.author.id)
     is_admin = ctx.author.guild_permissions.administrator
-    key = perso.lower().strip()
-
-    if key not in ANIME_CARDS_DB:
-        matches = [k for k in ANIME_CARDS_DB if perso.lower() in ANIME_CARDS_DB[k]["nom"].lower()]
-        if not matches:
-            return await ctx.send(f"❌ Personnage `{perso}` introuvable !")
-        key = matches[0]
+    key = trouver_carte(perso, uid)
+    if not key:
+        return await ctx.send(f"❌ Personnage `{perso}` introuvable !")
 
     # Admin peut setimage sans posséder la carte
     if not is_admin:
@@ -1576,12 +1577,9 @@ async def givecard_cmd(ctx, membre: discord.Member = None, *, perso: str = None)
     if not membre or not perso:
         return await ctx.send("❌ Usage : `.givecard @joueur <perso>`\nEx: `.givecard @Ryaax naruto`")
 
-    key = perso.lower().strip().replace(" ", "")
-    if key not in ANIME_CARDS_DB:
-        matches = [k for k in ANIME_CARDS_DB if perso.lower() in ANIME_CARDS_DB[k]["nom"].lower()]
-        if not matches:
-            return await ctx.send(f"❌ Personnage `{perso}` introuvable !")
-        key = matches[0]
+    key = trouver_carte(perso, uid)
+    if not key:
+        return await ctx.send(f"❌ Personnage `{perso}` introuvable !")
 
     c = ANIME_CARDS_DB[key]
     uid = str(membre.id)
@@ -1622,12 +1620,9 @@ async def removecard_cmd(ctx, membre: discord.Member = None, *, perso: str = Non
     if not membre or not perso:
         return await ctx.send("❌ Usage : `.removecard @joueur <perso>`\nEx: `.removecard @Ryaax naruto`")
 
-    key = perso.lower().strip().replace(" ", "")
-    if key not in ANIME_CARDS_DB:
-        matches = [k for k in ANIME_CARDS_DB if perso.lower() in ANIME_CARDS_DB[k]["nom"].lower()]
-        if not matches:
-            return await ctx.send(f"❌ Personnage `{perso}` introuvable !")
-        key = matches[0]
+    key = trouver_carte(perso, uid)
+    if not key:
+        return await ctx.send(f"❌ Personnage `{perso}` introuvable !")
 
     c = ANIME_CARDS_DB[key]
     uid = str(membre.id)
@@ -1670,6 +1665,7 @@ async def removecard_cmd(ctx, membre: discord.Member = None, *, perso: str = Non
 # ============================================================
 active_quiz = {}
 active_drapeaux = {}
+risque_cooldown = {}
 quiz_duels = {}  # {channel_id: {players, scores, theme, round, total_rounds}}
 
 QUIZ_HARRYPOTTER = [
@@ -2003,6 +1999,169 @@ async def emojistop_cmd(ctx):
     await ctx.send("❌ Aucun Emoji Quiz en cours ici !")
 
 
+
+# ============================================================
+#  🃏 MEMORY — retourne les cartes, trouve les paires
+# ============================================================
+MEMORY_SYMBOLES = ["🍥","🗡️","🏴‍☠️","⚔️","📓","👊","🐉","⚗️","🏐","💚",
+                   "⛓️","🕵️","🧝","⚽","🌑","♟️","🧪","🎹","🪓","🕷️",
+                   "🕯️","🪂","🦑","🦅","🍺","📼","👑","📻","🩺","🔥"]
+active_memory = {}
+
+class MemoryView(ui.View):
+    """Grille de paires à retourner"""
+    TAILLES = {"facile": (4, 3), "normal": (4, 4), "difficile": (5, 4)}
+
+    def __init__(self, joueur, salon, niveau="normal", timeout=420):
+        super().__init__(timeout=timeout)
+        self.joueur, self.salon, self.niveau = joueur, salon, niveau
+        cols, lignes = self.TAILLES[niveau]
+        total = cols * lignes
+        paires = random.sample(MEMORY_SYMBOLES, total // 2)
+        self.cartes = paires * 2
+        random.shuffle(self.cartes)
+        self.cols = cols
+        self.trouvees = set()
+        self.retournees = []
+        self.coups = 0
+        self.debut = None
+        self.message = None
+        self.fini = False
+        for i in range(total):
+            btn = ui.Button(label="\u200b", emoji="🎴",
+                            style=discord.ButtonStyle.secondary, row=i // cols)
+            async def cb(interaction, idx=i):
+                await self.retourner(interaction, idx)
+            btn.callback = cb
+            self.add_item(btn)
+
+    def build(self, fin=None):
+        restant = len(self.cartes) // 2 - len(self.trouvees) // 2
+        if fin:
+            desc = fin
+            col = 0x2ecc71
+        else:
+            desc = (f"Retrouve toutes les paires !\n\n"
+                    f"🎴 Paires restantes : **{restant}**\n"
+                    f"🔄 Coups joués : **{self.coups}**")
+            col = 0x9b59b6
+        e = discord.Embed(title=f"🃏 Memory — {self.niveau.capitalize()}", description=desc, color=col)
+        e.set_author(name=self.joueur.display_name, icon_url=self.joueur.display_avatar.url)
+        if not fin:
+            e.set_footer(text="Clique sur deux cartes pour les retourner")
+        return e
+
+    async def retourner(self, interaction, idx):
+        if interaction.user.id != self.joueur.id:
+            return await interaction.response.send_message("❌ C'est la partie de quelqu'un d'autre !", ephemeral=True)
+        if self.fini or idx in self.trouvees or idx in self.retournees:
+            return await interaction.response.defer()
+        if len(self.retournees) >= 2:
+            return await interaction.response.defer()
+
+        import time as _t
+        if self.debut is None:
+            self.debut = _t.time()
+        self.retournees.append(idx)
+        self.children[idx].emoji = self.cartes[idx]
+        self.children[idx].style = discord.ButtonStyle.primary
+
+        if len(self.retournees) < 2:
+            return await interaction.response.edit_message(embed=self.build(), view=self)
+
+        self.coups += 1
+        a, b = self.retournees
+        await interaction.response.edit_message(embed=self.build(), view=self)
+
+        if self.cartes[a] == self.cartes[b]:
+            self.trouvees.update((a, b))
+            self.retournees = []
+            for i in (a, b):
+                self.children[i].style = discord.ButtonStyle.success
+                self.children[i].disabled = True
+            if len(self.trouvees) == len(self.cartes):
+                self.fini = True
+                duree = int(_t.time() - self.debut)
+                parfait = len(self.cartes) // 2
+                bonus = max(0, (parfait * 2 - self.coups)) * 40
+                base = {"facile": 250, "normal": 450, "difficile": 800}[self.niveau]
+                gain = base + bonus
+                uid = str(self.joueur.id)
+                economy_data[uid]["coins"] += gain
+                xp_data[uid]["xp"] += 40
+                check_coins_achievements(uid, self.salon)
+                active_memory.pop(self.salon.id, None)
+                for it in self.children:
+                    it.disabled = True
+                return await interaction.message.edit(embed=self.build(
+                    f"🎉 **Toutes les paires trouvées !**\n\n"
+                    f"🔄 **{self.coups}** coups *(minimum possible : {parfait})*\n"
+                    f"⏱️ **{duree//60}m{duree%60:02d}s**\n\n"
+                    f"💰 **+{gain:,} pièces** *(base {base} + {bonus} de précision)*\n⭐ +40 XP"), view=self)
+            return await interaction.message.edit(embed=self.build(), view=self)
+
+        # Paire ratée : on remasque après une pause
+        await asyncio.sleep(1.1)
+        for i in (a, b):
+            self.children[i].emoji = "🎴"
+            self.children[i].style = discord.ButtonStyle.secondary
+        self.retournees = []
+        try:
+            await interaction.message.edit(embed=self.build(), view=self)
+        except Exception:
+            pass
+
+    async def on_timeout(self):
+        active_memory.pop(self.salon.id, None)
+        self.fini = True
+        for it in self.children:
+            it.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(embed=self.build("⏰ Partie abandonnée — trop d'attente."), view=self)
+            except Exception:
+                pass
+
+@bot.command(name="memory", aliases=["paires", "memo"])
+async def memory_cmd(ctx, niveau: str = "normal"):
+    """Jeu de memory — .memory [facile|normal|difficile]"""
+    niveau = niveau.lower().strip()
+    if niveau not in MemoryView.TAILLES:
+        return await ctx.send(embed=discord.Embed(
+            title="🃏 Memory",
+            description=("Retourne les cartes et retrouve les paires !\n\n"
+                         "`.memory facile` — 12 cartes · 6 paires · **250 p**\n"
+                         "`.memory normal` — 16 cartes · 8 paires · **450 p**\n"
+                         "`.memory difficile` — 20 cartes · 10 paires · **800 p**\n\n"
+                         "*Bonus de précision : +40 p par coup économisé.*"),
+            color=0x9b59b6))
+    if ctx.channel.id in active_memory:
+        return await ctx.send("🃏 Une partie de Memory est déjà en cours ici !")
+
+    salon, temporaire = await demander_salon_prive(ctx, f"Memory {niveau}", "🃏")
+    if salon.id in active_memory:
+        return await salon.send("🃏 Une partie est déjà en cours ici !")
+
+    vue = MemoryView(ctx.author, salon, niveau)
+    active_memory[salon.id] = vue
+    vue.message = await salon.send(embed=vue.build(), view=vue)
+    if temporaire:
+        await vue.wait()
+        await close_event_channel(salon, 60)
+
+@bot.command(name="memorystop", aliases=["stopmemory"])
+async def memorystop_cmd(ctx):
+    """Abandonne la partie de Memory — .memorystop"""
+    vue = active_memory.get(ctx.channel.id)
+    if not vue:
+        return await ctx.send("❌ Aucune partie de Memory en cours ici !")
+    if ctx.author.id != vue.joueur.id and not ctx.author.guild_permissions.manage_messages:
+        return await ctx.send("❌ Seul le joueur peut abandonner.")
+    vue.fini = True
+    vue.stop()
+    active_memory.pop(ctx.channel.id, None)
+    await ctx.send(embed=discord.Embed(description="🛑 Partie de Memory abandonnée.", color=0xe74c3c))
+
 # ============================================================
 #  🔴 PUISSANCE 4 — duel à boutons
 # ============================================================
@@ -2145,6 +2304,144 @@ async def p4stop_cmd(ctx):
     jeu.stop()
     active_p4.pop(ctx.channel.id, None)
     await ctx.send(embed=discord.Embed(description="🛑 Partie de Puissance 4 annulée.", color=0xe74c3c))
+
+
+# ============================================================
+#  🎲 QUITTE OU DOUBLE — la cagnotte monte, la peur aussi
+# ============================================================
+QD_PALIERS = [200, 500, 1000, 2000, 4000, 8000, 15000, 30000]
+
+class QDCandidatView(ui.View):
+    def __init__(self, timeout=60):
+        super().__init__(timeout=timeout)
+        self.candidat = None
+    @ui.button(label="Je tente ma chance !", emoji="🎲", style=discord.ButtonStyle.success)
+    async def jouer(self, interaction, button):
+        self.candidat = interaction.user
+        button.disabled = True
+        button.label = f"{interaction.user.display_name} monte sur scène"
+        await interaction.response.edit_message(view=self)
+        self.stop()
+
+class QDChoixView(ui.View):
+    def __init__(self, joueur, timeout=45):
+        super().__init__(timeout=timeout)
+        self.joueur, self.continuer = joueur, None
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.joueur.id:
+            await interaction.response.send_message("❌ Seul le candidat décide !", ephemeral=True)
+            return False
+        return True
+    @ui.button(label="Continuer", emoji="🔼", style=discord.ButtonStyle.danger)
+    async def suite(self, interaction, button):
+        self.continuer = True
+        for it in self.children: it.disabled = True
+        await interaction.response.edit_message(view=self)
+        self.stop()
+    @ui.button(label="J'encaisse", emoji="💰", style=discord.ButtonStyle.success)
+    async def stop_btn(self, interaction, button):
+        self.continuer = False
+        for it in self.children: it.disabled = True
+        await interaction.response.edit_message(view=self)
+        self.stop()
+
+async def run_quitte_ou_double(channel, guild):
+    """🎲 Quitte ou Double — un candidat, des questions, une cagnotte qui explose"""
+    salon = await create_event_channel(guild, "🎲・quitte-ou-double")
+    cible = salon or channel
+    if salon:
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title="🎲 QUITTE OU DOUBLE",
+            description="Un candidat, 8 questions, **jusqu'à 30 000 pièces**… ou rien du tout.",
+            color=0xf1c40f), salon)
+
+    v = QDCandidatView(timeout=60)
+    await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
+                     embed=discord.Embed(
+                         title="🎲 QUITTE OU DOUBLE",
+                         description=("**8 paliers. La cagnotte double à chaque bonne réponse.**\n\n"
+                                      "À chaque étape tu choisis : **encaisser** ou **continuer**.\n"
+                                      "Une seule erreur et **tu repars les mains vides**.\n\n"
+                                      "💰 200 → 500 → 1 000 → 2 000 → 4 000 → 8 000 → 15 000 → **30 000**\n\n"
+                                      "*Qui a les nerfs assez solides ?*"),
+                         color=0xf1c40f), view=v)
+    await v.wait()
+    if not v.candidat:
+        await cible.send(embed=discord.Embed(description="😴 Personne n'a osé.", color=0x95a5a6))
+        if salon: await close_event_channel(salon, 60)
+        return
+
+    joueur = v.candidat
+    uid = str(joueur.id)
+    pool = QUIZ_THEMES["mix"][:]
+    random.shuffle(pool)
+    posees = []
+
+    def check(m):
+        return m.channel == cible and m.author.id == joueur.id
+
+    for palier, montant in enumerate(QD_PALIERS, start=1):
+        q = pool[palier - 1] if palier - 1 < len(pool) else random.choice(QUIZ_THEMES["mix"])
+        posees.append(q)
+        await cible.send(f"{joueur.mention}", embed=discord.Embed(
+            title=f"🎲 Palier {palier}/8  —  {montant:,} pièces en jeu",
+            description=f"**{q['q']}**\n\n*30 secondes pour répondre.*",
+            color=0xf1c40f))
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=30)
+            bonne = check_answer(msg.content, q["a"])
+        except asyncio.TimeoutError:
+            bonne = False
+
+        if not bonne:
+            await cible.send(embed=discord.Embed(
+                title="💀 PERDU !",
+                description=(f"La réponse était **{q['a']}**.\n\n"
+                             f"**{joueur.display_name}** repart avec **0 pièce**…\n"
+                             f"*Il était à un palier de {montant:,} pièces.*"),
+                color=0xe74c3c))
+            if salon: await close_event_channel(salon, 120)
+            return
+
+        await cible.send(embed=discord.Embed(
+            description=f"✅ Bonne réponse ! **{montant:,} pièces** sécurisées… pour l'instant.",
+            color=0x2ecc71))
+        if palier == len(QD_PALIERS):
+            break
+
+        cv = QDChoixView(joueur, timeout=45)
+        await cible.send(f"{joueur.mention}", embed=discord.Embed(
+            title="🤔 Le choix",
+            description=(f"Tu as **{montant:,} pièces** dans la poche.\n"
+                         f"Le palier suivant vaut **{QD_PALIERS[palier]:,} pièces**.\n\n"
+                         f"🔼 **Continuer** — tout risquer pour doubler\n"
+                         f"💰 **J'encaisse** — repartir avec ce que tu as"),
+            color=0xe67e22), view=cv)
+        await cv.wait()
+        if cv.continuer is False:
+            economy_data[uid]["coins"] += montant
+            check_coins_achievements(uid, cible)
+            suivante = posees[-1]
+            await cible.send(embed=discord.Embed(
+                title="💰 ENCAISSÉ !",
+                description=(f"**{joueur.display_name}** repart avec **{montant:,} pièces** !\n\n"
+                             f"*Sagesse ou lâcheté ? Le débat est ouvert.*"),
+                color=0xf1c40f))
+            if salon: await close_event_channel(salon, 120)
+            return
+        await cible.send(embed=discord.Embed(
+            description="🔥 **Il continue !** Le public retient son souffle…", color=0xe74c3c))
+        await asyncio.sleep(2)
+
+    total = QD_PALIERS[-1]
+    economy_data[uid]["coins"] += total
+    check_coins_achievements(uid, cible)
+    await cible.send(embed=discord.Embed(
+        title="🏆 LES 8 PALIERS !",
+        description=(f"**{joueur.display_name}** a tout réussi et empoche **{total:,} pièces** !\n\n"
+                     f"*Une performance qui restera dans les annales du QG.*"),
+        color=0xf1c40f))
+    if salon: await close_event_channel(salon, 180)
 
 # ============================================================
 #  🌍 QUIZ DRAPEAUX — reconnaissance à boutons
@@ -2544,6 +2841,7 @@ async def ameliorer(ctx, stat: str = None):
     s[cle] += 1
     points_amelio[uid] -= 1
 
+    save_all_data()
     hp_total  = 250 + s["pv_bonus"]  * 8
     end_total = 100 + s["end_bonus"] * 5
 
@@ -2641,7 +2939,7 @@ SHOP_ITEMS = [
     {"id": "fav_slot_5",   "nom": "🔓 Slots Favoris (5)",   "prix": 5000, "cat": "gacha_boost", "description": "Passe ta limite de cartes favorites de 3 à 5"},
     {"id": "boost_rarete", "nom": "🎯 Boost Rareté",        "prix": 3500, "cat": "gacha_boost", "description": "Chances Épique+ fortement augmentées pour 5 rolls", "daily": True},
     {"id": "claim_15",     "nom": "⚡ Claim 15 min",        "prix": 12000, "cat": "gacha_boost", "description": "Réduit ton cooldown de claim à 15 min — permanent"},
-    {"id": "cadeau",       "nom": "🎁 Cadeau Mystère",      "prix": 6000,  "cat": "gacha_boost", "description": "Une carte aléatoire Rare ou supérieure, offerte"},
+    {"id": "cadeau",       "nom": "🎁 Cadeau Mystère",      "prix": 6000,  "cat": "gacha_boost", "description": "Une carte surprise : 78 % Rare · 19 % Épique · 2,8 % Légendaire · **0,2 % Mythique**"},
     {"id": "claim_20",     "nom": "⚡ Claim 20 min",        "prix": 6000,  "cat": "gacha_boost", "description": "Réduit ton cooldown de claim à 20 min — permanent"},
     {"id": "rolls_5",      "nom": "🎰 +5 Rolls",            "prix": 3500,  "cat": "gacha_boost", "description": "Cinq tirages supplémentaires immédiatement"},
     {"id": "oracle",       "nom": "🔮 Oracle",              "prix": 2500,  "cat": "gacha_boost", "description": "Tes 3 prochains rolls ont 1 chance sur 5 de faire tomber une carte bonus"},
@@ -3041,6 +3339,44 @@ def gacha_tirer(uid=None):
         if r <= cumul:
             return key
     return random.choice(pool)
+
+def trouver_carte(perso, uid=None, possedees_only=False):
+    """Trouve la clé d'une carte. Les cartes possédées par `uid` sont prioritaires
+    à score égal — évite de tomber sur un homonyme qu'on ne possède pas."""
+    if not perso:
+        return None
+    q, qc = normalize_str(perso), _sans_espaces(perso)
+    if not q:
+        return None
+    mots_q = set(q.split())
+    a_moi = set(gacha_collections.get(uid, {})) if uid else set()
+
+    resultats = []
+    for k, cc in ANIME_CARDS_DB.items():
+        if possedees_only and k not in a_moi:
+            continue
+        nom_n, nom_c = normalize_str(cc["nom"]), _sans_espaces(cc["nom"])
+        mots_n = set(nom_n.split())
+        score = 0
+        if q == nom_n or qc == nom_c or qc == k:
+            score = 100
+        elif mots_q == mots_n:                      # « Gojo Satoru » = « Satoru Gojo »
+            score = 95
+        elif mots_q and mots_q.issubset(mots_n):    # tous les mots cherchés sont dans le nom
+            score = 88
+        elif nom_n.startswith(q) or nom_c.startswith(qc) or k.startswith(qc):
+            score = 80
+        elif q in nom_n or qc in nom_c:
+            score = 70
+        elif len(qc) >= 4 and qc in k:
+            score = 60
+        if score:
+            # +15 si le joueur la possède : à score proche, c'est la sienne qui gagne
+            resultats.append((score + (15 if k in a_moi else 0), k))
+    if not resultats:
+        return None
+    resultats.sort(key=lambda x: -x[0])
+    return resultats[0][1]
 
 def build_card_embed(key, uid_claimer=None, claimed=False):
     c = ANIME_CARDS_DB[key]
@@ -3663,12 +3999,9 @@ async def fusionner_cmd(ctx, *, perso: str = None):
                        if en_cours else "*Aucun doublon pour l'instant. Continue à roll !*"), inline=False)
         return await ctx.send(embed=embed)
 
-    key = perso.lower().strip().replace(" ", "")
-    if key not in ANIME_CARDS_DB:
-        matches = [k for k in ANIME_CARDS_DB if perso.lower() in ANIME_CARDS_DB[k]["nom"].lower()]
-        if not matches:
-            return await ctx.send(f"❌ `{perso}` introuvable !")
-        key = matches[0]
+    key = trouver_carte(perso, uid)
+    if not key:
+        return await ctx.send(f"❌ Carte `{perso}` introuvable !")
     cc = ANIME_CARDS_DB[key]
     if claimed_cards.get(key) != uid:
         return await ctx.send(f"❌ Tu ne possèdes pas **{cc['nom']}** !")
@@ -3760,12 +4093,9 @@ async def wish_cmd(ctx, action: str = None, *, perso: str = None):
         cible = perso if action.lower() in ("add", "ajouter", "+") and perso else \
                 (f"{action} {perso}" if perso else action)
 
-    key = cible.lower().strip().replace(" ", "")
-    if key not in ANIME_CARDS_DB:
-        matches = [k for k in ANIME_CARDS_DB if normalize_str(cible) in normalize_str(ANIME_CARDS_DB[k]["nom"])]
-        if not matches:
-            return await ctx.send(f"❌ Carte `{cible}` introuvable !")
-        key = matches[0]
+    key = trouver_carte(cible, uid)
+    if not key:
+        return await ctx.send(f"❌ Carte `{cible}` introuvable !")
     cc = ANIME_CARDS_DB[key]
 
     if action.lower() in ("remove", "retirer", "supprimer", "-"):
@@ -3804,11 +4134,8 @@ async def gachagive_cmd(ctx, target: discord.Member = None, *, perso: str = None
     if not target or not perso:
         return await ctx.send("❌ `.gachagive @joueur <perso>`")
     uid = str(ctx.author.id)
-    key = perso.lower().strip().replace(" ","")
-    if key not in ANIME_CARDS_DB:
-        matches = [k for k in ANIME_CARDS_DB if perso.lower() in ANIME_CARDS_DB[k]["nom"].lower()]
-        if not matches: return await ctx.send(f"❌ `{perso}` introuvable !")
-        key = matches[0]
+    key = trouver_carte(perso, uid)
+    if not key: return await ctx.send(f"❌ `{perso}` introuvable !")
     if claimed_cards.get(key) != uid:
         return await ctx.send("❌ Tu ne possèdes pas cette carte !")
     c = ANIME_CARDS_DB[key]
@@ -4248,12 +4575,18 @@ async def acheter_cmd(ctx, item_id: str = None):
 
     # ── Cadeau Mystère : une carte Rare ou mieux ──
     if iid == "cadeau":
-        dispo = [k for k, cc in ANIME_CARDS_DB.items()
-                 if cc["rarete"] in ("Rare", "Épique", "Légendaire", "Mythique") and k not in claimed_cards]
-        if not dispo:
+        # Tirage pondéré : le cadeau reste une surprise, pas un raccourci vers le Mythique
+        CHANCES = [("Rare", 78), ("Épique", 19), ("Légendaire", 2.8), ("Mythique", 0.2)]
+        libres = {}
+        for r, _ in CHANCES:
+            libres[r] = [k for k, cc in ANIME_CARDS_DB.items()
+                         if cc["rarete"] == r and k not in claimed_cards]
+        possibles = [(r, p) for r, p in CHANCES if libres[r]]
+        if not possibles:
             economy_data[uid]["coins"] += item["prix"]
             return await ctx.send("❌ Aucune carte disponible pour le moment !")
-        key = random.choice(dispo)
+        rarete = random.choices([r for r, _ in possibles], weights=[p for _, p in possibles])[0]
+        key = random.choice(libres[rarete])
         claimed_cards[key] = uid
         gacha_collections[uid][key] = {"fusion": 0}
         check_collection_achievements(uid, ctx.channel)
@@ -4741,6 +5074,51 @@ async def animequote_cmd(ctx):
 # ============================================================
 #  ADMIN ÉCONOMIE
 # ============================================================
+
+@bot.command(name="giveamelioration", aliases=["givepoints", "giveamelio"])
+@commands.has_permissions(administrator=True)
+async def giveamelioration_cmd(ctx, membre: discord.Member = None, nombre: int = None):
+    """Donne des points d'amélioration — .giveamelioration @joueur <nombre> (admin)"""
+    if not membre or nombre is None:
+        return await ctx.send(embed=discord.Embed(
+            description=("❌ Usage : `.giveamelioration @joueur <nombre>`\n"
+                         "*Un nombre négatif retire des points.*\n"
+                         "*Astuce : `.giveamelioration @joueur auto` recalcule selon son niveau.*"),
+            color=0xe74c3c))
+    uid = str(membre.id)
+    points_amelio[uid] = max(0, points_amelio[uid] + nombre)
+    save_all_data()
+    await ctx.send(embed=discord.Embed(
+        title="🆙 Points d'amélioration",
+        description=(f"**{membre.display_name}** {'reçoit' if nombre >= 0 else 'perd'} "
+                     f"**{abs(nombre)} point(s)**.\n"
+                     f"Il en a maintenant **{points_amelio[uid]}**.\n\n"
+                     f"*Il peut les dépenser avec `.ameliorer <pv|atk|def|endurance>`.*"),
+        color=0x2ecc71))
+
+@bot.command(name="recalcamelioration", aliases=["fixamelio"])
+@commands.has_permissions(administrator=True)
+async def recalcamelioration_cmd(ctx, membre: discord.Member = None):
+    """Recalcule les points selon le niveau — .recalcamelioration [@joueur] (admin)"""
+    cibles = [membre] if membre else [m for m in ctx.guild.members if not m.bot and str(m.id) in xp_data]
+    corriges = []
+    for m in cibles:
+        uid = str(m.id)
+        lvl = xp_data[uid]["level"]
+        s = arena_stats[uid]
+        depenses = s["pv_bonus"] + s["atk_bonus"] + s["def_bonus"] + s["end_bonus"]
+        du = max(0, lvl - 1)          # 1 point par niveau gagné
+        manquants = du - depenses - points_amelio[uid]
+        if manquants > 0:
+            points_amelio[uid] += manquants
+            corriges.append(f"**{m.display_name}** — niveau {lvl} → +{manquants} point(s)")
+    save_all_data()
+    if not corriges:
+        return await ctx.send("✅ Tout le monde a déjà le bon nombre de points.")
+    await ctx.send(embed=discord.Embed(
+        title="🔧 Points d'amélioration recalculés",
+        description="\n".join(corriges[:20]) + (f"\n*…et {len(corriges)-20} autres*" if len(corriges) > 20 else ""),
+        color=0x2ecc71))
 
 @bot.command(name="givepieces")
 @commands.has_permissions(administrator=True)
@@ -6081,6 +6459,666 @@ DEBATS = [
 ]
 
 
+
+
+
+# ============================================================
+#  🎪 EVENTS — série 3
+# ============================================================
+async def run_qui_suis_je(channel, guild):
+    """🎭 Qui suis-je ? — indices qui tombent un par un"""
+    perso = random.choice(PERSONNAGES)
+    gain_max = random.randint(900, 1600)
+    salon = await create_event_channel(guild, "🎭・qui-suis-je")
+    cible = salon or channel
+    if salon:
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title="🎭 QUI SUIS-JE ?",
+            description=f"Un personnage {perso['univers']} se cache — jusqu'à **{gain_max:,} pièces** !",
+            color=0x9b59b6), salon)
+    await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
+                     embed=discord.Embed(
+                         title="🎭 QUI SUIS-JE ?",
+                         description=(f"📂 **Thème : {perso['univers']}**\n\n"
+                                      f"**Indice 1 :** {perso['indices'][0]}\n\n"
+                                      f"🏆 **{gain_max:,} pièces** — *le gain baisse à chaque nouvel indice*\n"
+                                      f"⏰ Un indice de plus toutes les 25 secondes"),
+                         color=0x9b59b6))
+    def check(m):
+        return m.channel == cible and not m.author.bot and not m.content.startswith(".")
+    idx = 0
+    fin = asyncio.get_event_loop().time() + 140
+    prochain_indice = asyncio.get_event_loop().time() + 25
+    while asyncio.get_event_loop().time() < fin:
+        now = asyncio.get_event_loop().time()
+        if now >= prochain_indice and idx < len(perso["indices"]) - 1:
+            idx += 1
+            prochain_indice = now + 25
+            await cible.send(embed=discord.Embed(
+                description=(f"💡 **Indice {idx+1} :** {perso['indices'][idx]}\n"
+                             f"*Gain actuel : {max(300, gain_max - idx*300):,} pièces*"),
+                color=0xf39c12))
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=min(5, fin - now))
+        except asyncio.TimeoutError:
+            continue
+        if _devine_valide(msg.content, perso["nom"]):
+            gain = max(300, gain_max - idx * 300)
+            economy_data[str(msg.author.id)]["coins"] += gain
+            check_coins_achievements(str(msg.author.id), cible)
+            await cible.send(embed=discord.Embed(
+                title="🎭 Trouvé !",
+                description=(f"**{msg.author.display_name}** reconnaît **{perso['nom']}** "
+                             f"*({perso['univers']})* en {idx+1} indice(s) !\n💰 +{gain:,} pièces"),
+                color=0x2ecc71))
+            if salon:
+                await close_event_channel(salon, 90)
+            return
+    await cible.send(embed=discord.Embed(
+        description=f"⏰ Personne n'a trouvé — c'était **{perso['nom']}** *({perso['univers']})*",
+        color=0xe74c3c))
+    if salon:
+        await close_event_channel(salon, 90)
+
+COFFRE_ENIGMES = [
+    ("Suite logique : 2 · 4 · 8 · 16 · ?", "32"),
+    ("Suite logique : 1 · 1 · 2 · 3 · 5 · 8 · ?", "13"),
+    ("Suite logique : 3 · 6 · 11 · 18 · ?", "27"),
+    ("Combien font 17 × 4 + 12 ?", "80"),
+    ("Combien font (25 × 4) − 37 ?", "63"),
+    ("Suite logique : 100 · 50 · 25 · ?", "12.5"),
+    ("J'ai 3 pommes, j'en mange 1, j'en achète 5, j'en donne 2. Combien m'en reste-t-il ?", "5"),
+    ("Un train part à 14h et met 3h45. À quelle heure arrive-t-il ? *(format 17h45)*", "17h45"),
+    ("Combien de minutes dans 2 jours et demi ?", "3600"),
+    ("Suite logique : 1 · 4 · 9 · 16 · 25 · ?", "36"),
+    ("Combien font 144 ÷ 12 × 3 ?", "36"),
+    ("Si 5 machines mettent 5 min pour 5 objets, combien de min pour 100 machines et 100 objets ?", "5"),
+]
+
+async def run_braquage_coffre(channel, guild):
+    """🏦 Braquage du Coffre — trouvez le code avant les autres"""
+    total = random.choice([8000, 10000, 12000, 15000, 20000])
+    enigmes = random.sample(COFFRE_ENIGMES, 3)
+    salon = await create_event_channel(guild, "🏦・braquage-du-coffre")
+    cible = salon or channel
+    if salon:
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title="🔐 BRAQUAGE DU COFFRE",
+            description=f"Un coffre de **{total:,} pièces** — 3 codes à trouver, chacun rapporte une part.",
+            color=0xf1c40f), salon)
+    part = total // 3
+    await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
+                     embed=discord.Embed(
+                         title="🔐 BRAQUAGE DU COFFRE",
+                         description=(f"Le coffre contient **{total:,} pièces**, protégé par **3 codes**.\n"
+                                      f"Chaque code trouvé rapporte **{part:,} pièces** à celui qui le craque.\n\n"
+                                      f"⏰ **2 minutes par code** — que le meilleur gagne !"),
+                         color=0xf1c40f))
+    await asyncio.sleep(3)
+    butins = {}
+    def check(m):
+        return m.channel == cible and not m.author.bot and not m.content.startswith(".")
+    for i, (q, rep) in enumerate(enigmes, 1):
+        await cible.send(embed=discord.Embed(
+            title=f"🔢 Code {i}/3",
+            description=f"## {q}\n\n💰 **{part:,} pièces** au premier · ⏰ 2 minutes",
+            color=0xf1c40f))
+        fin = asyncio.get_event_loop().time() + 120
+        trouve = False
+        while asyncio.get_event_loop().time() < fin:
+            reste = fin - asyncio.get_event_loop().time()
+            try:
+                msg = await bot.wait_for("message", check=check, timeout=reste)
+            except asyncio.TimeoutError:
+                break
+            if check_answer(msg.content, rep):
+                uid = str(msg.author.id)
+                economy_data[uid]["coins"] += part
+                check_coins_achievements(uid, cible)
+                butins[msg.author.display_name] = butins.get(msg.author.display_name, 0) + part
+                await cible.send(embed=discord.Embed(
+                    description=f"🔓 **{msg.author.display_name}** craque le code {i} — **{rep}** !\n💰 +{part:,} pièces",
+                    color=0x2ecc71))
+                trouve = True
+                break
+        if not trouve:
+            await cible.send(embed=discord.Embed(
+                description=f"⏰ Code {i} non trouvé — c'était **{rep}**. Cette part reste dans le coffre.",
+                color=0xe74c3c))
+        await asyncio.sleep(2)
+    if butins:
+        cl = sorted(butins.items(), key=lambda x: -x[1])
+        await cible.send(embed=discord.Embed(
+            title="🏦 Butin du braquage",
+            description="\n".join(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{n}** — {v:,} pièces"
+                                  for i, (n, v) in enumerate(cl)),
+            color=0xf1c40f))
+    else:
+        await cible.send(embed=discord.Embed(
+            description="🔒 Le coffre est resté fermé… personne n'a craqué un seul code.", color=0x95a5a6))
+    if salon:
+        await close_event_channel(salon, 120)
+
+class RisqueView(ui.View):
+    """Risque ou Sécurité — doubler ou encaisser"""
+    def __init__(self, joueur, montant, palier=1, timeout=30):
+        super().__init__(timeout=timeout)
+        self.joueur, self.montant, self.palier = joueur, montant, palier
+        self.message = None
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.joueur.id:
+            await interaction.response.send_message("❌ Ce n'est pas ta partie !", ephemeral=True)
+            return False
+        return True
+
+    @ui.button(label="Continuer", emoji="🎲", style=discord.ButtonStyle.danger)
+    async def continuer(self, interaction, button):
+        # Le risque augmente à chaque palier
+        proba = max(0.35, 0.70 - self.palier * 0.07)
+        if random.random() < proba:
+            nouveau = self.montant * 2
+            if self.palier >= 6:
+                economy_data[str(self.joueur.id)]["coins"] += nouveau
+                check_coins_achievements(str(self.joueur.id), interaction.channel)
+                for it in self.children: it.disabled = True
+                return await interaction.response.edit_message(embed=discord.Embed(
+                    title="👑 PALIER MAXIMUM !",
+                    description=(f"**{self.joueur.display_name}** est allé au bout — "
+                                 f"**{nouveau:,} pièces** encaissées !\n*Personne n'ira plus loin.*"),
+                    color=0xf1c40f), view=None)
+            vue = RisqueView(self.joueur, nouveau, self.palier + 1)
+            await interaction.response.edit_message(embed=discord.Embed(
+                title=f"🎲 Palier {self.palier + 1}",
+                description=(f"Ça passe ! Tu as maintenant **{nouveau:,} pièces**.\n\n"
+                             f"🎲 **Continuer** — ×2 mais {int((1-max(0.35, 0.70-(self.palier+1)*0.07))*100)} % de tout perdre\n"
+                             f"💰 **Encaisser** — tu repars avec {nouveau:,} pièces"),
+                color=0xe67e22), view=vue)
+            vue.message = interaction.message
+        else:
+            for it in self.children: it.disabled = True
+            await interaction.response.edit_message(embed=discord.Embed(
+                title="💥 Perdu !",
+                description=(f"**{self.joueur.display_name}** a tout perdu au palier {self.palier}…\n"
+                             f"*Il repart avec **0 pièce**. Il aurait pu encaisser {self.montant:,}.*"),
+                color=0xe74c3c), view=None)
+            self.stop()
+
+    @ui.button(label="Encaisser", emoji="💰", style=discord.ButtonStyle.success)
+    async def encaisser(self, interaction, button):
+        economy_data[str(self.joueur.id)]["coins"] += self.montant
+        check_coins_achievements(str(self.joueur.id), interaction.channel)
+        for it in self.children: it.disabled = True
+        await interaction.response.edit_message(embed=discord.Embed(
+            title="💰 Encaissé !",
+            description=(f"**{self.joueur.display_name}** repart avec **{self.montant:,} pièces** "
+                         f"après {self.palier} palier(s).\n*Sage décision… ou pas ?*"),
+            color=0x2ecc71), view=None)
+        self.stop()
+
+@bot.command(name="risque", aliases=["risqueousecurite", "doubleounrien"])
+async def risque_cmd(ctx):
+    """Risque ou Sécurité — double ou perds tout (.risque)"""
+    uid = str(ctx.author.id)
+    import time as _t
+    dernier = risque_cooldown.get(uid, 0)
+    if _t.time() - dernier < 3600:
+        reste = int((3600 - (_t.time() - dernier)) / 60)
+        return await ctx.send(f"⏳ Tu pourras retenter dans **{reste} min**.", delete_after=8)
+    risque_cooldown[uid] = _t.time()
+    depart = random.randint(300, 800)
+    vue = RisqueView(ctx.author, depart)
+    vue.message = await ctx.send(embed=discord.Embed(
+        title="🎲 Risque ou Sécurité",
+        description=(f"Tu as gagné **{depart:,} pièces** !\n\n"
+                     f"🎲 **Continuer** — ×2 mais 30 % de tout perdre\n"
+                     f"💰 **Encaisser** — tu repars avec {depart:,} pièces\n\n"
+                     f"*Jusqu'à 6 paliers. Plus tu montes, plus c'est risqué.*"),
+        color=0xe67e22), view=vue)
+
+# ============================================================
+#  ⚡ EVENTS RAPIDES — série 2
+# ============================================================
+VRAIFAUX = [
+    ("Naruto est le 7ème Hokage.", True), ("Luffy a mangé le fruit du Gum-Gum.", True),
+    ("Goku est né sur Terre.", False), ("Light Yagami survit à la fin de Death Note.", False),
+    ("Tanjiro utilise la respiration de la foudre.", False), ("Gojo Satoru possède les Six Yeux.", True),
+    ("Eren peut se transformer en Titan Colossal.", False), ("Saitama est chauve à cause de son entraînement.", True),
+    ("Squid Game compte 9 épisodes en saison 1.", True), ("Goblin dure 900 ans d'attente pour Kim Shin.", True),
+    ("Vincenzo est avocat de la mafia japonaise.", False), ("Reply 1988 se passe à Busan.", False),
+    ("Kingdom se déroule pendant la dynastie Joseon.", True), ("Le hangul est l'alphabet coréen.", True),
+    ("Le kimchi est un plat japonais.", False), ("Séoul est la capitale de la Corée du Sud.", True),
+    ("BTS compte 7 membres.", True), ("Le soju est une boisson chinoise.", False),
+    ("One Piece a commencé en 1999 en animé.", True), ("Levi Ackerman mesure plus d'1m80.", False),
+    ("Frieren est une elfe.", True), ("Denji fusionne avec un chat.", False),
+    ("Anya Forger lit dans les pensées.", True), ("Yor Forger est infirmière.", False),
+    ("Sung Jin-Woo commence chasseur de rang S.", False), ("Le titre 'Hallyu' désigne la vague coréenne.", True),
+    ("Un manhwa est une bande dessinée coréenne.", True), ("Attack on Titan compte 4 saisons.", True),
+    ("Le Vif d'Or vaut 100 points au Quidditch.", False), ("Hermione a un patronus loutre.", True),
+    ("La Corée du Sud a plus de 50 millions d'habitants.", True), ("Le taekwondo vient du Japon.", False),
+    ("Jujutsu Kaisen est produit par MAPPA.", True), ("Demon Slayer est animé par Ufotable.", True),
+    ("Il y a 12 Piliers dans Demon Slayer.", False), ("Zoro utilise 4 sabres.", False),
+]
+
+ENIGMES = [
+    ("Je monte et je descends mais je ne bouge jamais. Qui suis-je ?", "escalier", "Tu le prends tous les jours"),
+    ("Plus on en prend, plus on en laisse derrière soi. Qu'est-ce que c'est ?", "des pas", "Regarde par terre en marchant"),
+    ("Qu'est-ce qui a des villes mais pas de maisons, des forêts mais pas d'arbres ?", "une carte", "On la déplie pour voyager"),
+    ("Je n'ai pas de vie mais je peux mourir. Qui suis-je ?", "une batterie", "Ton téléphone en dépend"),
+    ("Plus je sèche, plus je deviens mouillée. Qui suis-je ?", "une serviette", "Après la douche"),
+    ("Qu'est-ce qui se casse dès qu'on le prononce ?", "le silence", "Chut…"),
+    ("J'ai des dents mais je ne mords pas. Qui suis-je ?", "un peigne", "Dans la salle de bain"),
+    ("Je suis toujours devant toi mais tu ne me vois jamais. Qui suis-je ?", "le futur", "Il arrive dans une seconde"),
+    ("Qu'est-ce qui a un cou mais pas de tête ?", "une bouteille", "Dans le frigo"),
+    ("Plus tu m'enlèves, plus je deviens grand. Qui suis-je ?", "un trou", "Prends une pelle"),
+    ("Je parle toutes les langues mais je n'en ai appris aucune. Qui suis-je ?", "un echo", "Crie dans la montagne"),
+    ("Qu'est-ce qui appartient à toi mais que les autres utilisent plus que toi ?", "ton prenom", "On t'appelle avec"),
+    ("Je vole sans ailes, je pleure sans yeux. Qui suis-je ?", "un nuage", "Regarde le ciel"),
+    ("Plus je suis chaud, plus je suis frais. Qui suis-je ?", "le pain", "À la boulangerie"),
+    ("Qu'est-ce qui monte quand la pluie descend ?", "un parapluie", "Tu l'ouvres quand il pleut"),
+    ("Je suis pris avant d'être donné. Qui suis-je ?", "une photo", "Souris !"),
+    ("Qu'est-ce qui court sans jamais marcher ?", "l eau", "Dans la rivière"),
+    ("J'ai des clés mais pas de serrures. Qui suis-je ?", "un clavier", "Devant toi"),
+]
+
+MOTS_MELANGES = [
+    ("naruto","📺 Animé"),("goblin","🎭 K-Drama"),("vincenzo","🎭 K-Drama"),("tanjiro","👤 Personnage"),
+    ("kdrama","🌍 Culture"),("kimchi","🌍 Culture"),("hallyu","🌍 Culture"),("bibimbap","🌍 Culture"),
+    ("shinigami","📺 Animé"),("pourfendeur","📺 Animé"),("akatsuki","📺 Animé"),("rasengan","📺 Animé"),
+    ("kamehameha","📺 Animé"),("bankai","📺 Animé"),("hokage","📺 Animé"),("sharingan","📺 Animé"),
+    ("kingdom","🎭 K-Drama"),("itaewon","🎭 K-Drama"),("hospital","🎭 K-Drama"),("signal","🎭 K-Drama"),
+    ("nezuko","👤 Personnage"),("sasuke","👤 Personnage"),("mikasa","👤 Personnage"),("saitama","👤 Personnage"),
+    ("makima","👤 Personnage"),("frieren","👤 Personnage"),("hermione","👤 Personnage"),("dumbledore","👤 Personnage"),
+    ("seoul","🌍 Culture"),("hangul","🌍 Culture"),("tteokbokki","🌍 Culture"),("makgeolli","🌍 Culture"),
+    ("manhwa","🌍 Culture"),("chapeaudepaille","📺 Animé"),("titancolossal","📺 Animé"),("domaine","📺 Animé"),
+]
+
+PAYS_QUIZ = [
+    ("Quelle est la capitale de la Corée du Sud ?","seoul"),("Quelle est la capitale du Japon ?","tokyo"),
+    ("Quelle est la capitale de la Thaïlande ?","bangkok"),("Quelle est la capitale du Vietnam ?","hanoi"),
+    ("Quelle est la capitale de l'Australie ?","canberra"),("Quelle est la capitale du Canada ?","ottawa"),
+    ("Quelle est la capitale du Brésil ?","brasilia"),("Quelle est la capitale du Maroc ?","rabat"),
+    ("Quelle est la capitale de l'Égypte ?","le caire"),("Quelle est la capitale de la Turquie ?","ankara"),
+    ("Dans quel pays trouve-t-on le Machu Picchu ?","perou"),("Dans quel pays se trouve le Taj Mahal ?","inde"),
+    ("Dans quel pays se trouve la Grande Muraille ?","chine"),("Dans quel pays se trouve Petra ?","jordanie"),
+    ("Quel pays a le plus d'habitants au monde ?","inde"),("Quel est le plus grand pays du monde ?","russie"),
+    ("Quel est le plus petit pays du monde ?","vatican"),("Dans quel pays est né le taekwondo ?","coree du sud"),
+    ("Quelle est la monnaie du Japon ?","yen"),("Quelle est la monnaie de la Corée du Sud ?","won"),
+    ("Dans quel pays mange-t-on traditionnellement le kimchi ?","coree du sud"),
+    ("Quel pays est surnommé le pays du Soleil-Levant ?","japon"),
+    ("Dans quel pays se trouve la ville de Séoul ?","coree du sud"),
+    ("Quel pays a inventé les sushis ?","japon"),("Dans quel pays coule le Nil ?","egypte"),
+]
+
+class VraiFauxView(ui.View):
+    def __init__(self, bonne, salon, timeout=15):
+        super().__init__(timeout=timeout)
+        self.bonne, self.salon = bonne, salon
+        self.gagnant = None
+        self.repondu = set()
+
+    async def _traiter(self, interaction, rep):
+        uid = interaction.user.id
+        if uid in self.repondu:
+            return await interaction.response.send_message("❌ Tu as déjà répondu !", ephemeral=True)
+        self.repondu.add(uid)
+        if rep == self.bonne:
+            if self.gagnant is None:
+                self.gagnant = interaction.user
+                gain = random.randint(300, 600)
+                economy_data[str(uid)]["coins"] += gain
+                check_coins_achievements(str(uid), self.salon)
+                for it in self.children: it.disabled = True
+                await interaction.response.edit_message(view=self)
+                await self.salon.send(embed=discord.Embed(
+                    description=f"✅ **{interaction.user.display_name}** a raison — c'était **{'VRAI' if self.bonne else 'FAUX'}** !\n💰 +{gain:,} pièces",
+                    color=0x2ecc71))
+                self.stop()
+            else:
+                await interaction.response.send_message("✅ Bonne réponse, mais trop tard !", ephemeral=True)
+        else:
+            await interaction.response.send_message("❌ Raté !", ephemeral=True)
+
+    @ui.button(label="VRAI", emoji="✅", style=discord.ButtonStyle.success)
+    async def vrai(self, interaction, button):
+        await self._traiter(interaction, True)
+
+    @ui.button(label="FAUX", emoji="❌", style=discord.ButtonStyle.danger)
+    async def faux(self, interaction, button):
+        await self._traiter(interaction, False)
+
+async def run_vraifaux(channel, guild):
+    """🧠 Vrai ou Faux — 5 affirmations, le premier bon bouton gagne"""
+    salon = await create_event_channel(guild, "🧠・vrai-ou-faux")
+    cible = salon or channel
+    if salon:
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title="🧠 VRAI OU FAUX !",
+            description="5 affirmations, 15 secondes chacune — le premier bon bouton empoche les pièces.",
+            color=0x9b59b6), salon)
+    await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
+                     embed=discord.Embed(
+                         title="🧠 VRAI OU FAUX",
+                         description="**5 affirmations** · 15 s chacune\n🏆 **300 à 600 pièces** au premier qui répond juste",
+                         color=0x9b59b6))
+    await asyncio.sleep(2)
+    scores = {}
+    for i, (texte, rep) in enumerate(random.sample(VRAIFAUX, 5), 1):
+        view = VraiFauxView(rep, cible, timeout=15)
+        await cible.send(embed=discord.Embed(
+            title=f"🧠 Affirmation {i}/5",
+            description=f"## {texte}",
+            color=0x9b59b6), view=view)
+        await view.wait()
+        if view.gagnant:
+            scores[view.gagnant.display_name] = scores.get(view.gagnant.display_name, 0) + 1
+        else:
+            await cible.send(embed=discord.Embed(
+                description=f"⏰ Personne — c'était **{'VRAI' if rep else 'FAUX'}**", color=0xe74c3c))
+        await asyncio.sleep(2)
+    if scores:
+        cl = sorted(scores.items(), key=lambda x: -x[1])
+        await cible.send(embed=discord.Embed(
+            title="🧠 Résultats",
+            description="\n".join(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{n}** — {s}/5"
+                                  for i, (n, s) in enumerate(cl[:5])), color=0x9b59b6))
+    if salon:
+        await close_event_channel(salon, 90)
+
+async def run_enigme(channel, guild):
+    """🧩 Énigme du Jour — une énigme, un indice à mi-parcours"""
+    enigme, reponse, indice = random.choice(ENIGMES)
+    gain = random.randint(700, 1500)
+    salon = await create_event_channel(guild, "🧩・enigme-du-jour")
+    cible = salon or channel
+    if salon:
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title="🧩 ÉNIGME DU JOUR",
+            description=f"Une énigme à résoudre — **{gain:,} pièces** pour le premier.",
+            color=0x8e44ad), salon)
+    await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
+                     embed=discord.Embed(
+                         title="🧩 ÉNIGME DU JOUR",
+                         description=f"## {enigme}\n\n🏆 **{gain:,} pièces** au premier · ⏰ 3 minutes",
+                         color=0x8e44ad))
+    def check(m):
+        return m.channel == cible and not m.author.bot and not m.content.startswith(".")
+    fin = asyncio.get_event_loop().time() + 180
+    indice_donne = False
+    while asyncio.get_event_loop().time() < fin:
+        reste = fin - asyncio.get_event_loop().time()
+        if not indice_donne and reste < 100:
+            indice_donne = True
+            await cible.send(embed=discord.Embed(description=f"💡 **Indice :** {indice}", color=0xf39c12))
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=min(reste, 20))
+        except asyncio.TimeoutError:
+            continue
+        if check_answer(msg.content, reponse):
+            economy_data[str(msg.author.id)]["coins"] += gain
+            check_coins_achievements(str(msg.author.id), cible)
+            await cible.send(embed=discord.Embed(
+                title="🧩 Résolue !",
+                description=f"**{msg.author.display_name}** trouve — c'était **{reponse}** !\n💰 +{gain:,} pièces",
+                color=0x2ecc71))
+            if salon:
+                await close_event_channel(salon, 90)
+            return
+    await cible.send(embed=discord.Embed(
+        description=f"⏰ Personne n'a trouvé — la réponse était **{reponse}**.", color=0xe74c3c))
+    if salon:
+        await close_event_channel(salon, 90)
+
+async def run_mot_melange(channel, guild):
+    """🔤 Mot Mélangé — remettre les lettres dans l'ordre"""
+    mot, theme = random.choice(MOTS_MELANGES)
+    lettres = list(mot)
+    while True:
+        random.shuffle(lettres)
+        if "".join(lettres) != mot:
+            break
+    melange = " ".join(l.upper() for l in lettres)
+    gain = random.randint(400, 900) + len(mot) * 20
+    salon = await create_event_channel(guild, "🔤・mot-melange")
+    cible = salon or channel
+    if salon:
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title="🔤 MOT MÉLANGÉ",
+            description=f"Retrouve le mot caché — **{gain:,} pièces** au premier.",
+            color=0x1abc9c), salon)
+    await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
+                     embed=discord.Embed(
+                         title="🔤 MOT MÉLANGÉ",
+                         description=(f"📂 **Thème : {theme}**\n\n# `{melange}`\n\n"
+                                      f"*{len(mot)} lettres*\n🏆 **{gain:,} pièces** · ⏰ 90 secondes"),
+                         color=0x1abc9c))
+    def check(m):
+        return m.channel == cible and not m.author.bot and not m.content.startswith(".")
+    fin = asyncio.get_event_loop().time() + 90
+    while asyncio.get_event_loop().time() < fin:
+        reste = fin - asyncio.get_event_loop().time()
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=reste)
+        except asyncio.TimeoutError:
+            break
+        if normalize_str(msg.content) == normalize_str(mot):
+            economy_data[str(msg.author.id)]["coins"] += gain
+            check_coins_achievements(str(msg.author.id), cible)
+            await cible.send(embed=discord.Embed(
+                description=f"🎉 **{msg.author.display_name}** trouve — **{mot.upper()}** !\n💰 +{gain:,} pièces",
+                color=0x2ecc71))
+            if salon:
+                await close_event_channel(salon, 90)
+            return
+    await cible.send(embed=discord.Embed(
+        description=f"⏰ Temps écoulé — c'était **{mot.upper()}**", color=0xe74c3c))
+    if salon:
+        await close_event_channel(salon, 90)
+
+async def run_devine_pays(channel, guild):
+    """🗺️ Devine le Pays — capitales et cultures"""
+    q, rep = random.choice(PAYS_QUIZ)
+    gain = random.randint(350, 700)
+    salon = await create_event_channel(guild, "🗺️・devine-le-pays")
+    cible = salon or channel
+    if salon:
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title="🗺️ DEVINE LE PAYS",
+            description=f"Une question de géographie — **{gain:,} pièces** au premier.",
+            color=0x16a085), salon)
+    await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
+                     embed=discord.Embed(
+                         title="🗺️ DEVINE LE PAYS",
+                         description=f"## {q}\n\n🏆 **{gain:,} pièces** · ⏰ 60 secondes",
+                         color=0x16a085))
+    def check(m):
+        return m.channel == cible and not m.author.bot and not m.content.startswith(".")
+    fin = asyncio.get_event_loop().time() + 60
+    while asyncio.get_event_loop().time() < fin:
+        reste = fin - asyncio.get_event_loop().time()
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=reste)
+        except asyncio.TimeoutError:
+            break
+        if check_answer(msg.content, rep):
+            economy_data[str(msg.author.id)]["coins"] += gain
+            check_coins_achievements(str(msg.author.id), cible)
+            await cible.send(embed=discord.Embed(
+                description=f"🎉 **{msg.author.display_name}** trouve — **{rep}** !\n💰 +{gain:,} pièces",
+                color=0x2ecc71))
+            if salon:
+                await close_event_channel(salon, 90)
+            return
+    await cible.send(embed=discord.Embed(
+        description=f"⏰ Temps écoulé — la réponse était **{rep}**", color=0xe74c3c))
+    if salon:
+        await close_event_channel(salon, 90)
+
+# ============================================================
+#  💣 BOMBE MYSTÈRE
+# ============================================================
+BOMBE_FILS = [("Fil Rouge","🔴",0xe74c3c),("Fil Bleu","🔵",0x3498db),("Fil Vert","🟢",0x2ecc71),
+               ("Fil Jaune","🟡",0xf1c40f),("Fil Noir","⚫",0x2c3e50)]
+BOMBE_GAINS = [(2500,30),(5000,28),(7500,20),(10000,14),(15000,6),(20000,2)]
+
+BOMBE_PERDANT = [
+    "💥 BOOM ! {j} a coupé le mauvais fil… Il ne sera clairement pas recruté comme démineur.",
+    "💀 {j} a tenté sa chance… et a transformé le QG en feu d'artifice.",
+    "🤡 Félicitations {j}, tu viens de battre le record du démineur le plus rapide… à exploser.",
+    "💣 On avait dit de désamorcer la bombe, pas de la tester…",
+    "🪦 Une minute de silence pour {j}.",
+    "💀 {j} a choisi avec son instinct… malheureusement son instinct était faux.",
+    "😂 Merci {j} d'avoir testé les mauvais fils pour les autres.",
+    "🚑 Les secours sont en route… enfin, on espère.",
+    "💥 La bombe remercie chaleureusement {j} pour sa participation.",
+    "📉 Le classement des meilleurs démineurs vient de perdre un membre.",
+    "🤦 {j} pensait avoir un plan… la bombe avait un autre plan.",
+    "🔥 Le QG vient de perdre quelques mètres carrés grâce à {j}.",
+    "💣 Mauvaise nouvelle : la bombe fonctionne parfaitement.",
+    "😭 {j} voulait sauver le serveur, il a finalement créé un barbecue géant.",
+    "🧠 Petit rappel : couper un fil au hasard n'est pas une stratégie.",
+]
+BOMBE_PERDANTS = [
+    "💥 Une explosion collective ! Le QG va devoir faire des travaux.",
+    "🤦 Vous avez réussi l'exploit de choisir presque tous les mauvais fils.",
+    "🚑 Le QG ouvre officiellement une infirmerie.",
+    "💀 Aucun survivant… belle performance.",
+    "😂 Merci pour ce magnifique feu d'artifice collectif.",
+    "💣 Vous avez confondu « désamorcer » et « déclencher ».",
+    "📢 Les assurances viennent de quitter le serveur.",
+    "🪦 Moment de silence pour tous les démineurs tombés aujourd'hui.",
+]
+BOMBE_GAGNANT = [
+    "😎 Pendant que les autres explosaient, {j} a trouvé le bon fil.",
+    "👑 Le seul vrai démineur du QG aujourd'hui : {j}.",
+    "🧠 Heureusement qu'il y avait {j} pour sauver la situation.",
+    "💰 Les autres repartent avec des dégâts, {j} repart avec la récompense.",
+    "🎉 {j} a sauvé le QG pendant que les autres faisaient exploser la moitié du bâtiment.",
+    "🏆 Mission réussie, le serveur est entre de bonnes mains.",
+]
+
+class BombeView(ui.View):
+    """5 fils — un seul choix par personne, définitif"""
+    def __init__(self, timeout=25):
+        super().__init__(timeout=timeout)
+        self.choix = {}          # {uid: index du fil}
+        self.noms = {}           # {uid: display_name}
+        self.message = None
+        for i, (nom, emo, _) in enumerate(BOMBE_FILS):
+            btn = ui.Button(label=nom, emoji=emo, style=discord.ButtonStyle.secondary, row=i // 3)
+            async def cb(interaction, idx=i):
+                uid = str(interaction.user.id)
+                if uid in self.choix:
+                    dej = BOMBE_FILS[self.choix[uid]]
+                    return await interaction.response.send_message(
+                        f"❌ Tu as déjà coupé le **{dej[0]}** {dej[1]} — impossible de changer !", ephemeral=True)
+                self.choix[uid] = idx
+                self.noms[uid] = interaction.user.display_name
+                await interaction.response.send_message(
+                    f"{BOMBE_FILS[idx][1]} Tu t'apprêtes à couper le **{BOMBE_FILS[idx][0]}**… "
+                    f"plus qu'à croiser les doigts.", ephemeral=True)
+                try:
+                    await interaction.message.edit(embed=self.build())
+                except Exception:
+                    pass
+            btn.callback = cb
+            self.add_item(btn)
+
+    def build(self, gain=0):
+        repartition = "\n".join(
+            f"{emo} **{nom}** — {sum(1 for v in self.choix.values() if v == i)} personne(s)"
+            for i, (nom, emo, _) in enumerate(BOMBE_FILS))
+        return discord.Embed(
+            title="🚨 Une bombe a été découverte dans le QG !",
+            description=(f"*Le démineur n'arrivera jamais à temps…*\n"
+                         f"**Coupez le bon fil avant l'explosion !**\n\n"
+                         f"🎁 Récompense : **{gain:,} pièces** pour chaque personne qui trouve\n\n"
+                         f"{repartition}\n\n"
+                         f"⚠️ *Un seul fil par personne — le choix est définitif.*"),
+            color=0xe74c3c)
+
+async def run_bombe(channel, guild):
+    """💣 Bombe Mystère — couper le bon fil parmi 5"""
+    gain = random.choices([g for g, _ in BOMBE_GAINS], weights=[p for _, p in BOMBE_GAINS])[0]
+    bon = random.randrange(len(BOMBE_FILS))
+
+    salon = await create_event_channel(guild, "💣・bombe-mystere")
+    cible = salon or channel
+    if salon:
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title="🚨 UNE BOMBE DANS LE QG !",
+            description=f"Coupez le bon fil parmi 5 — **{gain:,} pièces** pour chaque démineur qui réussit.",
+            color=0xe74c3c), salon)
+
+    view = BombeView(timeout=25)
+    view.message = await cible.send(
+        get_event_ping(guild, "everyone") if cible is channel else "",
+        embed=view.build(gain), view=view)
+    await view.wait()
+    for it in view.children:
+        it.disabled = True
+    try:
+        await view.message.edit(view=view)
+    except Exception:
+        pass
+
+    if not view.choix:
+        await cible.send(embed=discord.Embed(
+            title="💥 BOOM !",
+            description="Personne n'a osé toucher un seul fil… la bombe a explosé toute seule. 🤷",
+            color=0x95a5a6))
+        if salon:
+            await close_event_channel(salon, 90)
+        return
+
+    # ── Suspense ──
+    msg = await cible.send(embed=discord.Embed(description="🔍 **Analyse des fils…**", color=0xf1c40f))
+    for n in ("⏳ **3…**", "⏳ **2…**", "⏳ **1…**"):
+        await asyncio.sleep(1.4)
+        try:
+            await msg.edit(embed=discord.Embed(description=n, color=0xf1c40f))
+        except Exception:
+            pass
+    await asyncio.sleep(1.4)
+
+    nom_bon, emo_bon, coul = BOMBE_FILS[bon]
+    gagnants = [u for u, v in view.choix.items() if v == bon]
+    perdants = [u for u, v in view.choix.items() if v != bon]
+
+    if gagnants:
+        mentions = "\n".join(f"<@{u}>" for u in gagnants)
+        for u in gagnants:
+            economy_data[u]["coins"] += gain
+            check_coins_achievements(u, cible)
+        phrase = random.choice(BOMBE_GAGNANT).format(j=f"<@{gagnants[0]}>")
+        embed = discord.Embed(
+            title="✅ La bombe a été désamorcée !",
+            description=(f"Le bon fil était le **{nom_bon}** {emo_bon}\n\n"
+                         f"🎉 **Félicitations à :**\n{mentions}\n\n"
+                         f"Vous remportez chacun **{gain:,} pièces** !\n\n*{phrase}*"),
+            color=coul)
+        if perdants:
+            embed.add_field(
+                name=f"💥 Et les {len(perdants)} autres…",
+                value=(random.choice(BOMBE_PERDANTS) if len(perdants) > 2
+                       else random.choice(BOMBE_PERDANT).format(j=f"<@{perdants[0]}>")),
+                inline=False)
+        await cible.send(embed=embed)
+    else:
+        if len(perdants) > 2:
+            phrase = random.choice(BOMBE_PERDANTS)
+        else:
+            phrase = random.choice(BOMBE_PERDANT).format(j=f"<@{perdants[0]}>")
+        await cible.send(embed=discord.Embed(
+            title="💥 BOOM !",
+            description=(f"Personne n'a réussi à désamorcer la bombe…\n"
+                         f"Il fallait couper le **{nom_bon}** {emo_bon}\n\n"
+                         f"*{phrase}*\n\n"
+                         f"💸 Les **{gain:,} pièces** sont parties en fumée."),
+            color=0xe74c3c))
+    if salon:
+        await close_event_channel(salon, 120)
+
 # ============================================================
 #  📋 CATALOGUE DES EVENTS — source unique pour .event et .lancerevent
 # ============================================================
@@ -6096,6 +7134,20 @@ EVENTS_CATALOGUE = {
         "desc":"Devinez le nombre caché entre 1 et 100, avec des indices chaud/froid.","gain":"500 à 1 200 pièces"},
     "pluiepieces": {"nom":"💸 Pluie de Pièces","fn":"run_pluie_pieces","salon":True,"duree":"1 min",
         "desc":"Des pièces tombent du ciel — tout le monde clique, tout le monde gagne.","gain":"150 à 600 pièces chacun"},
+    "quisuisje": {"nom":"🎭 Qui suis-je ?","fn":"run_qui_suis_je","salon":True,"duree":"2 min",
+        "desc":"Un personnage se cache, les indices tombent un par un. Plus tu trouves tôt, plus tu gagnes.","gain":"300 à 1 600 pièces"},
+    "braquagecoffre": {"nom":"🏦 Braquage du Coffre","fn":"run_braquage_coffre","salon":True,"duree":"6 min",
+        "desc":"3 codes à craquer (calculs, suites logiques). Chaque code rapporte un tiers du coffre.","gain":"jusqu'à 20 000 pièces"},
+    "vraifaux": {"nom":"🧠 Vrai ou Faux","fn":"run_vraifaux","salon":True,"duree":"2 min",
+        "desc":"5 affirmations, deux boutons. Le premier bon clic empoche la mise.","gain":"300 à 600 p par manche"},
+    "enigme": {"nom":"🧩 Énigme du Jour","fn":"run_enigme","salon":True,"duree":"3 min",
+        "desc":"Une énigme à résoudre, avec un indice à mi-parcours.","gain":"700 à 1 500 pièces"},
+    "motmelange": {"nom":"🔤 Mot Mélangé","fn":"run_mot_melange","salon":True,"duree":"90 s",
+        "desc":"Les lettres sont dans le désordre — retrouve le mot.","gain":"400 à 1 500 pièces"},
+    "devinepays": {"nom":"🗺️ Devine le Pays","fn":"run_devine_pays","salon":True,"duree":"1 min",
+        "desc":"Capitales, cultures, géographie — le premier qui trouve gagne.","gain":"350 à 700 pièces"},
+    "bombe": {"nom":"💣 Bombe Mystère","fn":"run_bombe","salon":True,"duree":"1 min",
+        "desc":"Cinq fils, un seul désamorce la bombe. Un choix chacun, définitif.","gain":"2 500 à 20 000 pièces"},
     "chiffredujour": {"nom":"🎲 Chiffre du Jour","fn":"run_morpion_geant","salon":True,"duree":"90 s",
         "desc":"Un seul pari chacun — le plus proche du nombre secret gagne.","gain":"600 à 1 400 pièces"},
     "debatdujour": {"nom":"🎤 Débat du Jour","fn":"run_debat","salon":True,"duree":"1 h",
@@ -6151,9 +7203,11 @@ async def event_cmd(ctx, nom: str = None):
             .add_field(name="📍 Salon dédié", value="Oui" if e["salon"] else "Non", inline=True))
 
     pages, groupes = [], {
-        "⚡ Rapides — quelques minutes": ["questioneclair","premierarrive","chiffremystere","pluiepieces","chiffredujour"],
+        "⚡ Rapides — quelques minutes": ["questioneclair","premierarrive","chiffremystere","pluiepieces",
+                                          "chiffredujour","bombe","vraifaux","motmelange","devinepays",
+                                          "enigme","quisuisje"],
         "🎁 À récupérer": ["coffre","colis","jackpot","cartemystere"],
-        "🎪 Gros events": ["banquier","encheres","loterie","invasion","roicolline","debatdujour"],
+        "🎪 Gros events": ["banquier","encheres","loterie","invasion","roicolline","debatdujour","braquagecoffre"],
         "🌙 Bonus temporaires": ["nuitchasse","doublexp","nuitcasino","marchenoir","classement","heuremaudite"],
     }
     for titre, cles in groupes.items():
@@ -6181,7 +7235,7 @@ async def lancerevent_cmd(ctx, nom: str = None):
              "chasse":"nuitchasse","xp2":"doublexp","casino":"nuitcasino","marche":"marchenoir",
              "carte":"cartemystere","top":"classement","maudite":"heuremaudite",
              "deal":"banquier","vente":"encheres","enchere":"encheres","premier":"premierarrive",
-             "chiffre":"chiffremystere","pluie":"pluiepieces","dujour":"chiffredujour"}
+             "chiffre":"chiffremystere","pluie":"pluiepieces","dujour":"chiffredujour","fil":"bombe","desamorcer":"bombe","vf":"vraifaux","melange":"motmelange","pays":"devinepays","riddle":"enigme","qui":"quisuisje","coffrefort":"braquagecoffre","braquagecoffre":"braquagecoffre"}
     if not nom:
         lignes = "\n".join(f"`{k}` — {v['nom']}" for k, v in EVENTS_CATALOGUE.items())
         return await ctx.send(embed=discord.Embed(
@@ -8970,14 +10024,9 @@ async def gacha_cmd(ctx, sous_cmd: str = None, *args):
 
         # Cherche la carte
         key = query.replace(" ", "")
-        if key not in ANIME_CARDS_DB:
-            # Recherche approximative par nom
-            matches = [k for k in ANIME_CARDS_DB if query in ANIME_CARDS_DB[k]["nom"].lower()]
-            if not matches:
-                matches = [k for k in ANIME_CARDS_DB if any(w in k for w in query.split())]
-            if not matches:
-                return await ctx.send(f"❌ Personnage `{query}` introuvable !")
-            key = matches[0]
+        key = trouver_carte(query, str(ctx.author.id))
+        if not key:
+            return await ctx.send(f"❌ Personnage `{query}` introuvable !")
 
         c = ANIME_CARDS_DB[key]
         rarete_emoji = RARETE_EMOJI.get(c["rarete"], "🔵")
@@ -9158,20 +10207,14 @@ async def gachatrade_cmd(ctx, membre: discord.Member = None, ma_carte: str = Non
     target_uid = str(membre.id)
 
     # Trouver ma carte
-    key1 = ma_carte.lower().strip().replace(" ", "")
-    if key1 not in ANIME_CARDS_DB:
-        matches = [k for k in ANIME_CARDS_DB if ma_carte.lower() in ANIME_CARDS_DB[k]["nom"].lower()]
-        if not matches:
-            return await ctx.send(f"❌ Carte `{ma_carte}` introuvable !")
-        key1 = matches[0]
+    key1 = trouver_carte(ma_carte, uid)
+    if not key1:
+        return await ctx.send(f"❌ Carte `{ma_carte}` introuvable !")
 
     # Trouver sa carte
-    key2 = sa_carte.lower().strip().replace(" ", "")
-    if key2 not in ANIME_CARDS_DB:
-        matches = [k for k in ANIME_CARDS_DB if sa_carte.lower() in ANIME_CARDS_DB[k]["nom"].lower()]
-        if not matches:
-            return await ctx.send(f"❌ Carte `{sa_carte}` introuvable !")
-        key2 = matches[0]
+    key2 = trouver_carte(sa_carte, uid)
+    if not key2:
+        return await ctx.send(f"❌ Carte `{sa_carte}` introuvable !")
 
     c1 = ANIME_CARDS_DB[key1]
     c2 = ANIME_CARDS_DB[key2]
@@ -10852,12 +11895,9 @@ async def burn_cmd(ctx, *, perso: str = None):
     if not perso:
         return await ctx.send("❌ Usage : `.burn <perso>`\n*Détruit une carte contre des pièces selon sa rareté.*")
     uid = str(ctx.author.id)
-    key = perso.lower().strip().replace(" ", "")
-    if key not in ANIME_CARDS_DB:
-        matches = [k for k in ANIME_CARDS_DB if perso.lower() in ANIME_CARDS_DB[k]["nom"].lower()]
-        if not matches:
-            return await ctx.send(f"❌ Personnage `{perso}` introuvable !")
-        key = matches[0]
+    key = trouver_carte(perso, uid)
+    if not key:
+        return await ctx.send(f"❌ Personnage `{perso}` introuvable !")
     if claimed_cards.get(key) != uid:
         return await ctx.send("❌ Tu ne possèdes pas cette carte !")
     c = ANIME_CARDS_DB[key]
@@ -10994,12 +12034,9 @@ async def cardinfo_cmd(ctx, *, perso: str = None):
     if not perso:
         return await ctx.send("❌ Usage : `.cardinfo <perso>`")
     uid = str(ctx.author.id)
-    key = perso.lower().strip().replace(" ", "")
-    if key not in ANIME_CARDS_DB:
-        matches = [k for k in ANIME_CARDS_DB if perso.lower() in ANIME_CARDS_DB[k]["nom"].lower()]
-        if not matches:
-            return await ctx.send(f"❌ Personnage `{perso}` introuvable !")
-        key = matches[0]
+    key = trouver_carte(perso, uid)
+    if not key:
+        return await ctx.send(f"❌ Personnage `{perso}` introuvable !")
     c = ANIME_CARDS_DB[key]
     r_emoji = RARETE_EMOJI.get(c["rarete"], "🔵")
     couleur = RARETE_COULEURS.get(c["rarete"], 0x95a5a6)
@@ -11089,12 +12126,9 @@ async def marcheacheter_cmd(ctx, *, perso: str = None):
     if not perso:
         return await ctx.send("❌ `.marcheacheter <perso>`")
     uid = str(ctx.author.id)
-    key = perso.lower().strip().replace(" ","")
-    if key not in ANIME_CARDS_DB:
-        matches = [k for k in ANIME_CARDS_DB if perso.lower() in ANIME_CARDS_DB[k]["nom"].lower()]
-        if not matches:
-            return await ctx.send(f"❌ `{perso}` introuvable !")
-        key = matches[0]
+    key = trouver_carte(perso, uid)
+    if not key:
+        return await ctx.send(f"❌ `{perso}` introuvable !")
     c = ANIME_CARDS_DB[key]
     prix = {"Commun": 500, "Rare": 1200, "Épique": 2500, "Légendaire": 5000, "Mythique": 12000}
     cout = prix.get(c["rarete"], 1000)
@@ -12856,6 +13890,8 @@ def save_all_data():
             "pets": pets_data,
             "achievements": {k: list(v) for k, v in achievements_data.items()},
             "user_stats": {k: dict(v) for k, v in user_stats.items()},
+            "arena_stats": {k: dict(v) for k, v in arena_stats.items()},
+            "points_amelio": dict(points_amelio),
             "invite_counts": dict(invite_counts),
             "inventaire": {k: dict(v) for k, v in inventaire.items()},
             "claim_reduction": dict(claim_reduction),
@@ -12935,6 +13971,9 @@ def load_all_data():
                 achievements_data[k] = set(v)
             for k, v in data.get("user_stats", {}).items():
                 user_stats[k].update(v)
+            for k, v in data.get("arena_stats", {}).items():
+                arena_stats[k].update(v)
+            points_amelio.update(data.get("points_amelio", {}))
             invite_counts.update(data.get("invite_counts", {}))
             for k, v in data.get("inventaire", {}).items():
                 inventaire[k].update(v)
@@ -13388,4 +14427,4 @@ while True:
         print(f"❌ CRASH BOT: {e}")
         traceback.print_exc()
         print("🔄 Redémarrage dans 5 secondes...")
-        time.sleep(5) 
+        time.sleep(5)
