@@ -1295,7 +1295,7 @@ def build_help_pages(guild, is_admin=False):
         "`.memory [facile|normal|difficile]` — Retrouve les paires 🃏\n"
         "`.memorystop` — Abandonner la partie\n"
         "`.risque` — Double ou perds tout, jusqu'à 6 paliers *(1×/heure)*\n"
-        "`.saison` — 🎬 **Le Drama Collectif** : où en est la série du serveur\n"
+        "`.saison` — 🎬 **Le Drama Collectif** : épisode, casting, votes en cours\n"
         "`.drama-tropes` — Les 10 histoires possibles\n"
         "`.avent` — Le **calendrier de l'Avent** 🎄 *(1er → 24 décembre)*\n"
         "`.ouvrircase` — Ouvrir la case du jour · `.topavent` — Les plus assidus\n"
@@ -1373,7 +1373,10 @@ def build_help_pages(guild, is_admin=False):
     e.add_field(name="📢 Communication", value=(
         "`.announce <message>` — Annonce officielle\n"
         "`.forcegazette` — Publier la gazette immédiatement\n"
-        "`.drama-start [trope] [@a @b]` — Lancer une saison *(casting au choix)*\n"
+        "`.drama-start` — Lancer une saison *(histoire et casting au hasard)*\n"
+        "`.drama-start <trope>` — Choisir l'histoire · `.drama-start liste` — Les voir toutes\n"
+        "`.drama-start <trope> @a @b` — Choisir aussi le casting\n"
+        "`.drama-cast @a @b` — Changer le casting en cours de saison\n"
         "`.drama-next` — Dépouiller le vote et publier l'épisode suivant *(quand tu veux)*\n"
         "`.drama-stop` — Clôturer la saison"
     ), inline=False)
@@ -10381,69 +10384,143 @@ async def cloturer_saison(guild, salon):
 
 @bot.command(name="drama-start", aliases=["dramastart", "lancerdrama"])
 @commands.has_permissions(manage_guild=True)
-async def dramastart_cmd(ctx, trope: str = None, *membres: discord.Member):
-    """Lance une saison — .drama-start [trope] [@perso1 @perso2] (staff)"""
+async def dramastart_cmd(ctx, *, args: str = None):
+    """Lance une saison — .drama-start [trope] [@perso1 @perso2] (staff)
+
+    `.drama-start`                        → trope et casting au hasard
+    `.drama-start ennemis`                → trope choisi, casting au hasard
+    `.drama-start @Marie @Kevin`          → casting choisi, trope au hasard
+    `.drama-start ennemis @Marie @Kevin`  → tout choisi
+    `.drama-start liste`                  → voir les 10 histoires
+    """
     s = drama_saison
     if s["en_cours"]:
-        return await ctx.send(
-            f"🎬 **{DRAMA_TROPES[s['trope_cle']]['titre']}** est déjà en cours "
-            f"(épisode {s['episode']}/{len(DRAMA_EPISODES)}).\n"
-            f"`.drama-next` pour la suite · `.drama-stop` pour clôturer.")
+        return await ctx.send(embed=discord.Embed(
+            description=(f"🎬 **{DRAMA_TROPES[s['trope_cle']]['titre']}** est déjà en cours "
+                         f"— épisode **{s['episode']}/{len(DRAMA_EPISODES)}**.\n\n"
+                         f"`.drama-next` pour la suite · `.drama-stop` pour clôturer."),
+            color=0xe74c3c))
 
-    if trope and trope.lower() not in DRAMA_TROPES:
-        pages = []
+    # ── Casting : on lit les mentions réelles du message ──
+    mentions = [m for m in ctx.message.mentions if not m.bot]
+
+    # ── Trope : on retire les mentions du texte pour isoler le mot-clé ──
+    texte = re.sub(r"<@!?\d+>", "", args or "").strip().lower()
+    mot = texte.split()[0] if texte.split() else None
+
+    if mot in ("liste", "list", "tropes", "histoires", "aide", "help"):
+        mot = "__liste__"
+
+    if mot and mot != "__liste__" and mot not in DRAMA_TROPES:
+        proches = [k for k in DRAMA_TROPES if mot in k or k in mot]
+        if len(proches) == 1:
+            mot = proches[0]
+        else:
+            mot = "__liste__"
+
+    if mot == "__liste__":
         items = list(DRAMA_TROPES.items())
-        for i in range(0, len(items), 5):
+        pages = []
+        for i in range(0, len(items), 4):
             e = discord.Embed(
                 title="🎬 Choisis une histoire",
-                description="*Chaque trope donne une saison complètement différente.*",
+                description=("*Chaque trope donne une saison entièrement différente.*\n\n"
+                             "**`.drama-start <trope>`** — l'histoire de ton choix\n"
+                             "**`.drama-start`** — une histoire et un casting au hasard\n"
+                             "**`.drama-start <trope> @a @b`** — tout choisir"),
                 color=0xff6b9d)
-            for k, v in items[i:i+5]:
-                e.add_field(name=f"{v['trope']} — {v['titre']}",
-                            value=f"`{k}`\n*{v['accroche']}*\n{v['pitch'][:180]}…", inline=False)
-            e.set_footer(text="`.drama-start <trope>` · sans argument, une histoire est tirée au sort")
+            for k, v in items[i:i+4]:
+                e.add_field(name=f"{v['trope']}  ·  {v['titre']}",
+                            value=f"`{k}`\n*« {v['accroche']} »*", inline=False)
+            e.set_footer(text=f"{len(DRAMA_TROPES)} histoires · {len(DRAMA_EPISODES)} épisodes chacune")
             pages.append(e)
         vue = PageView(pages, ctx.author, timeout=180) if len(pages) > 1 else None
         return await ctx.send(embed=pages[0], view=vue)
 
-    cle = trope.lower() if trope else random.choice(list(DRAMA_TROPES))
+    cle = mot if mot else random.choice(list(DRAMA_TROPES))
     tr = DRAMA_TROPES[cle]
 
-    # Casting : mentionné, sinon tiré au sort parmi les membres actifs
-    if len(membres) >= 2:
-        a, b = membres[0], membres[1]
+    # ── Sélection du casting ──
+    if len(mentions) >= 2:
+        a, b = mentions[0], mentions[1]
+        origine_casting = "choisi par le staff"
     else:
-        pool = [m for m in ctx.guild.members if not m.bot and str(m.id) in xp_data] or \
-               [m for m in ctx.guild.members if not m.bot]
-        if len(pool) < 2:
-            return await ctx.send("❌ Il faut au moins 2 membres.")
-        a, b = random.sample(pool, 2)
+        actifs = [m for m in ctx.guild.members
+                  if not m.bot and str(m.id) in xp_data and xp_data[str(m.id)]["level"] >= 2]
+        pool = actifs or [m for m in ctx.guild.members if not m.bot and str(m.id) in xp_data] \
+                      or [m for m in ctx.guild.members if not m.bot]
+        if len(mentions) == 1:
+            a = mentions[0]
+            reste = [m for m in pool if m.id != a.id]
+            if not reste:
+                return await ctx.send("❌ Il faut au moins 2 membres sur le serveur.")
+            b = random.choice(reste)
+            origine_casting = "un choisi, un tiré au sort"
+        else:
+            if len(pool) < 2:
+                return await ctx.send("❌ Il faut au moins 2 membres actifs sur le serveur.")
+            a, b = random.sample(pool, 2)
+            origine_casting = "tiré au sort parmi les membres actifs"
 
     s.update({"titre": tr["titre"], "episode": 0, "en_cours": True, "trope_cle": cle,
-              "casting": {"a": a.mention, "b": b.mention}, "historique": [], "vue": None})
+              "casting": {"a": a.mention, "b": b.mention,
+                          "nom_a": a.display_name, "nom_b": b.display_name},
+              "historique": [], "vue": None})
     save_all_data()
 
     salon = (ctx.guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None) or ctx.channel
-    await salon.send(get_event_ping(ctx.guild, "everyone"), embed=discord.Embed(
+    embed = discord.Embed(
         title=f"🎬  {tr['titre']}",
         description=(f"## « {tr['accroche']} »\n\n"
                      f"━━━━━━━━━━━━━━━━━━━━\n\n"
                      f"{tr['pitch']}\n\n"
                      f"━━━━━━━━━━━━━━━━━━━━\n\n"
                      f"### 🎭 Au casting\n"
-                     f"**{a.mention}** — *{tr['role_a']}*\n"
-                     f"**{b.mention}** — *{tr['role_b']}*\n\n"
+                     f"{a.mention}\n└ *{tr['role_a']}*\n\n"
+                     f"{b.mention}\n└ *{tr['role_b']}*\n\n"
                      f"━━━━━━━━━━━━━━━━━━━━\n\n"
                      f"**{len(DRAMA_EPISODES)} épisodes.** Pas de coup de foudre, "
-                     f"pas de raccourci — ils partent de zéro et se détestent poliment.\n\n"
+                     f"pas de raccourci — ils partent de zéro et se supportent à peine.\n\n"
                      f"À la fin de chaque épisode, **vous votez**. Le suivant reprendra "
                      f"exactement là où votre choix l'aura mené.\n"
                      f"💰 **150 pièces** à chaque votant.\n\n"
                      f"*Personne ne connaît la fin. Elle n'est pas écrite.*"),
-        color=0xff6b9d).set_author(name=tr["trope"]).set_footer(
-            text="Le premier épisode arrive dans quelques secondes…"))
+        color=0xff6b9d)
+    embed.set_author(name=tr["trope"])
+    embed.set_thumbnail(url=a.display_avatar.url)
+    embed.set_footer(text=f"Casting {origine_casting} · le premier épisode arrive…")
+    await salon.send(f"{a.mention} {b.mention}", embed=embed)
     await asyncio.sleep(5)
     await publier_episode(ctx.guild, salon)
+
+@bot.command(name="drama-cast", aliases=["dramacast", "recast"])
+@commands.has_permissions(manage_guild=True)
+async def dramacast_cmd(ctx, *membres: discord.Member):
+    """Change le casting de la saison en cours — .drama-cast @a @b (staff)"""
+    s = drama_saison
+    if not s["en_cours"]:
+        return await ctx.send("❌ Aucune saison en cours.")
+    humains = [m for m in membres if not m.bot]
+    if len(humains) < 2:
+        pool = [m for m in ctx.guild.members if not m.bot and str(m.id) in xp_data]
+        if len(pool) < 2:
+            return await ctx.send("❌ Mentionne deux membres : `.drama-cast @a @b`")
+        a, b = random.sample(pool, 2)
+        origine = "nouveau tirage au sort"
+    else:
+        a, b = humains[0], humains[1]
+        origine = "casting imposé"
+    tr = DRAMA_TROPES[s["trope_cle"]]
+    s["casting"] = {"a": a.mention, "b": b.mention,
+                    "nom_a": a.display_name, "nom_b": b.display_name}
+    save_all_data()
+    await ctx.send(embed=discord.Embed(
+        title="🎭 Casting modifié",
+        description=(f"**{tr['titre']}** continue avec :\n\n"
+                     f"{a.mention}\n└ *{tr['role_a']}*\n\n"
+                     f"{b.mention}\n└ *{tr['role_b']}*\n\n"
+                     f"*Le changement s'applique dès le prochain épisode.*"),
+        color=0xff6b9d).set_footer(text=origine))
 
 
 @bot.command(name="drama-next", aliases=["dramanext", "episodesuivant"])
@@ -10471,42 +10548,78 @@ async def dramastop_cmd(ctx):
     salon = (ctx.guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None) or ctx.channel
     await cloturer_saison(ctx.guild, salon)
 
-@bot.command(name="saison", aliases=["dramacollectif", "masaison"])
+@bot.command(name="saison", aliases=["dramacollectif", "masaison", "episode"])
 async def saison_cmd(ctx):
     """Où en est la saison — .saison"""
     s = drama_saison
     if not s["en_cours"]:
-        exemples = "\n".join(f"{v['trope']} **{v['titre']}** — *{v['accroche']}*"
-                             for v in list(DRAMA_TROPES.values())[:5])
+        apercu = "\n".join(f"{v['trope']} **{v['titre']}**\n└ *« {v['accroche']} »*"
+                           for v in list(DRAMA_TROPES.values())[:4])
         return await ctx.send(embed=discord.Embed(
             title="🎬 Le Drama Collectif",
-            description=("Aucune saison en cours.\n\n"
-                         "**Le principe :** une romance en **12 épisodes**, avec deux membres du "
-                         "serveur comme personnages. Pas de coup de foudre — une vraie progression, "
-                         "de la friction du premier jour jusqu'à la dernière scène.\n\n"
-                         "À la fin de chaque épisode, **le serveur vote**. Le suivant reprend "
-                         "exactement là où votre choix l'a mené.\n\n"
-                         f"### {len(DRAMA_TROPES)} histoires possibles\n{exemples}\n"
-                         f"*…et {len(DRAMA_TROPES)-5} autres.*\n\n"
-                         "*Le staff lance une saison avec `.drama-start`.*"),
+            description=(
+                "**Aucune saison en cours pour l'instant.**\n\n"
+                "━━━━━━━━━━━━━━━━━━━━\n\n"
+                "### Le principe\n"
+                "Une romance en **12 épisodes**, avec **deux membres du serveur** comme "
+                "personnages principaux.\n\n"
+                "Pas de coup de foudre : ils se supportent à peine au premier épisode. "
+                "L'attirance met du temps à venir, comme dans un vrai drama.\n\n"
+                "À la fin de chaque épisode, **le serveur vote** entre trois suites possibles. "
+                "L'épisode suivant reprend exactement là où votre choix l'a mené — "
+                "et commence par le rappel des résultats.\n\n"
+                "💰 **150 pièces** à chaque votant.\n\n"
+                "━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"### {len(DRAMA_TROPES)} histoires possibles\n{apercu}\n\n"
+                f"*…et {len(DRAMA_TROPES)-4} autres — `.drama-tropes` pour tout voir.*\n\n"
+                "*Le staff lance une saison avec `.drama-start`.*"),
             color=0x95a5a6))
+
     tr = DRAMA_TROPES[s["trope_cle"]]
-    recap = "\n".join(f"▪️ {t}" for t in s["historique"]) or "*Le premier vote est en cours.*"
     ep = s["episode"]
-    f = int(ep / len(DRAMA_EPISODES) * 12)
+    total = len(DRAMA_EPISODES)
+    f = max(0, min(12, int(ep / total * 12)))
+
+    recap = "\n".join(f"▪️ {t}" for t in s["historique"][-6:]) or "*Le premier vote est en cours.*"
+    if len(s["historique"]) > 6:
+        recap = f"*…les {len(s['historique'])-6} premiers épisodes sont plus haut*\n" + recap
+
     embed = discord.Embed(
-        title=f"🎬 {tr['titre']}",
-        description=(f"*« {tr['accroche']} »*\n\n"
-                     f"`{'▰'*f}{'▱'*(12-f)}`  **Épisode {ep}/{len(DRAMA_EPISODES)}**\n\n"
-                     f"🎭 {s['casting'].get('a','?')} — *{tr['role_a']}*\n"
-                     f"🎭 {s['casting'].get('b','?')} — *{tr['role_b']}*\n\n"
+        title=f"🎬  {tr['titre']}",
+        description=(f"## « {tr['accroche']} »\n\n"
+                     f"`{'▰'*f}{'▱'*(12-f)}`  **Épisode {ep}/{total}**\n\n"
                      f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                     f"### Vos choix jusqu'ici\n{recap}"),
+                     f"### 🎭 Au casting\n"
+                     f"{s['casting'].get('a','?')}\n└ *{tr['role_a']}*\n\n"
+                     f"{s['casting'].get('b','?')}\n└ *{tr['role_b']}*"),
         color=0xff6b9d)
     embed.set_author(name=tr["trope"])
-    if ep and ep <= len(DRAMA_EPISODES):
-        embed.set_footer(text=f"Prochain épisode : {DRAMA_EPISODES[ep-1]['titre'] if ep < len(DRAMA_EPISODES) else 'la fin'}")
+
+    if ep and ep <= total:
+        E = DRAMA_EPISODES[ep-1]
+        embed.add_field(name=f"📖 Épisode en cours — {E['titre']}",
+                        value=f"*{E['etape']}*", inline=False)
+    embed.add_field(name="🗳️ Vos choix jusqu'ici", value=recap[:1024], inline=False)
+
+    vue = s.get("vue")
+    if vue and vue.votes:
+        cnt = {}
+        for v in vue.votes.values():
+            cnt[v] = cnt.get(v, 0) + 1
+        tot = sum(cnt.values())
+        embed.add_field(name=f"⏳ Vote en cours — {tot} participant(s)",
+                        value="  ·  ".join(f"{['🅰️','🅱️','🇨'][k]} {v} ({v/tot*100:.0f} %)"
+                                          for k, v in sorted(cnt.items())), inline=False)
+    elif ep:
+        embed.add_field(name="⏳ Vote en cours",
+                        value="*Personne n'a encore voté sur cet épisode.*", inline=False)
+
+    if ep < total:
+        embed.set_footer(text=f"Prochain épisode : « {DRAMA_EPISODES[ep]['titre']} » — publié par le staff")
+    else:
+        embed.set_footer(text="Dernier épisode — la saison se termine au prochain dépouillement.")
     await ctx.send(embed=embed)
+
 
 @bot.command(name="drama-tropes", aliases=["dramatropes", "histoires"])
 async def dramatropes_cmd(ctx):
