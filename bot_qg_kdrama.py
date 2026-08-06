@@ -1295,7 +1295,8 @@ def build_help_pages(guild, is_admin=False):
         "`.memory [facile|normal|difficile]` — Retrouve les paires 🃏\n"
         "`.memorystop` — Abandonner la partie\n"
         "`.risque` — Double ou perds tout, jusqu'à 6 paliers *(1×/heure)*\n"
-        "`.saison` — 🎬 **Le Drama Collectif** : la série écrite par le serveur\n"
+        "`.saison` — 🎬 **Le Drama Collectif** : où en est la série du serveur\n"
+        "`.drama-tropes` — Les 10 histoires possibles\n"
         "`.avent` — Le **calendrier de l'Avent** 🎄 *(1er → 24 décembre)*\n"
         "`.ouvrircase` — Ouvrir la case du jour · `.topavent` — Les plus assidus\n"
         "`.gazette` — 📰 **La Gazette du QG** *(publiée dimanche 20 h)*\n"
@@ -1372,8 +1373,8 @@ def build_help_pages(guild, is_admin=False):
     e.add_field(name="📢 Communication", value=(
         "`.announce <message>` — Annonce officielle\n"
         "`.forcegazette` — Publier la gazette immédiatement\n"
-        "`.drama-start [trame]` — Lancer une saison du Drama Collectif\n"
-        "`.drama-next` — Dépouiller le vote et publier l'épisode suivant\n"
+        "`.drama-start [trope] [@a @b]` — Lancer une saison *(casting au choix)*\n"
+        "`.drama-next` — Dépouiller le vote et publier l'épisode suivant *(quand tu veux)*\n"
         "`.drama-stop` — Clôturer la saison"
     ), inline=False)
     e.add_field(name="📖 Aide", value=(
@@ -9909,301 +9910,541 @@ async def petaction_cmd(ctx):
 # ============================================================
 #  🎬 LE DRAMA COLLECTIF — le serveur écrit sa propre série
 # ============================================================
+# ============================================================
+#  🎬 LE DRAMA COLLECTIF — les tropes
+# ============================================================
+DRAMA_TROPES = {
+    "ennemis": {
+        "titre": "Ce Qu'on Ne Se Dira Jamais",
+        "trope": "💢 Enemies to Lovers",
+        "accroche": "Ils se détestent depuis trois ans. Il leur reste six mois à travailler ensemble.",
+        "pitch": ("Deux avocats d'un même cabinet se disputent la même associée depuis leur arrivée. "
+                  "Quand la direction les force à co-diriger le dossier le plus important de l'année, "
+                  "ils découvrent qu'ils ne savaient rien l'un de l'autre."),
+        "role_a": "l'avocate méthodique qui ne perd jamais",
+        "role_b": "l'avocat instinctif qui gagne quand même",
+        "lieux": ["la salle de réunion vide à 23 h", "l'ascenseur du 14ème étage", "le tribunal après l'audience",
+                  "la machine à café du bureau", "le parking souterrain sous la pluie", "l'archive du sous-sol",
+                  "le restaurant où le cabinet fête ses victoires"],
+        "conflit": "le dossier qu'ils doivent gagner ensemble",
+        "objet": "un stylo prêté qui n'a jamais été rendu",
+        "proximite": "la direction les a assignés au même bureau",
+    },
+    "faux_couple": {
+        "titre": "Contrat de Trois Mois",
+        "trope": "💍 Fake Dating",
+        "accroche": "Un mariage arrangé qu'aucun des deux ne veut. Et une clause que personne n'a lue.",
+        "pitch": ("Pour échapper à la pression de sa famille, une héritière signe un contrat de fiançailles "
+                  "de trois mois avec un employé de son entreprise. Le contrat interdit formellement "
+                  "tout sentiment. Il ne dit rien sur ce qu'on ne peut pas contrôler."),
+        "role_a": "l'héritière qui refuse qu'on décide pour elle",
+        "role_b": "l'employé qui avait juste besoin d'argent",
+        "lieux": ["la villa familiale un dimanche midi", "la voiture sur le trajet du retour",
+                  "le dîner de gala où il faut jouer la comédie", "la cuisine à 2 h du matin",
+                  "la chambre d'hôtel avec un seul lit", "le bureau où personne ne doit les voir",
+                  "le jardin derrière la maison"],
+        "conflit": "le contrat qui expire dans trois mois",
+        "objet": "la bague qu'elle enlève dès qu'ils sont seuls",
+        "proximite": "ils doivent vivre ensemble pour la crédibilité",
+    },
+    "seconde_chance": {
+        "titre": "Dix Ans Plus Tard",
+        "trope": "💔 Second Chance",
+        "accroche": "Ils s'étaient promis de se retrouver. Elle n'était pas venue.",
+        "pitch": ("Dix ans après une rupture jamais expliquée, ils se retrouvent par accident "
+                  "dans la même ville, le même immeuble, le même ascenseur. "
+                  "Il a une raison de lui en vouloir. Elle a une raison de s'être tue."),
+        "role_a": "celle qui est partie sans un mot",
+        "role_b": "celui qui a attendu trop longtemps",
+        "lieux": ["le café où ils allaient à vingt ans", "le palier entre leurs deux appartements",
+                  "la gare un soir de départ", "le banc du parc face au fleuve",
+                  "la fête d'anciens élèves", "l'hôpital où quelqu'un attend",
+                  "la rue sous la première neige"],
+        "conflit": "la vérité qu'elle n'a jamais dite",
+        "objet": "une lettre jamais envoyée",
+        "proximite": "ils habitent le même palier",
+    },
+    "interdit": {
+        "titre": "Le Sceau du Palais",
+        "trope": "👑 Forbidden Love",
+        "accroche": "Dans ce palais, un regard trop long peut coûter deux vies.",
+        "pitch": ("Joseon, 1592. Une servante du palais royal découvre par hasard un secret d'État. "
+                  "Le prince héritier est le seul à savoir qu'elle sait. "
+                  "Chacun tient la vie de l'autre entre ses mains."),
+        "role_a": "la servante qui en sait trop",
+        "role_b": "le prince qui devrait la faire taire",
+        "lieux": ["le pavillon du lotus à l'aube", "les cuisines royales avant le réveil de la cour",
+                  "la bibliothèque interdite", "les jardins sous la lune",
+                  "le couloir des servantes", "le pont de pierre au-dessus de l'étang",
+                  "la salle du trône, vide"],
+        "conflit": "le secret qui peut renverser la dynastie",
+        "objet": "un jade brisé en deux moitiés",
+        "proximite": "il l'a fait affecter à son service",
+    },
+    "colocation": {
+        "titre": "Deux Clés, Un Appartement",
+        "trope": "🏠 Roommates",
+        "accroche": "L'agence a loué le même appartement à deux personnes. Aucune ne partira.",
+        "pitch": ("Une erreur administrative, un bail signé deux fois, et deux inconnus qui "
+                  "refusent catégoriquement de céder. Ils décident de cohabiter jusqu'à ce que "
+                  "l'un craque. Aucun des deux n'a prévu de tenir aussi longtemps."),
+        "role_a": "l'illustratrice qui travaille la nuit",
+        "role_b": "l'urgentiste qui dort le jour",
+        "lieux": ["la cuisine à 6 h du matin", "le canapé du salon", "le balcon en fin de journée",
+                  "la salle de bain aux horaires négociés", "l'escalier de l'immeuble",
+                  "la supérette du coin à minuit", "le toit de l'immeuble"],
+        "conflit": "celui qui partira le premier",
+        "objet": "un post-it collé sur le frigo",
+        "proximite": "ils partagent quarante mètres carrés",
+    },
+    "idols": {
+        "titre": "Track 09",
+        "trope": "🎤 Idol / Forbidden",
+        "accroche": "Leur agence interdit les relations. Le contrat court encore quatre ans.",
+        "pitch": ("La leader d'un groupe au bord de la dissolution et le compositeur qui écrit "
+                  "leurs chansons se retrouvent seuls en studio chaque nuit. "
+                  "La neuvième piste de l'album n'a toujours pas de paroles."),
+        "role_a": "la leader qui tient tout à bout de bras",
+        "role_b": "le compositeur qui n'écrit plus que pour elle",
+        "lieux": ["le studio d'enregistrement à 3 h", "les coulisses juste avant le show",
+                  "le van de tournée sur l'autoroute", "le dortoir quand les autres dorment",
+                  "la salle de danse aux miroirs", "le toit de l'agence",
+                  "la loge après un concert raté"],
+        "conflit": "la clause anti-relation de leur contrat",
+        "objet": "une démo enregistrée à 4 h du matin",
+        "proximite": "ils travaillent seuls chaque nuit",
+    },
+    "amnesie": {
+        "titre": "Ce Que Tu As Oublié",
+        "trope": "🌫️ Amnesia",
+        "accroche": "Il se souvient de tout le monde. Sauf d'elle.",
+        "pitch": ("Après un accident, il a perdu six mois de mémoire — exactement les six mois "
+                  "où ils sont tombés amoureux. Elle décide de ne rien lui dire "
+                  "et de recommencer depuis le début. Sans savoir si ça peut marcher deux fois."),
+        "role_a": "celle qui se souvient pour deux",
+        "role_b": "celui à qui il manque six mois",
+        "lieux": ["la chambre d'hôpital", "l'appartement qu'il ne reconnaît pas",
+                  "le café où ils avaient leur table", "la plage en hiver",
+                  "la librairie du quartier", "le pont où il l'avait embrassée",
+                  "le cabinet du neurologue"],
+        "conflit": "les six mois disparus",
+        "objet": "une photo qu'il ne comprend pas",
+        "proximite": "elle est sa kinésithérapeute assignée",
+    },
+    "vengeance": {
+        "titre": "La Dette",
+        "trope": "🔥 Revenge Romance",
+        "accroche": "Elle est venue détruire sa famille. Personne ne lui avait parlé de lui.",
+        "pitch": ("Elle a passé dix ans à préparer sa vengeance contre le groupe qui a ruiné son père. "
+                  "Elle entre dans l'entreprise sous une fausse identité. "
+                  "Le fils du PDG n'était pas censé être quelqu'un de bien."),
+        "role_a": "celle qui a une liste et un plan",
+        "role_b": "l'héritier qui déteste son propre nom",
+        "lieux": ["le 43ème étage après la fermeture", "les archives de l'entreprise",
+                  "la salle du conseil d'administration", "le restaurant où son père a tout perdu",
+                  "l'appartement qu'elle n'a jamais montré", "le cimetière un matin de novembre",
+                  "la salle de sport à 5 h"],
+        "conflit": "la vérité sur ce qui est arrivé à son père",
+        "objet": "un dossier qu'elle garde depuis dix ans",
+        "proximite": "elle est devenue son assistante personnelle",
+    },
+    "surnaturel": {
+        "titre": "Neuf Cent Ans",
+        "trope": "🕯️ Fantasy Romance",
+        "accroche": "Il est immortel. Elle a trois ans à vivre. Aucun des deux ne le sait encore.",
+        "pitch": ("Un gumiho de neuf cents ans tient une boutique d'antiquités à Séoul. "
+                  "Une jeune femme entre un soir pour vendre un objet de famille — un objet "
+                  "qu'il reconnaît immédiatement, parce qu'il le lui avait offert dans une autre vie."),
+        "role_a": "celle qui ne se souvient pas de sa première vie",
+        "role_b": "celui qui l'a attendue neuf siècles",
+        "lieux": ["la boutique d'antiquités un soir de pluie", "le sanctuaire dans la montagne",
+                  "le métro de la ligne 2 à minuit", "la forêt de bambous",
+                  "le pont où tout avait commencé", "l'appartement au-dessus de la boutique",
+                  "le marché de nuit"],
+        "conflit": "la malédiction qui les sépare à chaque vie",
+        "objet": "une épingle à cheveux en jade",
+        "proximite": "elle vient travailler dans sa boutique",
+    },
+    "campus": {
+        "titre": "Bourse d'Excellence",
+        "trope": "📚 Academic Rivals",
+        "accroche": "Une seule bourse. Deux candidats. Et cinq mois à réviser côte à côte.",
+        "pitch": ("Deux étudiants en dernière année visent la même bourse d'excellence. "
+                  "Le professeur les oblige à préparer le concours ensemble. "
+                  "Chaque heure passée à réviser rend la compétition plus difficile à supporter."),
+        "role_a": "la boursière qui n'a pas droit à l'échec",
+        "role_b": "l'héritier qui veut réussir sans le nom de son père",
+        "lieux": ["la bibliothèque du 3ème étage à la fermeture", "le toit du bâtiment C",
+                  "le café en face du campus", "la salle d'étude réservée",
+                  "l'arrêt de bus sous la pluie", "le terrain de basket désert",
+                  "le couloir devant les résultats affichés"],
+        "conflit": "la bourse que l'un des deux perdra",
+        "objet": "un carnet de notes partagé",
+        "proximite": "le professeur les a mis en binôme",
+    },
+}
+
+# 12 épisodes — une vraie progression, pas de coup de foudre au premier regard
+DRAMA_EPISODES = [
+ {"titre": "Le Point de Départ", "etape": "Ils se supportent à peine.",
+  "scenes": [
+   "{lieu}.\n\n{a} arrive la première. Elle pose ses affaires sur la table, méthodiquement, comme pour marquer un territoire. Quand {b} entre dix minutes plus tard, il ne dit rien — il s'installe à l'autre bout, aussi loin que la pièce le permet.\n\nLe silence dure quarante minutes. Ni l'un ni l'autre ne veut être celui qui craquera en premier.\n\n« On ne va pas y arriver comme ça », finit par dire {b}, sans lever les yeux.\n\n« On n'est pas obligés d'y arriver. On est obligés de finir. »\n\nElle referme son dossier d'un geste sec. Ce n'est pas de la colère. C'est pire : c'est de l'indifférence travaillée, celle qu'on met des mois à construire.",
+   "{lieu}.\n\nIl y a des gens avec qui on peut être en désaccord. Et il y a {b}.\n\n{a} le regarde faire, appuyée contre le mur, les bras croisés. Il fait tout à l'envers — l'ordre, la méthode, la logique. Et pourtant ça marche. C'est peut-être ça, le plus insupportable.\n\n« Tu vas rester debout longtemps ? » demande-t-il sans se retourner.\n\n« Le temps que tu comprennes que ça ne fonctionnera pas. »\n\n« Alors assieds-toi, ça risque d'être long. »\n\nElle s'assoit. Pas parce qu'il l'a demandé. Parce que ses jambes commençaient à faire mal, et qu'elle refuse de lui donner cette victoire-là aussi.",
+   "{lieu}.\n\n{proximite}. La nouvelle est tombée ce matin, sans préavis, sans discussion possible.\n\n{a} a relu la note trois fois en espérant y trouver une erreur. {b} l'a lue une seule fois, puis l'a pliée et rangée dans sa poche sans rien dire — ce qui, chez lui, veut dire beaucoup.\n\nIls se croisent dans le couloir une heure plus tard. Aucun des deux ne ralentit.\n\n« Six mois », dit-elle en passant.\n\n« Six mois », répond-il.\n\nCe n'est pas un accord. C'est un compte à rebours."],
+  "cliff": ["Ce soir-là, {a} reçoit un message d'un numéro inconnu : « Il faut qu'on parle de {conflit}. »",
+            "En rangeant ses affaires, {a} trouve {objet} sur sa table. Elle ne l'y a pas posé.",
+            "Le lendemain matin, la note officielle tombe : ils ont trois semaines de moins que prévu."],
+  "choix": [("{a} pose ses conditions dès maintenant", "{a} laisse faire et observe", "Elle demande à changer de binôme")]},
+
+ {"titre": "La Première Fissure", "etape": "Un détail les surprend.",
+  "scenes": [
+   "{lieu}.\n\nIl est tard. {a} croit être seule quand elle entend une voix — {b}, au téléphone, dans la pièce d'à côté. Il ne parle pas comme d'habitude. Il parle doucement, avec une patience qu'elle ne lui connaissait pas.\n\n« Non, ne t'inquiète pas. Je passerai demain. Oui, promis. »\n\nElle devrait partir. Elle reste.\n\nQuand il raccroche et la découvre dans l'encadrement de la porte, quelque chose se ferme immédiatement sur son visage. Le masque revient, en une seconde.\n\n« Tu écoutes aux portes maintenant ? »\n\n« Non. J'attendais que tu finisses pour te dire que j'avais fini. »\n\nElle ment mal. Il fait semblant de la croire. C'est peut-être la première fois qu'ils se rendent service.",
+   "{lieu}.\n\n{b} n'aurait pas dû être là à cette heure-ci. {a} non plus, d'ailleurs.\n\nElle le trouve assis, {objet} entre les mains, à le regarder comme s'il y avait quelque chose d'écrit dessus. Il ne l'entend pas arriver.\n\n« Tu ne dors jamais ? »\n\nIl sursaute à peine. « Je pourrais te retourner la question. »\n\n« Moi j'ai une raison. »\n\n« Moi aussi. » Il repose l'objet. « Elle est juste moins présentable que la tienne. »\n\nIl se lève, prend sa veste, et sort sans rien ajouter. {a} reste plantée là plus longtemps qu'elle ne veut l'admettre.",
+   "{lieu}.\n\nC'est un tout petit geste. Presque rien.\n\n{b} lui tend un café. Pas en disant quelque chose de sarcastique, pas en attendant une réaction. Juste un café, posé sur la table, avant de retourner à son travail.\n\n« Sans sucre », dit-il sans se retourner. « Tu le prends sans sucre. »\n\n{a} regarde le gobelet pendant trois secondes de trop. Il a remarqué. Depuis quand est-ce qu'il remarque ?\n\nElle ne dit pas merci. Elle boit le café. C'est déjà énorme."],
+  "cliff": ["{a} rentre chez elle et réalise qu'elle n'a pensé qu'à ça de tout le trajet.",
+            "Le soir même, quelqu'un pose une question à {a} sur {b}. Elle ne sait pas quoi répondre.",
+            "En sortant, elle le voit dans la rue, avec quelqu'un qu'elle ne connaît pas."],
+  "choix": [("{a} lui demande directement ce qu'il cache", "Elle fait comme si de rien n'était", "Elle en parle à quelqu'un d'autre")]},
+
+ {"titre": "Le Terrain Neutre", "etape": "Une trêve fragile.",
+  "scenes": [
+   "{lieu}.\n\nLa trêve n'a jamais été déclarée. Elle s'est installée toute seule, comme la pluie.\n\nIls travaillent depuis quatre heures sans se disputer. C'est un record. À un moment {b} propose une idée, {a} la corrige, il accepte la correction — et c'est là qu'elle s'arrête net.\n\n« Tu viens de me donner raison. »\n\n« Tu avais raison. »\n\n« Tu ne fais jamais ça. »\n\n« Tu n'as jamais raison. » Il sourit — vraiment, pas le rictus habituel. « C'est arrivé une fois. Ça arrivera peut-être encore. »\n\nElle se remet au travail pour cacher qu'elle a envie de sourire aussi.",
+   "{lieu}.\n\nIls sont coincés. Littéralement.\n\nQuarante minutes qu'ils attendent, assis à un mètre l'un de l'autre, et il n'y a rien d'autre à faire que parler.\n\n« Pourquoi tu fais ce métier ? » demande {a}. La question sort toute seule.\n\n{b} met du temps à répondre. « Parce que quelqu'un m'a dit un jour que je n'en serais pas capable. »\n\n« C'est une raison stupide. »\n\n« Oui. » Il tourne la tête vers elle. « Et toi ? »\n\nElle ouvre la bouche. La referme. Et se rend compte qu'elle n'a jamais dit la vraie réponse à personne.",
+   "{lieu}.\n\n« Tu as mangé ? »\n\nLa question surprend {a} plus qu'elle ne devrait. Il est 21 h. Elle n'a pas mangé. Il le sait probablement.\n\n« Ce n'est pas ton problème. »\n\n« Non », admet {b}. « Mais si tu t'évanouis, c'est moi qui dois finir seul. Donc c'est un peu mon problème. »\n\nIl pose une barquette devant elle. Elle regarde le contenu, puis lui.\n\n« Tu es allé le chercher où ? »\n\n« En bas. »\n\n« Il n'y a rien en bas. »\n\n« Il y a un endroit à quinze minutes. » Il hausse les épaules. « Mange. »\n\nQuinze minutes aller. Quinze minutes retour. Elle ne relève pas. Mais elle compte."],
+  "cliff": ["En partant, leurs mains se frôlent sur la poignée. Aucun des deux ne bouge pendant une seconde.",
+            "{b} lui propose de la raccompagner. Elle a déjà dit non avant de réfléchir.",
+            "Elle réalise en rentrant qu'elle ne lui a jamais posé la seule question qui compte."],
+  "choix": [("{a} accepte de baisser sa garde", "Elle remet de la distance immédiatement", "Elle lui pose enfin sa vraie question")]},
+
+ {"titre": "Ce Qu'on Ne Dit Pas", "etape": "Une vulnérabilité s'échappe.",
+  "scenes": [
+   "{lieu}.\n\nElle ne pleure jamais devant les gens. C'est une règle.\n\nMais il est minuit passé, la nouvelle est tombée il y a deux heures, et {b} est entré sans frapper parce qu'il avait oublié ses clés.\n\nIl s'arrête net dans l'encadrement.\n\n« Je peux ressortir », dit-il doucement.\n\n{a} secoue la tête. Pas parce qu'elle veut qu'il reste. Parce qu'elle n'a plus l'énergie de gérer une décision de plus.\n\nIl s'assoit par terre, dos au mur, à trois mètres d'elle. Il ne dit rien. Il ne demande rien. Il reste là, et c'est exactement la bonne chose à faire — ce qui l'énerve, parce qu'elle aurait préféré qu'il se trompe.\n\nAu bout d'un long moment, elle parle. Pas de ce qui vient d'arriver. D'autre chose, de plus vieux, de plus enfoui.\n\nIl écoute jusqu'au bout.",
+   "{lieu}.\n\n« Pourquoi tu me détestes ? »\n\nLa question de {b} tombe sans prévenir, au milieu d'une phrase sur autre chose.\n\n{a} se fige. « Je ne te déteste pas. »\n\n« Si. Depuis le premier jour. J'aimerais juste savoir pourquoi. »\n\nElle pourrait mentir. Ce serait facile.\n\n« Parce que tout est simple pour toi », dit-elle à la place. « Tu arrives, tu fais les choses à moitié, et ça marche. Moi je fais tout correctement et je dois me battre pour la moitié de ce que tu obtiens sans demander. »\n\nUn silence. Puis {b} rit — un rire court, sans joie.\n\n« Tu crois vraiment que c'est simple pour moi ? »\n\nEt à la façon dont il le dit, elle comprend qu'elle vient de dire quelque chose de très injuste.",
+   "{lieu}.\n\nIl y a {objet}, posé entre eux sur la table, et le poids de tout ce qu'il représente.\n\n« Tu l'as gardé », dit {a}.\n\n« Oui. »\n\n« Pourquoi ? »\n\n{b} met longtemps à répondre. Assez longtemps pour qu'elle regrette d'avoir demandé.\n\n« Parce que c'est la seule preuve qu'à un moment, quelqu'un a pensé que j'en valais la peine. »\n\nIl dit ça comme on constate la météo. Sans drame, sans chercher quoi que ce soit. Et c'est précisément pour ça que {a} sent quelque chose se déplacer dans sa poitrine."],
+  "cliff": ["Cette nuit-là, {a} ne dort pas. Elle repense à sa phrase, encore et encore.",
+            "Le lendemain, tout est redevenu normal entre eux. C'est bien pire.",
+            "Elle réalise qu'elle vient de lui dire quelque chose qu'elle n'a jamais dit à personne."],
+  "choix": [("{a} revient là-dessus le lendemain", "Elle fait comme si la conversation n'avait pas eu lieu", "Elle lui rend {objet}")]},
+
+ {"titre": "Le Tiers", "etape": "Quelqu'un s'invite.",
+  "scenes": [
+   "{lieu}.\n\n« Tu ne m'avais pas dit que tu travaillais avec elle. »\n\nLa personne qui parle sourit trop. {a} met trois secondes à comprendre qui elle est — et une de plus à comprendre ce que ce sourire veut dire.\n\n{b} ne dit rien. Il fixe un point derrière elles.\n\n« On ne travaille pas ensemble », corrige {a}. « On nous a mis ensemble. Ce n'est pas pareil. »\n\n« C'est ce qu'il a dit aussi. »\n\nLa phrase reste suspendue. {a} la sent atterrir quelque part sous ses côtes, et elle déteste que ça lui fasse quelque chose.\n\nPlus tard, seule dans le couloir, elle se répète que ça n'a aucune importance. Elle se le répète beaucoup trop de fois pour que ce soit vrai.",
+   "{lieu}.\n\nIls sont trois maintenant, et c'est deux de trop.\n\n{a} observe {b} parler à l'autre personne — la posture, la distance, la façon dont il incline la tête. Elle connaît cette posture. C'est celle qu'il a avec elle quand il ne veut pas montrer qu'il écoute vraiment.\n\nSauf que là, il l'a avec quelqu'un d'autre.\n\n« Ça va ? » lui demande-t-il plus tard.\n\n« Pourquoi ça n'irait pas ? »\n\n« Tu n'as pas dit un mot depuis vingt minutes. »\n\n« Je réfléchissais. »\n\n« À quoi ? »\n\nÀ rien qu'elle puisse dire à voix haute. « Au dossier. »\n\nIl la regarde une seconde de trop, puis laisse passer.",
+   "{lieu}.\n\nC'est une information banale, dite en passant, par quelqu'un qui ne sait pas ce qu'il déclenche.\n\n« Il part dans deux mois, tu savais ? »\n\n{a} garde le visage parfaitement neutre. C'est une compétence qu'elle a mis des années à acquérir et elle ne l'a jamais autant utilisée qu'en ce moment.\n\n« Bien sûr », ment-elle.\n\nElle finit sa journée. Elle rentre. Elle range. Elle fait tout ce qu'elle fait d'habitude.\n\nEt à 23 h, assise dans le noir, elle réalise qu'elle est en colère — pas contre l'information. Contre le fait qu'il ne le lui ait pas dit lui-même."],
+  "cliff": ["Le lendemain, {b} lui demande s'ils peuvent parler. Elle dit qu'elle n'a pas le temps.",
+            "Elle apprend que la personne en question sera là toute la semaine.",
+            "En rentrant, elle trouve un message de {b} : « Ce n'est pas ce que tu crois. »"],
+  "choix": [("{a} demande des explications", "Elle prend ses distances sans rien dire", "Elle fait semblant que ça lui est égal")]},
+
+ {"titre": "L'Instant Suspendu", "etape": "Presque.",
+  "scenes": [
+   "{lieu}.\n\nIl pleut depuis vingt minutes et aucun des deux n'a de parapluie.\n\nIls se sont réfugiés sous le même auvent, à peine assez large pour deux. Ils sont debout, épaule contre épaule, à regarder l'eau tomber.\n\n« On aurait pu courir », dit {a}.\n\n« On aurait pu. »\n\nNi l'un ni l'autre ne court.\n\nElle tourne la tête au même moment que lui. Leurs visages sont à trente centimètres. Elle voit la goutte d'eau qui descend le long de sa tempe, et le fait qu'il ne recule pas.\n\n« {a}… »\n\nUn klaxon. Une voiture s'arrête devant eux, la vitre descend, quelqu'un appelle {b} par son prénom.\n\nIl recule d'un pas. Le moment se referme comme une porte.",
+   "{lieu}.\n\nElle a trop bu. Pas beaucoup — juste assez pour que les choses sortent plus facilement.\n\n« Je crois que je me suis trompée sur toi », dit {a}.\n\n{b} pose son verre. « Sur quoi exactement ? »\n\n« Sur tout. Depuis le début. »\n\nIl la regarde longtemps. Autour d'eux les gens parlent, la musique continue, mais il y a une bulle de deux mètres où plus rien n'existe.\n\n« Tu diras ça demain, quand tu seras sobre ? »\n\n« Non », répond-elle honnêtement.\n\n« C'est bien ce que je pensais. »\n\nIl sourit, mais il y a quelque chose de fatigué dedans. Il se lève, lui tend son manteau, et la raccompagne sans rien ajouter.",
+   "{lieu}.\n\nC'est un geste de rien du tout. Il remet une mèche derrière son oreille.\n\n{a} se fige complètement.\n\n{b} aussi, une demi-seconde plus tard, comme s'il réalisait ce qu'il venait de faire en même temps qu'elle.\n\n« Désolé », dit-il en retirant sa main.\n\n« Ce n'est rien. »\n\n« Non, je— »\n\n« {b}. Ce n'est rien. »\n\nElle le dit trop vite et trop fermement, et ils savent tous les deux que c'est un mensonge. Le reste de la soirée se passe dans un silence différent de tous ceux d'avant."],
+  "cliff": ["Cette nuit-là, {a} tape un message. Elle l'efface avant de l'envoyer. Trois fois.",
+            "Il lui envoie un message à 2 h : « Tu dors ? » Elle ne répond pas. Elle ne dort pas.",
+            "Le lendemain, il agit comme si rien ne s'était passé. Elle ne sait pas si c'est un soulagement."],
+  "choix": [("{a} envoie le message qu'elle a effacé", "Elle attend qu'il fasse le premier pas", "Elle décide d'en rester là")]},
+
+ {"titre": "La Fêlure", "etape": "Ce qui était caché sort.",
+  "scenes": [
+   "{lieu}.\n\nElle l'apprend par accident. C'est toujours comme ça que les choses importantes arrivent.\n\nUn document mal rangé, une phrase entendue à moitié, et soudain tout ce qu'elle croyait comprendre se réorganise dans un autre ordre.\n\n{b} arrive quinze minutes plus tard. Il voit le dossier ouvert sur la table. Il voit son visage.\n\n« Depuis quand ? » demande {a}.\n\n« Depuis le début. »\n\n« Le début de quoi ? »\n\nIl ne répond pas tout de suite. Et c'est ce silence-là, plus que la vérité, qui lui fait le plus mal.\n\n« Je voulais te le dire. »\n\n« Tu as eu six mois. »",
+   "{lieu}.\n\n« Dis-moi que ce n'est pas vrai. »\n\n{b} ne dit rien.\n\n« Dis-moi que ce n'est pas vrai », répète {a}, plus bas.\n\n« Je ne peux pas. »\n\nElle recule d'un pas. Puis d'un autre. Elle a l'impression que le sol s'est légèrement incliné.\n\n« Tout ce qu'on a fait ces derniers mois — »\n\n« Ça, c'était vrai. » Il fait un pas vers elle. Elle recule encore. « {a}, ça c'était vrai. »\n\n« Comment je peux savoir ? Comment je peux savoir quelle partie était vraie ? »\n\nIl n'a pas de réponse. C'est la première fois qu'elle le voit vraiment démuni, et elle découvre que ça ne lui fait aucun plaisir.",
+   "{lieu}.\n\nCe n'est pas lui qui le lui dit. C'est quelqu'un d'autre, en passant, persuadé qu'elle est déjà au courant.\n\n{a} hoche la tête, sourit, dit quelque chose de neutre. Puis elle sort, marche jusqu'au bout du couloir, et s'appuie contre le mur.\n\nElle sort son téléphone. Elle compose son numéro. Elle raccroche avant la première sonnerie.\n\nCe n'est pas la vérité qui la blesse. C'est de découvrir qu'elle est la dernière à l'apprendre — et qu'elle avait passé les dernières semaines à croire qu'ils étaient arrivés quelque part."],
+  "cliff": ["{b} l'appelle onze fois ce soir-là. Elle ne décroche pas.",
+            "Elle demande officiellement à être réaffectée. La demande est acceptée.",
+            "Il lui laisse un message vocal de quarante secondes. Elle ne l'écoute pas. Elle ne l'efface pas non plus."],
+  "choix": [("{a} le laisse s'expliquer", "Elle coupe tout contact", "Elle exige toute la vérité, maintenant")]},
+
+ {"titre": "L'Absence", "etape": "Le vide se remarque.",
+  "scenes": [
+   "{lieu}.\n\nDouze jours.\n\n{a} sait exactement combien, ce qui en soi est déjà un aveu.\n\nTout est plus simple sans lui. Plus rapide, plus efficace, plus calme. Elle finit ses journées à l'heure. Elle dort mieux. Elle a récupéré son espace, son rythme, sa tranquillité.\n\nEt pourtant à 21 h, quand elle range ses affaires, elle se surprend à attendre le bruit de la porte. Douze soirs de suite.\n\nLe treizième, elle reste plus tard sans raison. Elle ne se l'avoue pas.",
+   "{lieu}.\n\nQuelqu'un prononce son nom dans une conversation. {a} ne réagit pas — extérieurement.\n\n« Il paraît qu'il ne va pas très bien. »\n\n« Ah bon ? »\n\nElle a dit ça parfaitement. Ton neutre, sourcils immobiles, aucune inflexion. Personne ne remarque rien.\n\nElle rentre chez elle. Elle pose ses clés. Elle s'assoit sur le canapé sans allumer la lumière.\n\nEt elle reste comme ça très longtemps, à tenir dans ses mains un téléphone qu'elle n'utilise pas.",
+   "{lieu}.\n\nElle a gardé {objet}.\n\nElle aurait dû le rendre, le jeter, le donner. Elle l'a mis dans un tiroir, ce qui revient à ne pas décider.\n\nCe soir, elle l'a sorti. Elle le tourne entre ses doigts, sans rien en faire, en repensant à une phrase qu'il avait dite un jour et qu'elle n'avait pas relevée sur le moment.\n\nÀ l'époque elle n'avait pas compris. Maintenant si.\n\nC'est le pire moment pour comprendre."],
+  "cliff": ["Elle apprend qu'il part réellement. La date est fixée.",
+            "Quelqu'un lui remet une enveloppe de sa part. Elle ne l'ouvre pas tout de suite.",
+            "Elle le croise dans la rue. Ils se regardent trois secondes. Personne ne s'arrête."],
+  "choix": [("{a} va le voir", "Elle attend qu'il revienne de lui-même", "Elle ouvre enfin ce qu'il lui a laissé")]},
+
+ {"titre": "Les Vraies Raisons", "etape": "On comprend enfin.",
+  "scenes": [
+   "{lieu}.\n\n« Tu veux savoir pourquoi ? »\n\n{a} hoche la tête. Elle a attendu ça pendant des semaines et maintenant elle a presque peur d'entendre.\n\n{b} parle pendant onze minutes sans s'arrêter. Il raconte tout — le début, les raisons, ce qu'il ne pouvait pas dire, ce qu'il aurait dû dire quand même. Il ne cherche pas d'excuses. Il expose les faits, l'un après l'autre, comme on vide une pièce.\n\nQuand il a fini, il attend.\n\n« Pourquoi tu ne m'as pas dit ça avant ? »\n\n« Parce que tant que tu ne savais pas, tu me regardais encore comme quelqu'un de bien. »\n\nElle comprend. Ça ne règle rien. Mais elle comprend.",
+   "{lieu}.\n\nC'est elle qui parle cette fois.\n\n{a} dit ce qu'elle n'a jamais dit — pas seulement à lui, à personne. Pourquoi elle travaille comme ça. De quoi elle a peur. Ce qui s'est passé avant, il y a longtemps, et qui explique tout le reste.\n\n{b} écoute sans l'interrompre une seule fois.\n\n« Voilà », finit-elle. « Maintenant tu sais. »\n\n« Merci. »\n\n« De quoi ? »\n\n« De me l'avoir dit à moi. »\n\nEt à la façon dont il le dit, elle sait qu'il a compris exactement ce que ça lui a coûté.",
+   "{lieu}.\n\n{conflit} se règle sans eux. C'est presque décevant.\n\nAprès des mois à se battre là-dessus, ils apprennent la nouvelle par un mail de trois lignes. Fin du dossier. Fin de la raison qui les obligeait à se supporter.\n\nIls se regardent. Il n'y a plus d'obligation.\n\n« Donc c'est fini », dit {a}.\n\n« Techniquement. »\n\n« Techniquement », répète-t-elle.\n\nAucun des deux ne bouge. Le mot flotte entre eux, et ils savent tous les deux qu'il ne parle plus du dossier."],
+  "cliff": ["Il lui demande s'ils peuvent se revoir. En dehors de tout ça.",
+            "Elle réalise qu'ils n'ont plus aucune raison de se croiser. Aucune, sauf une.",
+            "Il dit une phrase, très bas, qu'elle n'est pas sûre d'avoir bien entendue."],
+  "choix": [("{a} accepte de le revoir", "Elle demande du temps", "Elle lui dit ce qu'elle ressent maintenant")]},
+
+ {"titre": "Le Point de Non-Retour", "etape": "Il faut choisir.",
+  "scenes": [
+   "{lieu}.\n\nIl y a une décision à prendre et elle engage tout.\n\n{a} le sait depuis ce matin. {b} aussi. Ils ont passé la journée à ne pas en parler.\n\n« Si tu pars », dit-elle finalement, « on ne se reverra pas. »\n\n« Je sais. »\n\n« Ce n'est pas une menace. C'est juste comment ça va se passer. »\n\n« Je sais », répète-t-il.\n\nIl la regarde. Elle attend. Et pendant quelques secondes, tout tient sur un fil qu'aucun des deux n'ose toucher.\n\n« Demande-moi de rester », dit-il.\n\nEt voilà. C'est là. C'est maintenant.",
+   "{lieu}.\n\n« Tu as ce que tu voulais », dit {b}.\n\n{a} regarde le document dans ses mains. Oui. Elle a exactement ce qu'elle voulait depuis le début. Ce pour quoi elle s'est battue pendant des mois.\n\n« Pourquoi tu ne dis rien ? » demande-t-il.\n\n« Parce que je ne sais pas quoi dire. »\n\n« Dis que tu es contente. »\n\n« Je devrais l'être. »\n\nLe silence s'installe. Elle repose le document sur la table.\n\n« Qu'est-ce que tu fais ? » demande {b}.\n\n« Je réfléchis. » Elle relève les yeux. « Pour la première fois depuis dix ans, je réfléchis vraiment. »",
+   "{lieu}.\n\nIl est parti. Il reste vingt minutes avant que ce soit définitif.\n\n{a} est assise, immobile, et compte les minutes comme on compte les battements de cœur.\n\nDix-huit.\n\nElle pense à la première fois qu'elle l'a vu et à quel point elle avait tort.\n\nQuinze.\n\nElle pense à ce café sans sucre.\n\nOnze.\n\nElle pense à la pluie sous l'auvent, à la mèche derrière l'oreille, aux onze appels qu'elle n'a pas pris.\n\nSept.\n\nElle se lève."],
+  "cliff": ["Elle sort en courant. Il reste quatre minutes.",
+            "Elle compose son numéro. Cette fois elle ne raccroche pas.",
+            "Elle dit une phrase de six mots. C'est la première fois qu'elle les prononce."],
+  "choix": [("{a} court le rejoindre", "Elle le laisse partir", "Elle lui envoie tout ce qu'elle n'a jamais dit")]},
+
+ {"titre": "Ce Qui Reste", "etape": "Les conséquences.",
+  "scenes": [
+   "{lieu}.\n\nCe qui s'est passé s'est passé. Maintenant il faut vivre avec.\n\n{a} apprend que les choses ne redeviennent pas comme avant — elles deviennent autre chose. Ni mieux ni pire. Autre chose.\n\n{b} n'est plus la même personne pour elle. Elle n'est plus la même pour lui. Ils se croisent avec un poids nouveau, fait de tout ce qu'ils savent maintenant l'un de l'autre.\n\n« Ça va ? » demande-t-il.\n\n« Non. » C'est la première fois qu'elle répond honnêtement à cette question. « Toi ? »\n\n« Non plus. »\n\nIls restent là. Il y a quelque chose de reposant à ne pas faire semblant.",
+   "{lieu}.\n\n« Je ne regrette pas », dit {a}.\n\n« Même maintenant ? »\n\n« Surtout maintenant. »\n\n{b} la regarde comme s'il essayait de mémoriser quelque chose.\n\n« Tu sais ce qui me fait le plus peur ? » demande-t-il. « Que dans un an, tu te dises que c'était une erreur. »\n\n« Alors ce sera une erreur que j'aurai choisie. » Elle hausse les épaules. « J'en ai assez des choses qu'on décide pour moi. »\n\nIl sourit. Pas le sourire du début. Un autre, qu'elle ne lui a jamais vu et qui lui va beaucoup mieux.",
+   "{lieu}.\n\nIls refont le chemin.\n\nPas métaphoriquement — vraiment. Ils reviennent à {lieu}, là où tout a commencé, parce que {a} a dit qu'elle voulait vérifier quelque chose.\n\n« Vérifier quoi ? »\n\n« Si c'est aussi laid que dans mon souvenir. »\n\nIls regardent l'endroit. C'est exactement pareil.\n\n« Alors ? »\n\n« C'est pire », dit-elle.\n\n{b} rit. Et le son de ce rire, à cet endroit précis, referme quelque chose qui était resté ouvert depuis le premier épisode."],
+  "cliff": ["Il reste une question qu'aucun des deux n'a posée.",
+            "Elle réalise qu'ils n'ont jamais mis de mot sur ce qu'ils sont.",
+            "Quelqu'un leur pose la question directement. Ils se regardent."],
+  "choix": [("Ils mettent enfin un mot dessus", "Ils laissent les choses comme elles sont", "{a} demande du temps avant de décider")]},
+
+ {"titre": "La Dernière Scène", "etape": "La fin — celle que vous avez écrite.",
+  "scenes": [
+   "{lieu}.\n\nUn an, six mois, ou trois semaines plus tard — le temps n'a plus tellement d'importance.\n\n{a} repense à la première fois. À la femme qu'elle était en entrant dans cette pièce, avec ses dossiers alignés et sa certitude d'avoir raison sur tout.\n\n« Tu souris », remarque {b}.\n\n« Je pensais au premier jour. »\n\n« Tu me détestais. »\n\n« Profondément. »\n\n« Et maintenant ? »\n\nElle prend son temps. Dehors la lumière baisse. Elle a appris à ne plus répondre trop vite.\n\n« Maintenant », dit-elle enfin, « je crois que je ne saurais plus faire sans. »",
+   "{lieu}.\n\nIl y a une chose qu'ils ne se sont jamais dite. Une seule.\n\nElle est là, entre eux, depuis le troisième épisode. Ils ont tourné autour, l'ont frôlée, l'ont évitée. Ils ont eu mille occasions.\n\nCe soir, {a} décide que ça suffit.\n\n« {b}. »\n\n« Oui ? »\n\nElle prend une inspiration. Toute l'histoire tient dans les secondes qui suivent — tout ce qu'ils ont traversé, tout ce que le serveur a choisi pour eux, chaque détour, chaque erreur.\n\nEt elle le dit.",
+   "{lieu}.\n\n« Si c'était à refaire ? »\n\n{a} ne réfléchit pas longtemps.\n\n« Je referais tout. Y compris les erreurs. »\n\n« Même le silence de six mois ? »\n\n« Surtout ça. » Elle le regarde. « Sans ça, on serait restés polis. On se serait dit bonjour dans les couloirs pendant trois ans et on ne se serait jamais vraiment rencontrés. »\n\n{b} ne dit rien. Il tend la main.\n\nElle la prend.\n\nEt c'est comme ça que se termine l'histoire que vous avez écrite."],
+  "cliff": ["", "", ""],
+  "choix": [("Ils restent ensemble", "Ils se séparent en bons termes", "Fin ouverte — à chacun d'imaginer")]},
+]
+
 drama_saison = {
     "titre": None, "episode": 0, "en_cours": False,
     "casting": {}, "historique": [], "trame": None, "vote_msg": None,
 }
 
 # Chaque trame donne une saison totalement différente
-DRAMA_TRAMES = {
-    "campus": {
-        "titre": "Le Campus des Cerisiers",
-        "pitch": "Une université de Séoul, deux étudiants que tout oppose, et une bourse que les deux convoitent.",
-        "lieux": ["la bibliothèque du 3ème étage", "le toit du bâtiment C", "le café en face du campus",
-                  "la salle de répétition", "l'arrêt de bus sous la pluie", "le terrain de basket désert"],
-        "roles": ["l'étudiante brillante et fauchée", "l'héritier arrogant", "le meilleur ami loyal",
-                  "la rivale ambitieuse", "le professeur qui observe tout"],
-    },
-    "entreprise": {
-        "titre": "Bureau 704",
-        "pitch": "Un open space, une fusion d'entreprise, et deux collègues qui se détestent depuis le premier jour.",
-        "lieux": ["l'ascenseur bloqué entre deux étages", "la salle de réunion vide à 22 h",
-                  "le distributeur du 7ème", "le parking souterrain", "le rooftop de l'immeuble",
-                  "le restaurant coréen d'en bas"],
-        "roles": ["la cheffe de projet perfectionniste", "le nouveau directeur", "la collègue confidente",
-                  "le stagiaire qui sait tout", "le PDG absent"],
-    },
-    "village": {
-        "titre": "Les Vagues de Gongjin",
-        "pitch": "Un village de bord de mer, un citadin en fuite, et une communauté qui ne laisse rien passer.",
-        "lieux": ["le port au lever du soleil", "la supérette du village", "la digue battue par le vent",
-                  "la maison abandonnée sur la colline", "le marché du dimanche", "le phare"],
-        "roles": ["le citadin qui fuit sa vie", "l'enfant du village", "la grand-mère qui sait tout",
-                  "le pêcheur taciturne", "l'ancien amour revenu"],
-    },
-    "hopital": {
-        "titre": "Garde de Nuit",
-        "pitch": "Un service d'urgences, des gardes interminables, et deux internes qui n'auraient jamais dû se rencontrer.",
-        "lieux": ["la salle de repos à 4 h du matin", "le couloir des urgences", "le toit de l'hôpital",
-                  "la cafétéria déserte", "le parking sous la neige", "la chambre 312"],
-        "roles": ["l'interne surdouée", "le chirurgien blessé", "l'infirmier qui console tout le monde",
-                  "la patiente mystérieuse", "le chef de service intransigeant"],
-    },
-    "musique": {
-        "titre": "Track 09",
-        "pitch": "Une agence d'idols, un groupe au bord de la rupture, et une chanson que personne n'ose finir.",
-        "lieux": ["le studio d'enregistrement", "les coulisses juste avant le show", "le dortoir à 3 h",
-                  "la salle de danse aux miroirs", "le van de tournée", "la terrasse de l'agence"],
-        "roles": ["la leader épuisée", "le compositeur solitaire", "la maknae pleine d'espoir",
-                  "le manager sous pression", "l'ancien membre parti"],
-    },
-    "historique": {
-        "titre": "Le Sceau de Joseon",
-        "pitch": "La cour de Joseon, un secret d'État, et un amour qui pourrait renverser une dynastie.",
-        "lieux": ["le pavillon du lotus", "les cuisines royales", "la bibliothèque interdite",
-                  "les jardins sous la lune", "la salle du trône", "le pont de pierre"],
-        "roles": ["la servante au passé caché", "le prince héritier", "le garde du corps fidèle",
-                  "la concubine ambitieuse", "le ministre comploteur"],
-    },
-    "fantastique": {
-        "titre": "Neuf Vies",
-        "pitch": "Une créature immortelle, une mortelle qui la reconnaît, et une malédiction vieille de 900 ans.",
-        "lieux": ["la boutique d'antiquités", "le sanctuaire dans la montagne", "le métro à minuit",
-                  "l'appartement où le temps s'arrête", "le pont où tout a commencé", "la forêt de bambous"],
-        "roles": ["l'immortel fatigué", "la mortelle qui se souvient", "l'ami qui ne vieillit pas",
-                  "la chamane du quartier", "l'ombre qui revient"],
-    },
-    "seconde_chance": {
-        "titre": "Retour à Case Départ",
-        "pitch": "Une femme se réveille dix ans en arrière, avec la mémoire intacte et une seule idée en tête.",
-        "lieux": ["l'appartement de ses vingt ans", "le bureau qu'elle avait quitté",
-                  "le café où tout s'était joué", "la gare un soir de départ",
-                  "la maison familiale", "le banc du parc"],
-        "roles": ["celle qui revient", "l'ex qu'elle veut éviter", "l'ami qu'elle avait négligé",
-                  "la rivale d'avant", "l'inconnu qui ne devrait pas être là"],
-    },
-}
 
 # Chaque épisode a sa propre couleur narrative
-DRAMA_ARCS = [
-    ("La Rencontre",        "Ils se croisent pour la première fois. Rien ne laisse présager la suite."),
-    ("Le Malentendu",       "Un mot de travers, un geste mal interprété. Tout part de là."),
-    ("Le Rapprochement",    "Une soirée qui s'éternise, et quelque chose qui change sans prévenir."),
-    ("Le Secret",           "Quelqu'un cache quelque chose. Et ça commence à se voir."),
-    ("La Rivalité",         "Un tiers entre en scène. L'équilibre vacille."),
-    ("L'Aveu Manqué",       "Les mots étaient là. Ils ne sont pas sortis."),
-    ("La Rupture",          "Ce qui devait arriver arrive. Personne n'en sort indemne."),
-    ("Le Passé Resurgit",   "Ce qu'on croyait enterré revient frapper à la porte."),
-    ("Le Choix Impossible", "Deux chemins, aucun sans perte."),
-    ("La Réconciliation",   "On se retrouve. Mais rien n'est comme avant."),
-    ("Le Dernier Obstacle", "Une dernière épreuve, la plus dure."),
-    ("La Fin",              "Tout se joue maintenant."),
-]
 
-DRAMA_OUVERTURES = [
-    "{lieu}. {a} n'avait pas prévu de se retrouver là ce soir.",
-    "Il est tard. {lieu} est presque vide, sauf {a}.",
-    "{a} arrive à {lieu} avec dix minutes de retard. {b} attendait déjà.",
-    "Personne n'aurait parié là-dessus : {a} et {b}, à {lieu}, à la même heure.",
-    "{lieu}. Le silence dure depuis trop longtemps entre {a} et {b}.",
-    "{b} avait dit qu'il ne viendrait pas. {b} est à {lieu}.",
-    "Ce qui devait être une soirée ordinaire à {lieu} ne l'est déjà plus.",
-    "{a} relit le message une dernière fois avant de pousser la porte de {lieu}.",
-]
-DRAMA_TENSIONS = [
-    "Le regard qu'ils échangent dure une seconde de trop.",
-    "Aucun des deux ne veut être celui qui parlera en premier.",
-    "Il y a cette chose qu'ils évitent depuis des semaines, et elle est là, entre eux.",
-    "Un détail change tout : ce qu'{a} croyait savoir était faux.",
-    "{b} ouvre la bouche, puis se ravise.",
-    "La pluie commence. Ni l'un ni l'autre ne bouge.",
-    "Quelqu'un les observe depuis l'autre bout de la pièce.",
-    "Le téléphone d'{a} vibre. Ce n'est pas le moment.",
-    "{b} dit son prénom. Juste son prénom.",
-    "Il aurait suffi d'un mot. Le mot ne vient pas.",
-]
-DRAMA_CHOIX = [
-    ("Il lui dit la vérité, maintenant", "Il garde le silence encore un peu", "Elle prend les devants"),
-    ("{a} reste", "{a} s'en va sans se retourner", "{b} le retient"),
-    ("Ils affrontent le problème ensemble", "Chacun règle ça de son côté", "Un tiers s'en mêle"),
-    ("{a} avoue tout", "{a} ment une dernière fois", "Le secret éclate autrement"),
-    ("Ils se donnent une chance", "Ils décident d'arrêter là", "Ils repoussent la décision"),
-    ("{b} pardonne", "{b} exige des explications", "{b} disparaît"),
-    ("Ils partent ensemble", "{a} part seul", "Ils restent, mais changés"),
-    ("La vérité sort au grand jour", "Le mensonge tient encore", "Quelqu'un d'autre parle à leur place"),
-]
-DRAMA_CONSEQUENCES = {
-    0: ["Ce choix change tout. On ne revient pas en arrière.",
-        "Le serveur a tranché. Les conséquences arrivent.",
-        "Personne ne s'attendait à ça. Surtout pas eux."],
-    1: ["Le silence a un prix. Il sera payé plus tard.",
-        "Rien n'est réglé. Tout est repoussé.",
-        "Ce qu'on tait finit toujours par se dire autrement."],
-    2: ["Le destin s'en mêle. Ils n'avaient pas le contrôle.",
-        "Une intervention extérieure change la donne.",
-        "Ce n'est pas eux qui décident, cette fois."],
-}
+
+
+
+
 
 class DramaVoteView(ui.View):
+    """Vote persistant sur l'épisode en cours"""
     def __init__(self, options, timeout=None):
         super().__init__(timeout=timeout)
-        self.votes = {}
-        self.options = options
+        self.votes, self.options = {}, options
         for i, opt in enumerate(options):
-            btn = ui.Button(label=f"{chr(65+i)}", emoji=["🅰️","🅱️","🇨"][i],
-                            style=discord.ButtonStyle.primary, custom_id=f"drama_vote_{i}")
+            btn = ui.Button(label=["A", "B", "C"][i], emoji=["🅰️", "🅱️", "🇨"][i],
+                            style=discord.ButtonStyle.primary)
             async def cb(interaction, idx=i):
                 deja = self.votes.get(interaction.user.id)
                 self.votes[interaction.user.id] = idx
-                compte = {}
+                cnt = {}
                 for v in self.votes.values():
-                    compte[v] = compte.get(v, 0) + 1
-                detail = "  ·  ".join(f"{['🅰️','🅱️','🇨'][k]} **{v}**" for k, v in sorted(compte.items()))
+                    cnt[v] = cnt.get(v, 0) + 1
+                tot = sum(cnt.values())
+                detail = "\n".join(
+                    f"{['🅰️','🅱️','🇨'][k]} **{v}** vote(s) — {v/tot*100:.0f} %"
+                    for k, v in sorted(cnt.items()))
                 await interaction.response.send_message(
-                    f"{'🔄 Vote changé' if deja is not None else '✅ Vote enregistré'} : "
-                    f"**{self.options[idx]}**\n\n*Décompte actuel — {detail}*", ephemeral=True)
+                    f"{'🔄 Vote modifié' if deja is not None else '✅ Vote enregistré'} — "
+                    f"**{self.options[idx]}**\n\n{detail}\n\n"
+                    f"*{tot} personne(s) ont voté. Tu peux changer d'avis jusqu'au dépouillement.*",
+                    ephemeral=True)
             btn.callback = cb
             self.add_item(btn)
 
-async def publier_episode(guild, salon):
-    """Publie l'épisode de la semaine"""
+def _drama_perso(guild):
     s = drama_saison
-    trame = DRAMA_TRAMES[s["trame"]]
+    a = s["casting"].get("a") or "Elle"
+    b = s["casting"].get("b") or "Lui"
+    return a, b
+
+def _drama_format(txt, guild, lieu):
+    s = drama_saison
+    tr = DRAMA_TROPES[s["trope_cle"]]
+    a, b = _drama_perso(guild)
+    return (txt.replace("{a}", a).replace("{b}", b).replace("{lieu}", lieu)
+               .replace("{objet}", tr["objet"]).replace("{conflit}", tr["conflit"])
+               .replace("{proximite}", tr["proximite"]))
+
+async def publier_episode(guild, salon, rappel=None):
+    """Publie l'épisode courant, précédé du résultat des votes"""
+    s = drama_saison
+    tr = DRAMA_TROPES[s["trope_cle"]]
     ep = s["episode"] + 1
-    if ep > len(DRAMA_ARCS):
+    if ep > len(DRAMA_EPISODES):
         return await cloturer_saison(guild, salon)
-    titre_arc, resume_arc = DRAMA_ARCS[ep - 1]
 
-    a = s["casting"].get("a") or "un membre du QG"
-    b = s["casting"].get("b") or "un autre membre"
-    lieu = random.choice(trame["lieux"])
-    ouverture = random.choice(DRAMA_OUVERTURES).format(a=a, b=b, lieu=lieu)
-    tension = random.choice(DRAMA_TENSIONS).format(a=a, b=b)
-    choix = [x.format(a=a, b=b) for x in random.choice(DRAMA_CHOIX)]
+    E = DRAMA_EPISODES[ep - 1]
+    lieu = random.choice(tr["lieux"])
+    scene = _drama_format(random.choice(E["scenes"]), guild, lieu)
+    cliff_src = [x for x in E["cliff"] if x]
+    cliff = _drama_format(random.choice(cliff_src), guild, lieu) if cliff_src else ""
+    choix = [_drama_format(x, guild, lieu) for x in random.choice(E["choix"])]
 
-    suite = ""
-    if s["historique"]:
-        suite = f"*Précédemment : {s['historique'][-1]}*\n\n"
+    # ── En-tête : résultat du vote précédent ──
+    entete = ""
+    if rappel:
+        entete = (f"> 🗳️ **Résultats des votes de l'épisode {ep-1}**\n"
+                  f"> {rappel['detail']}\n"
+                  f"> \n"
+                  f"> **Le choix du serveur est donc : {rappel['gagnant']}**\n"
+                  f"> *{rappel['consequence']}*\n\n"
+                  f"━━━━━━━━━━━━━━━━━━━━\n\n")
+
+    corps = (f"{entete}"
+             f"### 「 Épisode {ep} — {E['titre']} 」\n"
+             f"*{E['etape']}*\n\n"
+             f"━━━━━━━━━━━━━━━━━━━━\n\n"
+             f"{scene}")
 
     embed = discord.Embed(
-        title=f"🎬  {trame['titre']}  —  Épisode {ep}",
-        description=(f"### « {titre_arc} »\n"
-                     f"*{resume_arc}*\n\n"
-                     f"{suite}"
-                     f"━━━━━━━━━━━━━━━━━━\n\n"
-                     f"{ouverture}\n\n"
-                     f"{tension}\n\n"
-                     f"━━━━━━━━━━━━━━━━━━\n\n"
-                     f"### 🗳️  Que se passe-t-il ensuite ?\n"
-                     f"🅰️  {choix[0]}\n"
-                     f"🅱️  {choix[1]}\n"
-                     f"🇨  {choix[2]}\n\n"
-                     f"*Le serveur vote. Le prochain épisode reprendra là où vous l'aurez laissé.*"),
+        title=f"🎬  {tr['titre']}",
+        description=corps[:4000],
         color=0xff6b9d)
-    embed.set_footer(text=f"Épisode {ep}/{len(DRAMA_ARCS)}  ·  Vote ouvert jusqu'au prochain épisode")
+    embed.set_author(name=f"{tr['trope']}  ·  Épisode {ep}/{len(DRAMA_EPISODES)}")
+
+    if cliff:
+        embed.add_field(name="\u200b", value=f"### ⚡\n> *{cliff}*", inline=False)
+
+    embed.add_field(
+        name="🗳️  À vous d'écrire la suite",
+        value=(f"🅰️  {choix[0]}\n"
+               f"🅱️  {choix[1]}\n"
+               f"🇨  {choix[2]}\n\n"
+               f"*Votez ci-dessous. Le prochain épisode partira de votre choix.*\n"
+               f"💰 **150 pièces** à chaque votant."),
+        inline=False)
+    embed.set_footer(text=f"{tr['titre']} · Épisode {ep}/{len(DRAMA_EPISODES)} · "
+                          f"Le staff publiera la suite avec .drama-next")
 
     vue = DramaVoteView(choix)
-    msg = await salon.send(get_event_ping(guild, "everyone"), embed=embed, view=vue)
+    await salon.send(get_event_ping(guild, "everyone"), embed=embed, view=vue)
     s["episode"] = ep
-    s["vote_msg"] = msg.id
     s["vue"] = vue
     s["dernier_choix"] = choix
     save_all_data()
+
+DRAMA_CONSEQ = [
+    "Ce choix va peser sur la suite. Il n'y a pas de retour en arrière.",
+    "Personne ne mesure encore ce que ça implique. Eux non plus.",
+    "Une décision prise. Les conséquences arrivent au prochain épisode.",
+    "Le serveur a tranché. L'histoire ne pouvait pas aller ailleurs.",
+    "C'était le choix le plus risqué. Vous l'avez pris quand même.",
+    "Ce qui suit découle entièrement de cette décision.",
+]
 
 async def resoudre_episode(guild, salon):
     """Dépouille le vote et enchaîne sur l'épisode suivant"""
     s = drama_saison
     vue = s.get("vue")
-    if not vue or not vue.votes:
-        s["historique"].append("Le serveur n'a pas voté — l'histoire est restée en suspens.")
-    else:
-        compte = {}
+    rappel = None
+    if vue and vue.votes:
+        cnt = {}
         for v in vue.votes.values():
-            compte[v] = compte.get(v, 0) + 1
-        gagnant = max(compte, key=compte.get)
+            cnt[v] = cnt.get(v, 0) + 1
+        gagnant = max(cnt, key=cnt.get)
+        total = sum(cnt.values())
         texte = s["dernier_choix"][gagnant]
-        total = sum(compte.values())
-        s["historique"].append(texte)
-        consequence = random.choice(DRAMA_CONSEQUENCES.get(gagnant, DRAMA_CONSEQUENCES[0]))
-        detail = "\n".join(
-            f"{['🅰️','🅱️','🇨'][k]} {s['dernier_choix'][k]} — **{v}** vote(s) "
-            f"({v/total*100:.0f} %)" for k, v in sorted(compte.items(), key=lambda x: -x[1]))
-        await salon.send(embed=discord.Embed(
-            title=f"🗳️  Le verdict de l'épisode {s['episode']}",
-            description=(f"{detail}\n\n━━━━━━━━━━━━━━━━━━\n\n"
-                         f"### ➡️ {texte}\n\n*{consequence}*"),
-            color=0x9b59b6))
-        # récompense aux votants
+        s["historique"].append(f"Ép. {s['episode']} — {texte}")
+        detail = "  ·  ".join(
+            f"{['🅰️','🅱️','🇨'][k]} {v} ({v/total*100:.0f} %)"
+            for k, v in sorted(cnt.items()))
+        rappel = {"detail": detail, "gagnant": texte,
+                  "consequence": random.choice(DRAMA_CONSEQ)}
         for uid in vue.votes:
             economy_data[str(uid)]["coins"] += 150
-        gazette_fait("divers", f"Le serveur a voté « {texte} » dans l'épisode {s['episode']} du drama.", 2)
+            gazette_gain(str(uid), 150)
+        gazette_fait("divers",
+                     f"Le serveur a voté « {texte} » — épisode {s['episode']} du drama.", 2)
+    else:
+        s["historique"].append(f"Ép. {s['episode']} — Personne n'a voté, l'histoire a suivi son cours.")
+        rappel = {"detail": "Aucun vote enregistré.",
+                  "gagnant": "l'histoire a suivi son cours toute seule",
+                  "consequence": "Le silence est aussi une réponse."}
     s["vue"] = None
-    await asyncio.sleep(3)
-    await publier_episode(guild, salon)
+    await publier_episode(guild, salon, rappel=rappel)
 
 async def cloturer_saison(guild, salon):
-    """Fin de saison : récapitulatif complet"""
+    """Fin de saison — récapitulatif complet"""
     s = drama_saison
-    trame = DRAMA_TRAMES[s["trame"]]
-    recap = "\n".join(f"**Ép. {i+1}** — {t}" for i, t in enumerate(s["historique"]))
+    tr = DRAMA_TROPES[s["trope_cle"]]
+    a, b = _drama_perso(guild)
+    recap = "\n".join(f"**{t}**" for t in s["historique"]) or "*Aucun épisode joué.*"
     await salon.send(embed=discord.Embed(
-        title=f"🎬  {trame['titre']}  —  FIN DE SAISON",
-        description=(f"*{trame['pitch']}*\n\n"
-                     f"━━━━━━━━━━━━━━━━━━\n\n"
-                     f"**Voici l'histoire que vous avez écrite :**\n\n{recap}\n\n"
-                     f"━━━━━━━━━━━━━━━━━━\n\n"
-                     f"*Cette saison n'existe que sur ce serveur. Merci d'y avoir participé.*"),
-        color=0xf1c40f).set_footer(text="Une nouvelle saison démarrera bientôt — avec une histoire différente."))
+        title=f"🎬  {tr['titre']}  —  FIN DE SAISON",
+        description=(f"*{tr['accroche']}*\n\n"
+                     f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                     f"🎭 **{a}** — {tr['role_a']}\n"
+                     f"🎭 **{b}** — {tr['role_b']}\n\n"
+                     f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                     f"### L'histoire que vous avez écrite\n\n{recap}\n\n"
+                     f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                     f"*Cette saison n'existe que sur ce serveur. "
+                     f"Personne d'autre n'aura jamais lu celle-ci.*"),
+        color=0xf1c40f).set_footer(text="Le staff peut lancer une nouvelle saison avec .drama-start"))
     s["en_cours"] = False
     s["episode"] = 0
     save_all_data()
 
-
-
 @bot.command(name="drama-start", aliases=["dramastart", "lancerdrama"])
 @commands.has_permissions(manage_guild=True)
-async def dramastart_cmd(ctx, trame: str = None):
-    """Lance une saison du Drama Collectif — .drama-start [trame] (staff)"""
+async def dramastart_cmd(ctx, trope: str = None, *membres: discord.Member):
+    """Lance une saison — .drama-start [trope] [@perso1 @perso2] (staff)"""
     s = drama_saison
     if s["en_cours"]:
-        return await ctx.send(f"🎬 **{DRAMA_TRAMES[s['trame']]['titre']}** est déjà en cours "
-                              f"(épisode {s['episode']}). Utilise `.drama-stop` pour l'arrêter.")
-    if trame and trame.lower() not in DRAMA_TRAMES:
-        lignes = "\n".join(f"`{k}` — **{v['titre']}**\n└ *{v['pitch']}*" for k, v in DRAMA_TRAMES.items())
-        return await ctx.send(embed=discord.Embed(
-            title="🎬 Choisis une trame de saison",
-            description=f"{lignes}\n\n*`.drama-start` sans argument tire une trame au hasard.*",
-            color=0xff6b9d))
-    cle = trame.lower() if trame else random.choice(list(DRAMA_TRAMES))
-    trame_d = DRAMA_TRAMES[cle]
+        return await ctx.send(
+            f"🎬 **{DRAMA_TROPES[s['trope_cle']]['titre']}** est déjà en cours "
+            f"(épisode {s['episode']}/{len(DRAMA_EPISODES)}).\n"
+            f"`.drama-next` pour la suite · `.drama-stop` pour clôturer.")
 
-    membres = [m for m in ctx.guild.members if not m.bot and str(m.id) in xp_data]
-    if len(membres) < 2:
-        membres = [m for m in ctx.guild.members if not m.bot]
-    if len(membres) < 2:
-        return await ctx.send("❌ Il faut au moins 2 membres pour lancer une saison.")
-    a, b = random.sample(membres, 2)
+    if trope and trope.lower() not in DRAMA_TROPES:
+        pages = []
+        items = list(DRAMA_TROPES.items())
+        for i in range(0, len(items), 5):
+            e = discord.Embed(
+                title="🎬 Choisis une histoire",
+                description="*Chaque trope donne une saison complètement différente.*",
+                color=0xff6b9d)
+            for k, v in items[i:i+5]:
+                e.add_field(name=f"{v['trope']} — {v['titre']}",
+                            value=f"`{k}`\n*{v['accroche']}*\n{v['pitch'][:180]}…", inline=False)
+            e.set_footer(text="`.drama-start <trope>` · sans argument, une histoire est tirée au sort")
+            pages.append(e)
+        vue = PageView(pages, ctx.author, timeout=180) if len(pages) > 1 else None
+        return await ctx.send(embed=pages[0], view=vue)
 
-    s.update({"titre": trame_d["titre"], "episode": 0, "en_cours": True, "trame": cle,
+    cle = trope.lower() if trope else random.choice(list(DRAMA_TROPES))
+    tr = DRAMA_TROPES[cle]
+
+    # Casting : mentionné, sinon tiré au sort parmi les membres actifs
+    if len(membres) >= 2:
+        a, b = membres[0], membres[1]
+    else:
+        pool = [m for m in ctx.guild.members if not m.bot and str(m.id) in xp_data] or \
+               [m for m in ctx.guild.members if not m.bot]
+        if len(pool) < 2:
+            return await ctx.send("❌ Il faut au moins 2 membres.")
+        a, b = random.sample(pool, 2)
+
+    s.update({"titre": tr["titre"], "episode": 0, "en_cours": True, "trope_cle": cle,
               "casting": {"a": a.mention, "b": b.mention}, "historique": [], "vue": None})
     save_all_data()
 
     salon = (ctx.guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None) or ctx.channel
-    await salon.send(embed=discord.Embed(
-        title=f"🎬  NOUVELLE SAISON  —  {trame_d['titre']}",
-        description=(f"*{trame_d['pitch']}*\n\n"
-                     f"━━━━━━━━━━━━━━━━━━\n\n"
-                     f"**Au casting cette saison :**\n"
-                     f"🎭 {a.mention} — *{trame_d['roles'][0]}*\n"
-                     f"🎭 {b.mention} — *{trame_d['roles'][1]}*\n\n"
-                     f"━━━━━━━━━━━━━━━━━━\n\n"
-                     f"**{len(DRAMA_ARCS)} épisodes**, un par semaine.\n"
-                     f"À la fin de chaque épisode, **le serveur vote** pour décider de la suite.\n"
-                     f"Les votants gagnent **150 pièces**.\n\n"
-                     f"*Personne ne sait comment ça va finir. Pas même moi.*"),
-        color=0xff6b9d).set_footer(text="Le premier épisode arrive tout de suite."))
-    await asyncio.sleep(4)
+    await salon.send(get_event_ping(ctx.guild, "everyone"), embed=discord.Embed(
+        title=f"🎬  {tr['titre']}",
+        description=(f"## « {tr['accroche']} »\n\n"
+                     f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                     f"{tr['pitch']}\n\n"
+                     f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                     f"### 🎭 Au casting\n"
+                     f"**{a.mention}** — *{tr['role_a']}*\n"
+                     f"**{b.mention}** — *{tr['role_b']}*\n\n"
+                     f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                     f"**{len(DRAMA_EPISODES)} épisodes.** Pas de coup de foudre, "
+                     f"pas de raccourci — ils partent de zéro et se détestent poliment.\n\n"
+                     f"À la fin de chaque épisode, **vous votez**. Le suivant reprendra "
+                     f"exactement là où votre choix l'aura mené.\n"
+                     f"💰 **150 pièces** à chaque votant.\n\n"
+                     f"*Personne ne connaît la fin. Elle n'est pas écrite.*"),
+        color=0xff6b9d).set_author(name=tr["trope"]).set_footer(
+            text="Le premier épisode arrive dans quelques secondes…"))
+    await asyncio.sleep(5)
     await publier_episode(ctx.guild, salon)
+
 
 @bot.command(name="drama-next", aliases=["dramanext", "episodesuivant"])
 @commands.has_permissions(manage_guild=True)
@@ -10211,6 +10452,13 @@ async def dramanext_cmd(ctx):
     """Dépouille le vote et publie l'épisode suivant — .drama-next (staff)"""
     if not drama_saison["en_cours"]:
         return await ctx.send("❌ Aucune saison en cours. Lance-la avec `.drama-start`.")
+    if drama_saison["episode"] == 0:
+        salon0 = (ctx.guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None) or ctx.channel
+        return await publier_episode(ctx.guild, salon0)
+    vue = drama_saison.get("vue")
+    nb = len(vue.votes) if vue else 0
+    await ctx.send(f"🗳️ Dépouillement de l'épisode {drama_saison['episode']} — "
+                   f"**{nb} vote(s)**. L'épisode suivant arrive…", delete_after=10)
     salon = (ctx.guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None) or ctx.channel
     await resoudre_episode(ctx.guild, salon)
 
@@ -10224,56 +10472,58 @@ async def dramastop_cmd(ctx):
     await cloturer_saison(ctx.guild, salon)
 
 @bot.command(name="saison", aliases=["dramacollectif", "masaison"])
-async def drama_info_cmd(ctx):
-    """Où en est la saison — .drama"""
+async def saison_cmd(ctx):
+    """Où en est la saison — .saison"""
     s = drama_saison
     if not s["en_cours"]:
+        exemples = "\n".join(f"{v['trope']} **{v['titre']}** — *{v['accroche']}*"
+                             for v in list(DRAMA_TROPES.values())[:5])
         return await ctx.send(embed=discord.Embed(
             title="🎬 Le Drama Collectif",
-            description=("Aucune saison en cours actuellement.\n\n"
-                         "**Le principe :** le bot raconte une série en épisodes hebdomadaires, "
-                         "avec des **membres du serveur comme personnages**. "
-                         "À la fin de chaque épisode, le serveur **vote** pour décider de la suite.\n\n"
-                         f"**{len(DRAMA_TRAMES)} histoires différentes** sont possibles — "
-                         f"campus, entreprise, village de bord de mer, hôpital, agence d'idols, "
-                         f"Joseon, fantastique, voyage dans le temps.\n\n"
-                         "*Le staff peut en lancer une avec `.drama-start`.*"),
+            description=("Aucune saison en cours.\n\n"
+                         "**Le principe :** une romance en **12 épisodes**, avec deux membres du "
+                         "serveur comme personnages. Pas de coup de foudre — une vraie progression, "
+                         "de la friction du premier jour jusqu'à la dernière scène.\n\n"
+                         "À la fin de chaque épisode, **le serveur vote**. Le suivant reprend "
+                         "exactement là où votre choix l'a mené.\n\n"
+                         f"### {len(DRAMA_TROPES)} histoires possibles\n{exemples}\n"
+                         f"*…et {len(DRAMA_TROPES)-5} autres.*\n\n"
+                         "*Le staff lance une saison avec `.drama-start`.*"),
             color=0x95a5a6))
-    trame = DRAMA_TRAMES[s["trame"]]
-    recap = ("\n".join(f"**Ép. {i+1}** — {t}" for i, t in enumerate(s["historique"]))
-             if s["historique"] else "*La saison vient de commencer.*")
-    await ctx.send(embed=discord.Embed(
-        title=f"🎬 {trame['titre']}",
-        description=(f"*{trame['pitch']}*\n\n"
-                     f"**Épisode {s['episode']}/{len(DRAMA_ARCS)}**\n"
-                     f"🎭 {s['casting'].get('a','?')} · {s['casting'].get('b','?')}\n\n"
-                     f"━━━━━━━━━━━━━━━━━━\n\n**L'histoire jusqu'ici :**\n{recap}"),
-        color=0xff6b9d))
+    tr = DRAMA_TROPES[s["trope_cle"]]
+    recap = "\n".join(f"▪️ {t}" for t in s["historique"]) or "*Le premier vote est en cours.*"
+    ep = s["episode"]
+    f = int(ep / len(DRAMA_EPISODES) * 12)
+    embed = discord.Embed(
+        title=f"🎬 {tr['titre']}",
+        description=(f"*« {tr['accroche']} »*\n\n"
+                     f"`{'▰'*f}{'▱'*(12-f)}`  **Épisode {ep}/{len(DRAMA_EPISODES)}**\n\n"
+                     f"🎭 {s['casting'].get('a','?')} — *{tr['role_a']}*\n"
+                     f"🎭 {s['casting'].get('b','?')} — *{tr['role_b']}*\n\n"
+                     f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                     f"### Vos choix jusqu'ici\n{recap}"),
+        color=0xff6b9d)
+    embed.set_author(name=tr["trope"])
+    if ep and ep <= len(DRAMA_EPISODES):
+        embed.set_footer(text=f"Prochain épisode : {DRAMA_EPISODES[ep-1]['titre'] if ep < len(DRAMA_EPISODES) else 'la fin'}")
+    await ctx.send(embed=embed)
 
-@tasks.loop(minutes=1)
-async def drama_task():
-    """Publie un épisode chaque lundi à 19 h"""
-    if not drama_saison["en_cours"]:
-        return
-    now = datetime.datetime.now()
-    if now.weekday() != 0 or now.hour != 19 or now.minute != 0:
-        return
-    cle = f"drama_{now.date()}"
-    if planning_last_run.get(cle):
-        return
-    planning_last_run[cle] = True
-    for guild in bot.guilds:
-        salon = ((guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None)
-                 or guild.system_channel)
-        if not salon:
-            continue
-        try:
-            if drama_saison["episode"] == 0:
-                await publier_episode(guild, salon)
-            else:
-                await resoudre_episode(guild, salon)
-        except Exception as e:
-            print(f"[Drama] {e}")
+@bot.command(name="drama-tropes", aliases=["dramatropes", "histoires"])
+async def dramatropes_cmd(ctx):
+    """Toutes les histoires possibles — .drama-tropes"""
+    items = list(DRAMA_TROPES.items())
+    pages = []
+    for i in range(0, len(items), 4):
+        e = discord.Embed(title="🎬 Les histoires du Drama Collectif",
+                          description="*Chaque trope donne une saison entièrement différente.*",
+                          color=0xff6b9d)
+        for k, v in items[i:i+4]:
+            e.add_field(name=f"{v['trope']}  ·  {v['titre']}",
+                        value=f"*« {v['accroche']} »*\n{v['pitch']}", inline=False)
+        e.set_footer(text=f"{len(DRAMA_TROPES)} histoires · {len(DRAMA_EPISODES)} épisodes chacune")
+        pages.append(e)
+    await ctx.send(embed=pages[0], view=PageView(pages, ctx.author, timeout=180))
+
 
 # ============================================================
 #  🎁 CALENDRIER DE L'AVENT — du 1er au 24 décembre
@@ -16460,7 +16710,6 @@ async def on_ready():
     autosave.start()
     ambiance_nuit.start()
     gazette_task.start()
-    drama_task.start()
     nettoyer_salons_inactifs.start()
     await bot.change_presence(
         activity=discord.Activity(type=discord.ActivityType.watching, name="🎬 Kdrama • .help")
