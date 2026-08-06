@@ -988,6 +988,8 @@ ROASTS_QG = [
 async def on_message(message):
     if message.author.bot:
         return
+    gazette_note(str(message.author.id), "messages")
+
     # Activité dans les salons temporaires
     if message.channel.id in salons_temporaires:
         import time as _t
@@ -1160,6 +1162,8 @@ def build_help_pages(guild, is_admin=False):
         "`.pet` — Son état complet • `.pet liste` — Tous les tiens\n"
         "`.nourrir` 🍖 `.laver` 🛁 `.promener` 🚶 `.jouer` 🎾 `.dormir` 😴 `.caresser` 🫶\n"
         "`.petvisite @ami` — Fais rencontrer vos deux compagnons 🐾\n"
+        "`.liens [@membre]` — Tes **liens** avec les autres 🤝\n"
+        "`.topliens` — Les duos les plus soudés du serveur\n"
         "*Un compagnon négligé voit son bonus divisé par deux !*\n"
         "*Pour en obtenir un : `.shop` → page 🐾 Compagnons, puis `.acheter <nom>`*\n"
         "`.pet equiper <nom>` • `.pet nourrir` — +25 XP"
@@ -1291,6 +1295,12 @@ def build_help_pages(guild, is_admin=False):
         "`.memory [facile|normal|difficile]` — Retrouve les paires 🃏\n"
         "`.memorystop` — Abandonner la partie\n"
         "`.risque` — Double ou perds tout, jusqu'à 6 paliers *(1×/heure)*\n"
+        "`.saison` — 🎬 **Le Drama Collectif** : la série écrite par le serveur\n"
+        "`.avent` — Le **calendrier de l'Avent** 🎄 *(1er → 24 décembre)*\n"
+        "`.ouvrircase` — Ouvrir la case du jour · `.topavent` — Les plus assidus\n"
+        "`.gazette` — 📰 **La Gazette du QG** *(publiée dimanche 20 h)*\n"
+        "`.nuit` — L'état du **Mode Nuit** 🌙 *(minuit → 6 h)*\n"
+        "`.confession <texte>` — Confession anonyme *(la nuit uniquement)*\n"
         "`.puissance4 @membre` — Puissance 4 en duel *(250-450 p au vainqueur)*\n"
         "`.p4stop` — Annuler la partie\n"
         "`.rps <choix>` — Pierre / feuille / ciseaux\n"
@@ -1360,7 +1370,11 @@ def build_help_pages(guild, is_admin=False):
         "`.lock` / `.unlock` — Verrouiller un salon"
     ), inline=False)
     e.add_field(name="📢 Communication", value=(
-        "`.announce <message>` — Annonce officielle"
+        "`.announce <message>` — Annonce officielle\n"
+        "`.forcegazette` — Publier la gazette immédiatement\n"
+        "`.drama-start [trame]` — Lancer une saison du Drama Collectif\n"
+        "`.drama-next` — Dépouiller le vote et publier l'épisode suivant\n"
+        "`.drama-stop` — Clôturer la saison"
     ), inline=False)
     e.add_field(name="📖 Aide", value=(
         "`.helpadmin` — Cette aide staff  ·  `.help` — L'aide des joueurs"
@@ -1978,6 +1992,7 @@ async def emoji_cmd(ctx):
                 gain = random.randint(80, 140)
                 uid = str(msg.author.id)
                 economy_data[uid]["coins"] += gain
+                gazette_gain(uid, gain)
                 xp_data[uid]["xp"] += 25
                 track_stat(uid, "quiz_ok", channel=salon)
                 check_coins_achievements(uid, salon)
@@ -2102,6 +2117,7 @@ class MemoryView(ui.View):
                 gain = base + bonus
                 uid = str(self.joueur.id)
                 economy_data[uid]["coins"] += gain
+                gazette_gain(uid, gain)
                 xp_data[uid]["xp"] += 40
                 check_coins_achievements(uid, self.salon)
                 active_memory.pop(self.salon.id, None)
@@ -2249,10 +2265,12 @@ class Puissance4View(ui.View):
             gagnant = self.joueurs[self.tour]
             gain = random.randint(250, 450)
             economy_data[str(gagnant.id)]["coins"] += gain
+            gazette_gain(str(gagnant.id), gain)
             xp_data[str(gagnant.id)]["xp"] += 40
             check_coins_achievements(str(gagnant.id), self.channel)
             try: missions_progress[str(gagnant.id)]["wins"] += 1
             except Exception: pass
+            gazette_note(str(gagnant.id), "duels_gagnes")
             for it in self.children: it.disabled = True
             active_p4.pop(self.channel.id, None)
             await interaction.response.edit_message(
@@ -2302,6 +2320,7 @@ async def puissance4_cmd(ctx, adversaire: discord.Member = None):
         return await msg.edit(embed=discord.Embed(
             description=f"❌ **{adversaire.display_name}** n'a pas relevé le défi.", color=0x95a5a6), view=None)
 
+    ajouter_lien(str(ctx.author.id), str(adversaire.id), "duel")
     jeu = Puissance4View(ctx.author, adversaire, ctx.channel)
     active_p4[ctx.channel.id] = jeu
     jeu.message = await ctx.send(embed=jeu.build(), view=jeu)
@@ -2497,6 +2516,7 @@ class DrapeauView(ui.View):
                         self.gagnant = interaction.user
                         gain = random.randint(40, 90)
                         economy_data[str(uid)]["coins"] += gain
+                        gazette_gain(str(uid), gain)
                         xp_data[str(uid)]["xp"] += 25
                         track_stat(str(uid), "quiz_ok", channel=self.salon)
                         for it in self.children:
@@ -2756,6 +2776,10 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
         # Donner des pièces au gagnant
         winner_id = next(pid for pid, data in final_scores.items() if data["name"] == winner["name"])
         prize = random.randint(80, 150)
+        for _p in all_players:
+            for _q in all_players:
+                if _p.id < _q.id:
+                    ajouter_lien(str(_p.id), str(_q.id), "quiz")
         economy_data[str(winner_id)]["coins"] += prize
         xp_data[str(winner_id)]["xp"] += 50
         try: missions_progress[str(winner_id)]["wins"] += 1
@@ -3059,6 +3083,7 @@ async def daily(ctx):
     if double_daily.pop(uid, None):
         gain *= 2
     economy_data[uid]["coins"] += gain
+    gazette_gain(uid, gain)
     track_stat(uid, "dailies", channel=ctx.channel)
     check_coins_achievements(uid, ctx.channel)
     cooldowns[f"daily_{uid}"] = now_dt
@@ -3394,6 +3419,10 @@ def gacha_tirer(uid=None):
     if nuit_chasse_active:
         poids["Mythique"] *= 3
         poids["Légendaire"] *= 2
+    # 🌙 Mode Nuit : les raretés élevées sont plus accessibles entre minuit et 6 h
+    if est_nuit():
+        for r in ("Mythique", "Légendaire", "Épique"):
+            poids[r] = int(poids[r] * NUIT_BONUS_ROLL)
     poids_total = sum(poids[ANIME_CARDS_DB[k]["rarete"]] for k in pool)
     r = random.randint(1, poids_total)
     cumul = 0
@@ -3522,6 +3551,12 @@ def try_claim(uid, key, guild_id):
         return False, f"⏳ Ton claim est en recharge — encore **{reste} min**."
     claimed_cards[key] = uid
     gacha_collections[uid][key] = {"fusion": 0}
+    gazette_note(uid, "cartes")
+    _cc = ANIME_CARDS_DB[key]
+    if _cc["rarete"] in ("Légendaire", "Mythique"):
+        _poids = {"Mythique": 10, "Légendaire": 5}[_cc["rarete"]]
+        gazette_fait("carte", f"**<@{uid}>** a fait tomber {RARETE_EMOJI.get(_cc['rarete'],'')} "
+                              f"**{_cc['nom']}** — une {_cc['rarete']} !", _poids)
     claim_cooldown[uid] = now
     economy_data[uid]["coins"] += 10
     return True, "ok"
@@ -4254,6 +4289,7 @@ async def travailler_cmd(ctx):
     if _pb:
         gain = int(gain * (1 + _pb / 100))
     economy_data[uid]["coins"] += gain
+    gazette_gain(uid, gain)
     travailler_cooldowns[uid] = now
     await ctx.send(embed=discord.Embed(
         description=f"{job}\n💰 **{ctx.author.display_name}** a gagné **{gain} pièces** ! Total : {economy_data[uid]['coins']}",
@@ -4341,10 +4377,12 @@ async def slot_cmd(ctx, mise: str = "50"):
     if r1 == r2 == r3:
         gain = mise * (20 if casino_boost_actif else 10)
         economy_data[uid]["coins"] += gain
+        gazette_gain(uid, gain)
         embed = discord.Embed(title="🎰 JACKPOT !!!", description=f"**{r1} {r2} {r3}**\n\n🎉 **+{gain} pièces !**", color=0xf1c40f)
     elif r1==r2 or r2==r3 or r1==r3:
         gain = mise * (4 if casino_boost_actif else 2)
         economy_data[uid]["coins"] += gain
+        gazette_gain(uid, gain)
         embed = discord.Embed(title="🎰 Paire !", description=f"**{r1} {r2} {r3}**\n\n✅ **+{gain} pièces !**", color=0x2ecc71)
     else:
         embed = discord.Embed(title="🎰 Raté...", description=f"**{r1} {r2} {r3}**\n\n💸 Perdu **{mise} pièces**", color=0xe74c3c)
@@ -4720,6 +4758,7 @@ async def acheter_cmd(ctx, item_id: str = None):
             [0, 1500, 3000, 4500, 5500, 8000, 12000, 25000],
             weights=[8, 16, 22, 20, 14, 12, 6, 2])[0]
         economy_data[uid]["coins"] += gain
+        gazette_gain(uid, gain)
         check_coins_achievements(uid, ctx.channel)
         net = gain - item["prix"]
         if gain == 0:
@@ -6192,6 +6231,7 @@ async def run_question_eclair(channel, guild):
                 place = len(gagnants)
                 gain = rewards[place]
                 economy_data[str(msg.author.id)]["coins"] += gain
+                gazette_gain(str(msg.author.id), gain)
                 gagnants.append(msg.author)
                 unlock_achievement(str(msg.author.id), "eclair_win", channel)
                 medal = ["🥇", "🥈", "🥉"][place]
@@ -6410,6 +6450,7 @@ async def run_premier_arrive(channel, guild):
     try:
         msg = await bot.wait_for("message", check=check, timeout=90)
         economy_data[str(msg.author.id)]["coins"] += gain
+        gazette_gain(str(msg.author.id), gain)
         check_coins_achievements(str(msg.author.id), cible)
         await cible.send(embed=discord.Embed(
             description=(f"🏆 **{msg.author.display_name}** dégaine le plus vite !\n"
@@ -6455,6 +6496,7 @@ async def run_chiffre_mystere(channel, guild):
         essais += 1
         if n == secret:
             economy_data[str(msg.author.id)]["coins"] += gain
+            gazette_gain(str(msg.author.id), gain)
             check_coins_achievements(str(msg.author.id), cible)
             await cible.send(embed=discord.Embed(
                 title="🎯 TROUVÉ !",
@@ -6491,6 +6533,7 @@ async def run_pluie_pieces(channel, guild):
             gain = random.randint(150, 600)
             gagnants[uid] = gain
             economy_data[uid]["coins"] += gain
+            gazette_gain(uid, gain)
             check_coins_achievements(uid, cible)
             await interaction.response.send_message(f"💸 Tu attrapes **{gain:,} pièces** !", ephemeral=True)
 
@@ -6556,6 +6599,7 @@ async def run_morpion_geant(channel, guild):
         classement = sorted(paris.items(), key=lambda x: abs(x[1][0] - secret))
         uid_g, (n_g, nom_g) = classement[0]
         economy_data[uid_g]["coins"] += gain
+        gazette_gain(uid_g, gain)
         check_coins_achievements(uid_g, cible)
         détail = "\n".join(f"{'🥇' if i==0 else '🥈' if i==1 else '🥉' if i==2 else '▪️'} **{v[1]}** — {v[0]} "
                             f"*(écart {abs(v[0]-secret)})*"
@@ -6731,7 +6775,7 @@ class TapRaceView(ui.View):
             lignes.append(f"{medaille} **{self.joueurs[jid].display_name}**\n`{barre}` {n}/{self.LIGNE} 👆")
         return discord.Embed(
             title="🏁 TAP RACE — EN COURSE !",
-            description=(fin or "**Clique ton bouton le plus vite possible !**") + "\n\n" + "\n".join(lignes),
+            description=(fin or "**Clique ton bouton le plus vite possible !**\n*Le classement se met à jour toutes les 1,5 s — continue de tapoter sans t'arrêter.*") + "\n\n" + "\n".join(lignes),
             color=0x2ecc71 if fin else 0xe67e22)
 
 async def run_tap_race(channel, guild):
@@ -6778,11 +6822,13 @@ async def run_tap_race(channel, guild):
     async def rafraichir():
         """Un seul edit par seconde, et seulement si quelque chose a changé"""
         while not course.is_finished():
-            await asyncio.sleep(1)
+            await asyncio.sleep(1.5)
             if course.dirty and not course.is_finished():
                 course.dirty = False
                 try:
-                    await course.message.edit(embed=course.build(), view=course)
+                    # On ne réenvoie QUE l'embed : renvoyer la vue reconstruirait
+                    # les boutons et les ferait sauter sous le doigt des joueurs.
+                    await course.message.edit(embed=course.build())
                 except Exception:
                     pass
     tache = asyncio.create_task(rafraichir())
@@ -6792,6 +6838,7 @@ async def run_tap_race(channel, guild):
     for it in course.children: it.disabled = True
     if course.gagnant:
         economy_data[str(course.gagnant.id)]["coins"] += gain
+        gazette_gain(str(course.gagnant.id), gain)
         xp_data[str(course.gagnant.id)]["xp"] += 50
         check_coins_achievements(str(course.gagnant.id), cible)
         # lot de consolation pour les autres
@@ -7020,6 +7067,7 @@ async def run_premier_clic(channel, guild):
     await view.wait()
     if view.gagnant:
         economy_data[str(view.gagnant.id)]["coins"] += gain
+        gazette_gain(str(view.gagnant.id), gain)
         check_coins_achievements(str(view.gagnant.id), cible)
         extra = f"\n\n*{len(view.elimines)} personne(s) éliminée(s) au faux départ 😂*" if view.elimines else ""
         await cible.send(embed=discord.Embed(
@@ -7069,6 +7117,7 @@ async def run_reaction_eclair(channel, guild):
     try:
         _, user = await bot.wait_for("reaction_add", check=check, timeout=45)
         economy_data[str(user.id)]["coins"] += gain
+        gazette_gain(str(user.id), gain)
         check_coins_achievements(str(user.id), cible)
         await cible.send(embed=discord.Embed(
             description=f"🏆 **{user.display_name}** a réagi le premier avec {bon} — **+{gain:,} pièces** !",
@@ -7121,6 +7170,7 @@ async def run_intrus(channel, guild):
         l, co = (int(x) for x in msg.content.split())
         if l == ligne_rep and co == col_rep:
             economy_data[str(msg.author.id)]["coins"] += gain
+            gazette_gain(str(msg.author.id), gain)
             check_coins_achievements(str(msg.author.id), cible)
             return await _fin_intrus(cible, salon, embed=discord.Embed(
                 title="🎯 Trouvé !",
@@ -7181,6 +7231,7 @@ async def run_qui_suis_je(channel, guild):
         if _devine_valide(msg.content, perso["nom"]):
             gain = max(300, gain_max - idx * 300)
             economy_data[str(msg.author.id)]["coins"] += gain
+            gazette_gain(str(msg.author.id), gain)
             check_coins_achievements(str(msg.author.id), cible)
             await cible.send(embed=discord.Embed(
                 title="🎭 Trouvé !",
@@ -7480,15 +7531,42 @@ ENIGMES = [
 ]
 
 MOTS_MELANGES = [
-    ("naruto","📺 Animé"),("goblin","🎭 K-Drama"),("vincenzo","🎭 K-Drama"),("tanjiro","👤 Personnage"),
-    ("kdrama","🌍 Culture"),("kimchi","🌍 Culture"),("hallyu","🌍 Culture"),("bibimbap","🌍 Culture"),
-    ("shinigami","📺 Animé"),("pourfendeur","📺 Animé"),("akatsuki","📺 Animé"),("rasengan","📺 Animé"),
-    ("kamehameha","📺 Animé"),("bankai","📺 Animé"),("hokage","📺 Animé"),("sharingan","📺 Animé"),
-    ("kingdom","🎭 K-Drama"),("itaewon","🎭 K-Drama"),("hospital","🎭 K-Drama"),("signal","🎭 K-Drama"),
-    ("nezuko","👤 Personnage"),("sasuke","👤 Personnage"),("mikasa","👤 Personnage"),("saitama","👤 Personnage"),
-    ("makima","👤 Personnage"),("frieren","👤 Personnage"),("hermione","👤 Personnage"),("dumbledore","👤 Personnage"),
-    ("seoul","🌍 Culture"),("hangul","🌍 Culture"),("tteokbokki","🌍 Culture"),("makgeolli","🌍 Culture"),
-    ("manhwa","🌍 Culture"),("chapeaudepaille","📺 Animé"),("titancolossal","📺 Animé"),("domaine","📺 Animé"),
+    # ── 🏠 Objets du quotidien ──
+    ("oreiller","🏠 Objet"),("couverture","🏠 Objet"),("armoire","🏠 Objet"),("fauteuil","🏠 Objet"),
+    ("bouilloire","🏠 Objet"),("parapluie","🏠 Objet"),("serviette","🏠 Objet"),("brosse","🏠 Objet"),
+    ("miroir","🏠 Objet"),("horloge","🏠 Objet"),("casserole","🏠 Objet"),("tiroir","🏠 Objet"),
+    ("rideau","🏠 Objet"),("bougie","🏠 Objet"),("valise","🏠 Objet"),("clavier","🏠 Objet"),
+    ("telephone","🏠 Objet"),("lampe","🏠 Objet"),("ciseaux","🏠 Objet"),("balai","🏠 Objet"),
+    # ── 🍽️ Nourriture ──
+    ("chocolat","🍽️ Nourriture"),("fraise","🍽️ Nourriture"),("banane","🍽️ Nourriture"),
+    ("baguette","🍽️ Nourriture"),("fromage","🍽️ Nourriture"),("pasteque","🍽️ Nourriture"),
+    ("croissant","🍽️ Nourriture"),("myrtille","🍽️ Nourriture"),("courgette","🍽️ Nourriture"),
+    ("brocoli","🍽️ Nourriture"),("saucisse","🍽️ Nourriture"),("gaufre","🍽️ Nourriture"),
+    ("kimchi","🍽️ Nourriture"),("bibimbap","🍽️ Nourriture"),("tteokbokki","🍽️ Nourriture"),
+    # ── 🌍 Capitales ──
+    ("seoul","🌍 Capitale"),("tokyo","🌍 Capitale"),("madrid","🌍 Capitale"),("lisbonne","🌍 Capitale"),
+    ("bruxelles","🌍 Capitale"),("varsovie","🌍 Capitale"),("helsinki","🌍 Capitale"),("athenes","🌍 Capitale"),
+    ("ottawa","🌍 Capitale"),("canberra","🌍 Capitale"),("bangkok","🌍 Capitale"),("nairobi","🌍 Capitale"),
+    ("santiago","🌍 Capitale"),("brasilia","🌍 Capitale"),("budapest","🌍 Capitale"),("stockholm","🌍 Capitale"),
+    # ── 🐾 Animaux ──
+    ("elephant","🐾 Animal"),("crocodile","🐾 Animal"),("papillon","🐾 Animal"),("herisson","🐾 Animal"),
+    ("ecureuil","🐾 Animal"),("dauphin","🐾 Animal"),("autruche","🐾 Animal"),("panthere","🐾 Animal"),
+    ("tortue","🐾 Animal"),("mouette","🐾 Animal"),("renard","🐾 Animal"),("baleine","🐾 Animal"),
+    # ── 💼 Métiers ──
+    ("boulanger","💼 Métier"),("infirmier","💼 Métier"),("architecte","💼 Métier"),("plombier","💼 Métier"),
+    ("pompier","💼 Métier"),("libraire","💼 Métier"),("jardinier","💼 Métier"),("comedien","💼 Métier"),
+    ("photographe","💼 Métier"),("cuisinier","💼 Métier"),
+    # ── 🌦️ Nature & météo ──
+    ("montagne","🌦️ Nature"),("orage","🌦️ Nature"),("brouillard","🌦️ Nature"),("cascade","🌦️ Nature"),
+    ("coquillage","🌦️ Nature"),("tempete","🌦️ Nature"),("arcenciel","🌦️ Nature"),("volcan","🌦️ Nature"),
+    ("riviere","🌦️ Nature"),("desert","🌦️ Nature"),
+    # ── 🎨 Divers ──
+    ("aventure","🎨 Divers"),("souvenir","🎨 Divers"),("bibliotheque","🎨 Divers"),("vacances","🎨 Divers"),
+    ("musique","🎨 Divers"),("voyage","🎨 Divers"),("chaussure","🎨 Divers"),("ordinateur","🎨 Divers"),
+    ("anniversaire","🎨 Divers"),("chocolatine","🎨 Divers"),
+    # ── 📺 Un peu de culture QG ──
+    ("goblin","🎭 K-Drama"),("vincenzo","🎭 K-Drama"),("kingdom","🎭 K-Drama"),("itaewon","🎭 K-Drama"),
+    ("naruto","📺 Animé"),("shinigami","📺 Animé"),("pourfendeur","📺 Animé"),("hokage","📺 Animé"),
 ]
 
 PAYS_QUIZ = [
@@ -7558,6 +7636,7 @@ class VraiFauxView(ui.View):
                 self.gagnant = interaction.user
                 gain = random.randint(300, 600)
                 economy_data[str(uid)]["coins"] += gain
+                gazette_gain(str(uid), gain)
                 check_coins_achievements(str(uid), self.salon)
                 for it in self.children: it.disabled = True
                 await interaction.response.edit_message(view=self)
@@ -7653,6 +7732,7 @@ async def run_enigme(channel, guild):
             continue
         if check_answer(msg.content, reponse):
             economy_data[str(msg.author.id)]["coins"] += gain
+            gazette_gain(str(msg.author.id), gain)
             check_coins_achievements(str(msg.author.id), cible)
             await cible.send(embed=discord.Embed(
                 title="🧩 Résolue !",
@@ -7700,6 +7780,7 @@ async def run_mot_melange(channel, guild):
             break
         if normalize_str(msg.content) == normalize_str(mot):
             economy_data[str(msg.author.id)]["coins"] += gain
+            gazette_gain(str(msg.author.id), gain)
             check_coins_achievements(str(msg.author.id), cible)
             await cible.send(embed=discord.Embed(
                 description=f"🎉 **{msg.author.display_name}** trouve — **{mot.upper()}** !\n💰 +{gain:,} pièces",
@@ -7744,6 +7825,7 @@ async def run_devine_pays(channel, guild):
             break
         if check_answer(msg.content, rep):
             economy_data[str(msg.author.id)]["coins"] += gain
+            gazette_gain(str(msg.author.id), gain)
             check_coins_achievements(str(msg.author.id), cible)
             await cible.send(embed=discord.Embed(
                 description=f"🎉 **{msg.author.display_name}** trouve — **{rep}** !\n💰 +{gain:,} pièces",
@@ -7891,6 +7973,7 @@ async def run_bombe(channel, guild):
         mentions = "\n".join(f"<@{u}>" for u in gagnants)
         for u in gagnants:
             economy_data[u]["coins"] += gain
+            gazette_gain(u, gain)
             check_coins_achievements(u, cible)
         phrase = random.choice(BOMBE_GAGNANT).format(j=f"<@{gagnants[0]}>")
         embed = discord.Embed(
@@ -8472,52 +8555,70 @@ async def scheduler_task():
                     await trigger_scheduled_event(guild, ev["event"])
 
 @bot.command(name="addevent", aliases=["ajouterevent", "programmerevent"])
-@commands.has_permissions(administrator=True)
+@commands.has_permissions(manage_guild=True)
 async def addevent_cmd(ctx, event: str = None, jour: str = None, heure: str = None):
-    """Programme un event auto — .addevent <event> <jour> <heure>
-    Ex: .addevent loterie samedi 20h"""
+    """Programme un event — .addevent <event> <jour> <heure>
+    Jours : lundi…dimanche · `tous` pour chaque jour · `semaine` / `weekend`"""
+    JOURS = {"lundi":0,"mardi":1,"mercredi":2,"jeudi":3,"vendredi":4,"samedi":5,"dimanche":6}
     if not event or not jour or not heure:
-        return await ctx.send(
-            "❌ Usage : `.addevent <event> <jour> <heure>`\n"
-            "Ex : `.addevent loterie samedi 20h`\n\n"
-            "📋 Tape `.event` pour la liste complète des events\n"
-            "📅 Jours : lundi → dimanche\n"
-            "🕐 Heure : `20h`, `20h30`, `9h`..."
-        )
-    event = event.lower()
-    if event not in EVENTS_CATALOGUE:
-        return await ctx.send(f"❌ Event `{event}` invalide ! Tape `.event` pour la liste complète.")
-    jour = jour.lower()
-    if jour not in JOURS_MAP:
-        return await ctx.send("❌ Jour invalide ! (lundi, mardi, mercredi, jeudi, vendredi, samedi, dimanche)")
-    jour_num = JOURS_MAP[jour]
-    # Parser l'heure (20h, 20h30, 9h)
-    heure_clean = heure.lower().replace("h", ":").rstrip(":")
-    try:
-        if ":" in heure_clean:
-            parts = heure_clean.split(":")
-            h = int(parts[0])
-            m = int(parts[1]) if len(parts) > 1 and parts[1] else 0
-        else:
-            h = int(heure_clean)
-            m = 0
-        if not (0 <= h <= 23 and 0 <= m <= 59):
-            raise ValueError
-    except ValueError:
-        return await ctx.send("❌ Heure invalide ! Ex : `20h`, `20h30`, `9h`")
-    # Vérifier doublon
-    for ev in scheduled_events:
-        if ev["event"] == event and ev["jour_num"] == jour_num and ev["heure"] == h and ev.get("minute", 0) == m:
-            return await ctx.send("❌ Cet event est déjà programmé à cet horaire !")
-    scheduled_events.append({
-        "event": event, "jour": jour, "jour_num": jour_num,
-        "heure": h, "minute": m
-    })
+        return await ctx.send(embed=discord.Embed(
+            title="📅 Programmer un event",
+            description=(
+                "**Usage :** `.addevent <event> <jour> <heure>`\n\n"
+                "**Jours possibles :**\n"
+                "`lundi` `mardi` `mercredi` `jeudi` `vendredi` `samedi` `dimanche`\n"
+                "`tous` — tous les jours  ·  `semaine` — du lundi au vendredi  ·  `weekend` — samedi et dimanche\n\n"
+                "**Exemples :**\n"
+                "`.addevent banquier samedi 20h`\n"
+                "`.addevent coffre tous 18h`\n"
+                "`.addevent questioneclair semaine 12h30`\n\n"
+                "*`.event` pour la liste des events · `.planning` pour voir le programme.*"),
+            color=0x3498db))
+
+    cle = event.lower().strip()
+    ALIAS_EV = {"question":"questioneclair","eclair":"questioneclair","debat":"debatdujour",
+                "boss":"invasion","chasse":"nuitchasse","marche":"marchenoir","deal":"banquier",
+                "clic":"premierclic","tap":"taprace","lift":"ascenseur","etage":"ascenseur"}
+    cle = ALIAS_EV.get(cle, cle)
+    if cle not in EVENTS_CATALOGUE:
+        return await ctx.send(f"❌ Event `{event}` inconnu — tape `.event` pour la liste.")
+
+    j = jour.lower().strip()
+    if j in ("tous", "quotidien", "chaque", "daily"):
+        jours = list(range(7))
+    elif j in ("semaine", "sem"):
+        jours = [0, 1, 2, 3, 4]
+    elif j in ("weekend", "we"):
+        jours = [5, 6]
+    elif j in JOURS:
+        jours = [JOURS[j]]
+    else:
+        return await ctx.send("❌ Jour invalide ! `lundi`…`dimanche`, `tous`, `semaine` ou `weekend`.")
+
+    m = re.match(r"^(\d{1,2})\s*[h:]\s*(\d{0,2})$", heure.lower().strip())
+    if not m:
+        return await ctx.send("❌ Heure invalide ! Exemples : `20h`, `18h30`, `9:15`")
+    h, mn = int(m.group(1)), int(m.group(2) or 0)
+    if not (0 <= h <= 23 and 0 <= mn <= 59):
+        return await ctx.send("❌ Heure hors limites.")
+
+    ajoutes = []
+    for jn in jours:
+        if any(e["event"] == cle and e["jour_num"] == jn and e["heure"] == h and e.get("minute", 0) == mn
+               for e in scheduled_events):
+            continue
+        scheduled_events.append({"event": cle, "jour_num": jn, "heure": h, "minute": mn})
+        ajoutes.append(list(JOURS)[jn])
     save_scheduled_events()
+    if not ajoutes:
+        return await ctx.send("❌ Cet event est déjà programmé à ce créneau.")
     await ctx.send(embed=discord.Embed(
-        title="✅ Event programmé !",
-        description=f"**{event}** se déclenchera chaque **{JOURS_NOMS[jour_num]} à {h}h{m:02d}**\n\n*Voir tous les events avec `.planningauto`*",
+        title="✅ Event programmé",
+        description=(f"**{EVENTS_CATALOGUE[cle]['nom']}**\n"
+                     f"📅 {', '.join(ajoutes)}\n🕐 {h:02d}h{mn:02d}\n\n"
+                     f"*{len(scheduled_events)} event(s) au planning — `.planning` pour tout voir.*"),
         color=0x2ecc71))
+
 
 @bot.command(name="delevent", aliases=["supprimerevent", "retirerevent"])
 @commands.has_permissions(administrator=True)
@@ -8838,10 +8939,12 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
             active_arene.pop(ctx.channel.id, None)
             prize   = random.randint(100, 250)
             xp_gain = 40
+            ajouter_lien(str(ctx.author.id), str(adversaire.id), "duel")
             economy_data[str(winner["membre"].id)]["coins"] += prize
             track_stat(str(winner["membre"].id), "arene_wins", channel=ctx.channel)
             try: missions_progress[str(winner["membre"].id)]["wins"] += 1
             except Exception: pass
+            gazette_note(str(winner["membre"].id), "duels_gagnes")
             xp_data[str(winner["membre"].id)]["xp"]         += xp_gain
 
             await combat_msg.edit(content=None, embed=build_embed_combat(), view=None)
@@ -9518,6 +9621,12 @@ def track_stat(uid, stat, amount=1, channel=None):
         if a["stat"] == stat and a["seuil"] and val >= a["seuil"] and ach_id not in achievements_data[uid]:
             unlock_achievement(uid, ach_id, channel)
 
+def gazette_gain(uid, montant):
+    """Note un gain de pièces pour la gazette"""
+    gazette_note(uid, "gains", montant)
+    if montant > gazette_stats[uid].get("plus_gros_gain", 0):
+        gazette_stats[uid]["plus_gros_gain"] = montant
+
 def check_coins_achievements(uid, channel=None):
     """Vérifie les succès de richesse"""
     coins = economy_data[uid]["coins"]
@@ -9603,6 +9712,7 @@ PETS_DB = {
     "tortue":   {"nom": "Tortue Millénaire",    "emoji": "🐢", "rarete": "Mythique",   "type": "coins", "base": 40, "desc": "+% pièces sur daily/travail"},
     "tigrecor": {"nom": "Tigre de Corée",       "emoji": "🐅", "rarete": "Mythique",   "type": "xp",    "base": 40, "desc": "+% XP sur les messages"},
     "kirin":    {"nom": "Kirin",                "emoji": "🦌", "rarete": "Mythique",   "type": "roll",  "base": 20, "desc": "% chance de roll gratuit"},
+    "renne":    {"nom": "Renne du QG",          "emoji": "🦌", "rarete": "Mythique",   "type": "coins", "base": 35, "desc": "+% pièces sur daily/travail"},
     "fenrir":   {"nom": "Fenrir",                "emoji": "🐺", "rarete": "Légendaire", "type": "roll",  "base": 12, "desc": "% chance de roll gratuit"},
 }
 PETS_PRIX = {"Commun": 2000, "Rare": 5000, "Épique": 10000, "Légendaire": 20000, "Mythique": 60000}
@@ -9791,6 +9901,1013 @@ async def petaction_cmd(ctx):
     await ctx.send(embed=embed)
 
 
+
+
+
+
+
+# ============================================================
+#  🎬 LE DRAMA COLLECTIF — le serveur écrit sa propre série
+# ============================================================
+drama_saison = {
+    "titre": None, "episode": 0, "en_cours": False,
+    "casting": {}, "historique": [], "trame": None, "vote_msg": None,
+}
+
+# Chaque trame donne une saison totalement différente
+DRAMA_TRAMES = {
+    "campus": {
+        "titre": "Le Campus des Cerisiers",
+        "pitch": "Une université de Séoul, deux étudiants que tout oppose, et une bourse que les deux convoitent.",
+        "lieux": ["la bibliothèque du 3ème étage", "le toit du bâtiment C", "le café en face du campus",
+                  "la salle de répétition", "l'arrêt de bus sous la pluie", "le terrain de basket désert"],
+        "roles": ["l'étudiante brillante et fauchée", "l'héritier arrogant", "le meilleur ami loyal",
+                  "la rivale ambitieuse", "le professeur qui observe tout"],
+    },
+    "entreprise": {
+        "titre": "Bureau 704",
+        "pitch": "Un open space, une fusion d'entreprise, et deux collègues qui se détestent depuis le premier jour.",
+        "lieux": ["l'ascenseur bloqué entre deux étages", "la salle de réunion vide à 22 h",
+                  "le distributeur du 7ème", "le parking souterrain", "le rooftop de l'immeuble",
+                  "le restaurant coréen d'en bas"],
+        "roles": ["la cheffe de projet perfectionniste", "le nouveau directeur", "la collègue confidente",
+                  "le stagiaire qui sait tout", "le PDG absent"],
+    },
+    "village": {
+        "titre": "Les Vagues de Gongjin",
+        "pitch": "Un village de bord de mer, un citadin en fuite, et une communauté qui ne laisse rien passer.",
+        "lieux": ["le port au lever du soleil", "la supérette du village", "la digue battue par le vent",
+                  "la maison abandonnée sur la colline", "le marché du dimanche", "le phare"],
+        "roles": ["le citadin qui fuit sa vie", "l'enfant du village", "la grand-mère qui sait tout",
+                  "le pêcheur taciturne", "l'ancien amour revenu"],
+    },
+    "hopital": {
+        "titre": "Garde de Nuit",
+        "pitch": "Un service d'urgences, des gardes interminables, et deux internes qui n'auraient jamais dû se rencontrer.",
+        "lieux": ["la salle de repos à 4 h du matin", "le couloir des urgences", "le toit de l'hôpital",
+                  "la cafétéria déserte", "le parking sous la neige", "la chambre 312"],
+        "roles": ["l'interne surdouée", "le chirurgien blessé", "l'infirmier qui console tout le monde",
+                  "la patiente mystérieuse", "le chef de service intransigeant"],
+    },
+    "musique": {
+        "titre": "Track 09",
+        "pitch": "Une agence d'idols, un groupe au bord de la rupture, et une chanson que personne n'ose finir.",
+        "lieux": ["le studio d'enregistrement", "les coulisses juste avant le show", "le dortoir à 3 h",
+                  "la salle de danse aux miroirs", "le van de tournée", "la terrasse de l'agence"],
+        "roles": ["la leader épuisée", "le compositeur solitaire", "la maknae pleine d'espoir",
+                  "le manager sous pression", "l'ancien membre parti"],
+    },
+    "historique": {
+        "titre": "Le Sceau de Joseon",
+        "pitch": "La cour de Joseon, un secret d'État, et un amour qui pourrait renverser une dynastie.",
+        "lieux": ["le pavillon du lotus", "les cuisines royales", "la bibliothèque interdite",
+                  "les jardins sous la lune", "la salle du trône", "le pont de pierre"],
+        "roles": ["la servante au passé caché", "le prince héritier", "le garde du corps fidèle",
+                  "la concubine ambitieuse", "le ministre comploteur"],
+    },
+    "fantastique": {
+        "titre": "Neuf Vies",
+        "pitch": "Une créature immortelle, une mortelle qui la reconnaît, et une malédiction vieille de 900 ans.",
+        "lieux": ["la boutique d'antiquités", "le sanctuaire dans la montagne", "le métro à minuit",
+                  "l'appartement où le temps s'arrête", "le pont où tout a commencé", "la forêt de bambous"],
+        "roles": ["l'immortel fatigué", "la mortelle qui se souvient", "l'ami qui ne vieillit pas",
+                  "la chamane du quartier", "l'ombre qui revient"],
+    },
+    "seconde_chance": {
+        "titre": "Retour à Case Départ",
+        "pitch": "Une femme se réveille dix ans en arrière, avec la mémoire intacte et une seule idée en tête.",
+        "lieux": ["l'appartement de ses vingt ans", "le bureau qu'elle avait quitté",
+                  "le café où tout s'était joué", "la gare un soir de départ",
+                  "la maison familiale", "le banc du parc"],
+        "roles": ["celle qui revient", "l'ex qu'elle veut éviter", "l'ami qu'elle avait négligé",
+                  "la rivale d'avant", "l'inconnu qui ne devrait pas être là"],
+    },
+}
+
+# Chaque épisode a sa propre couleur narrative
+DRAMA_ARCS = [
+    ("La Rencontre",        "Ils se croisent pour la première fois. Rien ne laisse présager la suite."),
+    ("Le Malentendu",       "Un mot de travers, un geste mal interprété. Tout part de là."),
+    ("Le Rapprochement",    "Une soirée qui s'éternise, et quelque chose qui change sans prévenir."),
+    ("Le Secret",           "Quelqu'un cache quelque chose. Et ça commence à se voir."),
+    ("La Rivalité",         "Un tiers entre en scène. L'équilibre vacille."),
+    ("L'Aveu Manqué",       "Les mots étaient là. Ils ne sont pas sortis."),
+    ("La Rupture",          "Ce qui devait arriver arrive. Personne n'en sort indemne."),
+    ("Le Passé Resurgit",   "Ce qu'on croyait enterré revient frapper à la porte."),
+    ("Le Choix Impossible", "Deux chemins, aucun sans perte."),
+    ("La Réconciliation",   "On se retrouve. Mais rien n'est comme avant."),
+    ("Le Dernier Obstacle", "Une dernière épreuve, la plus dure."),
+    ("La Fin",              "Tout se joue maintenant."),
+]
+
+DRAMA_OUVERTURES = [
+    "{lieu}. {a} n'avait pas prévu de se retrouver là ce soir.",
+    "Il est tard. {lieu} est presque vide, sauf {a}.",
+    "{a} arrive à {lieu} avec dix minutes de retard. {b} attendait déjà.",
+    "Personne n'aurait parié là-dessus : {a} et {b}, à {lieu}, à la même heure.",
+    "{lieu}. Le silence dure depuis trop longtemps entre {a} et {b}.",
+    "{b} avait dit qu'il ne viendrait pas. {b} est à {lieu}.",
+    "Ce qui devait être une soirée ordinaire à {lieu} ne l'est déjà plus.",
+    "{a} relit le message une dernière fois avant de pousser la porte de {lieu}.",
+]
+DRAMA_TENSIONS = [
+    "Le regard qu'ils échangent dure une seconde de trop.",
+    "Aucun des deux ne veut être celui qui parlera en premier.",
+    "Il y a cette chose qu'ils évitent depuis des semaines, et elle est là, entre eux.",
+    "Un détail change tout : ce qu'{a} croyait savoir était faux.",
+    "{b} ouvre la bouche, puis se ravise.",
+    "La pluie commence. Ni l'un ni l'autre ne bouge.",
+    "Quelqu'un les observe depuis l'autre bout de la pièce.",
+    "Le téléphone d'{a} vibre. Ce n'est pas le moment.",
+    "{b} dit son prénom. Juste son prénom.",
+    "Il aurait suffi d'un mot. Le mot ne vient pas.",
+]
+DRAMA_CHOIX = [
+    ("Il lui dit la vérité, maintenant", "Il garde le silence encore un peu", "Elle prend les devants"),
+    ("{a} reste", "{a} s'en va sans se retourner", "{b} le retient"),
+    ("Ils affrontent le problème ensemble", "Chacun règle ça de son côté", "Un tiers s'en mêle"),
+    ("{a} avoue tout", "{a} ment une dernière fois", "Le secret éclate autrement"),
+    ("Ils se donnent une chance", "Ils décident d'arrêter là", "Ils repoussent la décision"),
+    ("{b} pardonne", "{b} exige des explications", "{b} disparaît"),
+    ("Ils partent ensemble", "{a} part seul", "Ils restent, mais changés"),
+    ("La vérité sort au grand jour", "Le mensonge tient encore", "Quelqu'un d'autre parle à leur place"),
+]
+DRAMA_CONSEQUENCES = {
+    0: ["Ce choix change tout. On ne revient pas en arrière.",
+        "Le serveur a tranché. Les conséquences arrivent.",
+        "Personne ne s'attendait à ça. Surtout pas eux."],
+    1: ["Le silence a un prix. Il sera payé plus tard.",
+        "Rien n'est réglé. Tout est repoussé.",
+        "Ce qu'on tait finit toujours par se dire autrement."],
+    2: ["Le destin s'en mêle. Ils n'avaient pas le contrôle.",
+        "Une intervention extérieure change la donne.",
+        "Ce n'est pas eux qui décident, cette fois."],
+}
+
+class DramaVoteView(ui.View):
+    def __init__(self, options, timeout=None):
+        super().__init__(timeout=timeout)
+        self.votes = {}
+        self.options = options
+        for i, opt in enumerate(options):
+            btn = ui.Button(label=f"{chr(65+i)}", emoji=["🅰️","🅱️","🇨"][i],
+                            style=discord.ButtonStyle.primary, custom_id=f"drama_vote_{i}")
+            async def cb(interaction, idx=i):
+                deja = self.votes.get(interaction.user.id)
+                self.votes[interaction.user.id] = idx
+                compte = {}
+                for v in self.votes.values():
+                    compte[v] = compte.get(v, 0) + 1
+                detail = "  ·  ".join(f"{['🅰️','🅱️','🇨'][k]} **{v}**" for k, v in sorted(compte.items()))
+                await interaction.response.send_message(
+                    f"{'🔄 Vote changé' if deja is not None else '✅ Vote enregistré'} : "
+                    f"**{self.options[idx]}**\n\n*Décompte actuel — {detail}*", ephemeral=True)
+            btn.callback = cb
+            self.add_item(btn)
+
+async def publier_episode(guild, salon):
+    """Publie l'épisode de la semaine"""
+    s = drama_saison
+    trame = DRAMA_TRAMES[s["trame"]]
+    ep = s["episode"] + 1
+    if ep > len(DRAMA_ARCS):
+        return await cloturer_saison(guild, salon)
+    titre_arc, resume_arc = DRAMA_ARCS[ep - 1]
+
+    a = s["casting"].get("a") or "un membre du QG"
+    b = s["casting"].get("b") or "un autre membre"
+    lieu = random.choice(trame["lieux"])
+    ouverture = random.choice(DRAMA_OUVERTURES).format(a=a, b=b, lieu=lieu)
+    tension = random.choice(DRAMA_TENSIONS).format(a=a, b=b)
+    choix = [x.format(a=a, b=b) for x in random.choice(DRAMA_CHOIX)]
+
+    suite = ""
+    if s["historique"]:
+        suite = f"*Précédemment : {s['historique'][-1]}*\n\n"
+
+    embed = discord.Embed(
+        title=f"🎬  {trame['titre']}  —  Épisode {ep}",
+        description=(f"### « {titre_arc} »\n"
+                     f"*{resume_arc}*\n\n"
+                     f"{suite}"
+                     f"━━━━━━━━━━━━━━━━━━\n\n"
+                     f"{ouverture}\n\n"
+                     f"{tension}\n\n"
+                     f"━━━━━━━━━━━━━━━━━━\n\n"
+                     f"### 🗳️  Que se passe-t-il ensuite ?\n"
+                     f"🅰️  {choix[0]}\n"
+                     f"🅱️  {choix[1]}\n"
+                     f"🇨  {choix[2]}\n\n"
+                     f"*Le serveur vote. Le prochain épisode reprendra là où vous l'aurez laissé.*"),
+        color=0xff6b9d)
+    embed.set_footer(text=f"Épisode {ep}/{len(DRAMA_ARCS)}  ·  Vote ouvert jusqu'au prochain épisode")
+
+    vue = DramaVoteView(choix)
+    msg = await salon.send(get_event_ping(guild, "everyone"), embed=embed, view=vue)
+    s["episode"] = ep
+    s["vote_msg"] = msg.id
+    s["vue"] = vue
+    s["dernier_choix"] = choix
+    save_all_data()
+
+async def resoudre_episode(guild, salon):
+    """Dépouille le vote et enchaîne sur l'épisode suivant"""
+    s = drama_saison
+    vue = s.get("vue")
+    if not vue or not vue.votes:
+        s["historique"].append("Le serveur n'a pas voté — l'histoire est restée en suspens.")
+    else:
+        compte = {}
+        for v in vue.votes.values():
+            compte[v] = compte.get(v, 0) + 1
+        gagnant = max(compte, key=compte.get)
+        texte = s["dernier_choix"][gagnant]
+        total = sum(compte.values())
+        s["historique"].append(texte)
+        consequence = random.choice(DRAMA_CONSEQUENCES.get(gagnant, DRAMA_CONSEQUENCES[0]))
+        detail = "\n".join(
+            f"{['🅰️','🅱️','🇨'][k]} {s['dernier_choix'][k]} — **{v}** vote(s) "
+            f"({v/total*100:.0f} %)" for k, v in sorted(compte.items(), key=lambda x: -x[1]))
+        await salon.send(embed=discord.Embed(
+            title=f"🗳️  Le verdict de l'épisode {s['episode']}",
+            description=(f"{detail}\n\n━━━━━━━━━━━━━━━━━━\n\n"
+                         f"### ➡️ {texte}\n\n*{consequence}*"),
+            color=0x9b59b6))
+        # récompense aux votants
+        for uid in vue.votes:
+            economy_data[str(uid)]["coins"] += 150
+        gazette_fait("divers", f"Le serveur a voté « {texte} » dans l'épisode {s['episode']} du drama.", 2)
+    s["vue"] = None
+    await asyncio.sleep(3)
+    await publier_episode(guild, salon)
+
+async def cloturer_saison(guild, salon):
+    """Fin de saison : récapitulatif complet"""
+    s = drama_saison
+    trame = DRAMA_TRAMES[s["trame"]]
+    recap = "\n".join(f"**Ép. {i+1}** — {t}" for i, t in enumerate(s["historique"]))
+    await salon.send(embed=discord.Embed(
+        title=f"🎬  {trame['titre']}  —  FIN DE SAISON",
+        description=(f"*{trame['pitch']}*\n\n"
+                     f"━━━━━━━━━━━━━━━━━━\n\n"
+                     f"**Voici l'histoire que vous avez écrite :**\n\n{recap}\n\n"
+                     f"━━━━━━━━━━━━━━━━━━\n\n"
+                     f"*Cette saison n'existe que sur ce serveur. Merci d'y avoir participé.*"),
+        color=0xf1c40f).set_footer(text="Une nouvelle saison démarrera bientôt — avec une histoire différente."))
+    s["en_cours"] = False
+    s["episode"] = 0
+    save_all_data()
+
+
+
+@bot.command(name="drama-start", aliases=["dramastart", "lancerdrama"])
+@commands.has_permissions(manage_guild=True)
+async def dramastart_cmd(ctx, trame: str = None):
+    """Lance une saison du Drama Collectif — .drama-start [trame] (staff)"""
+    s = drama_saison
+    if s["en_cours"]:
+        return await ctx.send(f"🎬 **{DRAMA_TRAMES[s['trame']]['titre']}** est déjà en cours "
+                              f"(épisode {s['episode']}). Utilise `.drama-stop` pour l'arrêter.")
+    if trame and trame.lower() not in DRAMA_TRAMES:
+        lignes = "\n".join(f"`{k}` — **{v['titre']}**\n└ *{v['pitch']}*" for k, v in DRAMA_TRAMES.items())
+        return await ctx.send(embed=discord.Embed(
+            title="🎬 Choisis une trame de saison",
+            description=f"{lignes}\n\n*`.drama-start` sans argument tire une trame au hasard.*",
+            color=0xff6b9d))
+    cle = trame.lower() if trame else random.choice(list(DRAMA_TRAMES))
+    trame_d = DRAMA_TRAMES[cle]
+
+    membres = [m for m in ctx.guild.members if not m.bot and str(m.id) in xp_data]
+    if len(membres) < 2:
+        membres = [m for m in ctx.guild.members if not m.bot]
+    if len(membres) < 2:
+        return await ctx.send("❌ Il faut au moins 2 membres pour lancer une saison.")
+    a, b = random.sample(membres, 2)
+
+    s.update({"titre": trame_d["titre"], "episode": 0, "en_cours": True, "trame": cle,
+              "casting": {"a": a.mention, "b": b.mention}, "historique": [], "vue": None})
+    save_all_data()
+
+    salon = (ctx.guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None) or ctx.channel
+    await salon.send(embed=discord.Embed(
+        title=f"🎬  NOUVELLE SAISON  —  {trame_d['titre']}",
+        description=(f"*{trame_d['pitch']}*\n\n"
+                     f"━━━━━━━━━━━━━━━━━━\n\n"
+                     f"**Au casting cette saison :**\n"
+                     f"🎭 {a.mention} — *{trame_d['roles'][0]}*\n"
+                     f"🎭 {b.mention} — *{trame_d['roles'][1]}*\n\n"
+                     f"━━━━━━━━━━━━━━━━━━\n\n"
+                     f"**{len(DRAMA_ARCS)} épisodes**, un par semaine.\n"
+                     f"À la fin de chaque épisode, **le serveur vote** pour décider de la suite.\n"
+                     f"Les votants gagnent **150 pièces**.\n\n"
+                     f"*Personne ne sait comment ça va finir. Pas même moi.*"),
+        color=0xff6b9d).set_footer(text="Le premier épisode arrive tout de suite."))
+    await asyncio.sleep(4)
+    await publier_episode(ctx.guild, salon)
+
+@bot.command(name="drama-next", aliases=["dramanext", "episodesuivant"])
+@commands.has_permissions(manage_guild=True)
+async def dramanext_cmd(ctx):
+    """Dépouille le vote et publie l'épisode suivant — .drama-next (staff)"""
+    if not drama_saison["en_cours"]:
+        return await ctx.send("❌ Aucune saison en cours. Lance-la avec `.drama-start`.")
+    salon = (ctx.guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None) or ctx.channel
+    await resoudre_episode(ctx.guild, salon)
+
+@bot.command(name="drama-stop", aliases=["dramastop"])
+@commands.has_permissions(manage_guild=True)
+async def dramastop_cmd(ctx):
+    """Arrête la saison en cours — .drama-stop (staff)"""
+    if not drama_saison["en_cours"]:
+        return await ctx.send("❌ Aucune saison en cours.")
+    salon = (ctx.guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None) or ctx.channel
+    await cloturer_saison(ctx.guild, salon)
+
+@bot.command(name="saison", aliases=["dramacollectif", "masaison"])
+async def drama_info_cmd(ctx):
+    """Où en est la saison — .drama"""
+    s = drama_saison
+    if not s["en_cours"]:
+        return await ctx.send(embed=discord.Embed(
+            title="🎬 Le Drama Collectif",
+            description=("Aucune saison en cours actuellement.\n\n"
+                         "**Le principe :** le bot raconte une série en épisodes hebdomadaires, "
+                         "avec des **membres du serveur comme personnages**. "
+                         "À la fin de chaque épisode, le serveur **vote** pour décider de la suite.\n\n"
+                         f"**{len(DRAMA_TRAMES)} histoires différentes** sont possibles — "
+                         f"campus, entreprise, village de bord de mer, hôpital, agence d'idols, "
+                         f"Joseon, fantastique, voyage dans le temps.\n\n"
+                         "*Le staff peut en lancer une avec `.drama-start`.*"),
+            color=0x95a5a6))
+    trame = DRAMA_TRAMES[s["trame"]]
+    recap = ("\n".join(f"**Ép. {i+1}** — {t}" for i, t in enumerate(s["historique"]))
+             if s["historique"] else "*La saison vient de commencer.*")
+    await ctx.send(embed=discord.Embed(
+        title=f"🎬 {trame['titre']}",
+        description=(f"*{trame['pitch']}*\n\n"
+                     f"**Épisode {s['episode']}/{len(DRAMA_ARCS)}**\n"
+                     f"🎭 {s['casting'].get('a','?')} · {s['casting'].get('b','?')}\n\n"
+                     f"━━━━━━━━━━━━━━━━━━\n\n**L'histoire jusqu'ici :**\n{recap}"),
+        color=0xff6b9d))
+
+@tasks.loop(minutes=1)
+async def drama_task():
+    """Publie un épisode chaque lundi à 19 h"""
+    if not drama_saison["en_cours"]:
+        return
+    now = datetime.datetime.now()
+    if now.weekday() != 0 or now.hour != 19 or now.minute != 0:
+        return
+    cle = f"drama_{now.date()}"
+    if planning_last_run.get(cle):
+        return
+    planning_last_run[cle] = True
+    for guild in bot.guilds:
+        salon = ((guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None)
+                 or guild.system_channel)
+        if not salon:
+            continue
+        try:
+            if drama_saison["episode"] == 0:
+                await publier_episode(guild, salon)
+            else:
+                await resoudre_episode(guild, salon)
+        except Exception as e:
+            print(f"[Drama] {e}")
+
+# ============================================================
+#  🎁 CALENDRIER DE L'AVENT — du 1er au 24 décembre
+# ============================================================
+avent_data = defaultdict(dict)   # {uid: {"1": "pieces:500", ...}}
+
+# Case → (type, valeur, libellé)
+AVENT_CASES = {
+    1:  ("pieces", 500,   "500 pièces"),
+    2:  ("pieces", 700,   "700 pièces"),
+    3:  ("item",   "cafe", "☕ Café du QG"),
+    4:  ("pieces", 900,   "900 pièces"),
+    5:  ("rolls",  3,     "3 rolls gacha"),
+    6:  ("pieces", 1200,  "1 200 pièces"),
+    7:  ("item",   "boost_rarete", "🎯 Boost Rareté"),
+    8:  ("pieces", 1500,  "1 500 pièces"),
+    9:  ("xp",     300,   "300 XP"),
+    10: ("pieces", 1800,  "1 800 pièces"),
+    11: ("item",   "cadeau", "🎁 Cadeau Mystère"),
+    12: ("role",   "hiver", "❄️ Esprit d'Hiver"),
+    13: ("pieces", 2200,  "2 200 pièces"),
+    14: ("rolls",  5,     "5 rolls gacha"),
+    15: ("item",   "sablier", "🕰️ Sablier"),
+    16: ("pieces", 2800,  "2 800 pièces"),
+    17: ("xp",     600,   "600 XP"),
+    18: ("item",   "aimant", "🧲 Aimant"),
+    19: ("pieces", 3500,  "3 500 pièces"),
+    20: ("item",   "trefle", "🍀 Trèfle Porte-Bonheur"),
+    21: ("pieces", 4500,  "4 500 pièces"),
+    22: ("item",   "potionxp", "🧪 Potion d'XP"),
+    23: ("pieces", 6000,  "6 000 pièces"),
+    24: ("pet",    "renne", "🦌 Renne du QG — compagnon exclusif !"),
+}
+
+AVENT_NARRATION = {
+    1:  "Le calendrier apparaît sur le mur du QG. La première case craque sous tes doigts.",
+    5:  "Une odeur de cannelle flotte dans le salon principal.",
+    8:  "Quelqu'un a accroché des guirlandes pendant la nuit. Personne n'avoue.",
+    12: "La neige tombe sur le QG. Enfin, sur l'image de fond du serveur.",
+    15: "Il ne reste plus que dix cases. Le compte à rebours commence vraiment.",
+    18: "Le sapin du QG penche dangereusement à gauche.",
+    20: "Plus que quatre jours. L'excitation monte.",
+    23: "Demain, c'est le grand jour. Dors bien.",
+    24: "🎄 **Joyeux Noël au QG.** Merci d'être là cette année.",
+}
+
+def avent_actif():
+    now = datetime.datetime.now()
+    return now.month == 12 and now.day <= 24
+
+def build_calendrier(uid):
+    """Grille visuelle 6×4 du calendrier"""
+    now = datetime.datetime.now()
+    jour = now.day if now.month == 12 else 0
+    ouvertes = avent_data.get(uid, {})
+    lignes = []
+    for l in range(6):
+        ligne = ""
+        for co in range(4):
+            n = l * 4 + co + 1
+            if str(n) in ouvertes:
+                ligne += "✅ "
+            elif n == 24:
+                ligne += ("🎄 " if n <= jour else "🔒 ")
+            elif n > jour:
+                ligne += "🔒 "
+            else:
+                ligne += "🎁 "
+        lignes.append(ligne)
+    grille = "\n".join(lignes)
+    numeros = "\n".join(
+        "  ".join(f"`{l*4+co+1:2d}`" for co in range(4)) for l in range(6))
+    return grille, len(ouvertes)
+
+@bot.command(name="avent", aliases=["calendrier", "noel"])
+async def avent_cmd(ctx):
+    """Le calendrier de l'Avent — .avent"""
+    uid = str(ctx.author.id)
+    now = datetime.datetime.now()
+    if not avent_actif():
+        return await ctx.send(embed=discord.Embed(
+            title="🎄 Calendrier de l'Avent",
+            description=("Le calendrier n'est disponible que **du 1er au 24 décembre**.\n\n"
+                         "24 cases, une par jour, avec des récompenses qui montent :\n"
+                         "pièces, rolls, items, un **rôle exclusif** le 12…\n"
+                         "et un **compagnon unique** le 24 décembre. 🎁"),
+            color=0x95a5a6))
+
+    jour = now.day
+    ouvertes = avent_data[uid]
+    grille, nb = build_calendrier(uid)
+    deja = str(jour) in ouvertes
+
+    embed = discord.Embed(
+        title=f"🎄  Calendrier de l'Avent  —  {jour} décembre",
+        description=(f"{grille}\n\n"
+                     f"✅ ouverte  ·  🎁 disponible  ·  🔒 verrouillée\n\n"
+                     f"**{nb}/24 cases ouvertes**"),
+        color=0xc0392b if not deja else 0x27ae60)
+    if AVENT_NARRATION.get(jour):
+        embed.add_field(name="\u200b", value=f"*{AVENT_NARRATION[jour]}*", inline=False)
+    if deja:
+        embed.add_field(name=f"✅ Case {jour} déjà ouverte",
+                        value=f"Tu as reçu : **{ouvertes[str(jour)]}**\n\n*Reviens demain !*", inline=False)
+    else:
+        embed.add_field(name=f"🎁 Case {jour} disponible !",
+                        value="Tape `.ouvrircase` pour l'ouvrir.", inline=False)
+    manquees = [n for n in range(1, jour) if str(n) not in ouvertes]
+    if manquees:
+        embed.set_footer(text=f"⚠️ {len(manquees)} case(s) manquée(s) — elles sont perdues !")
+    else:
+        embed.set_footer(text="🔥 Aucune case manquée — continue comme ça !")
+    await ctx.send(embed=embed)
+
+@bot.command(name="ouvrircase", aliases=["case", "ouvriravent"])
+async def ouvrircase_cmd(ctx):
+    """Ouvre la case du jour — .ouvrircase"""
+    uid = str(ctx.author.id)
+    now = datetime.datetime.now()
+    if not avent_actif():
+        return await ctx.send("🎄 Le calendrier n'est ouvert que du **1er au 24 décembre** !")
+    jour = now.day
+    if str(jour) in avent_data[uid]:
+        return await ctx.send(f"✅ Tu as déjà ouvert la case **{jour}** ! Reviens demain 🎁")
+
+    typ, val, libelle = AVENT_CASES[jour]
+    avent_data[uid][str(jour)] = libelle
+    extra = ""
+
+    if typ == "pieces":
+        economy_data[uid]["coins"] += val
+        check_coins_achievements(uid, ctx.channel)
+        gazette_gain(uid, val)
+    elif typ == "xp":
+        xp_data[uid]["xp"] += val
+        while xp_data[uid]["xp"] >= xp_data[uid]["level"] * 100:
+            xp_data[uid]["xp"] -= xp_data[uid]["level"] * 100
+            xp_data[uid]["level"] += 1
+            points_amelio[uid] += 1
+    elif typ == "rolls":
+        roll_data[uid]["rolls"] = min(roll_data[uid]["rolls"] + val, ROLLS_MAX + 10)
+    elif typ == "item":
+        inventaire[uid][val] += 1
+        extra = "\n*Rangé dans ton inventaire — `.utiliser` pour t'en servir.*"
+    elif typ == "role":
+        nom_role, coul = ROLES_BOUTIQUE[val]
+        role = discord.utils.get(ctx.guild.roles, name=nom_role)
+        try:
+            if not role:
+                role = await ctx.guild.create_role(name=nom_role, colour=discord.Colour(coul),
+                                                   reason="Calendrier de l'Avent")
+            await ctx.author.add_roles(role, reason="Calendrier de l'Avent")
+            extra = "\n*Un rôle qui ne s'obtient qu'en décembre.*"
+        except discord.Forbidden:
+            economy_data[uid]["coins"] += 5000
+            extra = "\n*(Je n'ai pas pu créer le rôle — 5 000 pièces à la place.)*"
+    elif typ == "pet":
+        if uid not in pets_data:
+            pets_data[uid] = {"owned": {}, "active": None}
+        pets_data[uid]["owned"]["renne"] = {"level": 1, "xp": 0}
+        if not pets_data[uid]["active"]:
+            pets_data[uid]["active"] = "renne"
+        extra = "\n*Un compagnon qu'on ne trouve nulle part ailleurs. Joyeux Noël.* 🎄"
+
+    save_all_data()
+    grille, nb = build_calendrier(uid)
+    embed = discord.Embed(
+        title=f"🎁  Case {jour} ouverte !",
+        description=(f"{AVENT_NARRATION.get(jour, 'La case s ouvre dans un petit bruit de papier.')}\n\n"
+                     f"### Tu reçois : **{libelle}**{extra}"),
+        color=0xf1c40f if jour < 24 else 0xc0392b)
+    embed.add_field(name=f"📅 Ta progression — {nb}/24", value=grille, inline=False)
+    if jour == 24:
+        embed.set_footer(text="🎄 Dernière case. Merci d'avoir fait vivre le QG cette année.")
+    else:
+        embed.set_footer(text=f"Prochaine case demain : {AVENT_CASES[jour+1][2]}")
+    await ctx.send(embed=embed)
+    gazette_fait("divers", f"**{ctx.author.display_name}** a ouvert la case {jour} du calendrier.", 1)
+
+@bot.command(name="topavent")
+async def topavent_cmd(ctx):
+    """Qui a ouvert le plus de cases — .topavent"""
+    if not avent_data:
+        return await ctx.send("🎄 Personne n'a encore ouvert de case !")
+    cl = sorted(((u, len(v)) for u, v in avent_data.items() if v), key=lambda x: -x[1])
+    lignes = []
+    for i, (u, n) in enumerate(cl[:10]):
+        m = ctx.guild.get_member(int(u))
+        if not m: continue
+        parfait = " 🔥" if n == datetime.datetime.now().day else ""
+        lignes.append(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{m.display_name}** — {n}/24 cases{parfait}")
+    await ctx.send(embed=discord.Embed(
+        title="🎄 Les plus assidus du calendrier",
+        description="\n".join(lignes) or "*Aucun participant.*",
+        color=0xc0392b))
+
+# ============================================================
+#  📰 LA GAZETTE DU QG — le journal hebdomadaire
+# ============================================================
+gazette_stats = defaultdict(lambda: defaultdict(int))   # {uid: {métrique: valeur}}
+gazette_faits = []          # faits marquants de la semaine
+gazette_semaine = {"num": 1, "debut": None}
+
+def gazette_note(uid, metrique, valeur=1):
+    """Enregistre une statistique pour la gazette"""
+    gazette_stats[uid][metrique] += valeur
+
+def gazette_fait(categorie, texte, poids=1):
+    """Enregistre un fait marquant (max 200 gardés)"""
+    gazette_faits.append({"cat": categorie, "txt": texte, "poids": poids})
+    if len(gazette_faits) > 200:
+        gazette_faits.pop(0)
+
+GAZETTE_INTROS = [
+    "Une semaine de plus au QG, et il s'en est passé des choses.",
+    "Le calme n'aura pas duré. Voici ce qu'il faut retenir.",
+    "Sept jours, des fortunes faites et défaites. Le résumé.",
+    "Certains ont brillé, d'autres ont explosé. Littéralement.",
+    "La rédaction a tout noté. Personne n'y échappe.",
+    "Voici ce que le QG retiendra de cette semaine.",
+]
+GAZETTE_FINS = [
+    "*Rendez-vous dimanche prochain pour le prochain numéro.*",
+    "*La rédaction retourne se coucher. À la semaine prochaine.*",
+    "*Tout ça sera oublié lundi. Ou pas.*",
+    "*Merci à tous ceux qui ont fait vivre le QG cette semaine.*",
+]
+
+async def construire_gazette(guild):
+    """Assemble le journal de la semaine"""
+    def nom(uid):
+        m = guild.get_member(int(uid))
+        return m.display_name if m else None
+
+    def top(metrique, n=1):
+        lot = [(u, s[metrique]) for u, s in gazette_stats.items() if s.get(metrique)]
+        lot.sort(key=lambda x: -x[1])
+        return [(u, v) for u, v in lot[:n] if nom(u)]
+
+    num = gazette_semaine["num"]
+    embed = discord.Embed(
+        title=f"📰  LA GAZETTE DU QG  —  N°{num}",
+        description=f"*{random.choice(GAZETTE_INTROS)}*",
+        color=0xf1c40f)
+    if guild.icon:
+        embed.set_thumbnail(url=guild.icon.url)
+
+    rubriques = 0
+
+    # 💰 Fortune
+    riches = top("gains", 1)
+    if riches:
+        u, v = riches[0]
+        detail = ""
+        gros = gazette_stats[u].get("plus_gros_gain", 0)
+        if gros >= 3000:
+            detail = f", dont **{gros:,}** sur un seul coup"
+        embed.add_field(name="💰 Fortune de la semaine",
+                        value=f"**{nom(u)}** a empoché **{v:,} pièces**{detail}.", inline=False)
+        rubriques += 1
+
+    # 💀 Chute
+    perdants = top("echecs", 1)
+    if perdants and perdants[0][1] >= 3:
+        u, v = perdants[0]
+        embed.add_field(name="💀 Chute de la semaine",
+                        value=f"**{nom(u)}** a échoué **{v} fois** aux events. La rédaction compatit.",
+                        inline=False)
+        rubriques += 1
+
+    # 🎴 Rareté
+    rares = [f for f in gazette_faits if f["cat"] == "carte"]
+    if rares:
+        meilleur = max(rares, key=lambda x: x["poids"])
+        embed.add_field(name="🎴 Trouvaille de la semaine", value=meilleur["txt"], inline=False)
+        rubriques += 1
+
+    # ⚔️ Duels
+    duellistes = top("duels_gagnes", 3)
+    if duellistes:
+        embed.add_field(name="⚔️ Les combattants",
+                        value="\n".join(f"{'🥇🥈🥉'[i]} **{nom(u)}** — {v} victoire(s)"
+                                        for i, (u, v) in enumerate(duellistes)), inline=False)
+        rubriques += 1
+
+    # 🧠 Cerveau
+    quiz = top("quiz_ok", 1)
+    if quiz and quiz[0][1] >= 5:
+        u, v = quiz[0]
+        embed.add_field(name="🧠 Cerveau de la semaine",
+                        value=f"**{nom(u)}** a trouvé **{v} bonnes réponses** aux quiz et events.",
+                        inline=False)
+        rubriques += 1
+
+    # 🤝 Duo
+    vus, duos = set(), []
+    for a, cibles in liens_data.items():
+        for b, p in cibles.items():
+            if p <= 0 or (b, a) in vus:
+                continue
+            vus.add((a, b))
+            duos.append((p, a, b))
+    if duos:
+        duos.sort(reverse=True)
+        p, a, b = duos[0]
+        if nom(a) and nom(b):
+            titre = palier_lien(p)[0][1]
+            embed.add_field(name="🤝 Duo de la semaine",
+                            value=f"**{nom(a)}** & **{nom(b)}** — {titre} *({p} points de lien)*",
+                            inline=False)
+            rubriques += 1
+
+    # 🎪 Faits divers
+    divers = [f for f in gazette_faits if f["cat"] == "divers"]
+    if divers:
+        choisis = random.sample(divers, min(3, len(divers)))
+        embed.add_field(name="🎪 En bref",
+                        value="\n".join(f"▪️ {f['txt']}" for f in choisis), inline=False)
+        rubriques += 1
+
+    # 📈 Le serveur en chiffres
+    total_msg = sum(s.get("messages", 0) for s in gazette_stats.values())
+    total_ev = sum(s.get("events", 0) for s in gazette_stats.values())
+    total_cartes = sum(s.get("cartes", 0) for s in gazette_stats.values())
+    total_pieces = sum(s.get("gains", 0) for s in gazette_stats.values())
+    actifs = len([u for u, s in gazette_stats.items() if s.get("messages", 0) > 0])
+    embed.add_field(name="📈 Le QG en chiffres", value=(
+        f"💬 **{total_msg:,}** messages · 👥 **{actifs}** membres actifs\n"
+        f"🎪 **{total_ev}** participations aux events\n"
+        f"🎴 **{total_cartes}** cartes claimées\n"
+        f"💰 **{total_pieces:,}** pièces distribuées"), inline=False)
+
+    if rubriques == 0:
+        embed.description = "*Semaine très calme au QG… personne n'a fait grand-chose.*"
+    embed.set_footer(text=f"Semaine {num} · {random.choice(GAZETTE_FINS).strip('*')}")
+    return embed
+
+@tasks.loop(minutes=1)
+async def gazette_task():
+    """Publie la gazette chaque dimanche à 20 h"""
+    now = datetime.datetime.now()
+    if now.weekday() != 6 or now.hour != 20 or now.minute != 0:
+        return
+    cle = f"gazette_{now.date()}"
+    if planning_last_run.get(cle):
+        return
+    planning_last_run[cle] = True
+    for guild in bot.guilds:
+        salon = ((guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None)
+                 or (guild.get_channel(SALON_EVENT_ID) if SALON_EVENT_ID else None)
+                 or guild.system_channel)
+        if not salon:
+            continue
+        try:
+            embed = await construire_gazette(guild)
+            await salon.send(get_event_ping(guild, "everyone"), embed=embed)
+        except Exception as e:
+            print(f"[Gazette] {e}")
+    gazette_stats.clear()
+    gazette_faits.clear()
+    gazette_semaine["num"] += 1
+    save_all_data()
+
+@bot.command(name="gazette", aliases=["journal", "news"])
+async def gazette_cmd(ctx):
+    """La gazette de la semaine en cours — .gazette"""
+    embed = await construire_gazette(ctx.guild)
+    embed.set_author(name="Aperçu en direct — la version finale sort dimanche à 20 h")
+    await ctx.send(embed=embed)
+
+@bot.command(name="forcegazette")
+@commands.has_permissions(administrator=True)
+async def forcegazette_cmd(ctx):
+    """Publie la gazette immédiatement et remet les compteurs à zéro — (admin)"""
+    embed = await construire_gazette(ctx.guild)
+    await ctx.send(embed=embed)
+    gazette_stats.clear()
+    gazette_faits.clear()
+    gazette_semaine["num"] += 1
+    save_all_data()
+    await ctx.send("✅ Gazette publiée, compteurs remis à zéro.", delete_after=8)
+
+# ============================================================
+#  🤝 LES LIENS — le bot mémorise qui joue avec qui
+# ============================================================
+liens_data = defaultdict(lambda: defaultdict(int))   # {uid: {autre_uid: points}}
+liens_detail = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))  # {uid: {autre: {type: n}}}
+
+LIENS_PALIERS = [
+    (0,    "👋 Connaissances",     0x95a5a6, 0),
+    (15,   "🙂 Camarades",         0x3498db, 2),
+    (40,   "🤝 Complices",         0x2ecc71, 5),
+    (90,   "⚔️ Rivaux Éternels",   0xe67e22, 8),
+    (180,  "🔥 Duo Légendaire",    0xe74c3c, 12),
+    (350,  "👑 Âmes Jumelles",     0xf1c40f, 18),
+]
+LIENS_TYPES = {
+    "duel":    ("⚔️", "duels", 3),
+    "quiz":    ("🧠", "quiz ensemble", 2),
+    "pet":     ("🐾", "rencontres de compagnons", 4),
+    "trade":   ("🔄", "échanges de cartes", 5),
+    "event":   ("🎪", "events partagés", 1),
+    "cadeau":  ("🎁", "cadeaux", 4),
+}
+
+def ajouter_lien(uid_a, uid_b, type_lien="event"):
+    """Renforce le lien entre deux membres"""
+    if not uid_a or not uid_b or uid_a == uid_b:
+        return
+    pts = LIENS_TYPES.get(type_lien, ("", "", 1))[2]
+    for x, y in ((uid_a, uid_b), (uid_b, uid_a)):
+        liens_data[x][y] += pts
+        liens_detail[x][y][type_lien] += 1
+
+def palier_lien(pts):
+    actuel = LIENS_PALIERS[0]
+    suivant = None
+    for i, p in enumerate(LIENS_PALIERS):
+        if pts >= p[0]:
+            actuel = p
+            suivant = LIENS_PALIERS[i + 1] if i + 1 < len(LIENS_PALIERS) else None
+    return actuel, suivant
+
+def bonus_lien(uid_a, uid_b):
+    """Bonus % appliqué quand deux membres liés jouent ensemble"""
+    return palier_lien(liens_data[uid_a][uid_b])[0][3]
+
+@bot.command(name="liens", aliases=["lien", "relations"])
+async def liens_cmd(ctx, membre: discord.Member = None):
+    """Tes liens avec les autres membres — .liens [@membre]"""
+    uid = str(ctx.author.id)
+
+    # ── Lien précis avec une personne ──
+    if membre:
+        if membre.bot or membre.id == ctx.author.id:
+            return await ctx.send("❌ Mentionne un autre membre !")
+        aid = str(membre.id)
+        pts = liens_data[uid][aid]
+        (seuil, nom, coul, bonus), suivant = palier_lien(pts)
+        detail = liens_detail[uid][aid]
+        lignes = [f"{LIENS_TYPES[t][0]} **{n}** {LIENS_TYPES[t][1]}"
+                  for t, n in sorted(detail.items(), key=lambda x: -x[1]) if n and t in LIENS_TYPES]
+        embed = discord.Embed(
+            title=f"🤝 Ton lien avec {membre.display_name}",
+            description=f"### {nom}\n**{pts} points de lien**",
+            color=coul)
+        embed.set_thumbnail(url=membre.display_avatar.url)
+        embed.add_field(name="📊 Ce que vous avez fait ensemble",
+                        value="\n".join(lignes) if lignes else "*Rien encore — jouez ensemble !*",
+                        inline=False)
+        if bonus:
+            embed.add_field(name="✨ Bonus de duo",
+                            value=f"**+{bonus} %** de pièces quand vous jouez l'un contre l'autre", inline=False)
+        if suivant:
+            manque = suivant[0] - pts
+            f = max(0, min(10, int((pts - seuil) / max(1, suivant[0] - seuil) * 10)))
+            embed.add_field(name=f"🎯 Prochain palier — {suivant[1]}",
+                            value=f"`{'▰'*f}{'▱'*(10-f)}`  encore **{manque} points**", inline=False)
+        else:
+            embed.add_field(name="👑 Palier maximum",
+                            value="Vous avez atteint le sommet. Respect.", inline=False)
+        embed.set_footer(text="Duels, quiz, échanges, rencontres de compagnons et events renforcent le lien.")
+        return await ctx.send(embed=embed)
+
+    # ── Tous tes liens ──
+    mes = [(a, p) for a, p in liens_data[uid].items() if p > 0]
+    if not mes:
+        return await ctx.send(embed=discord.Embed(
+            title="🤝 Tes liens",
+            description=("Tu n'as encore tissé aucun lien.\n\n"
+                         "**Comment ça marche ?**\n"
+                         "Chaque fois que tu joues **avec** quelqu'un — duel, quiz, échange de carte, "
+                         "rencontre de compagnons, event partagé — votre lien se renforce.\n\n"
+                         "Les paliers débloquent des **titres partagés** et un **bonus de pièces** "
+                         "quand vous jouez ensemble.\n\n"
+                         "*Lance un `.quizduel` ou un `.puissance4` pour commencer !*"),
+            color=0x95a5a6))
+    mes.sort(key=lambda x: -x[1])
+    lignes = []
+    for aid, pts in mes[:12]:
+        m = ctx.guild.get_member(int(aid)) if ctx.guild else None
+        nom_m = m.display_name if m else "membre parti"
+        (_, titre, _, bonus), _ = palier_lien(pts)
+        lignes.append(f"{titre.split()[0]} **{nom_m}** — {titre.split(' ', 1)[1]} · *{pts} pts*"
+                      + (f" · +{bonus} %" if bonus else ""))
+    embed = discord.Embed(
+        title=f"🤝 Les liens de {ctx.author.display_name}",
+        description="\n".join(lignes),
+        color=0x9b59b6)
+    embed.set_footer(text=f"{len(mes)} lien(s) · `.liens @membre` pour le détail d'une relation")
+    await ctx.send(embed=embed)
+
+@bot.command(name="topliens", aliases=["topduos"])
+async def topliens_cmd(ctx):
+    """Les duos les plus soudés du serveur — .topliens"""
+    vus, duos = set(), []
+    for a, cibles in liens_data.items():
+        for b, p in cibles.items():
+            if p <= 0 or (b, a) in vus:
+                continue
+            vus.add((a, b))
+            duos.append((p, a, b))
+    if not duos:
+        return await ctx.send("🤝 Aucun duo n'a encore tissé de lien sur ce serveur !")
+    duos.sort(reverse=True)
+    lignes = []
+    for i, (p, a, b) in enumerate(duos[:10]):
+        ma = ctx.guild.get_member(int(a)) if ctx.guild else None
+        mb = ctx.guild.get_member(int(b)) if ctx.guild else None
+        if not ma or not mb:
+            continue
+        (_, titre, _, _), _ = palier_lien(p)
+        medaille = "🥇🥈🥉"[i] if i < 3 else "▪️"
+        lignes.append(f"{medaille} **{ma.display_name}** & **{mb.display_name}**\n└ {titre} · *{p} pts*")
+    await ctx.send(embed=discord.Embed(
+        title="🤝 Les duos les plus soudés du QG",
+        description="\n".join(lignes) if lignes else "*Aucun duo actif.*",
+        color=0x9b59b6))
+
+# ============================================================
+#  🌙 MODE NUIT — le QG change de visage entre minuit et 6 h
+# ============================================================
+NUIT_DEBUT, NUIT_FIN = 0, 6
+
+def est_nuit():
+    h = datetime.datetime.now().hour
+    return NUIT_DEBUT <= h < NUIT_FIN
+
+def couleur_nuit(defaut=0xff6b9d):
+    """Palette sombre quand il fait nuit"""
+    return 0x2c2f4a if est_nuit() else defaut
+
+NUIT_ACCUEIL = [
+    "Le QG dort. Il ne reste que toi et quelques ombres.",
+    "Tout le monde est parti. La lumière du salon est restée allumée.",
+    "Les couloirs sont vides. On entend seulement le bruit des notifications.",
+    "C'est l'heure où les pensées reviennent sans prévenir.",
+    "Personne ne saura que tu étais là.",
+    "La nuit avance, et toi tu es encore debout.",
+    "Il n'y a plus grand monde. C'est peut-être mieux comme ça.",
+    "Les insomniaques du QG se reconnaissent sans se parler.",
+]
+NUIT_QUESTIONS = [
+    "🌙 Quel drama tu regarderais si tu ne devais en revoir qu'un seul ?",
+    "🌙 Il est tard — qu'est-ce qui t'empêche de dormir en ce moment ?",
+    "🌙 Le personnage de fiction qui te ressemble le plus, honnêtement ?",
+    "🌙 Une scène de drama qui t'a marqué et que tu n'as jamais oubliée ?",
+    "🌙 Si tu pouvais recommencer une série en oubliant tout, laquelle ?",
+    "🌙 Qu'est-ce que tu écoutes quand tu es seul à cette heure-ci ?",
+    "🌙 Le meilleur souvenir de ta semaine, même tout petit ?",
+    "🌙 Tu préfères les fins heureuses ou les fins justes ?",
+    "🌙 Une chose que tu aimerais dire à quelqu'un mais que tu ne diras pas ?",
+    "🌙 Qu'est-ce qui te ferait du bien là, maintenant ?",
+    "🌙 Le personnage que tu as le plus détesté, et pourquoi ?",
+    "🌙 Si ta vie était un drama, on serait à quel épisode ?",
+]
+NUIT_BONUS_ROLL = 1.6   # taux Épique+ multipliés la nuit
+
+@bot.command(name="nuit", aliases=["modenuit", "nightmode"])
+async def nuit_cmd(ctx):
+    """L'état du Mode Nuit — .nuit"""
+    if est_nuit():
+        h = datetime.datetime.now()
+        reste = (NUIT_FIN - h.hour - 1) * 60 + (60 - h.minute)
+        embed = discord.Embed(
+            title="🌙  Mode Nuit — actif",
+            description=(f"*{random.choice(NUIT_ACCUEIL)}*\n\n"
+                         f"**Ce qui change à cette heure :**\n"
+                         f"🎴 Taux **Épique et plus ×{NUIT_BONUS_ROLL}** sur tes tirages\n"
+                         f"🕯️ Les embeds passent en teinte sombre\n"
+                         f"💭 Le bot pose des questions plus personnelles\n"
+                         f"🤫 `.confession` disponible uniquement la nuit\n\n"
+                         f"⏳ Il reste **{reste // 60}h{reste % 60:02d}** avant le lever du jour."),
+            color=0x2c2f4a)
+        embed.set_footer(text="Les noctambules du QG se reconnaissent sans se parler.")
+    else:
+        h = datetime.datetime.now().hour
+        dans = (24 - h) if h >= NUIT_FIN else (NUIT_DEBUT - h)
+        embed = discord.Embed(
+            title="☀️  Mode Nuit — inactif",
+            description=(f"Le QG est bien réveillé.\n\n"
+                         f"Le **Mode Nuit** s'active chaque jour de **minuit à 6 h** :\n"
+                         f"taux de tirage augmentés, ambiance sombre, questions plus intimes, "
+                         f"et le confessionnal qui s'ouvre.\n\n"
+                         f"🌙 Prochaine ouverture dans environ **{dans} h**."),
+            color=0xf1c40f)
+    await ctx.send(embed=embed)
+
+@bot.command(name="confession", aliases=["confesser"])
+async def confession_cmd(ctx, *, texte: str = None):
+    """Une confession anonyme — uniquement entre minuit et 6 h"""
+    if not est_nuit():
+        return await ctx.send(embed=discord.Embed(
+            description="🌙 Le confessionnal n'ouvre qu'entre **minuit et 6 h**. Reviens plus tard.",
+            color=0x95a5a6))
+    if not texte:
+        return await ctx.send("❌ `.confession <ton message>` — il sera posté anonymement.")
+    if len(texte) > 500:
+        return await ctx.send("❌ 500 caractères maximum.")
+    try:
+        await ctx.message.delete()
+    except Exception:
+        pass
+    embed = discord.Embed(
+        title="🕯️  Confession de la nuit",
+        description=texte,
+        color=0x2c2f4a)
+    embed.set_footer(text="Quelqu'un du QG, à une heure où on dit les vraies choses.")
+    msg = await ctx.send(embed=embed)
+    for e in ("❤️", "🫂", "🌙"):
+        try: await msg.add_reaction(e)
+        except Exception: pass
+
+@tasks.loop(minutes=30)
+async def ambiance_nuit():
+    """Pose une question introspective au cœur de la nuit"""
+    if not est_nuit():
+        return
+    h = datetime.datetime.now()
+    # une seule fois par heure, à la demie
+    if h.minute >= 30 or random.random() > 0.5:
+        return
+    for guild in bot.guilds:
+        salon = (guild.get_channel(SALON_EVENT_ID) if SALON_EVENT_ID else None) or guild.system_channel
+        if not salon:
+            continue
+        try:
+            await salon.send(embed=discord.Embed(
+                title=random.choice(NUIT_QUESTIONS),
+                description=f"*{random.choice(NUIT_ACCUEIL)}*\n\nRéponds si tu es encore debout.",
+                color=0x2c2f4a))
+        except Exception:
+            pass
+
 # ============================================================
 #  🎨 PERSONNALISATION DU PROFIL
 # ============================================================
@@ -9943,7 +11060,8 @@ async def petvisite_cmd(ctx, ami: discord.Member = None):
     embed.add_field(name=f"{db2['emoji']} {db2['nom']}",
                     value=f"*{ami.display_name}*\nHumeur : {pet_humeur_texte(e2)}"
                           + (f"\n🆙 **Niveau {n2} !**" if l2 else ""), inline=True)
-    embed.set_footer(text="Une rencontre par duo toutes les 6 heures")
+    ajouter_lien(uid, aid, "pet")
+    embed.set_footer(text="Une rencontre par duo toutes les 6 heures · votre lien se renforce 🤝")
     await ctx.send(f"{ami.mention}", embed=embed)
 
 @bot.command(name="pet", aliases=["compagnon"])
@@ -11575,6 +12693,7 @@ async def gachabattle_cmd(ctx, adversaire: discord.Member = None):
     if not equipe2:
         return await ctx.send(f"❌ **{adversaire.display_name}** n'a pas choisi son équipe !")
 
+    ajouter_lien(str(ctx.author.id), str(adversaire.id), "duel")
     active_gachabattles[ctx.channel.id] = {
         "j1": {"membre": ctx.author,  "equipe": equipe1, "actif": 0},
         "j2": {"membre": adversaire,  "equipe": equipe2, "actif": 0},
@@ -14867,6 +15986,13 @@ def save_all_data():
             "double_daily": dict(double_daily),
             "profil_custom": {k: dict(v) for k, v in profil_custom.items()},
             "cadenas_perso": dict(cadenas_perso),
+            "liens": {k: dict(v) for k, v in liens_data.items() if v},
+            "gazette_stats": {k: dict(v) for k, v in gazette_stats.items() if v},
+            "gazette_faits": gazette_faits[-200:],
+            "gazette_semaine": dict(gazette_semaine),
+            "avent": {k: dict(v) for k, v in avent_data.items() if v},
+            "drama_saison": {k: v for k, v in drama_saison.items() if k != "vue"},
+            "liens_detail": {k: {a: dict(b) for a, b in v.items()} for k, v in liens_detail.items() if v},
         }
         with open(DATA_FILES["social"], "w", encoding="utf-8") as f:
             _json.dump(social_save, f, ensure_ascii=False)
@@ -14953,6 +16079,19 @@ def load_all_data():
             for k, v in data.get("profil_custom", {}).items():
                 profil_custom[k].update(v)
             cadenas_perso.update(data.get("cadenas_perso", {}))
+            for k, v in data.get("liens", {}).items():
+                liens_data[k].update(v)
+            for k, v in data.get("gazette_stats", {}).items():
+                gazette_stats[k].update(v)
+            gazette_faits.extend(data.get("gazette_faits", []))
+            gazette_semaine.update(data.get("gazette_semaine", {}))
+            for k, v in data.get("avent", {}).items():
+                avent_data[k].update(v)
+            drama_saison.update(data.get("drama_saison", {}))
+            drama_saison["vue"] = None
+            for k, v in data.get("liens_detail", {}).items():
+                for a, b in v.items():
+                    liens_detail[k][a].update(b)
             print(f"[Load] ✅ Social chargé")
         except Exception as e:
             print(f"[Load] Erreur social: {e}")
@@ -14987,71 +16126,7 @@ marche_noir_actif = {}      # {card_key: {prix, expires}}
 # ─────────────────────────────────────────────────────────────
 #  📦 SPAWN COFFRE — toutes les 30-90 min, 1 gagnant, 100-500p
 # ─────────────────────────────────────────────────────────────
-coffre_planning = {"date": None, "heure": None, "minute": None, "fait": False}
 
-@tasks.loop(minutes=5)
-async def spawn_coffre():
-    """Un seul coffre par jour, à une heure tirée au hasard — jamais en même
-    temps qu'un event programmé."""
-    if not planning_actif:
-        return
-    now = datetime.datetime.now()
-    # Nouveau jour → on tire l'horaire du coffre
-    if coffre_planning["date"] != now.date():
-        prises = {ev["heure"] for ev in scheduled_events if ev.get("jour_num") == now.weekday()}
-        libres = [h for h in range(11, 23) if h not in prises] or list(range(11, 23))
-        coffre_planning.update({"date": now.date(), "heure": random.choice(libres),
-                                "minute": random.randint(0, 55), "fait": False})
-        print(f"[Coffre] Prévu aujourd'hui à {coffre_planning['heure']}h{coffre_planning['minute']:02d}")
-    if coffre_planning["fait"]:
-        return
-    if now.hour != coffre_planning["heure"] or now.minute < coffre_planning["minute"]:
-        return
-    coffre_planning["fait"] = True
-    for guild in bot.guilds:
-        try:
-            channel = (guild.get_channel(SALON_GACHA_ID) if SALON_GACHA_ID else None) or guild.system_channel
-            if channel:
-                await run_coffre(channel, gain=random.randint(300, 1200), guild=guild)
-        except Exception as e:
-            print(f"[spawn_coffre] Erreur: {e}")
-
-# ─────────────────────────────────────────────────────────────
-#  🌙 NUIT DE CHASSE — boost Mythique x2 pendant 2h
-# ─────────────────────────────────────────────────────────────
-@tasks.loop(hours=12)
-async def nuit_de_chasse():
-    """Toutes les 12h, 15% de chance — taux Mythique ×2 pendant 2h"""
-    if not planning_actif:
-        return
-    if random.random() > 0.15:
-        return
-    for guild in bot.guilds:
-        try:
-            channel = (guild.get_channel(SALON_GACHA_ID) if SALON_GACHA_ID else None) or guild.system_channel
-            if channel:
-                await run_nuit_chasse(channel, guild)
-        except Exception as e:
-            print(f"[nuit_de_chasse] Erreur: {e}")
-
-# ─────────────────────────────────────────────────────────────
-#  🕶️ MARCHÉ NOIR — toutes les 48h, 3 cartes rares à acheter
-# ─────────────────────────────────────────────────────────────
-@tasks.loop(hours=72)
-async def marche_noir_task():
-    """Toutes les 72h, 50% de chance — Marché Noir pendant 24h"""
-    if not planning_actif:
-        return
-    if random.random() > 0.50:
-        return
-    for guild in bot.guilds:
-        try:
-            channel = (guild.get_channel(SALON_BOUTIQUE_ID or SALON_GACHA_ID)
-                       if (SALON_BOUTIQUE_ID or SALON_GACHA_ID) else None) or guild.system_channel
-            if channel:
-                await run_marche_noir(channel, guild)
-        except Exception as e:
-            print(f"[marche_noir_task] Erreur: {e}")
 
 @bot.command(name="ouvrir", aliases=["coffre", "open"])
 async def ouvrir_cmd(ctx):
@@ -15065,6 +16140,7 @@ async def ouvrir_cmd(ctx):
     uid = str(ctx.author.id)
     gain = coffre.get("contenu", random.randint(100, 500))
     economy_data[uid]["coins"] += gain
+    gazette_gain(uid, gain)
     embed = discord.Embed(
         title="📦 Coffre ouvert !",
         description=f"🎉 **{ctx.author.mention}** a ouvert le coffre et gagné **{gain} pièces** ! 💰",
@@ -15382,10 +16458,10 @@ async def on_ready():
     scheduler_task.start()
     girls_auto_tasks.start()
     autosave.start()
+    ambiance_nuit.start()
+    gazette_task.start()
+    drama_task.start()
     nettoyer_salons_inactifs.start()
-    spawn_coffre.start()
-    nuit_de_chasse.start()
-    marche_noir_task.start()
     await bot.change_presence(
         activity=discord.Activity(type=discord.ActivityType.watching, name="🎬 Kdrama • .help")
     )
