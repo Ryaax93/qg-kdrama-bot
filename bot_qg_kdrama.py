@@ -1166,21 +1166,6 @@ def build_help_pages(guild, is_admin=False):
         "`.succes [@membre]` — Tes 30 succès à débloquer\n"
         "`.missions` — Tes missions du jour"
     ), inline=False)
-    e.add_field(name="🐾 Ton compagnon", value=(
-        "`.pet` — Son état complet • `.pet liste` — Tous les tiens\n"
-        "`.nourrir` 🍖 `.laver` 🛁 `.promener` 🚶 `.jouer` 🎾 `.dormir` 😴 `.caresser` 🫶\n"
-        "`.petvisite @ami` — Rencontre entre compagnons 🐾 *(amitié + récompenses)*\n"
-        "`.petamis` — Toutes les amitiés de ton compagnon\n"
-        "`.garderobe` — 👗 Habille ton compagnon *(12 accessoires visibles)*\n"
-        "`.refuge` — 🏡 Aménage sa maison *(10 meubles, bonus passifs)*\n"
-        "`.petexpedition <lieu>` — 🎒 Envoie-le explorer *(butin au retour)*\n"
-        "`.petcarnet` — 📖 Son carnet de bord *(ses souvenirs)*\n"
-        "`.liens [@membre]` — Tes **liens** avec les autres 🤝\n"
-        "`.topliens` — Les duos les plus soudés du serveur\n"
-        "*Un compagnon négligé voit son bonus divisé par deux !*\n"
-        "*Pour en obtenir un : `.shop` → page 🐾 Compagnons, puis `.acheter <nom>`*\n"
-        "`.pet equiper <nom>` • `.pet nourrir` — +25 XP"
-    ), inline=False)
     e.add_field(name="💪 Stats de combat", value=(
         "`.ameliorer <pv|atk|def|endurance>` — Dépenser tes points"
     ), inline=False)
@@ -1188,24 +1173,19 @@ def build_help_pages(guild, is_admin=False):
         "`.fit <description>` — Poster ton look dans le salon filles\n"
         "*Réservé aux membres ayant le rôle filles du serveur.*"
     ), inline=False)
-    e.add_field(name="🎨 Personnalisation *(à débloquer en boutique)*", value=(
-        "`.cartemembre [@membre]` — 🃏 **Ta carte de membre** à collectionner\n"
-        "`.pins` — 🎖️ Tes pins *(ils se méritent, ne s'achètent pas)*\n"
-        "`.vitrine <c1>, <c2>, <c3>` — 🌟 Expose 3 cartes sur ton profil\n"
-        "`.mood <texte>` — 🎵 Ton humeur du jour *(gratuit)*\n"
-        "`.macustom` — Voir tout ce que tu as débloqué 🎨\n"
-        "`.setbadge <texte>` — Un badge sur ton profil\n"
-        "`.setcadre <style>` — Encadrer ton profil *(12 styles)*\n"
-        "`.settitre <texte>` — Un titre au-dessus de ton nom\n"
-        "`.setemoji <emoji>` — Ton emoji signature\n"
-        "`.settheme <nom>` — Une ambiance complète *(8 thèmes)*\n"
-        "`.setcouleur <hex>` — La couleur de tes embeds\n"
-        "`.setcitation <texte>` — Une phrase sous ton pseudo\n"
-        "`.setbanniere <url>` — Une image en bas du profil\n"
-        "`.lettre #salon <texte>` — Message anonyme *(item)*"
-    ), inline=False)
     e.add_field(name="🎂 Divers", value=(
         "`.anniversaire <JJ/MM>` — Enregistrer ta date"
+    ), inline=False)
+    e.add_field(name="🎨 Personnalisation *(à débloquer en boutique)*", value=(
+        "`.macustom` — Voir tout ce que tu as débloqué 🎨\n"
+        "`.setbadge <texte>` · `.settitre <texte>` · `.setcitation <texte>`\n"
+        "`.setcadre <style>` — 12 cadres · `.settheme <nom>` — 8 ambiances\n"
+        "`.setcouleur <hex>` · `.setemoji <emoji>` · `.setbanniere <url>`"
+    ), inline=False)
+    e.add_field(name="🎖️ Ce qui se mérite", value=(
+        "`.pins` — Tes pins *(18 à débloquer, ils ne s'achètent pas)*\n"
+        "`.vitrine <c1>, <c2>, <c3>` — Expose 3 cartes sur ton profil\n"
+        "`.mood <texte>` — Ton humeur du jour *(gratuit)*"
     ), inline=False)
     pages.append(("🪪", "Profil & Progression", e))
 
@@ -1277,11 +1257,83 @@ def build_help_pages(guild, is_admin=False):
     ), inline=False)
     pages.append(("🎰", "Gacha", e))
 
-    # ══════════════ 5 — JEUX & COMBATS ══════════════
-    e = discord.Embed(
-        title="🎮  Jeux & Combats",
-        description="*De quoi s'occuper seul ou à plusieurs.*",
-        color=0xe74c3c)
+    e = discord.Embed(title="🐾  Compagnons",
+        description="*Ton compagnon vit, s'attache et rapporte — occupe-toi de lui.*", color=0xe91e63)
+    e.add_field(name="🐾 Les bases", value=(
+        "`.pet` — Son état complet • `.pet liste` — Tous les tiens\n"
+        "`.nourrir` 🍖 `.laver` 🛁 `.promener` 🚶 `.jouer` 🎾 `.dormir` 😴 `.caresser` 🫶\n"
+        "`.petvisite @ami` — Rencontre entre compagnons 🐾 *(amitié + récompenses)*\n"
+        "`.petamis` — Toutes les amitiés de ton compagnon\n"
+        "`.garderobe` — 👗 Habille ton compagnon *(12 accessoires visibles)*\n"
+        "`.refuge` — 🏡 Aménage sa maison *(10 meubles, bonus passifs)*\n"
+        "`.petexpedition <lieu>` — 🎒 Envoie-le explorer *(butin au retour)*\n"
+        "`.petcarnet` — 📖 Son carnet de bord *(ses souvenirs)*\n"
+        "`.liens [@membre]` — Tes **liens** avec les autres 🤝\n"
+        "`.topliens` — Les duos les plus soudés du serveur\n"
+        "*Un compagnon négligé voit son bonus divisé par deux !*\n"
+        "*Pour en obtenir un : `.shop` → page 🐾 Compagnons, puis `.acheter <nom>`*\n"
+        "`.pet equiper <nom>` • `.pet nourrir` — +25 XP"
+    ), inline=False)
+    e.add_field(name="👗 Garde-robe & 🏡 Refuge", value=(
+        "`.garderobe` — 12 accessoires **visibles** à côté de son nom\n"
+        "`.garderobe acheter/porter/retirer <objet>` — 3 accessoires max\n"
+        "`.refuge` — Sa maison · `.refuge liste` — Les 10 meubles\n"
+        "`.refuge acheter <meuble>` — Bonus passifs *(faim, humeur, XP)*\n"
+        "*Les accessoires **s'ajoutent** au bonus de race, ils ne le remplacent pas.*"
+    ), inline=False)
+    e.add_field(name="💞 Vie sociale", value=(
+        "`.petvisite @ami` — Rencontre entre compagnons *(amitié progressive)*\n"
+        "`.petamis` — Toutes ses amitiés · 6 paliers, bonus croissants\n"
+        "`.petcarnet` — 📖 Son carnet de souvenirs"
+    ), inline=False)
+    e.add_field(name="🎒 Aventure", value=(
+        "`.petexpedition` — Voir les 4 lieux d'expédition\n"
+        "`.petexpedition <lieu>` — L'envoyer explorer *(1 à 4 h, butin au retour)*\n"
+        "*L'event **🏃 Course de Compagnons** met tous les pets en compétition.*"
+    ), inline=False)
+    e.set_footer(text="Un compagnon négligé voit son bonus divisé par deux 🥺")
+    pages.append(("🐾", "Compagnons", e))
+
+    e = discord.Embed(title="🎮  Jeux & Duels",
+        description="*Tous les jeux du QG. La plupart proposent un salon privé au lancement.*",
+        color=0x2ecc71)
+    e.add_field(name="🧠 Réflexion", value=(
+        "`.quiz <thème>` — Quiz en continu *(6 thèmes, 433 questions)*\n"
+        "`.quizduel <thème> @joueur` — Quiz en duel\n"
+        "`.pendu` — Le pendu *(185 titres, thème affiché, `indice` dispo)*\n"
+        "`.devine` — Devine le personnage *(37 persos, indices progressifs)*\n"
+        "`.emoji [anime|kdrama|mix]` — Devine l'œuvre en 3 emojis\n"
+        "`.drapeaux` — Quiz des drapeaux à boutons *(70 pays)*\n"
+        "`.memory [facile|normal|difficile]` — Retrouve les paires 🃏"
+    ), inline=False)
+    e.add_field(name="🛑 Arrêter / passer", value=(
+        "`.quizstop` · `.pendustop` · `.devinerstop` · `.emojistop` · `.drapeauxstop` · `.memorystop`\n"
+        "`.devinetteskip` · `.drapeauxskip` — Passer la manche en cours"
+    ), inline=False)
+    e.add_field(name="⚔️ Duels", value=(
+        "`.puissance4 @membre` — Puissance 4 en duel *(250-450 p)*\n"
+        "`.p4stop` — Annuler la partie\n"
+        "`.rps <choix>` — Pierre / feuille / ciseaux\n"
+        "`.dice` — Un lancer de dés\n"
+        "`.risque` — Double ou perds tout, jusqu'à 6 paliers *(1×/heure)*"
+    ), inline=False)
+    e.add_field(name="⚔️ Combats", value=(
+        "`.arene @membre` — Duel d'arène\n"
+        "`.gachabattle @membre` — Combat 3v3 avec tes cartes\n"
+        "`.gachastop` — Annuler le combat en cours\n"
+        "`.attaque` — Frapper le boss du serveur *(alias `.attaquerboss`)*"
+    ), inline=False)
+    e.add_field(name="🏆 Tournois", value=(
+        "`.bracket <thème>` — Tournoi du serveur, le public vote\n"
+        "*Thèmes : `kdrama` `anime` `personnage` `fastfood` `marque`*\n"
+        "`.bracket anime 16` — Version à 16 candidats"
+    ), inline=False)
+    e.set_footer(text="Un salon privé peut t'être proposé — personne ne spoile tes réponses.")
+    pages.append(("🎮", "Jeux & Duels", e))
+
+    e = discord.Embed(title="🐺  Loup Garou",
+        description="*Le jeu de rôle du QG. Tout se joue au clic dans des salons secrets.*",
+        color=0x8e44ad)
     e.add_field(name="🐺 Loup Garou", value=(
         "`.lg` — L'aide complète du jeu\n"
         "`.lgroles` — Les rôles existants\n"
@@ -1303,33 +1355,10 @@ def build_help_pages(guild, is_admin=False):
         "`.lglove @a @b` — Cupidon • `.lgkillchasseur @cible` — Chasseur\n"
         "`.lgpass` / `.lgskip` — Passer son tour • `.lgnext` — Suite"
     ), inline=False)
-    e.add_field(name="⚔️ Combats", value=(
-        "`.arene @membre` — Duel d'arène\n"
-        "`.gachabattle @membre` — Combat 3v3 avec tes cartes\n"
-        "`.gachastop` — Annuler le combat en cours\n"
-        "`.attaque` — Frapper le boss du serveur *(alias `.attaquerboss`)*"
-    ), inline=False)
-    e.add_field(name="🎯 Mini-jeux", value=(
-        "`.devine` — Devine le personnage, manches en continu *(37 persos)*\n"
-        "`.devinetteskip` — Passer la devinette · `.devinerstop` — Arrêter\n"
-        "`.pendu` — Le pendu, manches en continu *(185 titres)*\n"
-        "`.pendustop` — Arrêter la partie de pendu\n"
-        "`.memory [facile|normal|difficile]` — Retrouve les paires 🃏\n"
-        "`.memorystop` — Abandonner la partie\n"
-        "`.risque` — Double ou perds tout, jusqu'à 6 paliers *(1×/heure)*\n"
-        "`.saison` — 🎬 **Le Drama Collectif** : épisode, casting, votes en cours\n"
-        "`.drama-tropes` — Les 10 histoires possibles\n"
-        "`.avent` — Le **calendrier de l'Avent** 🎄 *(1er → 24 décembre)*\n"
-        "`.ouvrircase` — Ouvrir la case du jour · `.topavent` — Les plus assidus\n"
-        "`.gazette` — 📰 **La Gazette du QG** *(publiée dimanche 20 h)*\n"
-        "`.nuit` — L'état du **Mode Nuit** 🌙 *(minuit → 6 h)*\n"
-        "`.confession <texte>` — Confession anonyme *(la nuit uniquement)*\n"
-        "`.puissance4 @membre` — Puissance 4 en duel *(250-450 p au vainqueur)*\n"
-        "`.p4stop` — Annuler la partie\n"
-        "`.rps <choix>` — Pierre / feuille / ciseaux\n"
-        "`.dice` — Lancer un dé"
-    ), inline=False)
-    pages.append(("🎮", "Jeux & Combats", e))
+    e.set_footer(text="À partir de 10 joueurs, le Loup Blanc et la Petite Fille entrent en jeu.")
+    pages.append(("🐺", "Loup Garou", e))
+
+    # ══════════════ 5 — JEUX & COMBATS ══════════════
 
     # ══════════════ 6 — EVENTS, SOCIAL & DIVERS ══════════════
     e = discord.Embed(
@@ -1365,6 +1394,17 @@ def build_help_pages(guild, is_admin=False):
         "`.sondage <question>` — Lancer un sondage\n"
         "`.giveaway <durée> <lot>` — Lancer un giveaway\n"
         "`.help` — Cette aide"
+    ), inline=False)
+    e.add_field(name="🎬 Le Drama Collectif", value=(
+        "`.saison` — Où en est la série écrite par le serveur\n"
+        "`.drama-tropes` — Les 10 histoires possibles"
+    ), inline=False)
+    e.add_field(name="🌙 Ambiances & rendez-vous", value=(
+        "`.nuit` — État du **Mode Nuit** 🌙 *(minuit → 6 h)*\n"
+        "`.confession <texte>` — Confession anonyme *(la nuit uniquement)*\n"
+        "`.gazette` — 📰 **La Gazette du QG** *(dimanche 20 h)*\n"
+        "`.avent` — 🎄 Calendrier de l'Avent · `.ouvrircase` · `.topavent`\n"
+        "`.lettre #salon <texte>` — Message anonyme *(item boutique)*"
     ), inline=False)
     pages.append(("🎪", "Events & Divers", e))
 
@@ -9621,69 +9661,14 @@ def build_guide_embeds(guild):
     return pages
 
 
-@bot.command(name="cartemembre", aliases=["membercard", "macarte"])
-async def carte_membre_cmd(ctx, membre: discord.Member = None):
-    """Ta carte de membre à collectionner — .carte [@membre]"""
-    cible = membre or ctx.author
-    uid = str(cible.id)
-    for p in verifier_pins(uid):
-        await donner_pin(uid, p)
-    lvl = xp_data[uid]["level"]
-    cosmo = profil_custom.get(uid, {})
-    s = user_stats[uid]
 
-    # Bordure selon le niveau
-    if lvl >= 50:   bord, rang, coul = "👑", "LÉGENDE", 0xf1c40f
-    elif lvl >= 35: bord, rang, coul = "💎", "MYTHIQUE", 0xe74c3c
-    elif lvl >= 25: bord, rang, coul = "🔱", "VÉTÉRAN", 0x9b59b6
-    elif lvl >= 15: bord, rang, coul = "⭐", "CONFIRMÉ", 0x3498db
-    elif lvl >= 8:  bord, rang, coul = "✦", "INITIÉ", 0x2ecc71
-    else:           bord, rang, coul = "▪️", "NOUVEAU", 0x95a5a6
-    if cosmo.get("couleur"):
-        coul = cosmo["couleur"]
-
-    ligne = bord * 13
-    holo = " ✨HOLOGRAPHIQUE✨" if lvl >= 50 else ""
-    pid, pdb, pst = get_active_pet(uid)
-    nb_cartes = len(gacha_collections.get(uid, {}))
-    mes_pins = pins_data.get(uid, set())
-    classement = sorted(xp_data.items(), key=lambda x: (x[1]["level"], x[1]["xp"]), reverse=True)
-    rang_srv = next((i+1 for i, (u, _) in enumerate(classement) if u == uid), "—")
-
-    corps = (f"{ligne}\n"
-             f"### {cosmo.get('emoji','')} {cible.display_name} {cosmo.get('emoji','')}\n"
-             f"**{rang}**{holo}  ·  Niveau **{lvl}**\n")
-    if cosmo.get("titre"):
-        corps += f"⟨ *{cosmo['titre']}* ⟩\n"
-    corps += (f"{ligne}\n\n"
-              f"🎴 **{nb_cartes}** cartes  ·  🏆 rang **#{rang_srv}**\n"
-              f"💰 **{economy_data[uid]['coins']:,}** pièces\n"
-              f"⚔️ **{s.get('arene_wins',0)+s.get('pb_wins',0)}** victoires  ·  "
-              f"💬 **{s.get('messages',0):,}** messages\n")
-    if pid:
-        corps += f"🐾 **{pet_nom_decore(uid, pdb)}** — niv. {pst['level']}\n"
-    if mes_pins:
-        corps += f"\n{'  '.join(PINS[p][0] for p in mes_pins if p in PINS)}\n"
-    corps += f"\n{ligne}"
-
-    embed = discord.Embed(description=corps, color=coul)
-    embed.set_thumbnail(url=cible.display_avatar.url)
-    embed.set_author(name=f"🃏  CARTE DE MEMBRE — QG KDRAMA")
-    vit = [k for k in cosmo.get("vitrine", []) if k in ANIME_CARDS_DB]
-    if vit and ANIME_CARDS_DB[vit[0]].get("image"):
-        embed.set_image(url=ANIME_CARDS_DB[vit[0]]["image"])
-    elif cosmo.get("banniere"):
-        embed.set_image(url=cosmo["banniere"])
-    embed.set_footer(text=(f"Membre depuis le {cible.joined_at.strftime('%d/%m/%Y')}"
-                           if getattr(cible, "joined_at", None) else "QG Kdrama")
-                          + f"  ·  {len(mes_pins)}/{len(PINS)} pins")
-    await ctx.send(embed=embed)
-
-@bot.command(name="profil", aliases=["profile", "p"])
+@bot.command(name="profil", aliases=["profile", "p", "cartemembre", "carteid"])
 async def profil_cmd(ctx, membre: discord.Member = None):
-    """Ta fiche de membre — .profil [@membre]"""
+    """Ta carte de membre — .profil [@membre]"""
     target = membre or ctx.author
     uid = str(target.id)
+    for _p in verifier_pins(uid):
+        await donner_pin(uid, _p, ctx.channel if target == ctx.author else None)
 
     lvl = xp_data[uid]["level"]
     xp = xp_data[uid]["xp"]
@@ -9693,55 +9678,54 @@ async def profil_cmd(ctx, membre: discord.Member = None):
     nb_cartes = len(gacha_collections.get(uid, {}))
     nb_succes = len(achievements_data.get(uid, set()))
     s = user_stats[uid]
-
-    # Barre de progression
-    ratio = min(1.0, xp / max(needed, 1))
-    filled = int(ratio * 12)
-    barre = "▰" * filled + "▱" * (12 - filled)
-
-    # Rang dans le serveur
-    classement = sorted(xp_data.items(), key=lambda x: (x[1]["level"], x[1]["xp"]), reverse=True)
-    rang = next((i + 1 for i, (u, _) in enumerate(classement) if u == uid), None)
-    medaille = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rang, f"#{rang}" if rang else "—")
-
-    for _p in verifier_pins(uid):
-        await donner_pin(uid, _p, ctx.channel if target == ctx.author else None)
     cosmo = profil_custom.get(uid, {})
-    cadre = PROFIL_CADRES.get(cosmo.get("cadre"))
-    sep = cadre[2] if cadre else "─────────────────────"
-    signature = cosmo.get("emoji", "")
-
-    embed = discord.Embed(color=cosmo.get("couleur", 0xe91e63))
-    titre_auteur = f"{signature} {target.display_name} {signature}".strip()
-    if cosmo.get("badge"):
-        titre_auteur += f"  ·  {cosmo['badge']}"
-    embed.set_author(name=titre_auteur[:250], icon_url=target.display_avatar.url)
-
-    entete = [sep]
-    if cosmo.get("titre"):
-        entete.append(f"### ⟨ {cosmo['titre']} ⟩")
-    if cosmo.get("citation"):
-        entete.append(f"*« {cosmo['citation']} »*")
-    if cosmo.get("mood"):
-        entete.append(f"🎵 *{cosmo['mood']}*")
     mes_pins = pins_data.get(uid, set())
+
+    # ── Rang et bordure selon le niveau ──
+    if lvl >= 50:   bord, rang, coul_r = "👑", "LÉGENDE", 0xf1c40f
+    elif lvl >= 35: bord, rang, coul_r = "💎", "MYTHIQUE", 0xe74c3c
+    elif lvl >= 25: bord, rang, coul_r = "🔱", "VÉTÉRAN", 0x9b59b6
+    elif lvl >= 15: bord, rang, coul_r = "⭐", "CONFIRMÉ", 0x3498db
+    elif lvl >= 8:  bord, rang, coul_r = "✦", "INITIÉ", 0x2ecc71
+    else:           bord, rang, coul_r = "▪️", "NOUVEAU", 0x95a5a6
+
+    cadre = PROFIL_CADRES.get(cosmo.get("cadre"))
+    sep = cadre[2] if cadre else bord * 13
+    signature = cosmo.get("emoji", "")
+    couleur = cosmo.get("couleur", coul_r)
+    holo = "  ✨" if lvl >= 50 else ""
+
+    ratio = min(1.0, xp / max(needed, 1))
+    barre = "▰" * int(ratio * 12) + "▱" * (12 - int(ratio * 12))
+    classement = sorted(xp_data.items(), key=lambda x: (x[1]["level"], x[1]["xp"]), reverse=True)
+    rang_srv = next((i + 1 for i, (u, _) in enumerate(classement) if u == uid), None)
+    medaille = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rang_srv, f"#{rang_srv}" if rang_srv else "—")
+
+    # ── Corps de la carte ──
+    corps = [sep]
+    corps.append(f"### {signature} {target.display_name} {signature}".rstrip())
+    corps.append(f"**{rang}**{holo}  ·  Niveau **{lvl}**  ·  {get_tier(lvl)}")
+    if cosmo.get("titre"):
+        corps.append(f"⟨ *{cosmo['titre']}* ⟩")
+    if cosmo.get("citation"):
+        corps.append(f"*« {cosmo['citation']} »*")
+    if cosmo.get("mood"):
+        corps.append(f"🎵 *{cosmo['mood']}*")
     if mes_pins:
-        entete.append("  ".join(PINS[p][0] for p in mes_pins if p in PINS))
-    if len(entete) > 1:
-        entete.append(sep)
-    embed.description = "\n".join(entete)
+        corps.append("  ".join(PINS[p][0] for p in mes_pins if p in PINS))
+    corps.append(sep)
+    corps.append(f"`{barre}`  **{xp} / {needed} XP**")
+
+    embed = discord.Embed(description="\n".join(corps), color=couleur)
+    embed.set_author(name=f"🃏  CARTE DE MEMBRE  ·  QG KDRAMA", icon_url=target.display_avatar.url)
     embed.set_thumbnail(url=target.display_avatar.url)
 
-    embed.add_field(
-        name=f"⭐  Niveau {lvl}",
-        value=f"`{barre}`\n**{xp} / {needed} XP**\n{get_tier(lvl)}",
-        inline=False)
-
-    embed.add_field(name="💰 Pièces",
+    embed.add_field(name="💰 Fortune",
                     value=f"**{coins:,}**" + (f"\n🏦 {depot:,} en banque" if depot else ""), inline=True)
-    embed.add_field(name="🏆 Classement", value=f"**{medaille}**\n*sur {len(classement)} membres*", inline=True)
-    embed.add_field(name="🎖️ Succès", value=f"**{nb_succes}** / {len(ACHIEVEMENTS)}", inline=True)
-
+    embed.add_field(name="🏆 Classement",
+                    value=f"**{medaille}**\n*sur {len(classement)} membres*", inline=True)
+    embed.add_field(name="🎖️ Succès",
+                    value=f"**{nb_succes}** / {len(ACHIEVEMENTS)}", inline=True)
     embed.add_field(name="🎴 Collection", value=f"**{nb_cartes}** cartes", inline=True)
     embed.add_field(name="💬 Messages", value=f"**{s.get('messages', 0):,}**", inline=True)
     embed.add_field(name="⚔️ Victoires",
@@ -9751,11 +9735,27 @@ async def profil_cmd(ctx, membre: discord.Member = None):
     pid, pdb, pstate = get_active_pet(uid)
     if pid:
         _ref = len(pets_data.get(uid, {}).get("refuge", []))
-        embed.add_field(name="🐾 Compagnon",
-                        value=(f"**{pet_nom_decore(uid, pdb)}** — Niv. {pstate['level']}\n"
-                               f"{pet_bonus_texte(pdb, pstate['level'])}"
-                               + (f"\n🏡 Refuge aménagé ({_ref} meuble(s))" if _ref else "")),
-                        inline=False)
+        _amis = sum(1 for k, v in petamitie.items() if uid in k.split("|") and v > 0)
+        val = f"**{pet_nom_decore(uid, pdb)}** — Niveau {pstate['level']}\n{pet_bonus_texte(pdb, pstate['level'], uid)}"
+        extra = []
+        if _ref: extra.append(f"🏡 {_ref} meuble(s)")
+        if _amis: extra.append(f"💞 {_amis} ami(s)")
+        if extra: val += "\n" + "  ·  ".join(extra)
+        embed.add_field(name="🐾 Compagnon", value=val, inline=False)
+
+    # Vitrine
+    vit = [k for k in cosmo.get("vitrine", []) if k in ANIME_CARDS_DB]
+    if vit:
+        embed.add_field(name="🌟 Vitrine",
+                        value="\n".join(f"{RARETE_EMOJI.get(ANIME_CARDS_DB[k]['rarete'],'')} "
+                                        f"**{ANIME_CARDS_DB[k]['nom']}** — *{ANIME_CARDS_DB[k]['serie']}*"
+                                        for k in vit), inline=False)
+
+    # Pins détaillés
+    if mes_pins:
+        embed.add_field(name=f"🎖️ Pins ({len(mes_pins)}/{len(PINS)})",
+                        value="  ·  ".join(f"{PINS[p][0]} {PINS[p][1]}"
+                                          for p in list(mes_pins)[:6] if p in PINS), inline=False)
 
     # Mariage
     if uid in mariages:
@@ -9763,28 +9763,20 @@ async def profil_cmd(ctx, membre: discord.Member = None):
         if conjoint:
             embed.add_field(name="💍 Marié(e) à", value=conjoint.display_name, inline=True)
 
-    # Rôles boutique portés
+    # Titres achetés
     noms_boutique = {n for n, _ in ROLES_BOUTIQUE.values()}
     portes = [r.name for r in getattr(target, "roles", []) if r.name in noms_boutique]
     if portes:
         embed.add_field(name="🎭 Titres", value=" · ".join(portes[:4]), inline=False)
 
-    vit = [k for k in cosmo.get("vitrine", []) if k in ANIME_CARDS_DB]
-    if vit:
-        embed.add_field(name="🌟 Vitrine",
-                        value="\n".join(f"{RARETE_EMOJI.get(ANIME_CARDS_DB[k]['rarete'],'')} "
-                                        f"**{ANIME_CARDS_DB[k]['nom']}** — *{ANIME_CARDS_DB[k]['serie']}*"
-                                        for k in vit), inline=False)
-    if mes_pins:
-        embed.add_field(name=f"🎖️ Pins ({len(mes_pins)}/{len(PINS)})",
-                        value="  ·  ".join(f"{PINS[p][0]} {PINS[p][1]}" for p in list(mes_pins)[:6]
-                                          if p in PINS), inline=False)
-    if cadre:
-        embed.add_field(name="\u200b", value=sep, inline=False)
-    if cosmo.get("banniere"):
+    embed.add_field(name="\u200b", value=sep, inline=False)
+    if vit and ANIME_CARDS_DB[vit[0]].get("image"):
+        embed.set_image(url=ANIME_CARDS_DB[vit[0]]["image"])
+    elif cosmo.get("banniere"):
         embed.set_image(url=cosmo["banniere"])
-    embed.set_footer(text=f"Membre depuis le {target.joined_at.strftime('%d/%m/%Y')}"
-                          if getattr(target, "joined_at", None) else "QG Kdrama")
+    embed.set_footer(text=(f"Membre depuis le {target.joined_at.strftime('%d/%m/%Y')}"
+                           if getattr(target, "joined_at", None) else "QG Kdrama")
+                          + f"  ·  `.macustom` pour personnaliser")
     await ctx.send(embed=embed)
 
 
@@ -9959,37 +9951,73 @@ PET_XP_PER_LEVEL = 100
 PET_LEVEL_MAX = 10
 pets_data = {}  # {uid: {"owned": {pet_id: {"level": 1, "xp": 0}}, "active": pet_id}}
 
-def pet_bonus_texte(p, niveau=1):
-    """Décrit le bonus d'un compagnon en clair : « +15 % de pièces »"""
+def pet_bonus_texte(p, niveau=1, uid=None):
+    """Décrit le bonus principal. Si `uid` est fourni, ajoute les accessoires."""
+    LABELS = {"coins": ("💰", "de pièces", "sur `.daily` et `.travailler`"),
+              "xp":    ("⭐", "d'XP", "sur chaque message"),
+              "roll":  ("🎰", "de roll gratuit", "")}
+    emo, quoi, ou = LABELS[p["type"]]
     val = p["base"] + (niveau - 1)
-    if p["type"] == "coins":
-        return f"💰 **+{val} % de pièces** sur `.daily` et `.travailler`"
-    if p["type"] == "xp":
-        return f"⭐ **+{val} % d'XP** sur chaque message"
-    return f"🎰 **{val} % de chance** de roll gratuit *(le roll n'est pas décompté)*"
+    acc = bonus_accessoires(uid, p["type"]) if uid else 0
+    if acc:
+        return (f"{emo} **+{val + acc} % {quoi}** {ou}\n"
+                f"└ *{val} % de race + {acc} % d'accessoires*")
+    return f"{emo} **+{val} % {quoi}** {ou}"
+
+def pet_detail_bonus(uid, pdb, niveau):
+    """Les lignes de bonus détaillées : race + accessoires, tous types confondus"""
+    LABELS = {"coins": ("💰", "de pièces", "sur `.daily` et `.travailler`"),
+              "xp":    ("⭐", "d'XP", "sur chaque message"),
+              "roll":  ("🎰", "de roll gratuit", "*(le roll n'est pas décompté)*"),
+              "humeur":("❤️", "d'humeur conservée", "*(il déprime moins vite)*")}
+    lignes = []
+    for typ, (emo, quoi, ou) in LABELS.items():
+        base = pdb["base"] + (niveau - 1) if pdb["type"] == typ else 0
+        acc = bonus_accessoires(uid, typ)
+        if base + acc <= 0:
+            continue
+        detail = []
+        if base:
+            detail.append(f"race **+{base} %**")
+        if acc:
+            noms = " ".join(f"{PET_ACCESSOIRES[a][0]}+{PET_ACCESSOIRES[a][4]}"
+                            for a in pet_accessoires(uid)
+                            if a in PET_ACCESSOIRES and PET_ACCESSOIRES[a][3] == typ)
+            detail.append(f"accessoires **+{acc} %** ({noms})")
+        lignes.append(f"{emo} **+{base + acc} % {quoi}** {ou}\n└ *{' + '.join(detail)}*")
+    return lignes or ["*Aucun bonus actif.*"]
+
+
+def pet_bonus(uid, bonus_type):
+    """Bonus % total : race (si le type correspond) + accessoires portés.
+    Les accessoires s'AJOUTENT et peuvent apporter un type que la race n'a pas."""
+    pid, pdb, pstate = get_active_pet(uid)
+    if not pid:
+        return 0
+    base = 0
+    if pdb["type"] == bonus_type:
+        base = pdb["base"] + (pstate["level"] - 1)
+    base += bonus_accessoires(uid, bonus_type)
+    if base <= 0:
+        return 0
+    st = pet_etat(uid)
+    if st and st["humeur"] < 30:
+        return max(1, int(base * 0.5))
+    if st and st["humeur"] < 55:
+        return max(1, int(base * 0.8))
+    return base
+
 
 def get_active_pet(uid):
-    """Retourne (pet_id, pet_db, pet_state) du pet actif, ou (None, None, None)"""
+    """Retourne (pet_id, pet_db, pet_state) du compagnon actif, ou (None, None, None)"""
     d = pets_data.get(uid)
     if not d or not d.get("active"):
         return None, None, None
     pid = d["active"]
-    if pid not in d.get("owned", {}) or pid not in PETS_DB:
+    if pid not in PETS_DB:
         return None, None, None
-    return pid, PETS_DB[pid], d["owned"][pid]
-
-def pet_bonus(uid, bonus_type):
-    """Bonus % du compagnon actif — réduit s'il est malheureux"""
-    pid, pdb, pstate = get_active_pet(uid)
-    if not pid or pdb["type"] != bonus_type:
-        return 0
-    base = pdb["base"] + (pstate["level"] - 1) + bonus_accessoires(uid, bonus_type)
-    st = pet_etat(uid)
-    if st and st["humeur"] < 30:
-        return max(1, int(base * 0.5))    # compagnon négligé → bonus divisé par deux
-    if st and st["humeur"] < 55:
-        return max(1, int(base * 0.8))
-    return base
+    st = d.setdefault("owned", {}).setdefault(pid, {"level": 1, "xp": 0})
+    return pid, PETS_DB[pid], st
 
 def give_pet_xp(uid, amount=1):
     """Donne de l'XP au pet actif. Retourne (levelup, new_level) ou (False, 0)"""
@@ -12629,19 +12657,27 @@ async def garderobe_cmd(ctx, action: str = None, *, objet: str = None):
     if not action or action.lower() in ("voir", "liste"):
         lignes = []
         for k, (emo, nom, prix, typ, val, desc) in PET_ACCESSOIRES.items():
-            eff = {"humeur":"❤️ humeur","coins":"💰 pièces","xp":"⭐ XP","roll":"🎰 rolls"}[typ]
+            eff = {"humeur":"❤️ humeur conservée","coins":"💰 pièces en plus",
+                   "xp":"⭐ XP en plus","roll":"🎰 rolls gratuits"}[typ]
             if k in d["portes"]:
                 etat = "✅ **porté**"
             elif k in d["garderobe"]:
                 etat = "🎒 possédé"
             else:
                 etat = f"🛒 {prix:,} p"
-            lignes.append(f"{emo} **{nom}** — `{k}` · +{val} % {eff}\n└ {etat}  *{desc}*")
+            lignes.append(f"{emo} **{nom}** — `{k}` · {etat}\n"
+                          f"└ **+{val} % {eff}** *(s'ajoute au bonus de race)*\n"
+                          f"└ *{desc}*")
         porte = "".join(PET_ACCESSOIRES[a][0] for a in d["portes"]) or "*rien pour l'instant*"
+        cumul = []
+        for typ, lab in [("coins","💰 pièces"),("xp","⭐ XP"),("roll","🎰 rolls"),("humeur","❤️ humeur")]:
+            v = bonus_accessoires(uid, typ)
+            if v: cumul.append(f"{lab} **+{v} %**")
         return await ctx.send(embed=discord.Embed(
-            title=f"👗 Garde-robe de {pdb['emoji']} {pdb['nom']}",
-            description=(f"**Actuellement :** {porte}\n"
-                         f"*Trois accessoires maximum en même temps.*\n\n"
+            title=f"👗 Garde-robe de {pet_nom_decore(uid, pdb)}",
+            description=(f"**Porté :** {porte}\n"
+                         + (f"**Bonus cumulé :** {'  ·  '.join(cumul)}\n" if cumul else "")
+                         + f"*Trois accessoires maximum. Ils **s'ajoutent** au bonus de race.*\n\n"
                          + "\n".join(lignes)
                          + "\n\n`.garderobe acheter <nom>` · `.garderobe porter <nom>` · `.garderobe retirer <nom>`"),
             color=0xe91e63))
@@ -12706,6 +12742,20 @@ async def refuge_cmd(ctx, action: str = None, *, objet: str = None):
     pets_data[uid].setdefault("refuge", [])
     ref = pets_data[uid]["refuge"]
 
+    EFFETS_L = {"humeur_lente": "❤️ humeur préservée", "faim_lente": "🍖 faim ralentie",
+                "energie_lente": "⚡ énergie conservée", "xp_passif": "⭐ XP passive"}
+    if action and action.lower() in ("liste", "catalogue", "tout"):
+        lignes = []
+        for k, (emo, nom, prix, typ, val, desc) in PET_MEUBLES.items():
+            possede = "✅ installé" if k in ref else f"🛒 **{prix:,} p**"
+            lignes.append(f"{emo} **{nom}** — `{k}` · {possede}\n"
+                          f"└ {EFFETS_L[typ]} **+{val}{'/h' if typ=='xp_passif' else ' %'}**\n"
+                          f"└ *{desc}*")
+        return await ctx.send(embed=discord.Embed(
+            title="🏡 Catalogue du refuge",
+            description="\n\n".join(lignes) + "\n\n*`.refuge acheter <meuble>` pour installer.*",
+            color=0xe91e63))
+
     if action and action.lower() in ("acheter", "achat", "buy"):
         if not objet:
             return await ctx.send("❌ Précise un meuble ! Ex : `.refuge acheter panier`")
@@ -12757,10 +12807,19 @@ async def refuge_cmd(ctx, action: str = None, *, objet: str = None):
                                         for m in ref), inline=False)
     if bonus:
         embed.add_field(name="✨ Effets du refuge", value="  ·  ".join(bonus), inline=False)
+    EFFETS = {"humeur_lente": "❤️ humeur baisse moins vite",
+              "faim_lente":   "🍖 il a faim moins vite",
+              "energie_lente":"⚡ il se fatigue moins vite",
+              "xp_passif":    "⭐ XP gagnée en dormant"}
     if dispo:
+        lot = dispo[:6]
         embed.add_field(name="🛒 À installer",
-                        value="\n".join(f"{v[0]} **{v[1]}** — `{k}` · {v[2]:,} p" for k, v in dispo[:6])
-                              + ("\n*…et d'autres*" if len(dispo) > 6 else ""), inline=False)
+                        value="\n".join(
+                            f"{v[0]} **{v[1]}** — `{k}` · **{v[2]:,} p**\n"
+                            f"└ {EFFETS[v[3]]} **+{v[4]}{'/h' if v[3]=='xp_passif' else ' %'}** · *{v[5]}*"
+                            for k, v in lot)
+                        + (f"\n\n*…et {len(dispo)-6} autre(s) — `.refuge liste` pour tout voir*"
+                           if len(dispo) > 6 else ""), inline=False)
     embed.set_footer(text="`.refuge acheter <meuble>` pour aménager")
     await ctx.send(embed=embed)
 
@@ -12906,7 +12965,8 @@ async def petamis_cmd(ctx, membre: discord.Member = None):
     for pts, m, ap, dp, nom_p, bonus in amis[:10]:
         emo = dp["emoji"] if dp else "🐾"
         nom_a = dp["nom"] if dp else "son compagnon"
-        lignes.append(f"{emo} **{nom_a}** *({m.display_name})*\n"
+        deco_a = "".join(PET_ACCESSOIRES[x][0] for x in pet_accessoires(autre) if x in PET_ACCESSOIRES)
+        lignes.append(f"{emo} **{nom_a}**{(' ' + deco_a) if deco_a else ''} *({m.display_name})*\n"
                       f"└ {nom_p} · **{pts}** rencontre(s)" + (f" · +{bonus} p" if bonus else ""))
     await ctx.send(embed=discord.Embed(
         title=f"🐾 Les amitiés de {pdb['emoji']} {pdb['nom']}",
@@ -12942,7 +13002,13 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
         embed.add_field(name="⚡ Énergie", value=_jauge(st["energie"], "🟨", "⬜"), inline=True)
         embed.add_field(name="🛁 Propreté", value=_jauge(st["proprete"], "🟦", "⬜"), inline=True)
         embed.add_field(name="✨ Ce qu'il t'apporte",
-                        value=pet_bonus_texte(pdb, pstate["level"]), inline=False)
+                        value="\n".join(pet_detail_bonus(uid, pdb, pstate["level"])), inline=False)
+        _acc = pet_accessoires(uid)
+        if _acc:
+            embed.add_field(name="👗 Accessoires portés", value="\n".join(
+                f"{PET_ACCESSOIRES[a][0]} **{PET_ACCESSOIRES[a][1]}** — +{PET_ACCESSOIRES[a][4]} % "
+                + {"coins":"pièces","xp":"XP","roll":"rolls","humeur":"humeur"}[PET_ACCESSOIRES[a][3]]
+                for a in _acc if a in PET_ACCESSOIRES), inline=False)
         embed.add_field(name="📈 Progression",
                         value=(f"Départ **+{pdb['base']} %** · Actuel **+{bonus} %** · "
                                f"Max **+{max_bonus} %** au niveau {PET_LEVEL_MAX}"), inline=False)
@@ -12967,7 +13033,10 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
                 actif = "  🌟 *actif*" if d.get("active") == pid else ""
                 val = p["base"] + st["level"] - 1
                 icone = {"coins": "💰", "xp": "⭐", "roll": "🎰"}[p["type"]]
-                lignes.append(f"{p['emoji']} **{p['nom']}** — Niv.{st['level']} · {icone} +{val} %{actif}")
+                deco = ("".join(PET_ACCESSOIRES[a][0] for a in st.get("portes", [])
+                                if a in PET_ACCESSOIRES)) if d.get("active") == pid else ""
+                lignes.append(f"{p['emoji']} **{p['nom']}**{(' ' + deco) if deco else ''} — "
+                              f"Niv.{st['level']} · {icone} +{val} %{actif}")
         return await ctx.send(embed=discord.Embed(
             title=f"🐾 Compagnons de {ctx.author.display_name}",
             description="\n".join(lignes), color=0xe91e63))
