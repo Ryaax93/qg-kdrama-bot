@@ -156,6 +156,8 @@ bank_data = defaultdict(lambda: {"depot": 0, "depot_time": 0})
 CONQUETE_ZONE_IDS = []
 ROLE_GACHA_ID = None
 ROLE_GIRLS_ID = None
+ROLE_HOMME_ID = None
+ROLE_FEMME_ID = None
 ROLE_ANIME_ID = None
 SALON_GIRLS_ID = None
 SALON_ANNONCES_ID = None
@@ -229,6 +231,8 @@ def sauvegarder_salons():
         "SALON_INVITATION_ID": SALON_INVITATION_ID,
         "ROLE_GACHA_ID":      ROLE_GACHA_ID,
         "ROLE_GIRLS_ID":      ROLE_GIRLS_ID,
+        "ROLE_HOMME_ID":      ROLE_HOMME_ID,
+        "ROLE_FEMME_ID":      ROLE_FEMME_ID,
         "ROLE_ANIME_ID":      ROLE_ANIME_ID,
     }
     try:
@@ -239,7 +243,7 @@ def sauvegarder_salons():
 
 def charger_salons():
     """Charge les IDs de salons depuis le fichier JSON au démarrage"""
-    global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_EVENT_ID, SALON_GUIDE_ID, ROLE_GACHA_ID, ROLE_GIRLS_ID, ROLE_ANIME_ID
+    global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_EVENT_ID, SALON_GUIDE_ID, ROLE_GACHA_ID, ROLE_GIRLS_ID, ROLE_ANIME_ID, ROLE_HOMME_ID, ROLE_FEMME_ID
     global SALON_GACHABATTLE_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID
     global SALON_BOOST_ID, SALON_HOF_ID, SALON_REGLEMENT_ID, ROLE_MEMBRE_NAME, REGLEMENT_ROLE_ID, REGLEMENT_MSG_ID
     if not os.path.exists(CONFIG_FILE):
@@ -271,6 +275,8 @@ def charger_salons():
         SALON_INVITATION_ID = data.get("SALON_INVITATION_ID")
         ROLE_GACHA_ID = data.get("ROLE_GACHA_ID") or ROLE_GACHA_ID
         ROLE_GIRLS_ID = data.get("ROLE_GIRLS_ID") or ROLE_GIRLS_ID
+        ROLE_HOMME_ID = data.get("ROLE_HOMME_ID") or ROLE_HOMME_ID
+        ROLE_FEMME_ID = data.get("ROLE_FEMME_ID") or ROLE_FEMME_ID
         ROLE_ANIME_ID = data.get("ROLE_ANIME_ID") or ROLE_ANIME_ID
         print("[Config] ✅ Salons chargés depuis salons_config.json")
     except Exception as e:
@@ -1432,6 +1438,7 @@ def build_help_pages(guild, is_admin=False):
     ), inline=False)
     e.add_field(name="🌸 Girls Only", value=(
         "`.setgirlsrole @role` — Définir le rôle filles\n"
+        "`.setgenrerole <homme|femme> @role` — Rôles de genre *(pour le Drama)*\n"
         "`.girlspanel` — Publier le **bouton d'auto-attribution**\n"
         "`.setsalon girlsonly` — Définir le salon *(publie aussi les commandes dedans)*\n"
         "`.setsalon annonces` — Salon des annonces\n"
@@ -10034,6 +10041,91 @@ async def petaction_cmd(ctx):
 # ============================================================
 #  🎬 LE DRAMA COLLECTIF — le serveur écrit sa propre série
 # ============================================================
+
+# ============================================================
+#  🎭 PERSONNAGES FICTIFS — le partenaire inventé du drama
+# ============================================================
+NOMS_FAMILLE = ["Kim","Lee","Park","Choi","Jung","Kang","Cho","Yoon","Jang","Lim",
+                "Han","Oh","Seo","Shin","Kwon","Hwang","Ahn","Song","Ryu","Baek",
+                "Nam","Moon","Yang","Bae","Ha","Noh","Koo","Sung","Cha","Do"]
+
+PRENOMS_F = ["Ji-eun","Seo-yeon","Ha-eun","Yoo-jin","Min-seo","Chae-won","Da-hyun","Su-bin",
+             "Na-yeon","Ye-rin","Hye-jin","Eun-chae","So-hee","Ah-reum","Ji-ah","Yeon-woo",
+             "Bo-ra","Se-ri","Ha-rin","Mi-rae","Soo-ah","Ju-won","Gyeo-ul","Seol-a","Ra-on",
+             "Yu-na","Da-eun","Si-eun","Hae-in","Ji-won","Eun-bi","Chae-yeon","Nari","Sol-ip"]
+
+PRENOMS_H = ["Ji-hoon","Min-jun","Seo-jun","Do-yoon","Tae-yang","Eun-woo","Ji-woo","Han-gyeol",
+             "Seung-hyun","Jae-hyun","Sun-woo","Yi-kyung","Kang-woo","Do-han","Si-woo","Ha-neul",
+             "Jun-ho","Tae-oh","Yeon-jun","Rae-on","Gun-woo","Ji-sung","Moo-jin","Chan-young",
+             "Hyun-bin","Dae-hyun","In-ho","Yoo-chan","Seok-jin","Baek-ho","Nam-joon","Ki-tae"]
+
+TRAITS_F = ["un carnet qu'elle ne montre à personne","une écharpe qu'elle porte même en été",
+            "l'habitude de répondre trop vite","une façon de rire en se cachant la bouche",
+            "un vieux téléphone qu'elle refuse de changer","une manie de tout ranger par ordre alphabétique",
+            "un tic : elle tapote trois fois avant de parler","une bague qu'elle tourne quand elle ment",
+            "l'art de disparaître au bon moment","une playlist qu'elle n'a jamais fait écouter"]
+
+TRAITS_H = ["une cicatrice qu'il n'explique jamais","l'habitude d'arriver toujours en retard de dix minutes",
+            "une veste qu'il ne quitte pas","une façon de regarder ailleurs quand ça compte",
+            "un carnet plein de choses barrées","la manie de couper les gens sans s'en rendre compte",
+            "un briquet qu'il ne sert jamais à allumer quoi que ce soit","une voix qui baisse quand il est sincère",
+            "l'art d'esquiver toutes les questions personnelles","une chanson qu'il fredonne sans y penser"]
+
+def detecter_genre(membre):
+    """Retourne 'f', 'h' ou None selon les rôles du membre"""
+    ids = {r.id for r in getattr(membre, "roles", [])}
+    noms = {r.name.lower() for r in getattr(membre, "roles", [])}
+    if ROLE_FEMME_ID and ROLE_FEMME_ID in ids:
+        return "f"
+    if ROLE_HOMME_ID and ROLE_HOMME_ID in ids:
+        return "h"
+    if ROLE_GIRLS_ID and ROLE_GIRLS_ID in ids:
+        return "f"
+    # Repli : on devine d'après le nom du rôle
+    for n in noms:
+        if any(m in n for m in ("femme", "fille", "girl", "elle/", "female", "♀")):
+            return "f"
+        if any(m in n for m in ("homme", "garçon", "garcon", "boy", "il/", "male", "♂")):
+            return "h"
+    return None
+
+def creer_personnage(genre):
+    """Invente un personnage fictif cohérent avec le genre demandé"""
+    fam = random.choice(NOMS_FAMILLE)
+    if genre == "f":
+        prenom = random.choice(PRENOMS_F)
+        trait = random.choice(TRAITS_F)
+    else:
+        prenom = random.choice(PRENOMS_H)
+        trait = random.choice(TRAITS_H)
+    return {"prenom": prenom, "nom": f"{fam} {prenom}", "genre": genre, "trait": trait}
+
+@bot.command(name="setgenrerole", aliases=["setrolegenre"])
+@commands.has_permissions(administrator=True)
+async def setgenrerole_cmd(ctx, genre: str = None, role: discord.Role = None):
+    """Définit les rôles homme/femme du serveur — .setgenrerole <homme|femme> @role (admin)"""
+    global ROLE_HOMME_ID, ROLE_FEMME_ID
+    g = (genre or "").lower().strip()
+    if g not in ("homme", "femme", "h", "f") or not role:
+        rh = ctx.guild.get_role(ROLE_HOMME_ID) if ROLE_HOMME_ID else None
+        rf = ctx.guild.get_role(ROLE_FEMME_ID) if ROLE_FEMME_ID else None
+        return await ctx.send(embed=discord.Embed(
+            title="🎭 Rôles de genre",
+            description=(f"**Usage :** `.setgenrerole homme @Homme` · `.setgenrerole femme @Femme`\n\n"
+                         f"👨 Homme : {rh.mention if rh else '*non configuré*'}\n"
+                         f"👩 Femme : {rf.mention if rf else '*non configuré*'}\n\n"
+                         f"*Sert au **Drama Collectif** : le membre casté est associé à un "
+                         f"personnage fictif du genre opposé.*"),
+            color=0x3498db))
+    if g in ("homme", "h"):
+        ROLE_HOMME_ID = role.id
+    else:
+        ROLE_FEMME_ID = role.id
+    sauvegarder_salons()
+    await ctx.send(embed=discord.Embed(
+        description=f"✅ Rôle **{'homme' if g in ('homme','h') else 'femme'}** défini sur {role.mention}.",
+        color=0x2ecc71))
+
 # ============================================================
 #  🎬 LE DRAMA COLLECTIF — les tropes
 # ============================================================
@@ -10517,8 +10609,8 @@ async def cloturer_saison(guild, salon):
         title=f"🎬  {tr['titre']}  —  FIN DE SAISON",
         description=(f"*{tr['accroche']}*\n\n"
                      f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                     f"🎭 **{a}** — {tr['role_a']}\n"
-                     f"🎭 **{b}** — {tr['role_b']}\n\n"
+                     f"🎭 {a} — {tr['role_a']}\n"
+                     f"🎭 {b} — {tr['role_b']}\n\n"
                      f"━━━━━━━━━━━━━━━━━━━━\n\n"
                      f"### L'histoire que vous avez écrite\n\n{recap}\n\n"
                      f"━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -10589,43 +10681,74 @@ async def dramastart_cmd(ctx, *, args: str = None):
     tr = DRAMA_TROPES[cle]
 
     # ── Sélection du casting ──
-    if len(mentions) >= 2:
-        a, b = mentions[0], mentions[1]
-        origine_casting = "choisi par le staff"
-    else:
-        actifs = [m for m in ctx.guild.members
-                  if not m.bot and str(m.id) in xp_data and xp_data[str(m.id)]["level"] >= 2]
-        pool = actifs or [m for m in ctx.guild.members if not m.bot and str(m.id) in xp_data] \
-                      or [m for m in ctx.guild.members if not m.bot]
-        if len(mentions) == 1:
-            a = mentions[0]
-            reste = [m for m in pool if m.id != a.id]
-            if not reste:
-                return await ctx.send("❌ Il faut au moins 2 membres sur le serveur.")
-            b = random.choice(reste)
-            origine_casting = "un choisi, un tiré au sort"
+    # Slot A = personnage féminin · Slot B = personnage masculin (les scènes sont écrites ainsi)
+    duo_reel = len(mentions) >= 2
+
+    if duo_reel:
+        m1, m2 = mentions[0], mentions[1]
+        g1 = detecter_genre(m1)
+        # Si m1 est un homme, il prend le slot B
+        if g1 == "h":
+            slot_a, slot_b = m2, m1
         else:
-            if len(pool) < 2:
-                return await ctx.send("❌ Il faut au moins 2 membres actifs sur le serveur.")
-            a, b = random.sample(pool, 2)
-            origine_casting = "tiré au sort parmi les membres actifs"
+            slot_a, slot_b = m1, m2
+        casting = {"a": slot_a.mention, "b": slot_b.mention,
+                   "nom_a": slot_a.display_name, "nom_b": slot_b.display_name,
+                   "fictif": None}
+        vedette, partenaire = slot_a, None
+        origine_casting = "deux membres du serveur"
+    else:
+        if len(mentions) == 1:
+            vedette = mentions[0]
+            origine_casting = "membre choisi par le staff"
+        else:
+            actifs = [m for m in ctx.guild.members
+                      if not m.bot and str(m.id) in xp_data and xp_data[str(m.id)]["level"] >= 2]
+            pool = actifs or [m for m in ctx.guild.members if not m.bot and str(m.id) in xp_data] \
+                          or [m for m in ctx.guild.members if not m.bot]
+            if not pool:
+                return await ctx.send("❌ Aucun membre disponible pour le casting.")
+            vedette = random.choice(pool)
+            origine_casting = "membre tiré au sort"
+
+        genre_membre = detecter_genre(vedette)
+        if genre_membre is None:
+            genre_membre = random.choice(["f", "h"])
+            origine_casting += " · genre non configuré, deviné"
+
+        perso = creer_personnage("h" if genre_membre == "f" else "f")
+        if genre_membre == "f":
+            casting = {"a": vedette.mention, "b": f"**{perso['prenom']}**",
+                       "nom_a": vedette.display_name, "nom_b": perso["nom"], "fictif": perso}
+        else:
+            casting = {"a": f"**{perso['prenom']}**", "b": vedette.mention,
+                       "nom_a": perso["nom"], "nom_b": vedette.display_name, "fictif": perso}
+        partenaire = perso
 
     s.update({"titre": tr["titre"], "episode": 0, "en_cours": True, "trope_cle": cle,
-              "casting": {"a": a.mention, "b": b.mention,
-                          "nom_a": a.display_name, "nom_b": b.display_name},
-              "historique": [], "vue": None})
+              "casting": casting, "historique": [], "vue": None})
     save_all_data()
 
     salon = (ctx.guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None) or ctx.channel
+    if partenaire:
+        bloc_casting = (
+            f"### 🎭 Au casting\n"
+            f"{casting['a']}\n└ *{tr['role_a']}*\n\n"
+            f"{casting['b']}\n└ *{tr['role_b']}*\n\n"
+            f"> 🆕 **{partenaire['nom']}** est un personnage inventé pour cette saison.\n"
+            f"> On le reconnaît à {partenaire['trait']}.")
+    else:
+        bloc_casting = (f"### 🎭 Au casting\n"
+                        f"{casting['a']}\n└ *{tr['role_a']}*\n\n"
+                        f"{casting['b']}\n└ *{tr['role_b']}*")
+
     embed = discord.Embed(
         title=f"🎬  {tr['titre']}",
         description=(f"## « {tr['accroche']} »\n\n"
                      f"━━━━━━━━━━━━━━━━━━━━\n\n"
                      f"{tr['pitch']}\n\n"
                      f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                     f"### 🎭 Au casting\n"
-                     f"{a.mention}\n└ *{tr['role_a']}*\n\n"
-                     f"{b.mention}\n└ *{tr['role_b']}*\n\n"
+                     f"{bloc_casting}\n\n"
                      f"━━━━━━━━━━━━━━━━━━━━\n\n"
                      f"**{len(DRAMA_EPISODES)} épisodes.** Pas de coup de foudre, "
                      f"pas de raccourci — ils partent de zéro et se supportent à peine.\n\n"
@@ -10635,9 +10758,10 @@ async def dramastart_cmd(ctx, *, args: str = None):
                      f"*Personne ne connaît la fin. Elle n'est pas écrite.*"),
         color=0xff6b9d)
     embed.set_author(name=tr["trope"])
-    embed.set_thumbnail(url=a.display_avatar.url)
-    embed.set_footer(text=f"Casting {origine_casting} · le premier épisode arrive…")
-    await salon.send(f"{a.mention} {b.mention}", embed=embed)
+    embed.set_thumbnail(url=vedette.display_avatar.url)
+    embed.set_footer(text=f"Casting : {origine_casting} · le premier épisode arrive…")
+    ping = vedette.mention + ((" " + mentions[1].mention) if duo_reel else "")
+    await salon.send(ping, embed=embed)
     await asyncio.sleep(5)
     await publier_episode(ctx.guild, salon)
 
@@ -10650,25 +10774,46 @@ async def dramacast_cmd(ctx, *membres: discord.Member):
     if not s["en_cours"]:
         return await ctx.send("❌ Aucune saison en cours.")
     humains = [m for m in membres if not m.bot]
-    if len(humains) < 2:
-        pool = [m for m in ctx.guild.members if not m.bot and str(m.id) in xp_data]
-        if len(pool) < 2:
-            return await ctx.send("❌ Mentionne deux membres : `.drama-cast @a @b`")
-        a, b = random.sample(pool, 2)
-        origine = "nouveau tirage au sort"
+    tr0 = DRAMA_TROPES[s["trope_cle"]]
+
+    if len(humains) >= 2:
+        m1, m2 = humains[0], humains[1]
+        if detecter_genre(m1) == "h":
+            a, b = m2, m1
+        else:
+            a, b = m1, m2
+        s["casting"] = {"a": a.mention, "b": b.mention,
+                        "nom_a": a.display_name, "nom_b": b.display_name, "fictif": None}
+        origine = "deux membres du serveur"
+        detail = f"{a.mention}\n└ *{tr0['role_a']}*\n\n{b.mention}\n└ *{tr0['role_b']}*"
     else:
-        a, b = humains[0], humains[1]
-        origine = "casting imposé"
-    tr = DRAMA_TROPES[s["trope_cle"]]
-    s["casting"] = {"a": a.mention, "b": b.mention,
-                    "nom_a": a.display_name, "nom_b": b.display_name}
+        if humains:
+            vedette = humains[0]
+            origine = "membre choisi"
+        else:
+            pool = [m for m in ctx.guild.members if not m.bot and str(m.id) in xp_data]
+            if not pool:
+                return await ctx.send("❌ Mentionne un membre : `.drama-cast @membre`")
+            vedette = random.choice(pool)
+            origine = "membre tiré au sort"
+        g = detecter_genre(vedette) or random.choice(["f", "h"])
+        perso = creer_personnage("h" if g == "f" else "f")
+        if g == "f":
+            s["casting"] = {"a": vedette.mention, "b": f"**{perso['prenom']}**",
+                            "nom_a": vedette.display_name, "nom_b": perso["nom"], "fictif": perso}
+        else:
+            s["casting"] = {"a": f"**{perso['prenom']}**", "b": vedette.mention,
+                            "nom_a": perso["nom"], "nom_b": vedette.display_name, "fictif": perso}
+        origine += " · nouveau partenaire inventé"
+        detail = (f"{s['casting']['a']}\n└ *{tr0['role_a']}*\n\n"
+                  f"{s['casting']['b']}\n└ *{tr0['role_b']}*\n\n"
+                  f"> 🆕 **{perso['nom']}** — on le reconnaît à {perso['trait']}.")
+
     save_all_data()
     await ctx.send(embed=discord.Embed(
         title="🎭 Casting modifié",
-        description=(f"**{tr['titre']}** continue avec :\n\n"
-                     f"{a.mention}\n└ *{tr['role_a']}*\n\n"
-                     f"{b.mention}\n└ *{tr['role_b']}*\n\n"
-                     f"*Le changement s'applique dès le prochain épisode.*"),
+        description=f"**{tr0['titre']}** continue avec :\n\n{detail}\n\n"
+                    f"*Le changement s'applique dès le prochain épisode.*",
         color=0xff6b9d).set_footer(text=origine))
 
 
@@ -10743,7 +10888,10 @@ async def saison_cmd(ctx):
                      f"━━━━━━━━━━━━━━━━━━━━\n\n"
                      f"### 🎭 Au casting\n"
                      f"{s['casting'].get('a','?')}\n└ *{tr['role_a']}*\n\n"
-                     f"{s['casting'].get('b','?')}\n└ *{tr['role_b']}*"),
+                     f"{s['casting'].get('b','?')}\n└ *{tr['role_b']}*"
+                     + (f"\n\n> 🆕 **{s['casting']['fictif']['nom']}** — personnage inventé, "
+                        f"reconnaissable à {s['casting']['fictif']['trait']}."
+                        if s['casting'].get('fictif') else "")),
         color=0xff6b9d)
     embed.set_author(name=tr["trope"])
 
