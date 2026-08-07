@@ -1132,7 +1132,8 @@ def build_help_pages(guild, is_admin=False):
         "`.quiz <thème>` — Quiz solo en continu\n"
         "`.quizduel <thème> @joueur` — Quiz en duel *(5 manches)*\n"
         "**Thèmes :** `kdrama` `anime` `gaming` `culture` `harrypotter` `mix`\n"
-        "`.emoji` — Devine l'œuvre à partir de 3 emojis *(78 énigmes)*\n"
+        "`.emoji [anime|kdrama|mix]` — Devine l'œuvre à partir de 3 emojis\n"
+        "*Choisis ton thème — un indice apparaît après 20 secondes*\n"
         "`.emojistop` — Arrêter l'Emoji Quiz\n"
         "`.drapeaux` — Quiz des drapeaux **à boutons** *(70 pays)*\n"
         "`.drapeauxskip` / `.drapeauxstop` — Passer / arrêter\n"
@@ -1162,7 +1163,8 @@ def build_help_pages(guild, is_admin=False):
     e.add_field(name="🐾 Ton compagnon", value=(
         "`.pet` — Son état complet • `.pet liste` — Tous les tiens\n"
         "`.nourrir` 🍖 `.laver` 🛁 `.promener` 🚶 `.jouer` 🎾 `.dormir` 😴 `.caresser` 🫶\n"
-        "`.petvisite @ami` — Fais rencontrer vos deux compagnons 🐾\n"
+        "`.petvisite @ami` — Rencontre entre compagnons 🐾 *(amitié + récompenses)*\n"
+        "`.petamis` — Toutes les amitiés de ton compagnon\n"
         "`.liens [@membre]` — Tes **liens** avec les autres 🤝\n"
         "`.topliens` — Les duos les plus soudés du serveur\n"
         "*Un compagnon négligé voit son bonus divisé par deux !*\n"
@@ -1177,7 +1179,12 @@ def build_help_pages(guild, is_admin=False):
         "*Réservé aux membres ayant le rôle filles du serveur.*"
     ), inline=False)
     e.add_field(name="🎨 Personnalisation *(à débloquer en boutique)*", value=(
+        "`.macustom` — Voir tout ce que tu as débloqué 🎨\n"
         "`.setbadge <texte>` — Un badge sur ton profil\n"
+        "`.setcadre <style>` — Encadrer ton profil *(12 styles)*\n"
+        "`.settitre <texte>` — Un titre au-dessus de ton nom\n"
+        "`.setemoji <emoji>` — Ton emoji signature\n"
+        "`.settheme <nom>` — Une ambiance complète *(8 thèmes)*\n"
         "`.setcouleur <hex>` — La couleur de tes embeds\n"
         "`.setcitation <texte>` — Une phrase sous ton pseudo\n"
         "`.setbanniere <url>` — Une image en bas du profil\n"
@@ -1939,21 +1946,44 @@ EMOJI_QUIZ = [
 active_emoji = {}
 
 @bot.command(name="emoji", aliases=["emojiquiz", "devineemoji"])
-async def emoji_cmd(ctx):
-    """Devine l'œuvre à partir d'emojis — .emoji (`.emojistop` pour arrêter)"""
+async def emoji_cmd(ctx, theme: str = "mix"):
+    """Devine l'œuvre à partir d'emojis — .emoji [anime|kdrama|mix]"""
+    ALIAS_EM = {"animes":"anime","manga":"anime","kdramas":"kdrama","drama":"kdrama",
+                "dramas":"kdrama","tout":"mix","all":"mix"}
+    theme = ALIAS_EM.get(theme.lower().strip(), theme.lower().strip())
+    LABELS = {"anime": "📺 Animés", "kdrama": "🎭 K-Dramas", "mix": "🎲 Mix"}
+    if theme not in LABELS:
+        na = sum(1 for x in EMOJI_QUIZ if x[2].startswith("📺"))
+        nk = sum(1 for x in EMOJI_QUIZ if x[2].startswith("🎭"))
+        return await ctx.send(embed=discord.Embed(
+            title="🎬 Emoji Quiz — choisis ton thème",
+            description=(f"`.emoji anime` — 📺 **Animés uniquement** *({na} énigmes)*\n"
+                         f"`.emoji kdrama` — 🎭 **K-Dramas uniquement** *({nk} énigmes)*\n"
+                         f"`.emoji mix` — 🎲 **Les deux mélangés** *({len(EMOJI_QUIZ)} énigmes)*\n\n"
+                         f"*Devine le titre à partir de 3 emojis.*"),
+            color=0xe67e22))
+
+    if theme == "anime":
+        pool = [x for x in EMOJI_QUIZ if x[2].startswith("📺")]
+    elif theme == "kdrama":
+        pool = [x for x in EMOJI_QUIZ if x[2].startswith("🎭")]
+    else:
+        pool = list(EMOJI_QUIZ)
+
     if ctx.channel.id in active_emoji:
         return await ctx.send("🎬 Un Emoji Quiz est déjà en cours ! `.emojistop` pour l'arrêter.")
 
-    salon, temporaire = await demander_salon_prive(ctx, "Emoji Quiz", "🎬")
+    salon, temporaire = await demander_salon_prive(ctx, f"Emoji Quiz {LABELS[theme]}", "🎬")
     if salon.id in active_emoji:
         return await salon.send("🎬 Un quiz est déjà en cours ici !")
 
-    active_emoji[salon.id] = {"running": True, "manche": 0, "scores": {}, "vus": []}
+    active_emoji[salon.id] = {"running": True, "manche": 0, "scores": {}, "vus": [], "pool": pool}
     await salon.send(embed=discord.Embed(
-        title="🎬 Emoji Quiz",
-        description=(f"Je te donne **3 emojis**, tu devines l'animé ou le k-drama !\n\n"
+        title=f"🎬 Emoji Quiz — {LABELS[theme]}",
+        description=(f"Je te donne **3 emojis**, tu devines le titre !\n\n"
+                     f"📂 **{len(pool)} énigmes** dans ce thème\n"
                      f"🏆 **80 à 140 pièces** + 25 XP par bonne réponse\n"
-                     f"⏱️ 45 secondes par manche\n\n"
+                     f"⏱️ 45 secondes par manche · un **indice** apparaît après 20 s\n\n"
                      f"`skip` pour passer · `.emojistop` pour arrêter"),
         color=0xe67e22))
     await asyncio.sleep(2)
@@ -1964,10 +1994,10 @@ async def emoji_cmd(ctx):
     while salon.id in active_emoji and active_emoji[salon.id].get("running"):
         etat = active_emoji[salon.id]
         etat["manche"] += 1
-        dispo = [e for e in EMOJI_QUIZ if e[1] not in etat["vus"]]
+        dispo = [e for e in etat["pool"] if e[1] not in etat["vus"]]
         if not dispo:
             etat["vus"] = []
-            dispo = EMOJI_QUIZ
+            dispo = etat["pool"]
         emojis, reponse, theme = random.choice(dispo)
         etat["vus"].append(reponse)
 
@@ -1975,12 +2005,19 @@ async def emoji_cmd(ctx):
             title=f"🎬 Manche {etat['manche']}  —  {theme}",
             description=f"# {emojis}\n\n*Quel titre se cache derrière ces emojis ?*",
             color=0xe67e22
-        ).set_footer(text="⏱️ 45 s · `skip` pour passer · `.emojistop` pour arrêter"))
+        ).set_footer(text="⏱️ 45 s · indice après 20 s · `skip` · `.emojistop`"))
 
-        trouve, passe = False, False
+        trouve, passe, indice_donne = False, False, False
         fin = asyncio.get_event_loop().time() + 45
         while asyncio.get_event_loop().time() < fin:
             reste = fin - asyncio.get_event_loop().time()
+            if not indice_donne and reste < 25:
+                indice_donne = True
+                mots = reponse.split()
+                masque = " ".join(m[0] + "•" * (len(m) - 1) for m in mots)
+                await salon.send(embed=discord.Embed(
+                    description=f"💡 **Indice :** `{masque}`  ·  *{len(reponse.replace(' ',''))} lettres*",
+                    color=0xf39c12))
             try:
                 msg = await bot.wait_for("message", check=check, timeout=reste)
             except asyncio.TimeoutError:
@@ -3051,6 +3088,10 @@ SHOP_ITEMS = [
     {"id": "couleur",  "nom": "🎨 Couleur de profil",  "prix": 10000, "cat": "cosmetique", "description": "La couleur de tes embeds de profil *(`.setcouleur <hex>`)*"},
     {"id": "citation", "nom": "💬 Citation de profil", "prix": 8000,  "cat": "cosmetique", "description": "Une phrase affichée sous ton pseudo *(`.setcitation <texte>`)*"},
     {"id": "banniere", "nom": "🏳️ Bannière de profil", "prix": 15000, "cat": "cosmetique", "description": "Une image en bas de ton profil *(`.setbanniere <url>`)*"},
+    {"id": "cadre",    "nom": "🖼️ Cadre décoratif",   "prix": 9000,  "cat": "cosmetique", "description": "Encadre ton profil de motifs — 12 styles *(`.setcadre`)*"},
+    {"id": "titre",    "nom": "📜 Titre personnalisé", "prix": 11000, "cat": "cosmetique", "description": "Une ligne de titre au-dessus de ton nom *(`.settitre <texte>`)*"},
+    {"id": "emojiperso","nom": "✨ Emoji signature",   "prix": 6000,  "cat": "cosmetique", "description": "Un emoji affiché partout à côté de ton nom *(`.setemoji <emoji>`)*"},
+    {"id": "theme",    "nom": "🌈 Thème de profil",    "prix": 14000, "cat": "cosmetique", "description": "8 ambiances complètes : cadre + couleur + séparateurs *(`.settheme`)*"},
 
     # ═══ 💌 SOCIAL & FUN ═══
     {"id": "lettre",   "nom": "💌 Lettre Anonyme",     "prix": 2000, "cat": "divers", "description": "Envoie un message **anonyme** dans un salon *(`.lettre <salon> <texte>`)*"},
@@ -4910,10 +4951,12 @@ async def acheter_cmd(ctx, item_id: str = None):
             color=0x2ecc71))
 
     # ── 🎨 Cosmétiques ──
-    if iid in ("badge", "couleur", "citation", "banniere"):
+    if iid in ("badge", "couleur", "citation", "banniere", "cadre", "titre", "emojiperso", "theme"):
         profil_custom[uid][iid + "_debloque"] = True
         commandes = {"badge": ".setbadge <texte>", "couleur": ".setcouleur <hex>",
-                     "citation": ".setcitation <texte>", "banniere": ".setbanniere <url>"}
+                     "citation": ".setcitation <texte>", "banniere": ".setbanniere <url>",
+                     "cadre": ".setcadre", "titre": ".settitre <texte>",
+                     "emojiperso": ".setemoji <emoji>", "theme": ".settheme"}
         return await ctx.send(embed=discord.Embed(
             title="🎨 Personnalisation débloquée !",
             description=f"Configure-la avec `{commandes[iid]}`\nElle apparaîtra sur ton `.profil`.",
@@ -9568,13 +9611,24 @@ async def profil_cmd(ctx, membre: discord.Member = None):
     medaille = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rang, f"#{rang}" if rang else "—")
 
     cosmo = profil_custom.get(uid, {})
+    cadre = PROFIL_CADRES.get(cosmo.get("cadre"))
+    sep = cadre[2] if cadre else "─────────────────────"
+    signature = cosmo.get("emoji", "")
+
     embed = discord.Embed(color=cosmo.get("couleur", 0xe91e63))
-    titre = f"Profil de {target.display_name}"
+    titre_auteur = f"{signature} {target.display_name} {signature}".strip()
     if cosmo.get("badge"):
-        titre += f"  ·  {cosmo['badge']}"
-    embed.set_author(name=titre, icon_url=target.display_avatar.url)
+        titre_auteur += f"  ·  {cosmo['badge']}"
+    embed.set_author(name=titre_auteur[:250], icon_url=target.display_avatar.url)
+
+    entete = [sep]
+    if cosmo.get("titre"):
+        entete.append(f"### ⟨ {cosmo['titre']} ⟩")
     if cosmo.get("citation"):
-        embed.description = f"*« {cosmo['citation']} »*"
+        entete.append(f"*« {cosmo['citation']} »*")
+    if len(entete) > 1:
+        entete.append(sep)
+    embed.description = "\n".join(entete)
     embed.set_thumbnail(url=target.display_avatar.url)
 
     embed.add_field(
@@ -9611,6 +9665,8 @@ async def profil_cmd(ctx, membre: discord.Member = None):
     if portes:
         embed.add_field(name="🎭 Titres", value=" · ".join(portes[:4]), inline=False)
 
+    if cadre:
+        embed.add_field(name="\u200b", value=sep, inline=False)
     if cosmo.get("banniere"):
         embed.set_image(url=cosmo["banniere"])
     embed.set_footer(text=f"Membre depuis le {target.joined_at.strftime('%d/%m/%Y')}"
@@ -11387,6 +11443,126 @@ async def ambiance_nuit():
 def _cosmo_check(uid, cle):
     return profil_custom[uid].get(cle + "_debloque")
 
+
+PROFIL_CADRES = {
+    "sakura":   ("🌸", "🌸 ೃ࿔*:･  Sakura",       "🌸･ﾟ✧ ─────────────── ✧ﾟ･🌸"),
+    "etoiles":  ("✨", "✨ ⋆｡°✩  Étoilé",         "･✧ ⋆ ─────────────── ⋆ ✧･"),
+    "nuit":     ("🌙", "🌙 ⋆｡°  Nocturne",        "☾ ⋆ ─────────────── ⋆ ☽"),
+    "flammes":  ("🔥", "🔥 ══  Ardent",           "🔥 ▬▬▬▬▬▬▬▬▬▬▬▬▬ 🔥"),
+    "glace":    ("❄️", "❄️ ･｡  Givré",            "❄️ ∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙ ❄️"),
+    "royal":    ("👑", "👑 ═══  Royal",           "👑 ▰▰▰▰▰▰▰▰▰▰▰▰▰ 👑"),
+    "ocean":    ("🌊", "🌊 ～  Océan",            "🌊 ∿∿∿∿∿∿∿∿∿∿∿∿∿ 🌊"),
+    "foret":    ("🍃", "🍃 ⌒  Forêt",             "🍃 ⌒⌒⌒⌒⌒⌒⌒⌒⌒⌒⌒ 🍃"),
+    "coeur":    ("💗", "💗 ⋆｡˚  Tendre",          "💗 ･ﾟ ─────────────── ﾟ･ 💗"),
+    "gothique": ("🖤", "🖤 ✞  Gothique",          "🖤 ┅┅┅┅┅┅┅┅┅┅┅┅┅ 🖤"),
+    "arcade":   ("🕹️", "🕹️ ▓▒░  Arcade",          "▓▒░ ─────────────── ░▒▓"),
+    "cyber":    ("⚡", "⚡ ⟨⟩  Cyber",             "⟨ ═══════════════ ⟩"),
+}
+
+PROFIL_THEMES = {
+    "rose":     ("🌸 Rose Sakura",   0xff9ec7, "sakura"),
+    "nuit":     ("🌙 Nuit Étoilée",  0x2c2f4a, "nuit"),
+    "feu":      ("🔥 Braise",        0xe74c3c, "flammes"),
+    "glace":    ("❄️ Cristal",       0x74c0fc, "glace"),
+    "or":       ("👑 Royauté",       0xf1c40f, "royal"),
+    "ocean":    ("🌊 Abysses",       0x1abc9c, "ocean"),
+    "sombre":   ("🖤 Ténèbres",      0x2c2f33, "gothique"),
+    "neon":     ("⚡ Néon",          0x9b59b6, "cyber"),
+}
+
+@bot.command(name="setcadre", aliases=["setframe"])
+async def setcadre_cmd(ctx, cadre: str = None):
+    """Le cadre décoratif de ton profil — .setcadre <nom>"""
+    uid = str(ctx.author.id)
+    if not _cosmo_check(uid, "cadre"):
+        return await ctx.send("🔒 Achète le **🖼️ Cadre décoratif** dans `.shop` → page 🎨 Personnalisation.")
+    if not cadre or cadre.lower() not in PROFIL_CADRES:
+        apercu = "\n".join(f"`{k}` — {v[1]}" for k, v in PROFIL_CADRES.items())
+        return await ctx.send(embed=discord.Embed(
+            title="🖼️ Cadres disponibles",
+            description=f"{apercu}\n\n*`.setcadre sakura` par exemple · `.setcadre aucun` pour retirer.*",
+            color=0xff6fd8))
+    if cadre.lower() in ("aucun", "none", "retirer"):
+        profil_custom[uid].pop("cadre", None)
+        save_all_data()
+        return await ctx.send("🖼️ Cadre retiré.")
+    profil_custom[uid]["cadre"] = cadre.lower()
+    save_all_data()
+    e, label, sep = PROFIL_CADRES[cadre.lower()]
+    await ctx.send(embed=discord.Embed(
+        description=f"{sep}\n🖼️ Cadre **{label}** appliqué !\n{sep}", color=0xff6fd8))
+
+@bot.command(name="settitre", aliases=["settitle"])
+async def settitre_cmd(ctx, *, texte: str = None):
+    """Ton titre personnalisé — .settitre <texte>"""
+    uid = str(ctx.author.id)
+    if not _cosmo_check(uid, "titre"):
+        return await ctx.send("🔒 Achète le **📜 Titre personnalisé** dans `.shop` → page 🎨 Personnalisation.")
+    if not texte:
+        return await ctx.send("❌ `.settitre <texte>` — 40 caractères max. Ex : `.settitre Chasseur de Rang S`")
+    profil_custom[uid]["titre"] = texte[:40]
+    save_all_data()
+    await ctx.send(embed=discord.Embed(
+        description=f"📜 Titre défini :\n### ⟨ {texte[:40]} ⟩", color=0xff6fd8))
+
+@bot.command(name="setemoji", aliases=["setsignature"])
+async def setemoji_cmd(ctx, emo: str = None):
+    """Ton emoji signature — .setemoji <emoji>"""
+    uid = str(ctx.author.id)
+    if not _cosmo_check(uid, "emojiperso"):
+        return await ctx.send("🔒 Achète l'**✨ Emoji signature** dans `.shop` → page 🎨 Personnalisation.")
+    if not emo:
+        return await ctx.send("❌ `.setemoji 🌸` — un seul emoji.")
+    if len(emo) > 8:
+        return await ctx.send("❌ Un seul emoji, pas une phrase !")
+    profil_custom[uid]["emoji"] = emo
+    save_all_data()
+    await ctx.send(embed=discord.Embed(
+        description=f"✨ Emoji signature défini : {emo}\nIl apparaîtra à côté de ton nom.", color=0xff6fd8))
+
+@bot.command(name="settheme", aliases=["setambiance"])
+async def settheme_cmd(ctx, nom: str = None):
+    """Une ambiance complète pour ton profil — .settheme <nom>"""
+    uid = str(ctx.author.id)
+    if not _cosmo_check(uid, "theme"):
+        return await ctx.send("🔒 Achète le **🌈 Thème de profil** dans `.shop` → page 🎨 Personnalisation.")
+    if not nom or nom.lower() not in PROFIL_THEMES:
+        apercu = "\n".join(f"`{k}` — {v[0]}" for k, v in PROFIL_THEMES.items())
+        return await ctx.send(embed=discord.Embed(
+            title="🌈 Thèmes de profil",
+            description=(f"Un thème applique **couleur + cadre + séparateurs** d'un coup.\n\n{apercu}\n\n"
+                         f"*Ex : `.settheme nuit`*"),
+            color=0xff6fd8))
+    label, couleur, cadre = PROFIL_THEMES[nom.lower()]
+    profil_custom[uid].update({"couleur": couleur, "cadre": cadre, "theme": nom.lower()})
+    save_all_data()
+    _, _, sep = PROFIL_CADRES[cadre]
+    await ctx.send(embed=discord.Embed(
+        title=f"🌈 Thème {label}",
+        description=f"{sep}\nTon profil adopte cette ambiance.\n{sep}", color=couleur))
+
+@bot.command(name="macustom", aliases=["mescosmetiques", "customisation"])
+async def macustom_cmd(ctx):
+    """Ce que tu as débloqué — .macustom"""
+    uid = str(ctx.author.id)
+    co = profil_custom.get(uid, {})
+    items = [("badge","📛 Badge",".setbadge"),("couleur","🎨 Couleur",".setcouleur"),
+             ("citation","💬 Citation",".setcitation"),("banniere","🏳️ Bannière",".setbanniere"),
+             ("cadre","🖼️ Cadre",".setcadre"),("titre","📜 Titre",".settitre"),
+             ("emojiperso","✨ Emoji signature",".setemoji"),("theme","🌈 Thème",".settheme")]
+    lignes = []
+    for cle, nom, cmd in items:
+        if co.get(cle + "_debloque"):
+            actuel = co.get("emoji" if cle == "emojiperso" else cle)
+            etat = f"→ **{actuel}**" if actuel else "*(non configuré)*"
+            lignes.append(f"✅ {nom} — `{cmd}` {etat}")
+        else:
+            lignes.append(f"🔒 {nom} — *à acheter dans `.shop`*")
+    await ctx.send(embed=discord.Embed(
+        title=f"🎨 Personnalisation de {ctx.author.display_name}",
+        description="\n".join(lignes) + "\n\n*Page **🎨 Personnalisation** dans `.shop`.*",
+        color=co.get("couleur", 0xff6fd8)))
+
 @bot.command(name="setbadge")
 async def setbadge_cmd(ctx, *, texte: str = None):
     """Ton badge de profil — .setbadge <texte>"""
@@ -11470,22 +11646,72 @@ async def lettre_cmd(ctx, salon: discord.TextChannel = None, *, message: str = N
 # ============================================================
 #  🐾 RENCONTRE ENTRE COMPAGNONS
 # ============================================================
-PETVISITE_SCENES = [
-    "{a} et {b} se reniflent longuement, puis décident que oui, ça peut le faire.",
-    "{a} tente de voler la gamelle de {b}. La négociation dure trois minutes.",
-    "{a} et {b} s'endorment côte à côte au bout de dix minutes de jeu.",
-    "{b} montre son jouet préféré à {a}, qui fait semblant d'être impressionné.",
-    "{a} et {b} courent après le même papillon. Personne ne l'attrape.",
-    "{b} apprend à {a} comment réclamer des friandises avec les yeux. Technique redoutable.",
-    "{a} se cache derrière son maître pendant les cinq premières minutes. Puis c'est parti.",
-    "{a} et {b} se disputent la meilleure place au soleil. Match nul.",
-    "{b} pousse doucement {a} du museau pour l'inviter à jouer. Ça marche.",
-    "{a} et {b} explorent tout le quartier ensemble et rentrent couverts de boue.",
-    "{b} vole le collier de {a} et fait trois tours de jardin avec.",
-    "{a} et {b} découvrent qu'ils ont le même snack préféré. Amitié scellée.",
-    "{a} fait la sieste. {b} monte le garder. Personne ne bouge pendant une heure.",
-    "{b} essaie d'apprendre un tour à {a}. Le résultat est… discutable.",
-    "{a} et {b} organisent une course improvisée. {b} triche en coupant par le buisson.",
+# ── Amitié entre compagnons, façon Sims ──
+petamitie = defaultdict(int)     # {"uidA|uidB": points} — clé triée
+
+def _cle_amitie(a, b):
+    return "|".join(sorted([str(a), str(b)]))
+
+PET_AMITIE_PALIERS = [
+    (0,   "🌱 Se découvrent",   "Ils se reniflent encore avec méfiance.", 0),
+    (3,   "🙂 Camarades",       "Ils se reconnaissent de loin maintenant.", 30),
+    (7,   "🤝 Copains",         "Ils s'attendent avant de commencer à jouer.", 60),
+    (13,  "💛 Inséparables",    "Ils font tout ensemble, même les bêtises.", 100),
+    (22,  "💖 Âmes jumelles",   "Ils dorment collés l'un à l'autre.", 160),
+    (35,  "👑 Duo légendaire",  "Le QG entier connaît leur amitié.", 250),
+]
+
+def palier_amitie(pts):
+    actuel, suivant = PET_AMITIE_PALIERS[0], None
+    for i, p in enumerate(PET_AMITIE_PALIERS):
+        if pts >= p[0]:
+            actuel = p
+            suivant = PET_AMITIE_PALIERS[i+1] if i+1 < len(PET_AMITIE_PALIERS) else None
+    return actuel, suivant
+
+# ── Scènes par palier : plus ils se voient, plus c'est tendre ──
+PETVISITE_SCENES = {
+ "debut": [
+  "{a} avance de trois pas, s'arrête, recule de deux. {b} attend patiemment sans bouger une oreille.",
+  "Les deux se reniflent longuement, très sérieusement, comme s'ils remplissaient un formulaire.",
+  "{b} pose une patte devant {a}. {a} regarde la patte. Regarde {b}. Repose la sienne à côté. Contrat scellé.",
+  "{a} se cache derrière son maître pendant cinq bonnes minutes. Puis un jouet roule. Tout change.",
+  "{b} tourne autour de {a} trois fois dans le sens des aiguilles d'une montre. Personne ne sait pourquoi.",
+  "{a} fait semblant de ne pas voir {b}. {b} fait semblant d'y croire.",
+  "Ils s'observent depuis chacun un coin de la pièce. Au bout d'un quart d'heure, {a} avance d'un centimètre.",
+ ],
+ "moyen": [
+  "{a} rapporte son jouet préféré et le dépose devant {b}. C'est le plus grand compliment qu'il connaisse.",
+  "{a} et {b} courent après le même papillon. Aucun des deux ne l'attrape, mais ils rentrent très fiers.",
+  "{b} montre à {a} sa technique secrète pour réclamer des friandises. {a} prend des notes mentales.",
+  "Ils se disputent la meilleure place au soleil, puis finissent par s'y installer tous les deux, à l'étroit.",
+  "{a} et {b} explorent tout le quartier et reviennent couverts de boue, absolument ravis d'eux-mêmes.",
+  "{b} vole le collier de {a} et fait trois tours de jardin avec. {a} le poursuit en riant — enfin, à sa manière.",
+  "Ils découvrent qu'ils ont exactement le même snack préféré. L'amitié est officiellement scellée.",
+  "{a} s'endort en plein milieu d'une partie de cache-cache. {b} monte la garde à côté.",
+  "{b} essaie d'apprendre un tour à {a}. Le résultat est discutable, mais l'intention est belle.",
+  "Une flaque. Une seule. Les deux dedans. Les maîtres soupirent en chœur.",
+ ],
+ "haut": [
+  "{a} entend {b} arriver avant même de le voir, et court déjà vers la porte.",
+  "Ils ne jouent plus vraiment — ils s'installent côte à côte et regardent le monde passer.",
+  "{b} s'endort la tête posée sur {a}. Personne n'ose bouger pendant une heure et demie.",
+  "{a} partage sa gamelle sans qu'on lui demande. Ceux qui connaissent {a} savent ce que ça signifie.",
+  "Il pleut. Ils restent sous le même auvent, épaule contre épaule, sans un bruit.",
+  "{a} refuse de partir. Son maître doit le porter jusqu'à la porte, sous le regard de {b}.",
+  "Ils ont inventé un jeu que personne ne comprend, avec des règles qu'eux seuls connaissent.",
+  "{b} apporte à {a} une feuille morte, très solennellement. {a} la garde toute la soirée.",
+  "Quand vient l'heure de se quitter, aucun des deux ne bouge. Il faut négocier dix minutes.",
+ ],
+}
+
+PETVISITE_BONUS = [
+ ("pieces",  "💰", "Ils ont trouvé une pièce sous le canapé en jouant."),
+ ("pieces",  "🪙", "Un voisin attendri leur a glissé une petite récompense."),
+ ("xp",      "⭐", "Cette rencontre leur a beaucoup appris."),
+ ("humeur",  "🌈", "Ils repartent tous les deux d'humeur exceptionnelle."),
+ ("item",    "🎁", "Ils ont rapporté quelque chose. On préfère ne pas savoir d'où."),
+ ("rien",    "🍃", "Rien de spécial — juste un très bon moment."),
 ]
 
 @bot.command(name="petvisite", aliases=["visite", "petrencontre"])
@@ -11502,40 +11728,139 @@ async def petvisite_cmd(ctx, ami: discord.Member = None):
     if not p2:
         return await ctx.send(f"🐾 **{ami.display_name}** n'a pas de compagnon actif.")
 
-    cle = "visite_" + aid
+    cle_cd = "visite_" + aid
     e1 = pet_etat(uid)
-    dernier = e1["dernier"].get(cle, 0)
-    reste = 6 * 3600 - (_t.time() - dernier)
+    reste = 6 * 3600 - (_t.time() - e1["dernier"].get(cle_cd, 0))
     if reste > 0:
         h, m = divmod(int(reste) // 60, 60)
         return await ctx.send(f"⏳ Vos compagnons se sont vus récemment — revenez dans **{h}h{m:02d}**.",
                               delete_after=8)
-    e1["dernier"][cle] = _t.time()
-
+    e1["dernier"][cle_cd] = _t.time()
     e2 = pet_etat(aid)
-    scene = random.choice(PETVISITE_SCENES).format(
+
+    # ── Amitié ──
+    cle_am = _cle_amitie(uid, aid)
+    avant = petamitie[cle_am]
+    petamitie[cle_am] += 1
+    apres = petamitie[cle_am]
+    (seuil, nom_p, desc_p, bonus_p), suivant = palier_amitie(apres)
+    monte = palier_amitie(avant)[0][1] != nom_p
+
+    # ── Scène adaptée au niveau d'amitié ──
+    niveau = "debut" if apres < 5 else ("moyen" if apres < 15 else "haut")
+    scene = random.choice(PETVISITE_SCENES[niveau]).format(
         a=f"{db1['emoji']} **{db1['nom']}**", b=f"{db2['emoji']} **{db2['nom']}**")
 
+    # ── Effets de base ──
+    gain_humeur = 20 + min(20, apres)
     for st in (e1, e2):
-        st["humeur"] = min(100, st["humeur"] + 20)
-    l1, n1 = give_pet_xp(uid, 40)
-    l2, n2 = give_pet_xp(aid, 40)
+        st["humeur"] = min(100, st["humeur"] + gain_humeur)
+    xp_gagne = 40 + apres * 3
+    l1, n1 = give_pet_xp(uid, xp_gagne)
+    l2, n2 = give_pet_xp(aid, xp_gagne)
+
+    # ── Récompense surprise ──
+    typ, emo, txt = random.choice(PETVISITE_BONUS)
+    recompense = ""
+    if typ == "pieces":
+        montant = random.randint(80, 250) + bonus_p
+        for u in (uid, aid):
+            economy_data[u]["coins"] += montant
+            gazette_gain(u, montant)
+        recompense = f"{emo} *{txt}*\n**+{montant:,} pièces** chacun"
+    elif typ == "xp":
+        for u in (uid, aid):
+            xp_data[u]["xp"] += 60
+        recompense = f"{emo} *{txt}*\n**+60 XP** chacun"
+    elif typ == "humeur":
+        for st in (e1, e2):
+            st["humeur"] = 100
+            st["faim"] = max(0, st["faim"] - 20)
+        recompense = f"{emo} *{txt}*\n**Humeur au maximum** pour les deux"
+    elif typ == "item":
+        objet = random.choice(["cafe", "shield", "double_rien", "boost_rarete"])
+        nom_obj = next((i["nom"] for i in SHOP_ITEMS if i["id"] == objet), objet)
+        for u in (uid, aid):
+            inventaire[u][objet] += 1
+        recompense = f"{emo} *{txt}*\n**{nom_obj}** pour chacun"
+    else:
+        recompense = f"{emo} *{txt}*"
+
+    if bonus_p and typ != "pieces":
+        for u in (uid, aid):
+            economy_data[u]["coins"] += bonus_p
+        recompense += f"\n💛 **+{bonus_p} pièces** grâce à leur amitié"
+
+    ajouter_lien(uid, aid, "pet")
+    save_all_data()
+
+    # ── Barre d'amitié ──
+    if suivant:
+        prog = (apres - seuil) / max(1, suivant[0] - seuil)
+        f = max(0, min(10, int(prog * 10)))
+        barre = f"`{'💗'*f}{'🤍'*(10-f)}`\n*Encore **{suivant[0]-apres}** visite(s) → {suivant[1]}*"
+    else:
+        barre = "`💗💗💗💗💗💗💗💗💗💗`\n*Amitié maximale atteinte.*"
 
     embed = discord.Embed(
-        title="🐾 Une rencontre au QG",
-        description=(f"*{scene}*\n\n"
-                     f"❤️ Les deux compagnons repartent de **très bonne humeur**.\n"
-                     f"⭐ **+40 XP** chacun"),
+        title="🐾  Une rencontre au QG",
+        description=f"*{scene}*",
         color=0xe91e63)
+    embed.add_field(name=f"💞 Amitié — {nom_p}",
+                    value=f"{barre}\n*{desc_p}*\n**{apres} rencontre(s)**", inline=False)
+    embed.add_field(name="🎁 Ce qu'ils rapportent", value=recompense, inline=False)
     embed.add_field(name=f"{db1['emoji']} {db1['nom']}",
-                    value=f"*{ctx.author.display_name}*\nHumeur : {pet_humeur_texte(e1)}"
-                          + (f"\n🆙 **Niveau {n1} !**" if l1 else ""), inline=True)
+                    value=(f"*{ctx.author.display_name}*\n{pet_humeur_texte(e1)}\n+{xp_gagne} XP"
+                           + (f"\n🆙 **Niveau {n1} !**" if l1 else "")), inline=True)
     embed.add_field(name=f"{db2['emoji']} {db2['nom']}",
-                    value=f"*{ami.display_name}*\nHumeur : {pet_humeur_texte(e2)}"
-                          + (f"\n🆙 **Niveau {n2} !**" if l2 else ""), inline=True)
-    ajouter_lien(uid, aid, "pet")
-    embed.set_footer(text="Une rencontre par duo toutes les 6 heures · votre lien se renforce 🤝")
+                    value=(f"*{ami.display_name}*\n{pet_humeur_texte(e2)}\n+{xp_gagne} XP"
+                           + (f"\n🆙 **Niveau {n2} !**" if l2 else "")), inline=True)
+    if monte:
+        embed.add_field(name="✨ Leur amitié grandit !",
+                        value=f"Ils passent au palier **{nom_p}**", inline=False)
+        gazette_fait("divers", f"Les compagnons de **{ctx.author.display_name}** et "
+                               f"**{ami.display_name}** sont devenus {nom_p}.", 2)
+    embed.set_footer(text="Une rencontre par duo toutes les 6 heures · `.petamis` pour voir toutes leurs amitiés")
     await ctx.send(f"{ami.mention}", embed=embed)
+
+@bot.command(name="petamis", aliases=["amitiepet", "petfriends"])
+async def petamis_cmd(ctx, membre: discord.Member = None):
+    """Les amitiés de ton compagnon — .petamis"""
+    cible = membre or ctx.author
+    uid = str(cible.id)
+    pid, pdb, _ = get_active_pet(uid)
+    if not pid:
+        return await ctx.send(f"🐾 **{cible.display_name}** n'a pas de compagnon actif.")
+    amis = []
+    for cle, pts in petamitie.items():
+        if uid not in cle.split("|") or pts <= 0:
+            continue
+        autre = [x for x in cle.split("|") if x != uid][0]
+        m = ctx.guild.get_member(int(autre)) if ctx.guild else None
+        if not m:
+            continue
+        ap, _, dp, ai = get_active_pet(autre)
+        (_, nom_p, _, bonus), _ = palier_amitie(pts)
+        amis.append((pts, m, ap, dp, nom_p, bonus))
+    if not amis:
+        return await ctx.send(embed=discord.Embed(
+            title=f"🐾 Les amitiés de {pdb['emoji']} {pdb['nom']}",
+            description=("*Il n'a encore rencontré personne.*\n\n"
+                         "`.petvisite @ami` — chaque rencontre renforce leur amitié.\n"
+                         "Plus ils se voient, plus les récompenses grossissent."),
+            color=0xe91e63))
+    amis.sort(key=lambda x: -x[0])
+    lignes = []
+    for pts, m, ap, dp, nom_p, bonus in amis[:10]:
+        emo = dp["emoji"] if dp else "🐾"
+        nom_a = dp["nom"] if dp else "son compagnon"
+        lignes.append(f"{emo} **{nom_a}** *({m.display_name})*\n"
+                      f"└ {nom_p} · **{pts}** rencontre(s)" + (f" · +{bonus} p" if bonus else ""))
+    await ctx.send(embed=discord.Embed(
+        title=f"🐾 Les amitiés de {pdb['emoji']} {pdb['nom']}",
+        description="\n".join(lignes),
+        color=0xe91e63).set_footer(text=f"{len(amis)} ami(s) · `.petvisite @membre` pour les revoir"))
+
 
 @bot.command(name="pet", aliases=["compagnon"])
 async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
@@ -11668,36 +11993,286 @@ BRACKET_KDRAMA = [
     {"nom": "Crash Landing on You", "emoji": "🪂"},
     {"nom": "Squid Game", "emoji": "🦑"},
     {"nom": "Vincenzo", "emoji": "🦅"},
-    {"nom": "Reply 1988", "emoji": "📼"},
     {"nom": "Itaewon Class", "emoji": "🍺"},
+    {"nom": "Reply 1988", "emoji": "📼"},
     {"nom": "Kingdom", "emoji": "👑"},
     {"nom": "Signal", "emoji": "📻"},
     {"nom": "Hospital Playlist", "emoji": "🩺"},
-    {"nom": "My Love from the Star", "emoji": "⭐"},
-    {"nom": "Descendants of the Sun", "emoji": "☀️"},
     {"nom": "The Glory", "emoji": "🔥"},
     {"nom": "Queen of Tears", "emoji": "💧"},
     {"nom": "Extraordinary Attorney Woo", "emoji": "🐋"},
+    {"nom": "Weak Hero Class", "emoji": "📓"},
+    {"nom": "Alchemy of Souls", "emoji": "🔮"},
+    {"nom": "Business Proposal", "emoji": "💼"},
+    {"nom": "Twenty-Five Twenty-One", "emoji": "🤺"},
+    {"nom": "Start-Up", "emoji": "🚀"},
     {"nom": "Sweet Home", "emoji": "👹"},
     {"nom": "All of Us Are Dead", "emoji": "🧟"},
+    {"nom": "My Mister", "emoji": "🚇"},
+    {"nom": "Hometown Cha-Cha-Cha", "emoji": "🌊"},
+    {"nom": "Reborn Rich", "emoji": "💰"},
+    {"nom": "D.P.", "emoji": "🎖️"},
+    {"nom": "Mr. Sunshine", "emoji": "🌅"},
+    {"nom": "Hellbound", "emoji": "😈"},
+    {"nom": "Lovely Runner", "emoji": "🏃"},
+    {"nom": "Marry My Husband", "emoji": "💍"},
+    {"nom": "My Demon", "emoji": "😈"},
+    {"nom": "Mask Girl", "emoji": "🎭"},
+    {"nom": "Big Mouth", "emoji": "🐭"},
+    {"nom": "Stranger", "emoji": "🔍"},
+    {"nom": "Prison Playbook", "emoji": "⚾"},
+    {"nom": "Descendants of the Sun", "emoji": "☀️"},
+    {"nom": "My Love from the Star", "emoji": "⭐"},
+    {"nom": "Boys Over Flowers", "emoji": "🌸"},
+    {"nom": "Doctor Slump", "emoji": "🩹"},
+    {"nom": "Crash Course in Romance", "emoji": "📐"},
+    {"nom": "Move to Heaven", "emoji": "📦"},
+    {"nom": "Nevertheless", "emoji": "🦋"},
+    {"nom": "It's Okay to Not Be Okay", "emoji": "🌼"},
+    {"nom": "The Penthouse", "emoji": "🏢"},
+    {"nom": "Vagabond", "emoji": "✈️"},
+    {"nom": "W: Two Worlds", "emoji": "📖"},
+    {"nom": "Strong Woman Do Bong-soon", "emoji": "💪"},
+    {"nom": "While You Were Sleeping", "emoji": "💤"},
+    {"nom": "Tomorrow", "emoji": "🌉"},
+    {"nom": "Little Women", "emoji": "👗"},
+    {"nom": "The Uncanny Counter", "emoji": "👊"},
+    {"nom": "Our Beloved Summer", "emoji": "🎬"},
+    {"nom": "Twinkling Watermelon", "emoji": "🍉"},
+    {"nom": "Castaway Diva", "emoji": "🎤"},
+    {"nom": "The Trunk", "emoji": "🧳"},
 ]
 BRACKET_ANIME = [
     {"nom": "Attack on Titan", "emoji": "⚔️"},
     {"nom": "Demon Slayer", "emoji": "🗡️"},
     {"nom": "One Piece", "emoji": "🏴‍☠️"},
-    {"nom": "Naruto", "emoji": "🍥"},
-    {"nom": "Death Note", "emoji": "📓"},
+    {"nom": "Naruto Shippuden", "emoji": "🍥"},
     {"nom": "Jujutsu Kaisen", "emoji": "💥"},
-    {"nom": "FMA Brotherhood", "emoji": "⚗️"},
+    {"nom": "Death Note", "emoji": "📓"},
+    {"nom": "Fullmetal Alchemist Brotherhood", "emoji": "⚗️"},
+    {"nom": "Haikyuu", "emoji": "🏐"},
+    {"nom": "My Hero Academia", "emoji": "💚"},
+    {"nom": "Chainsaw Man", "emoji": "⛓️"},
+    {"nom": "Spy x Family", "emoji": "🕵️"},
+    {"nom": "Frieren", "emoji": "🧝"},
+    {"nom": "Solo Leveling", "emoji": "🌑"},
+    {"nom": "Oshi no Ko", "emoji": "⭐"},
+    {"nom": "Blue Lock", "emoji": "⚽"},
+    {"nom": "Vinland Saga", "emoji": "🪓"},
     {"nom": "Hunter x Hunter", "emoji": "🎯"},
     {"nom": "Bleach", "emoji": "🌙"},
-    {"nom": "Dragon Ball Z", "emoji": "🐉"},
-    {"nom": "One Punch Man", "emoji": "👊"},
-    {"nom": "Solo Leveling", "emoji": "🗡️"},
-    {"nom": "Vinland Saga", "emoji": "🪓"},
-    {"nom": "Haikyuu!!", "emoji": "🏐"},
+    {"nom": "Tokyo Revengers", "emoji": "🕰️"},
+    {"nom": "Dandadan", "emoji": "👽"},
+    {"nom": "Kaiju No. 8", "emoji": "🦖"},
     {"nom": "Mob Psycho 100", "emoji": "🔮"},
-    {"nom": "Chainsaw Man", "emoji": "⛓️"},
+    {"nom": "One Punch Man", "emoji": "👊"},
+    {"nom": "Code Geass", "emoji": "♟️"},
+    {"nom": "Steins;Gate", "emoji": "🧪"},
+    {"nom": "Your Lie in April", "emoji": "🎹"},
+    {"nom": "Re:Zero", "emoji": "💀"},
+    {"nom": "Fire Force", "emoji": "🔥"},
+    {"nom": "Black Clover", "emoji": "🍀"},
+    {"nom": "Tokyo Ghoul", "emoji": "🕷️"},
+    {"nom": "Made in Abyss", "emoji": "🕳️"},
+    {"nom": "Berserk", "emoji": "⚫"},
+    {"nom": "Mushoku Tensei", "emoji": "🪄"},
+    {"nom": "Konosuba", "emoji": "💢"},
+    {"nom": "Overlord", "emoji": "☠️"},
+    {"nom": "Sakamoto Days", "emoji": "🔫"},
+    {"nom": "Wind Breaker", "emoji": "🌸"},
+    {"nom": "Hell's Paradise", "emoji": "🏝️"},
+    {"nom": "Dr. Stone", "emoji": "🧬"},
+    {"nom": "Cowboy Bebop", "emoji": "🚀"},
+    {"nom": "Dragon Ball Z", "emoji": "🐉"},
+    {"nom": "Fairy Tail", "emoji": "🧚"},
+    {"nom": "Sword Art Online", "emoji": "🗡️"},
+    {"nom": "Noragami", "emoji": "⛩️"},
+    {"nom": "Assassination Classroom", "emoji": "🎓"},
+    {"nom": "The Promised Neverland", "emoji": "🌿"},
+    {"nom": "Erased", "emoji": "📺"},
+    {"nom": "Violet Evergarden", "emoji": "💌"},
+    {"nom": "Your Name", "emoji": "☄️"},
+    {"nom": "A Silent Voice", "emoji": "🌸"},
+    {"nom": "Le Voyage de Chihiro", "emoji": "🐲"},
+    {"nom": "Princesse Mononoké", "emoji": "🐺"},
+]
+
+BRACKET_MARQUES = [
+    {"nom": "Nike", "emoji": "✔️"},
+    {"nom": "Adidas", "emoji": "🔺"},
+    {"nom": "Puma", "emoji": "🐆"},
+    {"nom": "New Balance", "emoji": "🅽"},
+    {"nom": "Asics", "emoji": "🏃"},
+    {"nom": "Reebok", "emoji": "🔷"},
+    {"nom": "Zara", "emoji": "🖤"},
+    {"nom": "H&M", "emoji": "🧥"},
+    {"nom": "Uniqlo", "emoji": "🇯🇵"},
+    {"nom": "Bershka", "emoji": "👖"},
+    {"nom": "Pull & Bear", "emoji": "🐻"},
+    {"nom": "Stradivarius", "emoji": "✨"},
+    {"nom": "Lacoste", "emoji": "🐊"},
+    {"nom": "Ralph Lauren", "emoji": "🐴"},
+    {"nom": "Tommy Hilfiger", "emoji": "⛵"},
+    {"nom": "Calvin Klein", "emoji": "🖤"},
+    {"nom": "Levi's", "emoji": "👖"},
+    {"nom": "The North Face", "emoji": "🏔️"},
+    {"nom": "Columbia", "emoji": "🧭"},
+    {"nom": "Patagonia", "emoji": "🐟"},
+    {"nom": "Carhartt", "emoji": "🔨"},
+    {"nom": "Dickies", "emoji": "🔧"},
+    {"nom": "Gucci", "emoji": "🐝"},
+    {"nom": "Louis Vuitton", "emoji": "🧳"},
+    {"nom": "Dior", "emoji": "🌸"},
+    {"nom": "Chanel", "emoji": "🖤"},
+    {"nom": "Balenciaga", "emoji": "🏛️"},
+    {"nom": "Prada", "emoji": "🔻"},
+    {"nom": "Off-White", "emoji": "⬜"},
+    {"nom": "Supreme", "emoji": "🟥"},
+    {"nom": "Stüssy", "emoji": "🌊"},
+    {"nom": "Palace", "emoji": "🔺"},
+    {"nom": "Bape", "emoji": "🦍"},
+    {"nom": "Jordan", "emoji": "🏀"},
+    {"nom": "Converse", "emoji": "⭐"},
+    {"nom": "Vans", "emoji": "🛹"},
+    {"nom": "Timberland", "emoji": "🌲"},
+    {"nom": "Dr. Martens", "emoji": "🥾"},
+    {"nom": "Champion", "emoji": "🅲"},
+    {"nom": "Fila", "emoji": "🇮🇹"},
+    {"nom": "Kappa", "emoji": "👥"},
+    {"nom": "Ellesse", "emoji": "🗻"},
+    {"nom": "Sergio Tacchini", "emoji": "🎾"},
+    {"nom": "Jacquemus", "emoji": "☀️"},
+    {"nom": "Ami Paris", "emoji": "❤️"},
+    {"nom": "Sandro", "emoji": "🇫🇷"},
+    {"nom": "Maje", "emoji": "🌺"},
+    {"nom": "The Kooples", "emoji": "🖤"},
+    {"nom": "Shein", "emoji": "🛍️"},
+    {"nom": "Primark", "emoji": "🛒"},
+    {"nom": "Celio", "emoji": "👔"},
+    {"nom": "Jules", "emoji": "🤵"},
+    {"nom": "Kiabi", "emoji": "🌈"},
+]
+
+BRACKET_FASTFOOD = [
+    {"nom": "McDonald's", "emoji": "🍟"},
+    {"nom": "KFC", "emoji": "🍗"},
+    {"nom": "Burger King", "emoji": "👑"},
+    {"nom": "Tacos Avenue", "emoji": "🌯"},
+    {"nom": "O'Tacos", "emoji": "🌮"},
+    {"nom": "Subway", "emoji": "🥪"},
+    {"nom": "Domino's Pizza", "emoji": "🍕"},
+    {"nom": "Pizza Hut", "emoji": "🍕"},
+    {"nom": "Papa John's", "emoji": "🍕"},
+    {"nom": "Five Guys", "emoji": "🍔"},
+    {"nom": "Quick", "emoji": "🍔"},
+    {"nom": "Crousty", "emoji": "🍗"},
+    {"nom": "Tasty", "emoji": "🍔"},
+    {"nom": "Chicken Street", "emoji": "🐔"},
+    {"nom": "Popeyes", "emoji": "🌶️"},
+    {"nom": "Wendy's", "emoji": "🍔"},
+    {"nom": "Shake Shack", "emoji": "🥤"},
+    {"nom": "Nando's", "emoji": "🔥"},
+    {"nom": "Starbucks", "emoji": "☕"},
+    {"nom": "Dunkin'", "emoji": "🍩"},
+    {"nom": "Krispy Kreme", "emoji": "🍩"},
+    {"nom": "Sushi Shop", "emoji": "🍣"},
+    {"nom": "Planet Sushi", "emoji": "🍱"},
+    {"nom": "Pitaya", "emoji": "🇧🇷"},
+    {"nom": "Wok to Walk", "emoji": "🥡"},
+    {"nom": "Bagelstein", "emoji": "🥯"},
+    {"nom": "Big Fernand", "emoji": "🐄"},
+    {"nom": "Steak'n Shake", "emoji": "🥩"},
+    {"nom": "Nabab Kebab", "emoji": "🥙"},
+    {"nom": "Berliner Das Curry", "emoji": "🌭"},
+    {"nom": "Waffle Factory", "emoji": "🧇"},
+    {"nom": "La Brioche Dorée", "emoji": "🥐"},
+    {"nom": "Paul", "emoji": "🥖"},
+    {"nom": "Cojean", "emoji": "🥗"},
+    {"nom": "Exki", "emoji": "🌱"},
+    {"nom": "Chipotle", "emoji": "🌯"},
+    {"nom": "Taco Bell", "emoji": "🔔"},
+    {"nom": "In-N-Out", "emoji": "🍔"},
+    {"nom": "Jollibee", "emoji": "🐝"},
+    {"nom": "Lotteria", "emoji": "🇰🇷"},
+    {"nom": "BBQ Chicken", "emoji": "🇰🇷"},
+    {"nom": "Kyochon", "emoji": "🍗"},
+    {"nom": "Bonchon", "emoji": "🍗"},
+    {"nom": "Mom's Touch", "emoji": "🍔"},
+]
+
+BRACKET_PERSONNAGES = [
+    {"nom": "Luffy", "emoji": "🏴‍☠️"},
+    {"nom": "Zoro", "emoji": "⚔️"},
+    {"nom": "Sanji", "emoji": "🚬"},
+    {"nom": "Nami", "emoji": "🍊"},
+    {"nom": "Shanks", "emoji": "🦰"},
+    {"nom": "Ace", "emoji": "🔥"},
+    {"nom": "Law", "emoji": "💉"},
+    {"nom": "Naruto", "emoji": "🍥"},
+    {"nom": "Sasuke", "emoji": "⚡"},
+    {"nom": "Kakashi", "emoji": "📖"},
+    {"nom": "Itachi", "emoji": "🔴"},
+    {"nom": "Minato", "emoji": "💛"},
+    {"nom": "Gaara", "emoji": "🏜️"},
+    {"nom": "Jiraiya", "emoji": "🐸"},
+    {"nom": "Tanjiro", "emoji": "🗡️"},
+    {"nom": "Nezuko", "emoji": "🎋"},
+    {"nom": "Zenitsu", "emoji": "⚡"},
+    {"nom": "Inosuke", "emoji": "🐗"},
+    {"nom": "Rengoku", "emoji": "🔥"},
+    {"nom": "Giyu", "emoji": "💧"},
+    {"nom": "Gojo Satoru", "emoji": "👁️"},
+    {"nom": "Sukuna", "emoji": "👹"},
+    {"nom": "Yuji Itadori", "emoji": "💥"},
+    {"nom": "Megumi", "emoji": "🐕"},
+    {"nom": "Nobara", "emoji": "🔨"},
+    {"nom": "Toji", "emoji": "🗡️"},
+    {"nom": "Eren Yeager", "emoji": "🧱"},
+    {"nom": "Levi Ackerman", "emoji": "🧹"},
+    {"nom": "Mikasa", "emoji": "🧣"},
+    {"nom": "Armin", "emoji": "📘"},
+    {"nom": "Erwin", "emoji": "🎖️"},
+    {"nom": "Goku", "emoji": "🐉"},
+    {"nom": "Vegeta", "emoji": "👑"},
+    {"nom": "Gohan", "emoji": "📚"},
+    {"nom": "Piccolo", "emoji": "🟢"},
+    {"nom": "Broly", "emoji": "💢"},
+    {"nom": "Ichigo", "emoji": "🌙"},
+    {"nom": "Rukia", "emoji": "❄️"},
+    {"nom": "Aizen", "emoji": "🕶️"},
+    {"nom": "Byakuya", "emoji": "🌸"},
+    {"nom": "Killua", "emoji": "⚡"},
+    {"nom": "Gon", "emoji": "🎣"},
+    {"nom": "Hisoka", "emoji": "🃏"},
+    {"nom": "Kurapika", "emoji": "⛓️"},
+    {"nom": "Deku", "emoji": "💚"},
+    {"nom": "Bakugo", "emoji": "💥"},
+    {"nom": "Todoroki", "emoji": "🔥"},
+    {"nom": "All Might", "emoji": "💪"},
+    {"nom": "Light Yagami", "emoji": "📓"},
+    {"nom": "L", "emoji": "🍬"},
+    {"nom": "Ryuk", "emoji": "🍎"},
+    {"nom": "Saitama", "emoji": "👊"},
+    {"nom": "Genos", "emoji": "🤖"},
+    {"nom": "Garou", "emoji": "🐺"},
+    {"nom": "Denji", "emoji": "⛓️"},
+    {"nom": "Makima", "emoji": "🔗"},
+    {"nom": "Power", "emoji": "🩸"},
+    {"nom": "Aki", "emoji": "🗡️"},
+    {"nom": "Anya Forger", "emoji": "🥜"},
+    {"nom": "Loid Forger", "emoji": "🕴️"},
+    {"nom": "Yor Forger", "emoji": "🌹"},
+    {"nom": "Frieren", "emoji": "🧝"},
+    {"nom": "Sung Jin-Woo", "emoji": "🌑"},
+    {"nom": "Thorfinn", "emoji": "🪓"},
+    {"nom": "Guts", "emoji": "⚫"},
+    {"nom": "Lelouch", "emoji": "♟️"},
+    {"nom": "Edward Elric", "emoji": "⚗️"},
+    {"nom": "Roy Mustang", "emoji": "🔥"},
+    {"nom": "Senku", "emoji": "🧬"},
+    {"nom": "Mob", "emoji": "🔮"},
+    {"nom": "Reigen", "emoji": "💼"},
+    {"nom": "Kafka Hibino", "emoji": "🦖"},
 ]
 
 class BracketSkipView(ui.View):
@@ -12095,28 +12670,48 @@ async def boss_cmd(ctx):
         await ctx.send("⚔️ Un boss est déjà en cours ! Tape `.attaque` pour combattre.", delete_after=5)
 
 @bot.command(name="bracket")
-async def bracket_cmd(ctx, theme: str = None):
-    """
-    .bracket kdrama — Lance le tournoi des meilleurs Kdramas !
-    .bracket anime  — Lance le tournoi des meilleurs Animés !
-    """
-    if not theme or theme.lower() not in ["kdrama", "anime"]:
-        return await ctx.send("❌ Choisis un thème ! `.bracket kdrama` ou `.bracket anime`")
+async def bracket_cmd(ctx, theme: str = None, taille: int = 8):
+    """Tournoi à élimination directe — .bracket <thème> [8|16]"""
+    THEMES = {
+        "kdrama":      ("🎭 Meilleur K-Drama",       BRACKET_KDRAMA,      0xff6b9d),
+        "anime":       ("📺 Meilleur Animé",         BRACKET_ANIME,       0x9b59b6),
+        "personnage":  ("👤 Meilleur Personnage",    BRACKET_PERSONNAGES, 0xe67e22),
+        "fastfood":    ("🍔 Meilleur Fast-Food",     BRACKET_FASTFOOD,    0xf1c40f),
+        "marque":      ("👕 Meilleure Marque",       BRACKET_MARQUES,     0x3498db),
+    }
+    ALIAS = {"drama":"kdrama","kdramas":"kdrama","animes":"anime","manga":"anime",
+             "perso":"personnage","personnages":"personnage","character":"personnage",
+             "food":"fastfood","fast":"fastfood","burger":"fastfood","resto":"fastfood",
+             "marques":"marque","vetement":"marque","vetements":"marque","brand":"marque","fringues":"marque"}
+
+    cle = ALIAS.get((theme or "").lower().strip(), (theme or "").lower().strip())
+    if cle not in THEMES:
+        lignes = "\n".join(f"`{k}` — {v[0]} *({len(v[1])} candidats)*" for k, v in THEMES.items())
+        return await ctx.send(embed=discord.Embed(
+            title="🏆 Tournoi du QG",
+            description=(f"**Usage :** `.bracket <thème>`\n\n{lignes}\n\n"
+                         f"*Ajoute `16` pour un tournoi à 16 : `.bracket anime 16`*\n"
+                         f"Le serveur vote à chaque match, jusqu'au grand gagnant."),
+            color=0xf1c40f))
 
     gid = ctx.guild.id
     if gid in active_brackets:
         return await ctx.send("🏆 Un tournoi est déjà en cours ! Attends la fin.")
 
-    theme = theme.lower()
-    pool = BRACKET_KDRAMA if theme == "kdrama" else BRACKET_ANIME
-    participants = random.sample(pool, 8)
+    nom_theme, pool, couleur = THEMES[cle]
+    taille = 16 if taille >= 16 else 8
+    if len(pool) < taille:
+        taille = 8
+    participants = random.sample(pool, taille)
 
-    # Créer les matchs du 1er tour (4 matchs)
-    matchs = [(participants[i], participants[i+1]) for i in range(0, 8, 2)]
+    # Matchs du 1er tour
+    matchs = [(participants[i], participants[i+1]) for i in range(0, taille, 2)]
 
     active_brackets[gid] = {
         "host": ctx.author.id,
-        "theme": theme,
+        "theme": cle,
+        "nom_theme": nom_theme,
+        "couleur": couleur,
         "matchs": matchs,
         "tour": 1,
         "gagnants": [],
@@ -12124,22 +12719,23 @@ async def bracket_cmd(ctx, theme: str = None):
         "channel": ctx.channel.id,
     }
 
-    emoji_theme = "🎬" if theme == "kdrama" else "✨"
+    tableau = "\n".join(
+        f"{a['emoji']} **{a['nom']}**  🆚  {b['emoji']} **{b['nom']}**"
+        for a, b in matchs)
     embed = discord.Embed(
-        title=f"{emoji_theme} TOURNOI {'KDRAMA' if theme == 'kdrama' else 'ANIMÉ'} — QG Kdrama",
-        description=(
-            f"**8 {('dramas' if theme == 'kdrama' else 'animés')} s'affrontent !**\n"
-            f"Le serveur vote pour chaque duel — 24h par match !\n\n"
-            f"🏆 Le champion sera couronné meilleur {'drama' if theme == 'kdrama' else 'animé'} du QG !\n\n"
-            f"**TABLEAU :**\n" +
-            "\n".join([f"⚔️ **{m[0]['nom']}** vs **{m[1]['nom']}**" for m in matchs])
-        ),
-        color=0xf1c40f
-    )
-    await ctx.send(embed=embed)
-    await asyncio.sleep(2)
+        title=f"🏆  TOURNOI — {nom_theme}",
+        description=(f"**{taille} candidats s'affrontent !**\n"
+                     f"Le serveur vote à chaque duel — le créateur peut passer au suivant "
+                     f"avec le bouton.\n\n"
+                     f"━━━━━━━━━━━━━━━━━━\n\n"
+                     f"### 🥊 Premier tour\n{tableau}\n\n"
+                     f"━━━━━━━━━━━━━━━━━━\n\n"
+                     f"🏆 Le champion sera couronné **{nom_theme.split(' ', 1)[1]} du QG** !"),
+        color=couleur)
+    embed.set_footer(text=f"{taille} candidats · {taille-1} matchs · Que le meilleur gagne")
+    await ctx.send(get_event_ping(ctx.guild, "everyone"), embed=embed)
+    await asyncio.sleep(3)
 
-    # Lancer le premier match
     await bracket_lancer_match(ctx, gid, 0)
 
 @bot.command(name="bracketskip")
@@ -16459,6 +17055,7 @@ def save_all_data():
             "double_daily": dict(double_daily),
             "profil_custom": {k: dict(v) for k, v in profil_custom.items()},
             "cadenas_perso": dict(cadenas_perso),
+            "petamitie": dict(petamitie),
             "liens": {k: dict(v) for k, v in liens_data.items() if v},
             "gazette_stats": {k: dict(v) for k, v in gazette_stats.items() if v},
             "gazette_faits": gazette_faits[-200:],
@@ -16552,6 +17149,7 @@ def load_all_data():
             for k, v in data.get("profil_custom", {}).items():
                 profil_custom[k].update(v)
             cadenas_perso.update(data.get("cadenas_perso", {}))
+            petamitie.update(data.get("petamitie", {}))
             for k, v in data.get("liens", {}).items():
                 liens_data[k].update(v)
             for k, v in data.get("gazette_stats", {}).items():
