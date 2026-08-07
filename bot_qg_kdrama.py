@@ -125,6 +125,7 @@ economy_data = defaultdict(lambda: {"coins": 0, "tier": "Spectateur Débutant"})
 message_count = defaultdict(int)
 planning_last_run = {}  # {(weekday, hour): timestamp} anti-doublon
 planning_actif = True  # True = events automatiques activés
+derniere_erreur = {}   # dernière erreur de commande, pour .diag
 anniversaire_data = {}               # {uid: "JJ/MM"}
 
 duels = {}
@@ -1372,13 +1373,15 @@ def build_help_pages(guild, is_admin=False):
     ), inline=False)
     e.add_field(name="📢 Communication", value=(
         "`.announce <message>` — Annonce officielle\n"
+        "`.diag` — 🔧 **Diagnostic** : volume, sauvegardes, dernière erreur\n"
         "`.forcegazette` — Publier la gazette immédiatement\n"
         "`.drama-start` — Lancer une saison *(histoire et casting au hasard)*\n"
         "`.drama-start <trope>` — Choisir l'histoire · `.drama-start liste` — Les voir toutes\n"
         "`.drama-start <trope> @a @b` — Choisir aussi le casting\n"
         "`.drama-cast @a @b` — Changer le casting en cours de saison\n"
         "`.drama-next` — Dépouiller le vote et publier l'épisode suivant *(quand tu veux)*\n"
-        "`.drama-stop` — Clôturer la saison"
+        "`.drama-stop` — Clôturer la saison\n"
+        "`.drama-reset` — Tout remettre à zéro en cas de problème"
     ), inline=False)
     e.add_field(name="📖 Aide", value=(
         "`.helpadmin` — Cette aide staff  ·  `.help` — L'aide des joueurs"
@@ -8472,6 +8475,68 @@ async def addcard_cmd(ctx, *, args: str = None):
     if url: embed.set_thumbnail(url=url)
     await ctx.send(embed=embed)
 
+@bot.command(name="diag", aliases=["diagnostic", "debug"])
+@commands.has_permissions(manage_guild=True)
+async def diag_cmd(ctx):
+    """Diagnostic du bot — .diag (staff)"""
+    import sys as _sys, os as _os
+    embed = discord.Embed(title="🔧 Diagnostic du bot", color=0x3498db)
+
+    # Version et environnement
+    embed.add_field(name="⚙️ Environnement", value=(
+        f"Python **{_sys.version.split()[0]}**\n"
+        f"discord.py **{discord.__version__}**\n"
+        f"Dossier de données : `{DATA_DIR}`\n"
+        f"Volume monté : {'✅ oui' if DATA_DIR == '/data' else '⚠️ non — données éphémères !'}"),
+        inline=False)
+
+    # Fichiers de sauvegarde
+    fichiers = []
+    for nom, chemin in DATA_FILES.items():
+        try:
+            taille = _os.path.getsize(chemin)
+            fichiers.append(f"✅ `{nom}` — {taille:,} o")
+        except FileNotFoundError:
+            fichiers.append(f"⚠️ `{nom}` — absent")
+        except Exception as e:
+            fichiers.append(f"❌ `{nom}` — {type(e).__name__}")
+    embed.add_field(name="💾 Sauvegardes", value="\n".join(fichiers) or "aucune", inline=False)
+
+    # Test d'écriture réel
+    try:
+        save_all_data()
+        ecriture = "✅ écriture réussie"
+    except Exception as e:
+        ecriture = f"❌ {type(e).__name__}: {e}"
+    embed.add_field(name="✍️ Test de sauvegarde", value=ecriture, inline=False)
+
+    # Données chargées
+    embed.add_field(name="📊 En mémoire", value=(
+        f"👥 {len(xp_data)} membres · 💰 {len(economy_data)} comptes\n"
+        f"🎴 {len(claimed_cards)}/{len(ANIME_CARDS_DB)} cartes · 🐾 {len(pets_data)} compagnons\n"
+        f"🤝 {sum(1 for v in liens_data.values() if v)} liens · 📅 {len(scheduled_events)} events programmés"),
+        inline=False)
+
+    # Salons configurés
+    manquants = [n for n, v in [("gacha", SALON_GACHA_ID), ("event", SALON_EVENT_ID),
+                                ("annonces", SALON_ANNONCES_ID), ("boutique", SALON_BOUTIQUE_ID)] if not v]
+    embed.add_field(name="📍 Salons",
+                    value=("✅ tous configurés" if not manquants
+                           else f"⚠️ non configurés : {', '.join(manquants)}"), inline=False)
+
+    # Dernière erreur
+    if derniere_erreur:
+        embed.add_field(name=f"🐞 Dernière erreur — {derniere_erreur.get('quand','?')}", value=(
+            f"`.{derniere_erreur.get('cmd')}`\n"
+            f"**{derniere_erreur.get('type')}** : {str(derniere_erreur.get('msg'))[:300]}"),
+            inline=False)
+    else:
+        embed.add_field(name="🐞 Dernière erreur", value="*Aucune depuis le démarrage.*", inline=False)
+
+    await ctx.send(embed=embed)
+    if derniere_erreur.get("tb"):
+        await ctx.send(f"```py\n{derniere_erreur['tb'][-1800:]}\n```")
+
 @bot.command(name="dashboard")
 @commands.has_permissions(administrator=True)
 async def dashboard_cmd(ctx):
@@ -10210,8 +10275,31 @@ DRAMA_EPISODES = [
 
 drama_saison = {
     "titre": None, "episode": 0, "en_cours": False,
-    "casting": {}, "historique": [], "trame": None, "vote_msg": None,
+    "casting": {}, "historique": [], "trope_cle": None,
+    "vue": None, "dernier_choix": [],
 }
+
+def _drama_valide():
+    """Répare une saison sauvegardée dans un ancien format.
+    Retourne False si la saison est inutilisable (et la remet à zéro)."""
+    s = drama_saison
+    # Migration : l'ancien champ s'appelait « trame »
+    if not s.get("trope_cle") and s.get("trame"):
+        s["trope_cle"] = s.pop("trame", None)
+    s.pop("trame", None)
+    s.pop("vote_msg", None)
+    s.setdefault("historique", [])
+    s.setdefault("casting", {})
+    s.setdefault("dernier_choix", [])
+    s.setdefault("episode", 0)
+    s["vue"] = None
+    # Trope inconnu ou disparu → la saison ne peut pas continuer
+    if s.get("en_cours") and s.get("trope_cle") not in DRAMA_TROPES:
+        print(f"[Drama] Saison invalide (trope « {s.get('trope_cle')} ») — remise à zéro.")
+        s.update({"en_cours": False, "episode": 0, "trope_cle": None,
+                  "titre": None, "casting": {}, "historique": []})
+        return False
+    return True
 
 # Chaque trame donne une saison totalement différente
 
@@ -10256,7 +10344,7 @@ def _drama_perso(guild):
 
 def _drama_format(txt, guild, lieu):
     s = drama_saison
-    tr = DRAMA_TROPES[s["trope_cle"]]
+    tr = DRAMA_TROPES.get(s.get("trope_cle")) or next(iter(DRAMA_TROPES.values()))
     a, b = _drama_perso(guild)
     return (txt.replace("{a}", a).replace("{b}", b).replace("{lieu}", lieu)
                .replace("{objet}", tr["objet"]).replace("{conflit}", tr["conflit"])
@@ -10265,6 +10353,9 @@ def _drama_format(txt, guild, lieu):
 async def publier_episode(guild, salon, rappel=None):
     """Publie l'épisode courant, précédé du résultat des votes"""
     s = drama_saison
+    if not _drama_valide():
+        return await salon.send("❌ La saison en cours était corrompue — elle a été remise à zéro. "
+                                "Relance-la avec `.drama-start`.")
     tr = DRAMA_TROPES[s["trope_cle"]]
     ep = s["episode"] + 1
     if ep > len(DRAMA_EPISODES):
@@ -10363,7 +10454,7 @@ async def resoudre_episode(guild, salon):
 async def cloturer_saison(guild, salon):
     """Fin de saison — récapitulatif complet"""
     s = drama_saison
-    tr = DRAMA_TROPES[s["trope_cle"]]
+    tr = DRAMA_TROPES.get(s.get("trope_cle")) or next(iter(DRAMA_TROPES.values()))
     a, b = _drama_perso(guild)
     recap = "\n".join(f"**{t}**" for t in s["historique"]) or "*Aucun épisode joué.*"
     await salon.send(embed=discord.Embed(
@@ -10394,6 +10485,7 @@ async def dramastart_cmd(ctx, *, args: str = None):
     `.drama-start liste`                  → voir les 10 histoires
     """
     s = drama_saison
+    _drama_valide()
     if s["en_cours"]:
         return await ctx.send(embed=discord.Embed(
             description=(f"🎬 **{DRAMA_TROPES[s['trope_cle']]['titre']}** est déjà en cours "
@@ -10498,6 +10590,7 @@ async def dramastart_cmd(ctx, *, args: str = None):
 async def dramacast_cmd(ctx, *membres: discord.Member):
     """Change le casting de la saison en cours — .drama-cast @a @b (staff)"""
     s = drama_saison
+    _drama_valide()
     if not s["en_cours"]:
         return await ctx.send("❌ Aucune saison en cours.")
     humains = [m for m in membres if not m.bot]
@@ -10527,7 +10620,7 @@ async def dramacast_cmd(ctx, *membres: discord.Member):
 @commands.has_permissions(manage_guild=True)
 async def dramanext_cmd(ctx):
     """Dépouille le vote et publie l'épisode suivant — .drama-next (staff)"""
-    if not drama_saison["en_cours"]:
+    if not _drama_valide() or not drama_saison["en_cours"]:
         return await ctx.send("❌ Aucune saison en cours. Lance-la avec `.drama-start`.")
     if drama_saison["episode"] == 0:
         salon0 = (ctx.guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None) or ctx.channel
@@ -10543,8 +10636,10 @@ async def dramanext_cmd(ctx):
 @commands.has_permissions(manage_guild=True)
 async def dramastop_cmd(ctx):
     """Arrête la saison en cours — .drama-stop (staff)"""
-    if not drama_saison["en_cours"]:
-        return await ctx.send("❌ Aucune saison en cours.")
+    if not _drama_valide() or not drama_saison["en_cours"]:
+        drama_saison.update({"en_cours": False, "episode": 0, "vue": None})
+        save_all_data()
+        return await ctx.send("✅ Aucune saison active — tout a été remis à zéro.")
     salon = (ctx.guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None) or ctx.channel
     await cloturer_saison(ctx.guild, salon)
 
@@ -10552,6 +10647,7 @@ async def dramastop_cmd(ctx):
 async def saison_cmd(ctx):
     """Où en est la saison — .saison"""
     s = drama_saison
+    _drama_valide()
     if not s["en_cours"]:
         apercu = "\n".join(f"{v['trope']} **{v['titre']}**\n└ *« {v['accroche']} »*"
                            for v in list(DRAMA_TROPES.values())[:4])
@@ -10620,6 +10716,20 @@ async def saison_cmd(ctx):
         embed.set_footer(text="Dernier épisode — la saison se termine au prochain dépouillement.")
     await ctx.send(embed=embed)
 
+
+@bot.command(name="drama-reset", aliases=["dramareset"])
+@commands.has_permissions(manage_guild=True)
+async def dramareset_cmd(ctx):
+    """Remet le Drama Collectif à zéro — .drama-reset (staff)"""
+    drama_saison.update({"titre": None, "episode": 0, "en_cours": False,
+                         "casting": {}, "historique": [], "trope_cle": None,
+                         "vue": None, "dernier_choix": []})
+    drama_saison.pop("trame", None)
+    drama_saison.pop("vote_msg", None)
+    save_all_data()
+    await ctx.send(embed=discord.Embed(
+        description="🔄 Drama Collectif remis à zéro. Tu peux relancer avec `.drama-start`.",
+        color=0x2ecc71))
 
 @bot.command(name="drama-tropes", aliases=["dramatropes", "histoires"])
 async def dramatropes_cmd(ctx):
@@ -16451,7 +16561,7 @@ def load_all_data():
             for k, v in data.get("avent", {}).items():
                 avent_data[k].update(v)
             drama_saison.update(data.get("drama_saison", {}))
-            drama_saison["vue"] = None
+            _drama_valide()
             for k, v in data.get("liens_detail", {}).items():
                 for a, b in v.items():
                     liens_detail[k][a].update(b)
@@ -16685,14 +16795,50 @@ async def on_command_error(ctx, error):
         return await ctx.send(f"⏳ Patiente encore **{int(error.retry_after)}s**.", delete_after=8)
     if isinstance(error, commands.NoPrivateMessage):
         return await ctx.send("❌ Cette commande ne marche que sur le serveur.")
-    # Vraie erreur : on prévient et on log
-    import traceback
-    print(f"[Erreur] {ctx.command} → {type(error).__name__}: {error}")
-    traceback.print_exception(type(error), error, error.__traceback__)
+    # Vraie erreur : on log toujours, et on montre le détail au staff
+    import traceback as _tb
+    original = getattr(error, "original", error)
+    tb_txt = "".join(_tb.format_exception(type(original), original, original.__traceback__))
+    print(f"[Erreur] .{ctx.command} → {type(original).__name__}: {original}")
+    print(tb_txt)
+
+    # Mémoriser pour .diag
+    derniere_erreur["cmd"] = str(ctx.command)
+    derniere_erreur["type"] = type(original).__name__
+    derniere_erreur["msg"] = str(original)
+    derniere_erreur["tb"] = tb_txt[-1500:]
+    derniere_erreur["quand"] = datetime.datetime.now().strftime("%d/%m %H:%M:%S")
+
+    # Ligne fautive dans le bot
+    ligne = ""
+    for l in tb_txt.splitlines():
+        if "line" in l and (".py" in l):
+            ligne = l.strip()
+
     try:
-        await ctx.send("❌ Une erreur est survenue — un admin a été notifié dans les logs.", delete_after=10)
+        est_staff = ctx.guild and ctx.author.guild_permissions.manage_guild
     except Exception:
-        pass
+        est_staff = False
+
+    if est_staff:
+        embed = discord.Embed(
+            title="❌ Erreur dans la commande",
+            description=(f"**Commande :** `.{ctx.command}`\n"
+                         f"**Type :** `{type(original).__name__}`\n"
+                         f"**Message :** ```{str(original)[:400]}```"
+                         + (f"\n**Où :** `{ligne[-180:]}`" if ligne else "")),
+            color=0xe74c3c)
+        embed.set_footer(text="Visible par le staff uniquement · `.diag` pour le détail complet")
+        try:
+            await ctx.send(embed=embed)
+        except Exception:
+            pass
+    else:
+        try:
+            await ctx.send("❌ Une erreur est survenue — le staff a été prévenu.", delete_after=10)
+        except Exception:
+            pass
+
 
 # ============================================================
 #  🎭 RÉACTIONS — Autorole, rôles par réaction, règlement, Hall of Fame
