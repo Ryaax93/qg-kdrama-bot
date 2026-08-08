@@ -13633,6 +13633,45 @@ PET_MEUBLES = {
     "bibli":     ("📚", "Petite bibliothèque",6000,"xp_passif",    4,  "Il ne lit pas. Il dort dessus. C'est déjà ça."),
 }
 
+
+# ── 🏡 Pièces du refuge : chaque meuble appartient à une pièce ──
+PET_PIECES = {
+    "chambre":  ("🛏️", "Chambre",     ["panier", "fenetre", "cheminee", "hamac"]),
+    "salon":    ("🛋️", "Salon",       ["jouet", "tapis"]),
+    "cuisine":  ("🍖", "Cuisine",     ["gamelle"]),
+    "jardin":   ("🌿", "Jardin",      ["jardin", "arbre"]),
+    "calme":    ("📚", "Coin calme",  ["bibli"]),
+}
+
+# ── Niveaux d'évolution du refuge ──
+PET_REFUGE_NIVEAUX = [
+    (0,  "🏚️", "Petite pièce",       "Quatre murs et beaucoup de bonne volonté."),
+    (2,  "🏠", "Petit refuge",        "Ça commence à ressembler à quelque chose."),
+    (4,  "🏡", "Maison cosy",         "On s'y sent bien. Lui le premier."),
+    (6,  "🏘️", "Grande maison",       "Il a de la place pour courir maintenant."),
+    (8,  "🏰", "Villa",               "Le luxe. Il ne veut plus sortir."),
+    (10, "🌴", "Domaine légendaire",  "Le plus beau refuge du QG."),
+]
+
+def refuge_niveau(nb_meubles):
+    """Retourne (seuil, emoji, nom, description, numéro) du niveau de refuge"""
+    actuel, num = PET_REFUGE_NIVEAUX[0], 1
+    for i, n in enumerate(PET_REFUGE_NIVEAUX, 1):
+        if nb_meubles >= n[0]:
+            actuel, num = n, i
+    return actuel[0], actuel[1], actuel[2], actuel[3], num
+
+def refuge_niveau_suivant(nb_meubles):
+    """Le palier suivant, ou None si le refuge est complet"""
+    return next((n for n in PET_REFUGE_NIVEAUX if n[0] > nb_meubles), None)
+
+def piece_de(meuble):
+    """Dans quelle pièce se range ce meuble"""
+    for cle, (emo, nom, meubles) in PET_PIECES.items():
+        if meuble in meubles:
+            return cle, emo, nom
+    return "divers", "📦", "Divers"
+
 def pet_accessoires(uid):
     """Liste des accessoires portés par le compagnon actif"""
     d = pets_data.get(uid, {})
@@ -13769,16 +13808,26 @@ async def refuge_cmd(ctx, action: str = None, *, objet: str = None):
     EFFETS_L = {"humeur_lente": "❤️ humeur préservée", "faim_lente": "🍖 faim ralentie",
                 "energie_lente": "⚡ énergie conservée", "xp_passif": "⭐ XP passive"}
     if action and action.lower() in ("liste", "catalogue", "tout"):
-        lignes = []
-        for k, (emo, nom, prix, typ, val, desc) in PET_MEUBLES.items():
-            possede = "✅ installé" if k in ref else f"🛒 **{prix:,} p**"
-            lignes.append(f"{emo} **{nom}** — `{k}` · {possede}\n"
-                          f"└ {EFFETS_L[typ]} **+{val}{'/h' if typ=='xp_passif' else ' %'}**\n"
-                          f"└ *{desc}*")
-        return await ctx.send(embed=discord.Embed(
+        EFFETS_L = {"humeur_lente": "❤️ humeur préservée", "faim_lente": "🍖 faim ralentie",
+                    "energie_lente": "⚡ énergie conservée", "xp_passif": "⭐ XP passive"}
+        e = discord.Embed(
             title="🏡 Catalogue du refuge",
-            description="\n\n".join(lignes) + "\n\n*`.refuge acheter <meuble>` pour installer.*",
-            color=0xe91e63))
+            description=("*Chaque meuble se range dans une pièce et aide ton compagnon au quotidien.*\n"
+                         f"*Tu en as **{len(ref)}/{len(PET_MEUBLES)}**.*"),
+            color=0xe91e63)
+        for cle, (p_emo, p_nom, meubles) in PET_PIECES.items():
+            lignes = []
+            for k in meubles:
+                emo, nom, prix, typ, val, desc = PET_MEUBLES[k]
+                etat = "✅ **installé**" if k in ref else f"🛒 **{prix:,} p**"
+                lignes.append(f"{emo} **{nom}** — `{k}` · {etat}\n"
+                              f"　{EFFETS_L[typ]} **+{val}{'/h' if typ=='xp_passif' else ' %'}**\n"
+                              f"　*{desc}*")
+            e.add_field(name=f"{p_emo} {p_nom}  ·  {sum(1 for k in meubles if k in ref)}/{len(meubles)}",
+                        value="\n".join(lignes), inline=False)
+        e.set_footer(text="`.refuge acheter <meuble>` pour installer")
+        return await ctx.send(embed=e)
+
 
     if action and action.lower() in ("acheter", "achat", "buy"):
         if not objet:
@@ -13798,54 +13847,92 @@ async def refuge_cmd(ctx, action: str = None, *, objet: str = None):
         ref.append(cle)
         pet_carnet_note(uid, f"{emo} **{nom}** a été installé dans le refuge.")
         save_all_data()
+        _pc, _pe, _pn = piece_de(cle)
+        _av = refuge_niveau(len(ref) - 1)
+        _ap = refuge_niveau(len(ref))
+        _msg = (f"*{desc}*\n\n"
+                f"📍 Installé dans **{_pe} {_pn}**\n"
+                f"**{pet_nom_decore(uid, pdb)}** vient déjà l'inspecter.")
+        if _av[4] != _ap[4]:
+            _msg += (f"\n\n### {_ap[1]} Le refuge s'agrandit !\n"
+                     f"Il devient **{_ap[2]}** *(niveau {_ap[4]})*\n*{_ap[3]}*")
+            pet_carnet_note(uid, f"{_ap[1]} Son refuge est devenu **{_ap[2]}**.")
         return await ctx.send(embed=discord.Embed(
             title=f"🏡 {emo} {nom} installé !",
-            description=f"*{desc}*\n\n**{pet_nom_decore(uid, pdb)}** vient déjà l'inspecter.",
-            color=0x2ecc71))
+            description=_msg, color=0x2ecc71))
 
-    # ── Vue du refuge ──
+    # ── Visite du refuge ──
     st = pet_etat(uid)
-    deco = "".join(PET_MEUBLES[m][0] for m in ref) or "  ·  ·  ·  "
-    scene = (f"```\n"
-             f"╔══════════════════════════╗\n"
-             f"║   {deco:^22} ║\n"
-             f"║                          ║\n"
-             f"║      {pdb['emoji']}  {pdb['nom'][:14]:<14}  ║\n"
-             f"║                          ║\n"
-             f"╚══════════════════════════╝\n```")
-    bonus = []
-    for typ, label in [("humeur_lente","❤️ Humeur préservée"),("faim_lente","🍖 Faim ralentie"),
-                       ("energie_lente","⚡ Énergie conservée"),("xp_passif","⭐ XP passive")]:
+    nb = len(ref)
+    n_emo, n_nom, n_desc, n_num = refuge_niveau(nb)[1], refuge_niveau(nb)[2], refuge_niveau(nb)[3], refuge_niveau(nb)[4]
+    nom_pet = pst.get("surnom") or pdb["nom"]
+
+    embed = discord.Embed(
+        title=f"{n_emo}  Refuge de {nom_pet}",
+        description=(f"✨ **{n_nom}** — Niveau **{n_num}**\n"
+                     f"*{n_desc}*"),
+        color=0xe91e63)
+
+    # ── Les pièces, une par une ──
+    for cle, (p_emo, p_nom, meubles) in PET_PIECES.items():
+        presents = [m for m in meubles if m in ref]
+        total = len(meubles)
+        if presents:
+            lignes = [f"{PET_MEUBLES[m][0]} **{PET_MEUBLES[m][1]}**\n"
+                      f"　*{PET_MEUBLES[m][5]}*" for m in presents]
+            corps = "\n".join(lignes)
+            vides = total - len(presents)
+            if vides:
+                corps += f"\n\n*{vides} emplacement(s) libre(s)*"
+        else:
+            corps = "*Pièce vide pour l'instant…*"
+        embed.add_field(name=f"{p_emo} {p_nom}  ·  {len(presents)}/{total}",
+                        value=corps, inline=False)
+
+    # ── Le compagnon et les effets ──
+    EFFETS = [("humeur_lente", "❤️", "Humeur préservée", "%"),
+              ("faim_lente",   "🍖", "Faim ralentie",    "%"),
+              ("energie_lente","⚡", "Énergie conservée", "%"),
+              ("xp_passif",    "⭐", "XP passive",       "/h")]
+    lignes_e = []
+    for typ, emo, lab, unite in EFFETS:
         v = bonus_refuge(uid, typ)
         if v:
-            bonus.append(f"{label} **+{v}%**" if typ != "xp_passif" else f"{label} **+{v}/h**")
+            lignes_e.append(f"{emo} {lab} **+{v}{unite}**")
+    embed.add_field(
+        name="━━━━━━━━━━━━━━━━━━",
+        value=(f"🐾 **{pet_nom_decore(uid, pdb)}**\n{pet_humeur_texte(st)}\n\n"
+               + ("\n".join(lignes_e) if lignes_e
+                  else "*Aucun effet — installe des meubles pour l'aider au quotidien.*")),
+        inline=False)
 
+    # ── Prochain palier ──
+    suiv = refuge_niveau_suivant(nb)
+    if suiv:
+        manque = suiv[0] - nb
+        embed.add_field(name="🔨 Agrandir le refuge",
+                        value=(f"Encore **{manque} meuble(s)** pour devenir "
+                               f"**{suiv[1]} {suiv[2]}**\n*{suiv[3]}*"), inline=False)
+
+    # ── À installer ──
     dispo = [(k, v) for k, v in PET_MEUBLES.items() if k not in ref]
-    embed = discord.Embed(
-        title=f"🏡 Le refuge de {pdb['nom']}",
-        description=scene + f"\n{pet_nom_decore(uid, pdb)} · {pet_humeur_texte(st)}",
-        color=0xe91e63)
-    if ref:
-        embed.add_field(name=f"🪑 Aménagement ({len(ref)}/{len(PET_MEUBLES)})",
-                        value="\n".join(f"{PET_MEUBLES[m][0]} **{PET_MEUBLES[m][1]}** — *{PET_MEUBLES[m][5]}*"
-                                        for m in ref), inline=False)
-    if bonus:
-        embed.add_field(name="✨ Effets du refuge", value="  ·  ".join(bonus), inline=False)
-    EFFETS = {"humeur_lente": "❤️ humeur baisse moins vite",
-              "faim_lente":   "🍖 il a faim moins vite",
-              "energie_lente":"⚡ il se fatigue moins vite",
-              "xp_passif":    "⭐ XP gagnée en dormant"}
     if dispo:
-        lot = dispo[:6]
+        EFF_COURT = {"humeur_lente": "❤️ humeur", "faim_lente": "🍖 faim",
+                     "energie_lente": "⚡ énergie", "xp_passif": "⭐ XP passive"}
+        lot = sorted(dispo, key=lambda x: x[1][2])[:5]
         embed.add_field(name="🛒 À installer",
                         value="\n".join(
-                            f"{v[0]} **{v[1]}** — `{k}` · **{v[2]:,} p**\n"
-                            f"└ {EFFETS[v[3]]} **+{v[4]}{'/h' if v[3]=='xp_passif' else ' %'}** · *{v[5]}*"
+                            f"{v[0]} **{v[1]}** — `{k}` · **{v[2]:,} p**  ·  "
+                            f"{EFF_COURT[v[3]]} +{v[4]}{'/h' if v[3]=='xp_passif' else ' %'}"
+                            f"  ·  {piece_de(k)[1]} {piece_de(k)[2]}"
                             for k, v in lot)
-                        + (f"\n\n*…et {len(dispo)-6} autre(s) — `.refuge liste` pour tout voir*"
-                           if len(dispo) > 6 else ""), inline=False)
-    embed.set_footer(text="`.refuge acheter <meuble>` pour aménager")
+                        + (f"\n\n*…et {len(dispo)-5} autre(s) — `.refuge liste`*"
+                           if len(dispo) > 5 else ""), inline=False)
+        embed.set_footer(text=f"{nb}/{len(PET_MEUBLES)} meubles · `.refuge acheter <meuble>`")
+    else:
+        embed.set_footer(text="🌴 Refuge complet — il ne manque plus rien.")
     await ctx.send(embed=embed)
+
 
 @bot.command(name="petvisite", aliases=["visite", "petrencontre"])
 async def petvisite_cmd(ctx, ami: discord.Member = None):
