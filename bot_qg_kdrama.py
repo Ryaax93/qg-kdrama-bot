@@ -1264,42 +1264,40 @@ def build_help_pages(guild, is_admin=False):
     e = discord.Embed(title="🐾  Compagnons",
         description="*Ton compagnon vit, s'attache et rapporte — occupe-toi de lui.*", color=0xe91e63)
     e.add_field(name="🐾 Les bases", value=(
-        "`.pet` — Son état complet • `.pet liste` — Tous les tiens\n"
-        "`.nourrir` 🍖 `.laver` 🛁 `.promener` 🚶 `.jouer` 🎾 `.dormir` 😴 `.caresser` 🫶\n"
-        "`.petvisite @ami` — Rencontre entre compagnons 🐾 *(amitié + récompenses)*\n"
-        "`.petnom <nom>` — ✏️ **Renomme ton compagnon**\n"
-        "`.petamis` — Toutes ses relations *(amis, rivaux…)*\n"
-        "`.petduo @ami` — 💖 Activités exclusives *(dès Inséparables)*\n"
-        "`.petcadeau @ami <objet>` — 🎁 Offrir un cadeau à son compagnon\n"
-        "`.garderobe` — 👗 Habille ton compagnon *(12 accessoires visibles)*\n"
-        "`.refuge` — 🏡 Aménage sa maison *(10 meubles, bonus passifs)*\n"
-        "`.petexpedition <lieu>` — 🎒 Envoie-le explorer *(butin au retour)*\n"
-        "`.petcompetences` — 🎓 Ses 10 compétences *(elles montent toutes seules)*\n"
-        "`.petcarnet` — 📖 Son carnet de bord *(ses souvenirs)*\n"
-        "`.liens [@membre]` — Tes **liens** avec les autres 🤝\n"
-        "`.topliens` — Les duos les plus soudés du serveur\n"
-        "*Un compagnon négligé voit son bonus divisé par deux !*\n"
-        "*Pour en obtenir un : `.shop` → page 🐾 Compagnons, puis `.acheter <nom>`*\n"
-        "`.pet equiper <nom>` • `.pet nourrir` — +25 XP"
+        "`.pet` — Son état complet *(caractère, phase de vie, particularité)*\n"
+        "`.pet liste` — Tous les tiens · `.pet equiper <nom>`\n"
+        "`.petnom <nom>` — ✏️ **Renomme-le comme tu veux**\n"
+        "`.petevoluer` — ✨ **Le faire évoluer** *(paliers de 10 niveaux)*\n"
+        "*Pour en adopter un : `.shop` → page 🐾 Compagnons*"
     ), inline=False)
-    e.add_field(name="👗 Garde-robe & 🏡 Refuge", value=(
+    e.add_field(name="💗 S'en occuper", value=(
+        "`.nourrir` 🍖 · `.laver` 🛁 · `.promener` 🚶\n"
+        "`.jouer` 🎾 · `.dormir` 😴 · `.caresser` 🫶\n"
+        "*Quatre jauges se dégradent avec le temps.*\n"
+        "*Un compagnon négligé voit son bonus **divisé par deux** !*"
+    ), inline=False)
+    e.add_field(name="👗 L'habiller & 🏡 le loger", value=(
         "`.garderobe` — 12 accessoires **visibles** à côté de son nom\n"
-        "`.garderobe acheter/porter/retirer <objet>` — 3 accessoires max\n"
+        "`.garderobe acheter/porter/retirer <objet>` — 3 max, bonus cumulés\n"
         "`.refuge` — Sa maison · `.refuge liste` — Les 10 meubles\n"
-        "`.refuge acheter <meuble>` — Bonus passifs *(faim, humeur, XP)*\n"
-        "*Les accessoires **s'ajoutent** au bonus de race, ils ne le remplacent pas.*"
+        "`.refuge acheter <meuble>` — Bonus passifs *(faim, humeur, XP)*"
     ), inline=False)
-    e.add_field(name="💞 Vie sociale", value=(
-        "`.petvisite @ami` — Rencontre entre compagnons *(amitié progressive)*\n"
-        "`.petamis` — Toutes ses amitiés · 6 paliers, bonus croissants\n"
-        "`.petcarnet` — 📖 Son carnet de souvenirs"
+    e.add_field(name="💞 Sa vie sociale", value=(
+        "`.petvisite @ami` — Rencontre entre compagnons\n"
+        "`.petamis` — Ses relations *(de 😡 Ennemis à 👑 Duo légendaire)*\n"
+        "`.petduo @ami` — 💖 Activités exclusives *(dès Inséparables)*\n"
+        "`.petcadeau @ami <objet>` — 🎁 Offrir un cadeau à son compagnon"
     ), inline=False)
-    e.add_field(name="🎒 Aventure", value=(
-        "`.petexpedition` — Voir les 4 lieux d'expédition\n"
-        "`.petexpedition <lieu>` — L'envoyer explorer *(1 à 4 h, butin au retour)*\n"
+    e.add_field(name="🎒 Ses aventures", value=(
+        "`.petexpedition` — 4 lieux · il part 1 à 4 h et rapporte un butin\n"
+        "`.petcompetences` — 🎓 Ses 10 compétences *(elles montent seules)*\n"
+        "`.petcarnet` — 📖 Son carnet de souvenirs\n"
         "*L'event **🏃 Course de Compagnons** met tous les pets en compétition.*"
     ), inline=False)
-    e.set_footer(text="Un compagnon négligé voit son bonus divisé par deux 🥺")
+    e.add_field(name="🤝 Tes liens avec les membres", value=(
+        "`.liens [@membre]` — Tes liens · `.topliens` — Les duos du serveur"
+    ), inline=False)
+    e.set_footer(text="Chaque compagnon a un caractère et une particularité cachée à découvrir ✨")
     pages.append(("🐾", "Compagnons", e))
 
     e = discord.Embed(title="🎮  Jeux & Duels",
@@ -1705,6 +1703,9 @@ async def givecard_cmd(ctx, membre: discord.Member = None, *, perso: str = None)
     claimed_cards[key] = uid
     if key not in gacha_collections[uid]:
         gacha_collections[uid][key] = {"fusion": 0}
+    gazette_note(uid, "cartes")
+    try: check_collection_achievements(uid, ctx.channel)
+    except Exception: pass
 
     embed = discord.Embed(
         title=f"🎁 Carte offerte !",
@@ -3626,6 +3627,26 @@ def trouver_carte(perso, uid=None, possedees_only=False):
     resultats.sort(key=lambda x: -x[0])
     return resultats[0][1]
 
+def donner_carte(uid, key, channel=None, source=""):
+    """Attribue une carte à un membre — enregistre TOUT (collection, stats, succès, gazette).
+    À utiliser partout plutôt que de toucher claimed_cards directement."""
+    if key not in ANIME_CARDS_DB:
+        return False
+    claimed_cards[key] = uid
+    gacha_collections[uid][key] = {"fusion": 0}
+    gazette_note(uid, "cartes")
+    try:
+        check_collection_achievements(uid, channel)
+    except Exception:
+        pass
+    cc = ANIME_CARDS_DB[key]
+    if cc["rarete"] in ("Légendaire", "Mythique"):
+        poids = 10 if cc["rarete"] == "Mythique" else 5
+        gazette_fait("carte",
+                     f"**<@{uid}>** a obtenu {RARETE_EMOJI.get(cc['rarete'],'')} **{cc['nom']}** "
+                     f"— une {cc['rarete']}{(' ' + source) if source else ''} !", poids)
+    return True
+
 def build_card_embed(key, uid_claimer=None, claimed=False, guild=None):
     c = ANIME_CARDS_DB[key]
     rarete    = c["rarete"]
@@ -3704,7 +3725,7 @@ def build_card_embed(key, uid_claimer=None, claimed=False, guild=None):
 # ============================================================
 #  ❤️ CLAIM — bouton cœur sous la carte
 # ============================================================
-def try_claim(uid, key, guild_id):
+def try_claim(uid, key, guild_id, channel=None):
     """Tente de claim une carte. Retourne (succès: bool, message: str)."""
     if key not in ANIME_CARDS_DB:
         return False, "❌ Carte introuvable !"
@@ -3723,14 +3744,7 @@ def try_claim(uid, key, guild_id):
     if last and now - last < cooldown_mins * 60:
         reste = int((cooldown_mins * 60 - (now - last)) / 60) + 1
         return False, f"⏳ Ton claim est en recharge — encore **{reste} min**."
-    claimed_cards[key] = uid
-    gacha_collections[uid][key] = {"fusion": 0}
-    gazette_note(uid, "cartes")
-    _cc = ANIME_CARDS_DB[key]
-    if _cc["rarete"] in ("Légendaire", "Mythique"):
-        _poids = {"Mythique": 10, "Légendaire": 5}[_cc["rarete"]]
-        gazette_fait("carte", f"**<@{uid}>** a fait tomber {RARETE_EMOJI.get(_cc['rarete'],'')} "
-                              f"**{_cc['nom']}** — une {_cc['rarete']} !", _poids)
+    donner_carte(uid, key, channel, "au claim")
     claim_cooldown[uid] = now
     economy_data[uid]["coins"] += 10
     return True, "ok"
@@ -3745,7 +3759,7 @@ class ClaimView(ui.View):
     @ui.button(emoji="❤️", style=discord.ButtonStyle.danger)
     async def claim_btn(self, interaction, button):
         uid = str(interaction.user.id)
-        ok, msg = try_claim(uid, self.key, interaction.guild.id)
+        ok, msg = try_claim(uid, self.key, interaction.guild.id, interaction.channel)
         if not ok:
             return await interaction.response.send_message(msg, ephemeral=True)
         c = ANIME_CARDS_DB[self.key]
@@ -4424,6 +4438,7 @@ async def gachagive_cmd(ctx, target: discord.Member = None, *, perso: str = None
     c = ANIME_CARDS_DB[key]
     claimed_cards[key] = str(target.id)
     gacha_collections[str(target.id)][key] = gacha_collections[uid].pop(key, {"fusion": 0})
+    gazette_note(str(target.id), "cartes")
     await ctx.send(embed=discord.Embed(
         description=f"🎁 **{c['nom']}** donnée à {target.mention} !",
         color=0x2ecc71
@@ -4821,7 +4836,7 @@ async def acheter_cmd(ctx, item_id: str = None):
         return await ctx.send(embed=discord.Embed(
             title=f"🐾 {p['emoji']} {p['nom']} rejoint ton équipe !",
             description=(f"**{p['rarete']}**\n\n{pet_bonus_texte(p, 1)}\n"
-                         f"*+1 % par niveau, jusqu'à +{p['base'] + PET_LEVEL_MAX - 1} % au niveau {PET_LEVEL_MAX}.*\n\n"
+                         f"*+1 % par niveau — **sans plafond** grâce aux évolutions.*\n\n"
                          + ("🌟 Équipé automatiquement !" if pets_data[uid]["active"] == iid
                             else f"Utilise `.pet equiper {p['nom']}` pour l'activer.")),
             color=couleurs.get(p["rarete"], 0x95a5a6)))
@@ -4881,8 +4896,7 @@ async def acheter_cmd(ctx, item_id: str = None):
             return await ctx.send("❌ Aucune carte disponible pour le moment !")
         rarete = random.choices([r for r, _ in possibles], weights=[p for _, p in possibles])[0]
         key = random.choice(libres[rarete])
-        claimed_cards[key] = uid
-        gacha_collections[uid][key] = {"fusion": 0}
+        donner_carte(uid, key, ctx.channel)
         check_collection_achievements(uid, ctx.channel)
         cc = ANIME_CARDS_DB[key]
         if cc["rarete"] == "Mythique":
@@ -6323,8 +6337,7 @@ async def run_encheres(channel, guild):
     economy_data[uid]["coins"] -= prix
     detail = ""
     if lot_key:
-        claimed_cards[lot_key] = uid
-        gacha_collections[uid][lot_key] = {"fusion": 0}
+        donner_carte(uid, lot_key, channel)
         check_collection_achievements(uid, salon)
         if ANIME_CARDS_DB[lot_key]["rarete"] == "Mythique":
             unlock_achievement(uid, "mythique_1", salon)
@@ -9967,7 +9980,9 @@ async def profil_cmd(ctx, membre: discord.Member = None):
     if pid:
         _ref = len(pets_data.get(uid, {}).get("refuge", []))
         _amis = sum(1 for k, v in petamitie.items() if uid in k.split("|") and v > 0)
-        val = f"**{pet_nom_decore(uid, pdb)}** — Niveau {pstate['level']}\n{pet_bonus_texte(pdb, pstate['level'], uid)}"
+        _rom = pet_evolution(pstate['level'])[1]
+        val = (f"**{pet_nom_decore(uid, pdb)}** — ✨ Évo. {_rom} · Niveau {pstate['level']}\n"
+               f"{pet_bonus_texte(pdb, pstate['level'], uid)}")
         extra = []
         if _ref: extra.append(f"🏡 {_ref} meuble(s)")
         if _amis: extra.append(f"💞 {_amis} ami(s)")
@@ -10179,7 +10194,7 @@ PETS_DB = {
 }
 PETS_PRIX = {"Commun": 2000, "Rare": 5000, "Épique": 10000, "Légendaire": 20000, "Mythique": 60000}
 PET_XP_PER_LEVEL = 100
-PET_LEVEL_MAX = 10
+PET_LEVEL_MAX = 60   # dernier niveau atteignable aujourd'hui (extensible)
 pets_data = {}  # {uid: {"owned": {pet_id: {"level": 1, "xp": 0}}, "active": pet_id}}
 
 def pet_bonus_texte(p, niveau=1, uid=None):
@@ -10244,6 +10259,77 @@ def pet_bonus(uid, bonus_type):
     return base
 
 
+# ============================================================
+#  ✨ ÉVOLUTIONS DES COMPAGNONS
+# ============================================================
+# (numéro, chiffre romain, nom, niveau_min, niveau_max, coût en pièces)
+# Pour ajouter un palier : ajoute simplement une ligne à la fin.
+PET_EVOLUTIONS = [
+    (1, "I",   "Éveil",          1,  10, 0),
+    (2, "II",  "Éclosion",      11,  20, 8000),
+    (3, "III", "Ascension",     21,  30, 25000),
+    (4, "IV",  "Apogée",        31,  40, 60000),
+    (5, "V",   "Transcendance", 41,  50, 120000),
+    (6, "VI",  "Légende",       51,  60, 220000),
+]
+PET_XP_BASE = 100        # XP du niveau 1
+PET_XP_PALIER = 25       # XP ajoutée à chaque niveau
+
+def pet_xp_requis(niveau):
+    """XP nécessaire pour passer du niveau donné au suivant"""
+    return PET_XP_BASE + (max(1, niveau) - 1) * PET_XP_PALIER
+
+def pet_evolution(niveau):
+    """Retourne (num, romain, nom, min, max, cout) du palier contenant ce niveau"""
+    for e in PET_EVOLUTIONS:
+        if e[3] <= niveau <= e[4]:
+            return e
+    return PET_EVOLUTIONS[-1]
+
+def pet_evolution_suivante(niveau):
+    """Le palier suivant, ou None s'il n'existe pas encore"""
+    num = pet_evolution(niveau)[0]
+    return next((e for e in PET_EVOLUTIONS if e[0] == num + 1), None)
+
+def pet_niveau_max_actuel(niveau):
+    """Dernier niveau atteignable sans évoluer"""
+    return pet_evolution(niveau)[4]
+
+def pet_peut_evoluer(uid):
+    """Le compagnon est-il bloqué au sommet de son évolution ?"""
+    pid, pdb, st = get_active_pet(uid)
+    if not st:
+        return False
+    niveau = st.get("level", 1)
+    if niveau < pet_niveau_max_actuel(niveau):
+        return False
+    return pet_evolution_suivante(niveau) is not None
+
+def cout_evolution(niveau):
+    """Coût pour débloquer le palier suivant"""
+    suiv = pet_evolution_suivante(niveau)
+    return suiv[5] if suiv else None
+
+def pet_niveau_texte(uid, pdb, st):
+    """Bloc d'affichage : évolution, niveau, barre d'XP"""
+    niveau = st.get("level", 1)
+    num, rom, nom, mn, mx, _ = pet_evolution(niveau)
+    if pet_peut_evoluer(uid):
+        suiv = pet_evolution_suivante(niveau)
+        cout = suiv[5]
+        return (f"✨ **Évolution {rom}** — *{nom}*\n"
+                f"⭐ Niveau **{niveau}**  ·  🌟 **PRÊT À ÉVOLUER**\n"
+                f"`{'▰' * 12}` **MAX**\n\n"
+                f"➡️ Prochaine étape : **Évolution {suiv[1]} — {suiv[2]}** "
+                f"*(niveaux {suiv[3]} à {suiv[4]})*\n"
+                f"💰 Coût : **{cout:,} pièces**  ·  `.petevoluer`")
+    requis = pet_xp_requis(niveau)
+    xp = st.get("xp", 0)
+    f = max(0, min(12, int(xp / max(1, requis) * 12)))
+    return (f"✨ **Évolution {rom}** — *{nom}*\n"
+            f"⭐ Niveau **{niveau}** *(palier {mn}–{mx})*\n"
+            f"`{'▰' * f}{'▱' * (12 - f)}` **{xp:,} / {requis:,} XP**")
+
 def get_active_pet(uid):
     """Retourne (pet_id, pet_db, pet_state) du compagnon actif, ou (None, None, None)"""
     d = pets_data.get(uid)
@@ -10256,18 +10342,26 @@ def get_active_pet(uid):
     return pid, PETS_DB[pid], st
 
 def give_pet_xp(uid, amount=1):
-    """Donne de l'XP au pet actif. Retourne (levelup, new_level) ou (False, 0)"""
+    """Donne de l'XP au pet actif. Bloqué au sommet de l'évolution en cours.
+    Retourne (levelup, new_level)."""
     pid, pdb, pstate = get_active_pet(uid)
     if not pid:
         return False, 0
-    if pstate["level"] >= PET_LEVEL_MAX:
-        return False, pstate["level"]
-    pstate["xp"] += amount
+    niveau = pstate.get("level", 1)
+    plafond = pet_niveau_max_actuel(niveau)
+    if niveau >= plafond:
+        # Bloqué : l'XP n'est plus accumulée tant que le joueur n'a pas fait évoluer
+        pstate["xp"] = 0
+        return False, niveau
+    pstate["xp"] = pstate.get("xp", 0) + amount
     leveled = False
-    while pstate["level"] < PET_LEVEL_MAX and pstate["xp"] >= PET_XP_PER_LEVEL:
-        pstate["xp"] -= PET_XP_PER_LEVEL
+    while pstate["level"] < plafond and pstate["xp"] >= pet_xp_requis(pstate["level"]):
+        pstate["xp"] -= pet_xp_requis(pstate["level"])
         pstate["level"] += 1
         leveled = True
+    if pstate["level"] >= plafond:
+        pstate["xp"] = 0
+        pstate["evolution_prete"] = pet_evolution_suivante(pstate["level"]) is not None
     return leveled, pstate["level"]
 
 
@@ -10388,12 +10482,41 @@ async def petaction_cmd(ctx):
     st = pet_etat(uid)
     conf = PET_ACTIONS[action]
 
+    # ── Le besoin urgent passe avant le cooldown ──
+    URGENCES = {
+        "dormir":   ("energie",  lambda v: v < 35,  "😴 Il tombe de fatigue"),
+        "nourrir":  ("faim",     lambda v: v > 65,  "🍖 Il a vraiment faim"),
+        "laver":    ("proprete", lambda v: v < 35,  "🛁 Il est vraiment sale"),
+        "jouer":    ("humeur",   lambda v: v < 40,  "🎾 Il déprime"),
+        "caresser": ("humeur",   lambda v: v < 50,  "🫶 Il a besoin de réconfort"),
+        "promener": ("humeur",   lambda v: v < 40,  "🚶 Il tourne en rond"),
+    }
+    urgent = False
+    raison = ""
+    if action in URGENCES:
+        cle_u, test, txt = URGENCES[action]
+        if test(st[cle_u]):
+            urgent = True
+            raison = txt
+
     dernier = st["dernier"].get(action, 0)
     reste = conf["cd"] * 3600 - (_t.time() - dernier)
+    # Anti-spam : même en urgence, 20 minutes minimum entre deux fois
+    if urgent:
+        reste = min(reste, 1200 - (_t.time() - dernier))
     if reste > 0:
         h, m = divmod(int(reste) // 60, 60)
-        return await ctx.send(f"⏳ **{pdb['nom']}** n'a pas besoin de ça tout de suite — reviens dans **{h}h{m:02d}**.",
-                              delete_after=8)
+        temps = f"**{h}h{m:02d}**" if h else f"**{m} min**"
+        besoins_alt = []
+        if st["faim"] > 65 and action != "nourrir": besoins_alt.append("🍖 `.nourrir`")
+        if st["energie"] < 35 and action != "dormir": besoins_alt.append("😴 `.dormir`")
+        if st["proprete"] < 35 and action != "laver": besoins_alt.append("🛁 `.laver`")
+        if st["humeur"] < 40 and action != "jouer": besoins_alt.append("🎾 `.jouer`")
+        msg = (f"⏳ **{pdb['nom']}** vient de {'dormir' if action=='dormir' else 'en profiter'} — "
+               f"reviens dans {temps}.")
+        if besoins_alt:
+            msg += f"\n*En attendant, il a besoin de : {'  ·  '.join(besoins_alt)}*"
+        return await ctx.send(msg, delete_after=12)
     if conf["cout"] and economy_data[uid]["coins"] < conf["cout"]:
         return await ctx.send(f"❌ Il te faut **{conf['cout']} pièces** pour ça !")
     if conf["cout"]:
@@ -10413,7 +10536,7 @@ async def petaction_cmd(ctx):
     texte = random.choice(conf["textes"]).format(e=pdb["emoji"], n=pdb["nom"] + (f" {_deco}" if _deco else ""))
     embed = discord.Embed(
         title=f"{conf['emoji']}  {action.capitalize()}",
-        description=f"*{texte}*",
+        description=(f"*{texte}*" + (f"\n\n> {raison} — c'était vraiment nécessaire." if urgent else "")),
         color=0xe91e63)
     embed.add_field(name="❤️ Humeur", value=f"{_jauge(st['humeur'])}\n{pet_humeur_texte(st)}", inline=False)
     embed.add_field(name="✨ Gain", value=f"+{conf['xp']} XP" + (f" · −{conf['cout']} p" if conf["cout"] else ""), inline=True)
@@ -10429,6 +10552,17 @@ async def petaction_cmd(ctx):
         await ctx.send(embed=discord.Embed(
             title="🏅 Nouveau titre !",
             description=f"# {_e}\n**{pdb['nom']}** devient **« {_n} »**", color=0xf1c40f))
+    if pet_peut_evoluer(uid):
+        _pid, _pdb, _pst = get_active_pet(uid)
+        _s = pet_evolution_suivante(_pst["level"])
+        await ctx.send(embed=discord.Embed(
+            title="🌟 ÉVOLUTION DISPONIBLE !",
+            description=(f"**{_pst.get('surnom') or pdb['nom']}** a atteint le niveau maximum "
+                         f"de son évolution actuelle !\n\n"
+                         f"➡️ **Évolution {_s[1]} — {_s[2]}**  ·  💰 **{_s[5]:,} pièces**\n\n"
+                         f"*Il ne gagnera plus d'XP tant qu'il n'aura pas évolué.*\n"
+                         f"**➜ `.petevoluer`**"),
+            color=0xf1c40f))
     if random.random() < 0.06:
         await decouvrir_particularite(uid, ctx.channel)
     save_all_data()
@@ -12967,8 +13101,8 @@ async def petexpedition_cmd(ctx, lieu: str = None):
                           if cc["rarete"] in ("Épique","Légendaire") and k not in claimed_cards]
                 if libres:
                     key = random.choice(libres)
-                    claimed_cards[key] = uid
-                    gacha_collections[uid][key] = {"fusion": 0}
+                    donner_carte(uid, key, ctx.channel, "en expédition")
+                    pet_stat(uid, "cartes_trouvees")
                     butin.append(f"🎴 **{ANIME_CARDS_DB[key]['nom']}** — il l'a déterrée quelque part !")
             embed.add_field(name="🎒 Ce qu'il rapporte", value="\n".join(butin), inline=False)
             if l:
@@ -13800,6 +13934,146 @@ async def petvisite_cmd(ctx, ami: discord.Member = None):
 # ============================================================
 #  🐾 RENOMMER · RELATIONS · DUO · CADEAUX
 # ============================================================
+
+class EvolutionView(ui.View):
+    """Bouton d'évolution avec animation"""
+    def __init__(self, uid, timeout=180):
+        super().__init__(timeout=timeout)
+        self.uid = uid
+        self.message = None
+
+    async def interaction_check(self, interaction):
+        if str(interaction.user.id) != self.uid:
+            await interaction.response.send_message("❌ Ce n'est pas ton compagnon !", ephemeral=True)
+            return False
+        return True
+
+    @ui.button(label="Faire évoluer", emoji="✨", style=discord.ButtonStyle.success)
+    async def evoluer(self, interaction, button):
+        uid = self.uid
+        pid, pdb, st = get_active_pet(uid)
+        if not pid or not pet_peut_evoluer(uid):
+            return await interaction.response.send_message(
+                "❌ Ton compagnon ne peut pas évoluer pour le moment.", ephemeral=True)
+        suiv = pet_evolution_suivante(st["level"])
+        cout = suiv[5]
+        if economy_data[uid]["coins"] < cout:
+            manque = cout - economy_data[uid]["coins"]
+            return await interaction.response.send_message(
+                f"❌ Il te manque **{manque:,} pièces** *(il en faut {cout:,})*.", ephemeral=True)
+
+        economy_data[uid]["coins"] -= cout
+        ancien_niv = st["level"]
+        ancienne = pet_evolution(ancien_niv)
+        st["level"] += 1
+        st["xp"] = 0
+        st.pop("evolution_prete", None)
+        st.setdefault("evolutions", []).append(suiv[0])
+        nom_pet = st.get("surnom") or pdb["nom"]
+        pet_carnet_note(uid, f"✨ A évolué en **{suiv[2]}** — Évolution {suiv[1]} !")
+        pet_stat(uid, "evolutions")
+        save_all_data()
+
+        for it in self.children:
+            it.disabled = True
+        await interaction.response.edit_message(view=self)
+
+        # ── Animation ──
+        etapes = [
+            (f"✨ Une lumière douce enveloppe **{nom_pet}**…", 0xfff3cd),
+            (f"🌟 La lumière s'intensifie… il ne bouge plus…", 0xffe066),
+            (f"💫 Quelque chose est en train de changer…", 0xffd43b),
+            (f"⚡ **{nom_pet}** brille de tout son être !", 0xfab005),
+        ]
+        msg = await interaction.followup.send(embed=discord.Embed(
+            description=etapes[0][0], color=etapes[0][1]), wait=True)
+        for txt, coul in etapes[1:]:
+            await asyncio.sleep(1.6)
+            try:
+                await msg.edit(embed=discord.Embed(description=txt, color=coul))
+            except Exception:
+                pass
+        await asyncio.sleep(1.8)
+
+        embed = discord.Embed(
+            title="🎉  ÉVOLUTION RÉUSSIE !",
+            description=(f"# {pdb['emoji']} {nom_pet}\n\n"
+                         f"*Évolution {ancienne[1]} — {ancienne[2]}*\n"
+                         f"⬇️\n"
+                         f"## ✨ Évolution {suiv[1]} — {suiv[2]}\n\n"
+                         f"⭐ Niveau **{st['level']}**  ·  palier **{suiv[3]} à {suiv[4]}**\n"
+                         f"💰 **−{cout:,} pièces**\n\n"
+                         f"*Il peut de nouveau gagner de l'XP. Ses stats, ses accessoires, "
+                         f"ses amitiés et ses souvenirs sont intacts.*"),
+            color=0xf1c40f)
+        embed.set_footer(text=f"Ses bonus continuent de monter : +1 % par niveau")
+        try:
+            await msg.edit(embed=embed)
+        except Exception:
+            await interaction.followup.send(embed=embed)
+        gazette_fait("divers", f"Le compagnon de <@{uid}> a atteint l'**Évolution {suiv[1]} — {suiv[2]}** !", 4)
+        self.stop()
+
+    @ui.button(label="Plus tard", emoji="⏳", style=discord.ButtonStyle.secondary)
+    async def plus_tard(self, interaction, button):
+        for it in self.children:
+            it.disabled = True
+        await interaction.response.edit_message(view=self)
+        self.stop()
+
+@bot.command(name="petevoluer", aliases=["evoluer", "evolution", "petevolution"])
+async def petevoluer_cmd(ctx):
+    """Fais évoluer ton compagnon — .petevoluer"""
+    uid = str(ctx.author.id)
+    pid, pdb, st = get_active_pet(uid)
+    if not pid:
+        return await ctx.send("🐾 Tu n'as pas de compagnon actif ! Rends-toi dans `.shop`.")
+    pet_init_perso(uid)
+    niveau = st.get("level", 1)
+    num, rom, nom_ev, mn, mx, _ = pet_evolution(niveau)
+    nom_pet = st.get("surnom") or pdb["nom"]
+
+    if not pet_peut_evoluer(uid):
+        suiv = pet_evolution_suivante(niveau)
+        if not suiv:
+            return await ctx.send(embed=discord.Embed(
+                title=f"👑 {pet_nom_decore(uid, pdb)}",
+                description=(f"✨ **Évolution {rom} — {nom_ev}**  ·  Niveau **{niveau}**\n\n"
+                             f"Il a atteint le **dernier palier disponible**.\n"
+                             f"*De nouvelles évolutions arriveront plus tard.*"),
+                color=0xf1c40f))
+        return await ctx.send(embed=discord.Embed(
+            title=f"✨ {pet_nom_decore(uid, pdb)}",
+            description=(f"{pet_niveau_texte(uid, pdb, st)}\n\n"
+                         f"Il doit atteindre le **niveau {mx}** pour évoluer.\n"
+                         f"➡️ Prochaine étape : **Évolution {suiv[1]} — {suiv[2]}** "
+                         f"*(niveaux {suiv[3]} à {suiv[4]})*\n"
+                         f"💰 Coût prévu : **{suiv[5]:,} pièces**"),
+            color=0xe91e63))
+
+    suiv = pet_evolution_suivante(niveau)
+    cout = suiv[5]
+    assez = economy_data[uid]["coins"] >= cout
+    embed = discord.Embed(
+        title="🌟  ÉVOLUTION DISPONIBLE !",
+        description=(f"# {pdb['emoji']} {nom_pet}\n\n"
+                     f"**{nom_pet} a atteint le niveau maximum de son évolution actuelle !**\n"
+                     f"*Il ne gagne plus d'XP tant qu'il n'a pas évolué.*\n\n"
+                     f"━━━━━━━━━━━━━━━━━━\n\n"
+                     f"✨ Évolution **{rom} — {nom_ev}**  *(niveaux {mn} à {mx})*\n"
+                     f"⬇️\n"
+                     f"🌟 Évolution **{suiv[1]} — {suiv[2]}**  *(niveaux {suiv[3]} à {suiv[4]})*\n\n"
+                     f"💰 **Coût : {cout:,} pièces**\n"
+                     f"*Tu en as {economy_data[uid]['coins']:,}*"
+                     + ("" if assez else f"\n\n❌ **Il te manque {cout - economy_data[uid]['coins']:,} pièces.**")),
+        color=0xf1c40f if assez else 0x95a5a6)
+    embed.set_thumbnail(url=ctx.author.display_avatar.url)
+    embed.set_footer(text="Rien n'est réinitialisé — stats, accessoires, amitiés et souvenirs sont conservés.")
+    if not assez:
+        return await ctx.send(embed=embed)
+    vue = EvolutionView(uid)
+    vue.message = await ctx.send(embed=embed, view=vue)
+
 @bot.command(name="petnom", aliases=["renommerpet", "petrename", "surnom"])
 async def petnom_cmd(ctx, *, nouveau: str = None):
     """Donne un surnom à ton compagnon — .petnom <nom>"""
@@ -14111,15 +14385,9 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
         if not pid:
             return await ctx.send("🐾 Tu n'as pas de compagnon actif !\nRends-toi dans `.shop` → page **Compagnons** pour en acheter un.")
         bonus = pdb["base"] + (pstate["level"] - 1)
-        if pstate["level"] < PET_LEVEL_MAX:
-            filled = int((pstate["xp"] / PET_XP_PER_LEVEL) * 10)
-            bar = "█"*filled + "░"*(10-filled)
-            xp_txt = f"`{bar}` {pstate['xp']}/{PET_XP_PER_LEVEL} XP"
-        else:
-            xp_txt = "🌟 **NIVEAU MAX !**"
+        xp_txt = ""
         st = pet_etat(uid)
         pet_init_perso(uid)
-        max_bonus = pdb["base"] + PET_LEVEL_MAX - 1
         jours = pet_jours(uid)
         ph_emo, ph_nom, ph_desc = pet_phase(jours)
         part = pet_particularite(uid)
@@ -14131,13 +14399,14 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
             if _t0 in PET_TITRES:
                 _titre += f"\n« {PET_TITRES[_t0][1]} »"
 
+        peut_evo = pet_peut_evoluer(uid)
         embed = discord.Embed(
             title=_titre,
-            description=(f"**{pdb['rarete']}**  ·  {ph_emo} **{ph_nom}**  ·  "
-                         f"Niveau **{pstate['level']}** / {PET_LEVEL_MAX}\n"
-                         f"*{ph_desc}*\n{xp_txt}\n\n"
+            description=(f"**{pdb['rarete']}**  ·  {ph_emo} **{ph_nom}**\n"
+                         f"*{ph_desc}*\n\n"
+                         f"{pet_niveau_texte(uid, pdb, pstate)}\n\n"
                          f"### {pet_humeur_texte(st)}"),
-            color=0xe91e63)
+            color=0xf1c40f if peut_evo else 0xe91e63)
         embed.add_field(name="❤️ Humeur", value=_jauge(st["humeur"]), inline=False)
         embed.add_field(name="🍖 Faim", value=_jauge(100 - st["faim"], "🟧", "⬜"), inline=True)
         embed.add_field(name="⚡ Énergie", value=_jauge(st["energie"], "🟨", "⬜"), inline=True)
@@ -14152,7 +14421,7 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
                 for a in _acc if a in PET_ACCESSOIRES), inline=False)
         embed.add_field(name="📈 Progression",
                         value=(f"Départ **+{pdb['base']} %** · Actuel **+{bonus} %** · "
-                               f"Max **+{max_bonus} %** au niveau {PET_LEVEL_MAX}"), inline=False)
+                               f"*+1 % par niveau — sans plafond*"), inline=False)
         traits = pstate.get("traits", [])
         if traits:
             embed.add_field(name="🧠 Caractère",
@@ -14182,6 +14451,18 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
             embed.add_field(name=f"🏅 Titres ({len(pstate['titres'])}/{len(PET_TITRES)})",
                             value="  ·  ".join(f"{PET_TITRES[t][0]} {PET_TITRES[t][1]}"
                                               for t in pstate["titres"] if t in PET_TITRES), inline=False)
+        if peut_evo:
+            _suiv = pet_evolution_suivante(pstate["level"])
+            _assez = economy_data[uid]["coins"] >= _suiv[5]
+            embed.add_field(
+                name="🌟 ÉVOLUTION DISPONIBLE !",
+                value=(f"**{nom_perso}** a atteint le sommet de son évolution.\n"
+                       f"*Il ne gagne plus d'XP tant qu'il n'a pas évolué.*\n\n"
+                       f"➡️ **Évolution {_suiv[1]} — {_suiv[2]}** *(niveaux {_suiv[3]} à {_suiv[4]})*\n"
+                       f"💰 **{_suiv[5]:,} pièces**"
+                       + ("\n\n**➜ Tape `.petevoluer` !**" if _assez
+                          else f"\n\n*Il te manque {_suiv[5] - economy_data[uid]['coins']:,} pièces.*")),
+                inline=False)
         besoins = []
         if st["faim"] > 60: besoins.append("🍖 `.nourrir`")
         if st["proprete"] < 40: besoins.append("🛁 `.laver`")
@@ -14215,8 +14496,9 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
                 icone = {"coins": "💰", "xp": "⭐", "roll": "🎰"}[p["type"]]
                 deco = ("".join(PET_ACCESSOIRES[a][0] for a in st.get("portes", [])
                                 if a in PET_ACCESSOIRES)) if d.get("active") == pid else ""
+                _rom = pet_evolution(st.get("level", 1))[1]
                 lignes.append(f"{p['emoji']} **{p['nom']}**{(' ' + deco) if deco else ''} — "
-                              f"Niv.{st['level']} · {icone} +{val} %{actif}")
+                              f"✨{_rom} · Niv.{st['level']} · {icone} +{val} %{actif}")
         return await ctx.send(embed=discord.Embed(
             title=f"🐾 Compagnons de {ctx.author.display_name}",
             description="\n".join(lignes), color=0xe91e63))
@@ -15716,6 +15998,10 @@ async def gachatrade_cmd(ctx, membre: discord.Member = None, ma_carte: str = Non
             # Effectuer l'échange
             claimed_cards[key1] = target_uid
             claimed_cards[key2] = uid
+            try:
+                check_collection_achievements(uid, ctx.channel)
+                check_collection_achievements(target_uid, ctx.channel)
+            except Exception: pass
             if uid in gacha_collections:
                 gacha_collections[uid].pop(key1, None)
                 gacha_collections[uid][key2] = {"fusion": 0}
@@ -17049,8 +17335,7 @@ async def utiliser_item_solo(ctx, uid, iid):
             return False
         rarete = random.choices([r for r, _ in possibles], weights=[p for _, p in possibles])[0]
         key = random.choice(libres[rarete])
-        claimed_cards[key] = uid
-        gacha_collections[uid][key] = {"fusion": 0}
+        donner_carte(uid, key, ctx.channel)
         gazette_note(uid, "cartes")
         check_collection_achievements(uid, ctx.channel)
         cc = ANIME_CARDS_DB[key]
@@ -17903,8 +18188,7 @@ async def marcheacheter_cmd(ctx, *, perso: str = None):
     if economy_data[uid]["coins"] < cout:
         return await ctx.send(f"❌ Il te faut **{cout} pièces** ! (Marché Noir 🕶️)")
     economy_data[uid]["coins"] -= cout
-    claimed_cards[key] = uid
-    gacha_collections[uid][key] = {"fusion": 0}
+    donner_carte(uid, key, ctx.channel)
     embed = discord.Embed(
         title="🕶️ Marché Noir — Achat réussi !",
         description=f"{RARETE_EMOJI.get(c['rarete'],'⚪')} **{c['nom']}** acquis pour **{cout} pièces** !",
