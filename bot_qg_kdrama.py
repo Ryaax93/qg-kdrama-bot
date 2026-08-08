@@ -1291,6 +1291,7 @@ def build_help_pages(guild, is_admin=False):
     e.add_field(name="🎒 Ses aventures", value=(
         "`.petexpedition` — 4 lieux · il part 1 à 4 h et rapporte un butin\n"
         "`.petcompetences` — 🎓 Ses 10 compétences *(elles montent seules)*\n"
+        "`.petobjets` — 🎒 Sa collection d'objets\n"
         "`.petcarnet` — 📖 Son carnet de souvenirs\n"
         "*L'event **🏃 Course de Compagnons** met tous les pets en compétition.*"
     ), inline=False)
@@ -12807,6 +12808,39 @@ async def petcompetences_cmd(ctx, membre: discord.Member = None):
     embed.set_footer(text=f"Total : {total}/100 · Son caractère lui donne des facilités naturelles")
     await ctx.send(embed=embed)
 
+@bot.command(name="petobjets", aliases=["objetspet", "petcollection"])
+async def petobjets_cmd(ctx, membre: discord.Member = None):
+    """La collection d'objets de ton compagnon — .petobjets"""
+    cible = membre or ctx.author
+    uid = str(cible.id)
+    pid, pdb, pst = get_active_pet(uid)
+    if not pid:
+        return await ctx.send(f"🐾 **{cible.display_name}** n'a pas de compagnon actif.")
+    pet_init_perso(uid)
+    possedes = pst.get("objets", [])
+    prefere = pst.get("objet_prefere")
+
+    lignes = []
+    for nom, (emo, desc, eff, bonus) in PET_OBJETS_TROUVES.items():
+        if nom in possedes:
+            marque = " ❤️ **préféré**" if nom == prefere else ""
+            lignes.append(f"{emo} **{nom}**{marque}\n└ *{desc}*")
+        else:
+            lignes.append(f"🔒 *???* — pas encore trouvé")
+
+    embed = discord.Embed(
+        title=f"🎒 La collection de {pet_nom_decore(uid, pdb)}",
+        description=(f"**{len(possedes)} / {len(PET_OBJETS_TROUVES)}** objets trouvés\n"
+                     f"*Ils se ramassent lors des **événements spontanés** — "
+                     f"ouvre `.pet` régulièrement !*\n\n"
+                     + "\n".join(lignes)),
+        color=0xe91e63)
+    if prefere:
+        embed.set_footer(text=f"Son objet préféré : {prefere} · `.petobjets prefere <nom>` pour changer")
+    else:
+        embed.set_footer(text="Le premier objet trouvé devient son préféré.")
+    await ctx.send(embed=embed)
+
 @bot.command(name="petcarnet", aliases=["carnet", "journalpet"])
 async def petcarnet_cmd(ctx, membre: discord.Member = None):
     """Le carnet de bord de ton compagnon — .petcarnet"""
@@ -14384,97 +14418,148 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
         pid, pdb, pstate = get_active_pet(uid)
         if not pid:
             return await ctx.send("🐾 Tu n'as pas de compagnon actif !\nRends-toi dans `.shop` → page **Compagnons** pour en acheter un.")
-        bonus = pdb["base"] + (pstate["level"] - 1)
-        xp_txt = ""
         st = pet_etat(uid)
         pet_init_perso(uid)
         jours = pet_jours(uid)
         ph_emo, ph_nom, ph_desc = pet_phase(jours)
         part = pet_particularite(uid)
         nom_perso = pstate.get("surnom") or pdb["nom"]
+        peut_evo = pet_peut_evoluer(uid)
+        SEP = "━━━━━━━━━━━━━━━━━━"
 
-        _titre = pet_nom_decore(uid, pdb)
+        # ── 1. IDENTITÉ ──
+        titre_actuel = ""
         if pstate.get("titres"):
             _t0 = pstate["titres"][-1]
             if _t0 in PET_TITRES:
-                _titre += f"\n« {PET_TITRES[_t0][1]} »"
+                titre_actuel = f"« {PET_TITRES[_t0][1]} »"
 
-        peut_evo = pet_peut_evoluer(uid)
+        entete = [f"**{pdb['rarete']}**  ·  {ph_emo} **{ph_nom}**", f"*{ph_desc}*", SEP]
+
+        # ── 2. ÉVOLUTION ──
+        num, rom, nom_ev, mn, mx, _ = pet_evolution(pstate["level"])
+        if peut_evo:
+            _s = pet_evolution_suivante(pstate["level"])
+            _assez = economy_data[uid]["coins"] >= _s[5]
+            entete += [
+                f"✨ **Évolution {rom}** — *{nom_ev}*",
+                f"⭐ Niveau **{pstate['level']}**",
+                f"`{'▰' * 12}` **MAX**",
+                "",
+                "### 🌟 PRÊT À ÉVOLUER",
+                f"➡️ **Évolution {_s[1]} — {_s[2]}** *(niv. {_s[3]}–{_s[4]})*",
+                f"💰 **{_s[5]:,} pièces**" + ("  ·  **`.petevoluer`**" if _assez
+                                             else f"  ·  *il te manque {_s[5] - economy_data[uid]['coins']:,} p*"),
+            ]
+        else:
+            requis = pet_xp_requis(pstate["level"])
+            _f = max(0, min(12, int(pstate.get("xp", 0) / max(1, requis) * 12)))
+            entete += [
+                f"✨ **Évolution {rom}** — *{nom_ev}*",
+                f"⭐ Niveau **{pstate['level']}** *(palier {mn}–{mx})*",
+                f"`{'▰' * _f}{'▱' * (12 - _f)}` **{pstate.get('xp', 0):,} / {requis:,} XP**",
+            ]
+
         embed = discord.Embed(
-            title=_titre,
-            description=(f"**{pdb['rarete']}**  ·  {ph_emo} **{ph_nom}**\n"
-                         f"*{ph_desc}*\n\n"
-                         f"{pet_niveau_texte(uid, pdb, pstate)}\n\n"
-                         f"### {pet_humeur_texte(st)}"),
+            title=pet_nom_decore(uid, pdb) + (f"\n{titre_actuel}" if titre_actuel else ""),
+            description="\n".join(entete),
             color=0xf1c40f if peut_evo else 0xe91e63)
-        embed.add_field(name="❤️ Humeur", value=_jauge(st["humeur"]), inline=False)
-        embed.add_field(name="🍖 Faim", value=_jauge(100 - st["faim"], "🟧", "⬜"), inline=True)
-        embed.add_field(name="⚡ Énergie", value=_jauge(st["energie"], "🟨", "⬜"), inline=True)
-        embed.add_field(name="🛁 Propreté", value=_jauge(st["proprete"], "🟦", "⬜"), inline=True)
-        embed.add_field(name="✨ Ce qu'il t'apporte",
-                        value="\n".join(pet_detail_bonus(uid, pdb, pstate["level"])), inline=False)
-        _acc = pet_accessoires(uid)
-        if _acc:
-            embed.add_field(name="👗 Accessoires portés", value="\n".join(
-                f"{PET_ACCESSOIRES[a][0]} **{PET_ACCESSOIRES[a][1]}** — +{PET_ACCESSOIRES[a][4]} % "
-                + {"coins":"pièces","xp":"XP","roll":"rolls","humeur":"humeur"}[PET_ACCESSOIRES[a][3]]
-                for a in _acc if a in PET_ACCESSOIRES), inline=False)
-        embed.add_field(name="📈 Progression",
-                        value=(f"Départ **+{pdb['base']} %** · Actuel **+{bonus} %** · "
-                               f"*+1 % par niveau — sans plafond*"), inline=False)
+
+        # ── 3. ÉTAT GÉNÉRAL ──
+        embed.add_field(name="😊 État général", value=(
+            f"❤️ Humeur      `{_jauge(st['humeur'], '▰', '▱', 10)}` {int(st['humeur'])}%\n"
+            f"🍖 Faim        `{_jauge(100 - st['faim'], '▰', '▱', 10)}` {int(100 - st['faim'])}%\n"
+            f"⚡ Énergie     `{_jauge(st['energie'], '▰', '▱', 10)}` {int(st['energie'])}%\n"
+            f"🧼 Propreté    `{_jauge(st['proprete'], '▰', '▱', 10)}` {int(st['proprete'])}%\n\n"
+            f"### {pet_humeur_texte(st)}"), inline=False)
+
+        # ── 4. UNE SEULE PRIORITÉ ──
+        PRIORITES = [
+            (st["faim"] > 65,     "🍖", "Il a faim",        ".nourrir"),
+            (st["energie"] < 35,  "😴", "Il est épuisé",    ".dormir"),
+            (st["humeur"] < 40,   "🧸", "Il s'ennuie",      ".jouer"),
+            (st["proprete"] < 35, "🛁", "Il est sale",      ".laver"),
+            (st["faim"] > 45,     "🍖", "Il commence à avoir faim", ".nourrir"),
+            (st["humeur"] < 60,   "🫶", "Il réclame de l'attention", ".caresser"),
+        ]
+        urgence = next((p for p in PRIORITES if p[0]), None)
+        if urgence:
+            _, emo_u, txt_u, cmd_u = urgence
+            embed.add_field(name="⚠️ Il a besoin de toi",
+                            value=f"{emo_u} **{txt_u}**\n➡️ `{cmd_u}`", inline=False)
+
+        # ── 5. PERSONNALITÉ ──
         traits = pstate.get("traits", [])
         if traits:
-            embed.add_field(name="🧠 Caractère",
-                            value="\n".join(f"{PET_TRAITS[t][0]} **{PET_TRAITS[t][1]}** — *{PET_TRAITS[t][2]}*"
-                                            for t in traits if t in PET_TRAITS), inline=False)
+            embed.add_field(name="🧠 Personnalité",
+                            value="\n".join(f"{PET_TRAITS[t][0]} **{PET_TRAITS[t][1]}**"
+                                            for t in traits if t in PET_TRAITS), inline=True)
+
+        # ── 6. PARTICULARITÉ ──
         if part:
             _k, _emo, _nom, _eff, _desc = part
-            embed.add_field(name="✨ Particularité", value=f"# {_emo} {_nom}\n*{_desc}*", inline=False)
+            embed.add_field(name="✨ Particularité",
+                            value=f"{_emo} **{_nom}**\n*{_desc}*", inline=True)
         elif pstate.get("particularite"):
             embed.add_field(name="❓ Particularité",
-                            value="*Quelque chose semble spécial chez lui… mais quoi ?*\n"
-                                  "*Continue à t'en occuper pour le découvrir.*", inline=False)
+                            value="*Quelque chose semble spécial chez lui…*\n"
+                                  "*Continue à t'en occuper pour le découvrir.*", inline=True)
+
+        # ── 7. BONUS REGROUPÉS ──
+        lignes_b = []
+        for _typ, (_e, _q) in {"coins": ("💰", "pièces"), "xp": ("⭐", "XP"),
+                               "roll": ("🎰", "rolls gratuits"),
+                               "humeur": ("❤️", "humeur conservée")}.items():
+            _base = pdb["base"] + (pstate["level"] - 1) if pdb["type"] == _typ else 0
+            _acc = bonus_accessoires(uid, _typ)
+            if _base + _acc > 0:
+                lignes_b.append(f"{_e} **+{_base + _acc} % {_q}**")
+        _portes = pet_accessoires(uid)
+        if _portes:
+            lignes_b.append("\n👗 " + " · ".join(
+                f"{PET_ACCESSOIRES[a][0]} {PET_ACCESSOIRES[a][1]}"
+                for a in _portes if a in PET_ACCESSOIRES))
+        _ref = len(pets_data.get(uid, {}).get("refuge", []))
+        if _ref:
+            lignes_b.append(f"🏡 Refuge aménagé — **{_ref}** meuble(s)")
+        embed.add_field(name="✨ Bonus", value="\n".join(lignes_b) or "*Aucun bonus actif.*",
+                        inline=False)
+
+        # ── 8. PRÉFÉRENCES ──
+        _objets = pstate.get("objets", [])
+        if pstate.get("objet_prefere") or _objets:
+            _o = pstate.get("objet_prefere")
+            _eo = PET_OBJETS_TROUVES.get(_o, ("🎁",))[0] if _o else ""
+            val_p = (f"❤️ {_eo} **{_o}**\n" if _o else "")
+            val_p += f"🎒 Collection : **{len(_objets)} / {len(PET_OBJETS_TROUVES)}** objets\n*`.petobjets`*"
+            embed.add_field(name="🧸 Préférences", value=val_p, inline=True)
+
+        # ── 9. TITRES ──
+        _titres = pstate.get("titres", [])
+        val_t = (f"{PET_TITRES[_titres[-1]][0]} **{PET_TITRES[_titres[-1]][1]}**\n"
+                 if _titres and _titres[-1] in PET_TITRES else "*Aucun pour l'instant.*\n")
+        val_t += f"**{len(_titres)} / {len(PET_TITRES)}** débloqués"
+        embed.add_field(name="🏅 Titres", value=val_t, inline=True)
+
+        # ── 10. HABITUDES ──
         hab = pstate.get("habitudes", {})
         if hab:
             embed.add_field(name="🧬 Habitudes",
                             value="  ·  ".join(f"{PET_HABITUDES[h][0]} {PET_HABITUDES[h][1]}"
                                               for h in hab if h in PET_HABITUDES), inline=False)
-        if pstate.get("objet_prefere"):
-            _o = pstate["objet_prefere"]
-            _eo = PET_OBJETS_TROUVES.get(_o, ("🎁",))[0]
-            _autres = [x for x in pstate.get("objets", []) if x != _o]
-            embed.add_field(name="🧸 Objet préféré",
-                            value=f"{_eo} **{_o}**"
-                                  + (f"\n*Possède aussi : {', '.join(_autres[:4])}*" if _autres else ""),
-                            inline=False)
-        if pstate.get("titres"):
-            embed.add_field(name=f"🏅 Titres ({len(pstate['titres'])}/{len(PET_TITRES)})",
-                            value="  ·  ".join(f"{PET_TITRES[t][0]} {PET_TITRES[t][1]}"
-                                              for t in pstate["titres"] if t in PET_TITRES), inline=False)
-        if peut_evo:
-            _suiv = pet_evolution_suivante(pstate["level"])
-            _assez = economy_data[uid]["coins"] >= _suiv[5]
-            embed.add_field(
-                name="🌟 ÉVOLUTION DISPONIBLE !",
-                value=(f"**{nom_perso}** a atteint le sommet de son évolution.\n"
-                       f"*Il ne gagne plus d'XP tant qu'il n'a pas évolué.*\n\n"
-                       f"➡️ **Évolution {_suiv[1]} — {_suiv[2]}** *(niveaux {_suiv[3]} à {_suiv[4]})*\n"
-                       f"💰 **{_suiv[5]:,} pièces**"
-                       + ("\n\n**➜ Tape `.petevoluer` !**" if _assez
-                          else f"\n\n*Il te manque {_suiv[5] - economy_data[uid]['coins']:,} pièces.*")),
-                inline=False)
-        besoins = []
-        if st["faim"] > 60: besoins.append("🍖 `.nourrir`")
-        if st["proprete"] < 40: besoins.append("🛁 `.laver`")
-        if st["energie"] < 35: besoins.append("😴 `.dormir`")
-        if st["humeur"] < 50: besoins.append("🎾 `.jouer`")
-        if besoins:
-            embed.add_field(name="⚠️ Il a besoin de toi", value="  ·  ".join(besoins), inline=False)
-        embed.set_footer(text=f"Adopté il y a {jours} jour(s) · `.nourrir` `.laver` `.promener` `.jouer` `.dormir` `.caresser`")
+
+        # ── 11. INFOS ──
+        import datetime as _dt
+        _adopt = pstate.get("adoption")
+        _date = _dt.datetime.fromtimestamp(_adopt).strftime("%d/%m/%Y") if _adopt else "?"
+        embed.set_footer(text=f"Adopté le {_date} · il y a {jours} jour(s) · "
+                              f"`.petcompetences` `.petcarnet` `.garderobe` `.refuge`")
+
         await ctx.send(embed=embed)
         for e_h, n_h in verifier_habitudes(uid):
             await ctx.send(embed=discord.Embed(
-                description=f"🧬 **Nouvelle habitude**\n{e_h} **{nom_perso}** {n_h.lower()}.", color=0xe91e63))
+                description=f"🧬 **Nouvelle habitude**\n{e_h} **{nom_perso}** {n_h.lower()}.",
+                color=0xe91e63))
         for e_t, n_t in verifier_titres_pet(uid):
             await ctx.send(embed=discord.Embed(
                 title="🏅 Nouveau titre !",
