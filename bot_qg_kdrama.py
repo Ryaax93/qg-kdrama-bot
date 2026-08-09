@@ -1291,7 +1291,11 @@ def build_help_pages(guild, is_admin=False):
     e.add_field(name="🎒 Ses aventures", value=(
         "`.petexpedition` — 4 lieux · il part 1 à 4 h et rapporte un butin\n"
         "`.petcompetences` — 🎓 Ses 10 compétences *(elles montent seules)*\n"
-        "`.petobjets` — 🎒 Sa collection d'objets\n"
+        "`.petparler [message]` — 💬 **Parle-lui** *(il répond selon son humeur)*\n"
+        "`.petgouts` — ❤️ Ses préférences *(nourriture, endroit, couleur)*\n"
+        "`.nettoyer` — 🧹 Fais le ménage dans son refuge\n"
+        "`.nettoyer` — 🧹 Fais le ménage dans son refuge\n"
+        "`.petobjets` — 🎒 Sa collection d'objets *(30 à trouver, 6 raretés)*\n"
         "`.petcarnet` — 📖 Son carnet de souvenirs\n"
         "*L'event **🏃 Course de Compagnons** met tous les pets en compétition.*"
     ), inline=False)
@@ -10245,6 +10249,7 @@ def pet_bonus(uid, bonus_type):
     if pdb["type"] == bonus_type:
         base = pdb["base"] + (pstate["level"] - 1)
     base += bonus_accessoires(uid, bonus_type)
+    base += bonus_objets(uid, bonus_type)
     # Particularités
     if pet_a_particularite(uid, bonus_type):
         base = int(base * 1.5) if base else 5
@@ -10431,8 +10436,23 @@ def pet_etat(uid):
         r_hum  = 1 - min(0.7, bonus_refuge(uid, "humeur_lente") / 100)
         if pet_a_particularite(uid, "humeur"):
             r_hum *= 0.6
+        _sal = pets_data.get(uid, {}).get("saletes", 0)
+        if _sal > 50:
+            r_hum *= 1 + (_sal - 50) / 100     # un refuge sale déprime le pet
+        # Le refuge se salit tout seul, doucement
+        if heures >= 1:
+            pets_data.setdefault(uid, {})["saletes"] = min(
+                100, pets_data[uid].get("saletes", 0) + heures * 0.8)
+        _sal = pets_data.get(uid, {}).get("saletes", 0)
+        if _sal > 50:
+            r_hum *= 1 + (_sal - 50) / 100     # un refuge sale déprime le pet
+        # Le refuge se salit tout seul, doucement
+        if heures >= 1:
+            pets_data.setdefault(uid, {})["saletes"] = min(
+                100, pets_data[uid].get("saletes", 0) + heures * 0.8)
         r_faim2 = 1 - min(0.5, niveau_competence(uid, "cuisine") * 0.04)
-        r_prop = 1 - min(0.5, niveau_competence(uid, "proprete") * 0.04)
+        r_prop = 1 - min(0.7, niveau_competence(uid, "proprete") * 0.04
+                              + bonus_refuge(uid, "proprete_lente") / 100)
         st["faim"] = min(100, st["faim"] + heures * 3 * r_faim * r_faim2)
         st["energie"] = max(0, st["energie"] - heures * 2 * r_ener)
         st["proprete"] = max(0, st["proprete"] - heures * 2 * r_prop)
@@ -10544,7 +10564,7 @@ async def petaction_cmd(ctx):
     if leveled:
         embed.add_field(name="🆙 Niveau supérieur !",
                         value=f"**{pdb['nom']}** passe **niveau {lvl}**\n{pet_bonus_texte(pdb, lvl)}", inline=False)
-        pet_carnet_note(uid, f"🆙 Est passé **niveau {lvl}**.")
+        pet_carnet_note(uid, f"🆙 Est passé **niveau {lvl}**.", important=(lvl % 5 == 0))
     await ctx.send(embed=embed)
     for _e, _n in verifier_habitudes(uid):
         await ctx.send(embed=discord.Embed(
@@ -11788,28 +11808,29 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "2.9.0"
+BOT_VERSION = "3.0.0"
 CHANGELOG = {
-    "titre": "Les compagnons prennent vie 🐾",
+    "titre": "Une vraie vie de compagnon 🏡",
     "ajouts": [
-        "🧠 **Personnalité** — chaque compagnon a 2 ou 3 traits de caractère qui changent son comportement",
-        "✨ **Particularités cachées** — 10 à découvrir, dont certaines très rares",
-        "🎲 **Événements spontanés** — il se passe des choses quand tu ouvres `.pet`",
-        "🧬 **Habitudes** — le bot observe ce que tu fais et lui crée des routines",
-        "🎓 **10 compétences** qui montent toutes seules et influencent les expéditions",
-        "🏅 **12 titres** à débloquer · 🐣 **5 phases de vie** de Nouveau-né à Ancien",
-        "✏️ `.petnom` — renomme enfin ton compagnon comme tu veux",
-        "💖 `.petduo` — activités exclusives entre compagnons inséparables",
-        "🎁 `.petcadeau` — offrir un cadeau au compagnon d'un ami",
-        "💢 **Rivalités** — certains caractères ne s'entendent pas",
-        "🎒 `.inventaire` — vois enfin ton sac et utilise tes objets",
+        "💬 `.petparler` — **parle à ton compagnon**, il répond selon son humeur, son caractère et l'heure",
+        "❤️ `.petgouts` — il a une nourriture, un endroit et une couleur préférés",
+        "🕐 **Routine** — matin, après-midi, soirée, nuit : il vit sa journée selon son caractère",
+        "😈 **Bêtises** — 16 catastrophes possibles, du papier toilette déroulé au gâteau dévoré",
+        "🧹 `.nettoyer` — le refuge se salit, il faut faire le ménage *(et ça rapporte)*",
+        "🎒 **Collection de 30 objets** en 6 raretés — du ⚪ Bouchon en liège à la 🔴 Larme de Dragon",
+        "🏡 **Refuge repensé** — visite pièce par pièce, **8 pièces** dont salle de bain, salle de jeux et salle de sport",
+        "🏘️ **6 niveaux de maison** — de la 🏚️ Petite pièce au 🌴 Domaine légendaire",
+        "📖 **Carnet vivant** — les grands moments restent pour toujours, et tu peux épingler tes préférés",
+        "✨ **Évolutions sans plafond** — 6 paliers de 10 niveaux, plus de blocage au niveau 10",
+        "🐾 **Fiche `.pet` refaite** — un vrai tableau de bord, une seule priorité affichée",
         "🃏 **Memory en marathon** — les manches s'enchaînent, la série multiplie les gains",
     ],
     "correctifs": [
+        "**`.dormir` fonctionne enfin quand le pet est épuisé** — le besoin urgent passe avant le cooldown",
+        "La page 🐾 Compagnons du `.help` s'affiche de nouveau *(elle dépassait la limite Discord)*",
+        "Les cartes gagnées en expédition déclenchent bien les succès et la Gazette",
         "Les accessoires **s'ajoutent** au bonus de race au lieu de le remplacer",
-        "Les cadeaux mystère obtenus en expédition sont enfin ouvrables",
-        "Les votes du Drama Collectif survivent aux redémarrages",
-        "Le propriétaire d'une carte déjà prise est affiché",
+        "Les cadeaux mystère sont ouvrables via `.inventaire` et `.utiliser`",
     ],
 }
 
@@ -12738,8 +12759,8 @@ PETVISITE_BONUS = [
 # ============================================================
 #  📖 CARNET & 🎂 ANNIVERSAIRE DU COMPAGNON
 # ============================================================
-def pet_carnet_note(uid, texte):
-    """Ajoute une ligne au carnet du compagnon actif"""
+def pet_carnet_note(uid, texte, important=False):
+    """Ajoute une entrée au carnet. Les souvenirs `important` ne sont jamais effacés."""
     d = pets_data.get(uid, {})
     pid = d.get("active")
     if not pid:
@@ -12751,10 +12772,327 @@ def pet_carnet_note(uid, texte):
     st.setdefault("adoption", _t.time())
     st.setdefault("carnet", [])
     jour = int((_t.time() - st["adoption"]) / 86400) + 1
-    st["carnet"].append({"jour": jour, "txt": texte})
-    if len(st["carnet"]) > 60:
-        st["carnet"].pop(0)
+    st["carnet"].append({"jour": jour, "txt": texte, "imp": bool(important), "ts": _t.time()})
+    # On ne purge que les petits moments du quotidien
+    quotidiens = [e for e in st["carnet"] if not e.get("imp") and not e.get("pin")]
+    if len(quotidiens) > 40:
+        a_retirer = len(quotidiens) - 40
+        for e in list(st["carnet"]):
+            if a_retirer <= 0:
+                break
+            if not e.get("imp") and not e.get("pin"):
+                st["carnet"].remove(e)
+                a_retirer -= 1
 
+
+
+# ============================================================
+#  💬 DIALOGUE · 🕐 ROUTINE · ❤️ PRÉFÉRENCES
+# ============================================================
+PET_ROUTINES = {
+    "matin":    ("🌅", "Matin",       (6, 12)),
+    "aprem":    ("☀️", "Après-midi",  (12, 18)),
+    "soir":     ("🌆", "Soirée",      (18, 23)),
+    "nuit":     ("🌙", "Nuit",        (23, 6)),
+}
+ROUTINE_ACTIVITES = {
+    "matin": {
+        "defaut":     ["s'étire longuement près de la fenêtre", "réclame son petit-déjeuner avec insistance",
+                       "fait le tour de la maison pour vérifier que rien n'a bougé"],
+        "paresseux":  ["refuse catégoriquement de se lever", "ouvre un œil, le referme, se rendort"],
+        "sportif":    ["a déjà fait trois tours du jardin", "attend devant la porte depuis 6 h"],
+        "gourmand":   ["est assis devant sa gamelle depuis vingt minutes", "surveille la cuisine"],
+        "affectueux": ["vient te réveiller en se posant sur toi", "réclame un câlin avant tout le reste"],
+    },
+    "aprem": {
+        "defaut":     ["fait la sieste dans un rayon de soleil", "observe le monde par la fenêtre",
+                       "cherche quelque chose à faire"],
+        "curieux":    ["inspecte un placard qu'il n'aurait pas dû ouvrir", "suit une odeur mystérieuse"],
+        "farceur":    ["prépare visiblement quelque chose", "a déplacé un objet et fait l'innocent"],
+        "solitaire":  ["s'est trouvé un coin tranquille", "évite soigneusement tout le monde"],
+        "geek":       ["s'est installé devant l'écran", "regarde les pixels bouger, fasciné"],
+    },
+    "soir": {
+        "defaut":     ["se pose contre toi pour la soirée", "somnole en écoutant les bruits de la maison"],
+        "fetard":     ["a un regain d'énergie inexplicable", "court dans le couloir à 21 h"],
+        "calin":      ["refuse de te lâcher jusqu'au coucher", "s'endort sur tes genoux"],
+        "bavard":     ["commente tout ce qui se passe", "raconte visiblement sa journée"],
+        "protecteur": ["monte la garde devant la porte", "sursaute au moindre bruit dehors"],
+    },
+    "nuit": {
+        "defaut":     ["dort profondément, roulé en boule", "rêve — ses pattes bougent"],
+        "aventurier": ["est parti explorer la maison", "regarde par la fenêtre depuis une heure"],
+        "farceur":    ["fait un bruit suspect dans la cuisine", "court dans le couloir sans raison"],
+        "peureux":    ["s'est caché sous le lit", "sursaute à chaque craquement"],
+        "reveur":     ["fixe un point dans le vide", "observe la lune sans bouger"],
+    },
+}
+
+def routine_actuelle():
+    h = datetime.datetime.now().hour
+    for cle, (emo, nom, (d, f)) in PET_ROUTINES.items():
+        if d < f and d <= h < f:
+            return cle, emo, nom
+        if d > f and (h >= d or h < f):
+            return cle, emo, nom
+    return "aprem", "☀️", "Après-midi"
+
+def activite_routine(uid):
+    """Ce que fait le pet à cette heure-ci, selon son caractère"""
+    cle, emo, nom = routine_actuelle()
+    pid, pdb, st = get_active_pet(uid)
+    traits = st.get("traits", []) if st else []
+    pool = list(ROUTINE_ACTIVITES[cle]["defaut"])
+    for t in traits:
+        pool += ROUTINE_ACTIVITES[cle].get(t, []) * 2
+    return emo, nom, random.choice(pool)
+
+# ── Préférences ──
+PET_NOURRITURES = ["🍖 la viande", "🐟 le poisson", "🧀 le fromage", "🍗 le poulet",
+                   "🥕 les légumes", "🍚 le riz", "🥚 les œufs", "🍤 les crevettes",
+                   "🍠 la patate douce", "🥛 le lait tiède"]
+PET_ENDROITS = ["🪟 le rebord de la fenêtre", "🛏️ le pied du lit", "🔥 devant la cheminée",
+                "📦 un carton au hasard", "🧺 son panier", "🛋️ le dossier du canapé",
+                "🌿 sous la plante du salon", "🚪 le paillasson", "📚 sur la bibliothèque",
+                "☀️ le carré de soleil de 15 h"]
+PET_COULEURS = [("🔴", "le rouge"), ("🔵", "le bleu"), ("🟢", "le vert"), ("🟡", "le jaune"),
+                ("🟣", "le violet"), ("🩷", "le rose"), ("⚪", "le blanc"), ("⚫", "le noir"),
+                ("🟠", "l'orange"), ("🤎", "le marron")]
+
+def init_preferences(uid):
+    """Attribue les goûts du pet une fois pour toutes"""
+    pid, pdb, st = get_active_pet(uid)
+    if not st or st.get("prefs"):
+        return
+    coul = random.choice(PET_COULEURS)
+    st["prefs"] = {
+        "nourriture": random.choice(PET_NOURRITURES),
+        "endroit": random.choice(PET_ENDROITS),
+        "couleur": f"{coul[0]} {coul[1]}",
+    }
+
+# ── Dialogue ──
+PET_REPLIQUES = {
+    "faim":       ["*te fixe, puis fixe sa gamelle, puis te refixe.*",
+                   "*fait le tour de tes jambes en émettant un son de négociation.*",
+                   "*pousse doucement sa gamelle vide vers toi. Message reçu.*"],
+    "fatigue":    ["*bâille si fort qu'il en perd l'équilibre.*",
+                   "*s'écroule là où il était debout. Bonne nuit.*",
+                   "*te regarde avec des yeux mi-clos. Il tient à peine.*"],
+    "sale":       ["*se lèche une patte, abandonne, te regarde d'un air désolé.*",
+                   "*laisse une trace de terre partout où il passe.*"],
+    "triste":     ["*soupire. Un vrai soupir, très théâtral.*",
+                   "*se pose loin de toi, dos tourné. C'est un message.*",
+                   "*ne réagit pas quand tu l'appelles. Ça va mal.*"],
+    "heureux":    ["*se roule sur le dos et attend un ventre-gratouille.*",
+                   "*te suit partout depuis dix minutes, l'air ravi.*",
+                   "*fait ce bruit qu'il ne fait que quand tout va bien.*",
+                   "*t'apporte son jouet préféré et le lâche à tes pieds.*"],
+    "calin":      ["*se blottit contre toi sans prévenir et ferme les yeux.*",
+                   "*pose sa tête sur ta main. Il ne bougera plus.*"],
+    "farceur":    ["*a manifestement caché quelque chose. Il ne dira pas quoi.*",
+                   "*te regarde faire une bêtise, en pleine conscience.*"],
+    "solitaire":  ["*t'accorde exactement trois secondes d'attention.*",
+                   "*change de pièce. Rien de personnel.*"],
+    "bavard":     ["*émet une longue série de sons. Tu ne comprends rien mais tu hoches la tête.*",
+                   "*te répond. Vraiment. À sa manière.*"],
+    "nuit":       ["*est parfaitement réveillé. Il est 3 h du matin.*",
+                   "*te regarde depuis le bout du couloir, immobile. Tu n'aimes pas ça.*"],
+    "neutre":     ["*penche la tête sur le côté.*",
+                   "*cligne lentement des yeux. C'est un compliment, paraît-il.*",
+                   "*s'assoit devant toi et attend la suite.*",
+                   "*renifle ta main, puis se désintéresse totalement de toi.*"],
+}
+
+@bot.command(name="petparler", aliases=["parler", "petdiscuter"])
+async def petparler_cmd(ctx, *, message: str = None):
+    """Parle à ton compagnon — .petparler [message]"""
+    uid = str(ctx.author.id)
+    pid, pdb, pst = get_active_pet(uid)
+    if not pid:
+        return await ctx.send("🐾 Tu n'as pas de compagnon actif ! Rends-toi dans `.shop`.")
+    pet_init_perso(uid)
+    init_preferences(uid)
+    st = pet_etat(uid)
+    nom_pet = pst.get("surnom") or pdb["nom"]
+    cle_r, emo_r, nom_r = routine_actuelle()
+
+    # Choix de la réplique selon l'état, la personnalité et l'heure
+    pool = []
+    if st["faim"] > 65: pool += PET_REPLIQUES["faim"] * 3
+    if st["energie"] < 35: pool += PET_REPLIQUES["fatigue"] * 3
+    if st["proprete"] < 35: pool += PET_REPLIQUES["sale"] * 2
+    if st["humeur"] < 40: pool += PET_REPLIQUES["triste"] * 3
+    elif st["humeur"] > 75: pool += PET_REPLIQUES["heureux"] * 2
+    for t in pst.get("traits", []):
+        if t in PET_REPLIQUES:
+            pool += PET_REPLIQUES[t] * 2
+    if cle_r == "nuit": pool += PET_REPLIQUES["nuit"]
+    pool += PET_REPLIQUES["neutre"]
+    replique = random.choice(pool)
+
+    st["humeur"] = min(100, st["humeur"] + 3)
+    pet_stat(uid, "discussions")
+    save_all_data()
+
+    _, _, activite = activite_routine(uid)
+    embed = discord.Embed(
+        title=f"💬 {pet_nom_decore(uid, pdb)}",
+        description=(f"> {message}\n\n" if message else "")
+                    + f"**{nom_pet}** {replique}",
+        color=0xe91e63)
+    embed.add_field(name=f"{emo_r} {nom_r}", value=f"*Il {activite}.*", inline=False)
+    embed.set_footer(text=f"{pet_humeur_texte(st)} · ❤️ +3 humeur")
+    await ctx.send(embed=embed)
+
+@bot.command(name="petgouts", aliases=["gouts", "petpreferences"])
+async def petgouts_cmd(ctx, membre: discord.Member = None):
+    """Les goûts de ton compagnon — .petgouts"""
+    cible = membre or ctx.author
+    uid = str(cible.id)
+    pid, pdb, pst = get_active_pet(uid)
+    if not pid:
+        return await ctx.send(f"🐾 **{cible.display_name}** n'a pas de compagnon actif.")
+    pet_init_perso(uid)
+    init_preferences(uid)
+    prefs = pst.get("prefs", {})
+    obj = pst.get("objet_prefere")
+    emo_o = PET_OBJETS_TROUVES.get(obj, ("🎁",))[0] if obj else ""
+    _, _, activite = activite_routine(uid)
+    cle_r, emo_r, nom_r = routine_actuelle()
+
+    embed = discord.Embed(
+        title=f"❤️ Les goûts de {pet_nom_decore(uid, pdb)}",
+        description="*Chaque compagnon développe ses propres préférences.*",
+        color=0xe91e63)
+    embed.add_field(name="🍖 Nourriture préférée", value=prefs.get("nourriture", "?"), inline=True)
+    embed.add_field(name="🛏️ Endroit préféré", value=prefs.get("endroit", "?"), inline=True)
+    embed.add_field(name="🎨 Couleur préférée", value=prefs.get("couleur", "?"), inline=True)
+    embed.add_field(name="🧸 Objet préféré",
+                    value=f"{emo_o} **{obj}**" if obj else "*Il n'a encore rien trouvé.*", inline=False)
+    embed.add_field(name=f"{emo_r} En ce moment ({nom_r})", value=f"*Il {activite}.*", inline=False)
+    traits = pst.get("traits", [])
+    if traits:
+        embed.set_footer(text="Caractère : " + " · ".join(PET_TRAITS[t][1] for t in traits if t in PET_TRAITS))
+    await ctx.send(embed=embed)
+
+
+# ============================================================
+#  😈 BÊTISES & 🧹 PROPRETÉ DU REFUGE
+# ============================================================
+PET_BETISES = [
+    ("🪴", "a déterré la plante du salon", "Il y a de la terre jusque dans le couloir.", 300, "commune"),
+    ("🧻", "a déroulé tout le papier toilette", "Le couloir est devenu une scène de crime.", 200, "commune"),
+    ("🥣", "a renversé sa gamelle", "Il regarde le désastre sans aucun remords.", 150, "commune"),
+    ("🧦", "a caché une chaussette", "Elle réapparaîtra dans trois semaines. Ou jamais.", 100, "commune"),
+    ("📦", "s'est coincé dans une boîte", "Il a fallu vingt minutes pour le sortir.", 0, "commune"),
+    ("🛋️", "a fait ses griffes sur le canapé", "Le canapé n'avait rien demandé.", 600, "commune"),
+    ("🗑️", "a fouillé la poubelle", "Il en est très fier. Toi beaucoup moins.", 250, "commune"),
+    ("🥛", "a renversé un verre sur la table", "Il l'a poussé. Volontairement. En te regardant.", 200, "commune"),
+    ("👟", "a mâchouillé une chaussure", "Pas la vieille. La neuve, évidemment.", 900, "rare"),
+    ("📚", "a fait tomber toute une étagère", "Il dormait dessus. Tout s'est écroulé.", 700, "rare"),
+    ("🧶", "a emmêlé toute la pelote", "Il est dedans. Il ne peut plus sortir.", 300, "rare"),
+    ("🍰", "a mangé le gâteau qui refroidissait", "Tout le gâteau. Il n'en reste rien.", 1200, "rare"),
+    ("🍦", "a mangé une glace et en a mis partout", "Il a du sucre jusque sur le front.", 400, "rare"),
+    ("💻", "s'est assis sur le clavier", "Il a envoyé un message. À quelqu'un. On ne sait pas qui.", 500, "rare"),
+    ("🎨", "a marché dans la peinture", "Il y a des empreintes sur trois pièces.", 800, "tresrare"),
+    ("🐟", "a volé le poisson du dîner", "Le dîner est annulé. Lui a très bien mangé.", 1500, "tresrare"),
+]
+
+async def tenter_betise(ctx, uid):
+    """Le pet fait parfois une bêtise — plus souvent s'il est farceur ou s'ennuie"""
+    import time as _t
+    pid, pdb, pst = get_active_pet(uid)
+    if not pid:
+        return False
+    if _t.time() - pst.get("derniere_betise", 0) < 10800:   # 3 h minimum
+        return False
+    st = pet_etat(uid)
+    proba = 0.10
+    if pet_a_trait(uid, "farceur"): proba += 0.12
+    if pet_a_trait(uid, "curieux"): proba += 0.06
+    if pet_a_trait(uid, "gourmand"): proba += 0.05
+    if st["humeur"] < 45: proba += 0.10      # il s'ennuie
+    if st["energie"] > 80: proba += 0.06     # trop d'énergie
+    if random.random() > proba:
+        return False
+    pst["derniere_betise"] = _t.time()
+
+    poids = {"commune": 60, "rare": 32, "tresrare": 8}
+    lot = random.choices(PET_BETISES, weights=[poids[b[4]] for b in PET_BETISES])[0]
+    emo, action, detail, degats, rar = lot
+    nom_pet = pst.get("surnom") or pdb["nom"]
+
+    # Le refuge se salit
+    pets_data[uid]["saletes"] = min(100, pets_data[uid].get("saletes", 0) + random.randint(8, 20))
+    if degats:
+        perdu = min(economy_data[uid]["coins"], degats)
+        economy_data[uid]["coins"] -= perdu
+    st["humeur"] = min(100, st["humeur"] + 8)   # lui, il s'est bien amusé
+    pet_stat(uid, "betises")
+    pet_carnet_note(uid, f"{emo} {action.capitalize()}.", important=(rar != "commune"))
+    save_all_data()
+
+    RAR_LABEL = {"commune": "", "rare": "  ·  🔵 *rare*", "tresrare": "  ·  🟣 *très rare*"}
+    await ctx.send(embed=discord.Embed(
+        title=f"{emo} Une bêtise !",
+        description=(f"**{nom_pet}** {action}.\n*{detail}*\n\n"
+                     + (f"💸 **−{degats:,} pièces** de dégâts\n" if degats else "")
+                     + f"❤️ Lui, il est **ravi** (+8 humeur)\n"
+                     + f"🧹 Le refuge se salit un peu…{RAR_LABEL[rar]}"),
+        color=0xe67e22))
+    return True
+
+def saletes_refuge(uid):
+    """Niveau de saleté du refuge, 0-100"""
+    return int(pets_data.get(uid, {}).get("saletes", 0))
+
+def etat_refuge_texte(n):
+    if n < 15:  return "✨", "Impeccable", "Tout brille. On pourrait manger par terre."
+    if n < 35:  return "🙂", "Correct", "Un peu vécu, mais rien de grave."
+    if n < 60:  return "😐", "En désordre", "Ça commence à se voir."
+    if n < 80:  return "😖", "Sale", "Il faudrait vraiment faire quelque chose."
+    return "🤢", "Insalubre", "Même lui évite certaines pièces."
+
+@bot.command(name="nettoyer", aliases=["menage", "nettoyerrefuge"])
+async def nettoyer_cmd(ctx):
+    """Nettoie le refuge de ton compagnon — .nettoyer"""
+    import time as _t
+    uid = str(ctx.author.id)
+    pid, pdb, pst = get_active_pet(uid)
+    if not pid:
+        return await ctx.send("🐾 Tu n'as pas de compagnon actif ! Rends-toi dans `.shop`.")
+    n = saletes_refuge(uid)
+    if n < 10:
+        emo, lab, desc = etat_refuge_texte(n)
+        return await ctx.send(embed=discord.Embed(
+            description=f"{emo} Le refuge est déjà **{lab.lower()}**.\n*{desc}*", color=0x2ecc71))
+    dernier = pets_data[uid].get("dernier_menage", 0)
+    if _t.time() - dernier < 3600:
+        reste = int((3600 - (_t.time() - dernier)) / 60)
+        return await ctx.send(f"🧹 Tu viens de faire le ménage — repose-toi **{reste} min**.",
+                              delete_after=8)
+    pets_data[uid]["dernier_menage"] = _t.time()
+    pets_data[uid]["saletes"] = 0
+    st = pet_etat(uid)
+    st["humeur"] = min(100, st["humeur"] + 12)
+    give_pet_xp(uid, 30)
+    gain = 100 + n * 5
+    economy_data[uid]["coins"] += gain
+    save_all_data()
+    SCENES = [
+        "Il t'observe faire, allongé, sans lever une patte.",
+        "Il essaie d'aider. Il n'aide pas.",
+        "Il redécorne tout dès que tu as le dos tourné.",
+        "Il inspecte chaque zone nettoyée d'un air approbateur.",
+        "Il se roule dans la zone que tu viens de finir. Merci.",
+    ]
+    await ctx.send(embed=discord.Embed(
+        title="🧹 Grand ménage !",
+        description=(f"Le refuge de **{pet_nom_decore(uid, pdb)}** est de nouveau **impeccable** ✨\n\n"
+                     f"*{random.choice(SCENES)}*\n\n"
+                     f"❤️ Humeur **+12**  ·  ⭐ **+30 XP**  ·  💰 **+{gain:,} pièces**"),
+        color=0x2ecc71))
 
 # ============================================================
 #  🎓 COMPÉTENCES DU COMPAGNON
@@ -12809,67 +13147,110 @@ async def petcompetences_cmd(ctx, membre: discord.Member = None):
     await ctx.send(embed=embed)
 
 @bot.command(name="petobjets", aliases=["objetspet", "petcollection"])
-async def petobjets_cmd(ctx, membre: discord.Member = None):
-    """La collection d'objets de ton compagnon — .petobjets"""
-    cible = membre or ctx.author
-    uid = str(cible.id)
+async def petobjets_cmd(ctx, action: str = None, *, nom: str = None):
+    """La collection d'objets — .petobjets [prefere <objet>]"""
+    uid = str(ctx.author.id)
     pid, pdb, pst = get_active_pet(uid)
     if not pid:
-        return await ctx.send(f"🐾 **{cible.display_name}** n'a pas de compagnon actif.")
+        return await ctx.send("🐾 Tu n'as pas de compagnon actif.")
     pet_init_perso(uid)
     possedes = pst.get("objets", [])
+
+    if action and normalize_str(action) in ("prefere", "favori", "pref"):
+        if not nom:
+            return await ctx.send("❌ `.petobjets prefere <nom de l'objet>`")
+        trouve = next((o for o in possedes if normalize_str(nom) in normalize_str(o)), None)
+        if not trouve:
+            return await ctx.send(f"❌ Il ne possède pas **{nom}**.")
+        pst["objet_prefere"] = trouve
+        pet_carnet_note(uid, f"❤️ **{trouve}** est devenu son objet préféré.", important=True)
+        save_all_data()
+        return await ctx.send(embed=discord.Embed(
+            description=f"❤️ {PET_OBJETS_TROUVES[trouve][0]} **{trouve}** est maintenant son objet préféré.",
+            color=0xe91e63))
+
     prefere = pst.get("objet_prefere")
-
-    lignes = []
-    for nom, (emo, desc, eff, bonus) in PET_OBJETS_TROUVES.items():
-        if nom in possedes:
-            marque = " ❤️ **préféré**" if nom == prefere else ""
-            lignes.append(f"{emo} **{nom}**{marque}\n└ *{desc}*")
-        else:
-            lignes.append(f"🔒 *???* — pas encore trouvé")
-
     embed = discord.Embed(
         title=f"🎒 La collection de {pet_nom_decore(uid, pdb)}",
         description=(f"**{len(possedes)} / {len(PET_OBJETS_TROUVES)}** objets trouvés\n"
-                     f"*Ils se ramassent lors des **événements spontanés** — "
-                     f"ouvre `.pet` régulièrement !*\n\n"
-                     + "\n".join(lignes)),
+                     f"*Il les ramasse lors des **événements du quotidien** et des **expéditions**.*"),
         color=0xe91e63)
-    if prefere:
-        embed.set_footer(text=f"Son objet préféré : {prefere} · `.petobjets prefere <nom>` pour changer")
-    else:
-        embed.set_footer(text="Le premier objet trouvé devient son préféré.")
+    for rar, (r_emo, r_nom, r_coul, _) in PET_OBJ_RARETES.items():
+        lot = [(n, v) for n, v in PET_OBJETS_TROUVES.items() if v[4] == rar]
+        a_lui = [n for n, _ in lot if n in possedes]
+        lignes = [(f"{v[0]} **{n}**" + (" ❤️" if n == prefere else "")) if n in possedes else "🔒 *???*"
+                  for n, v in lot]
+        embed.add_field(name=f"{r_emo} {r_nom}  ·  {len(a_lui)}/{len(lot)}",
+                        value="  ·  ".join(lignes)[:1024], inline=False)
+    LAB = {"coins":"💰 pièces","xp":"⭐ XP","roll":"🎰 rolls","humeur":"❤️ humeur"}
+    bonus = [f"{lab} **+{bonus_objets(uid, t)} %**" for t, lab in LAB.items() if bonus_objets(uid, t)]
+    if bonus:
+        embed.add_field(name="✨ Bonus de collection", value="  ·  ".join(bonus), inline=False)
+    embed.set_footer(text=(f"Objet préféré : {prefere} · `.petobjets prefere <nom>` pour changer"
+                           if prefere else "Le premier objet trouvé devient son préféré."))
     await ctx.send(embed=embed)
 
 @bot.command(name="petcarnet", aliases=["carnet", "journalpet"])
-async def petcarnet_cmd(ctx, membre: discord.Member = None):
-    """Le carnet de bord de ton compagnon — .petcarnet"""
+async def petcarnet_cmd(ctx, action: str = None, numero: int = None):
+    """Le carnet de bord — .petcarnet [epingler|detacher] <n°>"""
     import time as _t
-    cible = membre or ctx.author
-    uid = str(cible.id)
-    pid, pdb, pst = get_active_pet(uid)
+    uid = str(ctx.author.id)
+    pid, pdb, st = get_active_pet(uid)
     if not pid:
-        return await ctx.send(f"🐾 **{cible.display_name}** n'a pas de compagnon actif.")
-    st = pets_data[uid]["owned"][pid]
+        return await ctx.send("🐾 Tu n'as pas de compagnon actif.")
     st.setdefault("adoption", _t.time())
     st.setdefault("carnet", [])
-    jours = int((_t.time() - st["adoption"]) / 86400) + 1
+    carnet = st["carnet"]
 
-    if not st["carnet"]:
-        contenu = "*Rien d'écrit pour l'instant. Le carnet se remplit au fil des moments marquants.*"
-    else:
-        contenu = "\n".join(f"**Jour {e['jour']}** — {e['txt']}" for e in st["carnet"][-12:])
-        if len(st["carnet"]) > 12:
-            contenu = f"*…{len(st['carnet'])-12} entrées plus anciennes*\n\n" + contenu
+    # ── Épingler / détacher ──
+    if action and action.lower() in ("epingler", "pin", "detacher", "unpin"):
+        if not numero or numero < 1 or numero > len(carnet):
+            return await ctx.send(f"❌ Numéro invalide — entre 1 et {len(carnet)}.")
+        e = carnet[numero - 1]
+        if action.lower() in ("epingler", "pin"):
+            if sum(1 for x in carnet if x.get("pin")) >= 5:
+                return await ctx.send("📌 Cinq souvenirs épinglés maximum — détaches-en un d'abord.")
+            e["pin"] = True
+            save_all_data()
+            return await ctx.send(f"📌 Souvenir épinglé : *{e['txt']}*")
+        e.pop("pin", None)
+        save_all_data()
+        return await ctx.send(f"📌 Souvenir détaché : *{e['txt']}*")
+
+    jours = int((_t.time() - st["adoption"]) / 86400) + 1
+    nom_pet = st.get("surnom") or pdb["nom"]
+    epingles = [e for e in carnet if e.get("pin")]
+    importants = [e for e in carnet if e.get("imp") and not e.get("pin")]
+    quotidiens = [e for e in carnet if not e.get("imp") and not e.get("pin")]
 
     embed = discord.Embed(
         title=f"📖 Le carnet de {pet_nom_decore(uid, pdb)}",
-        description=(f"*Adopté il y a **{jours} jour(s)** par {cible.display_name}.*\n\n"
-                     f"━━━━━━━━━━━━━━━━━━\n\n{contenu}"),
+        description=(f"*Adopté il y a **{jours} jour(s)** par {ctx.author.display_name}.*\n"
+                     f"*{len(carnet)} souvenir(s) — les grands moments restent pour toujours.*"),
         color=0xe91e63)
+
+    if epingles:
+        embed.add_field(name="📌 Souvenirs épinglés", value="\n".join(
+            f"**Jour {e['jour']}** — {e['txt']}" for e in epingles[:5]), inline=False)
+    if importants:
+        embed.add_field(name="⭐ Les grands moments", value="\n".join(
+            f"**Jour {e['jour']}** — {e['txt']}" for e in importants[-8:])[:1024], inline=False)
+    if quotidiens:
+        recents = quotidiens[-10:]
+        debut = len(carnet) - len(recents) + 1
+        embed.add_field(name="🌿 Le quotidien", value="\n".join(
+            f"`{carnet.index(e)+1}` **J{e['jour']}** — {e['txt']}" for e in recents)[:1024],
+            inline=False)
+    if not carnet:
+        embed.add_field(name="\u200b",
+                        value="*Rien d'écrit pour l'instant. Le carnet se remplit tout seul.*",
+                        inline=False)
+
     amis = sum(1 for k, v in petamitie.items() if uid in k.split("|") and v > 0)
-    embed.set_footer(text=f"Niveau {pst['level']} · {len(st['carnet'])} souvenir(s) · {amis} ami(s)")
+    embed.set_footer(text=f"Niveau {st.get('level',1)} · {amis} ami(s) · "
+                          f"`.petcarnet epingler <n°>` pour garder un souvenir")
     await ctx.send(embed=embed)
+
 
 @tasks.loop(hours=6)
 async def anniversaires_pets():
@@ -12899,7 +13280,7 @@ async def anniversaires_pets():
             pdb = PETS_DB[pid]
             economy_data[uid]["coins"] += 5000 * ans
             give_pet_xp(uid, 500)
-            pet_carnet_note(uid, f"🎂 A fêté ses **{ans} an(s)** avec {m.display_name}.")
+            pet_carnet_note(uid, f"🎂 A fêté ses **{ans} an(s)** avec {m.display_name}.", important=True)
             try:
                 await salon.send(embed=discord.Embed(
                     title="🎂  Joyeux anniversaire !",
@@ -13122,6 +13503,19 @@ async def petexpedition_cmd(ctx, lieu: str = None):
             xp_p = 40 * heures
             l, lv = give_pet_xp(uid, xp_p)
             butin = [f"💰 **{pieces:,} pièces**", f"⭐ **+{xp_p} XP** pour {pdb['nom']}"]
+            if random.random() < 0.4 + heures * 0.1:
+                _o = tirer_objet(uid, bonus_rare=heures * 0.25)
+                pst.setdefault("objets", [])
+                if _o not in pst["objets"]:
+                    pst["objets"].append(_o)
+                    if not pst.get("objet_prefere"):
+                        pst["objet_prefere"] = _o
+                    _oe, _od, _oef, _ob, _or = PET_OBJETS_TROUVES[_o]
+                    _re, _rn, _, _ = objet_rarete(_o)
+                    butin.append(f"{_oe} **{_o}** {_re} *{_rn}*")
+                    pet_carnet_note(uid, f"{_oe} A rapporté **{_o}** de {nom_l}.",
+                                    important=_or in ("epique","legendaire","mythique"))
+                    pet_stat(uid, "objets_trouves")
             if random.random() < 0.25 + heures * 0.08 + (0.15 if pet_a_particularite(uid, "objet") else 0):
                 obj = random.choice(["cafe","shield","boost_rarete","cadeau","sablier"])
                 nom_o = next((i["nom"] for i in SHOP_ITEMS if i["id"] == obj), obj)
@@ -13281,15 +13675,90 @@ PET_EVENTS_VIE = [
            ("😐 Il dormira sans","humeur",-12)]},
 ]
 
-PET_OBJETS_TROUVES = {
- "Chaussette Mystérieuse": ("🧦", "Il refuse désormais de dormir sans elle.", "humeur", 3),
- "Photo Attendrissante":   ("📸", "Tu la regardes plus souvent que tu ne l'admets.", "humeur", 2),
- "Carton Douillet":        ("📦", "Un classique indémodable.", "humeur", 4),
- "Écharpe Mouillée":       ("🧣", "Elle a séché. Elle sent encore un peu.", "humeur", 2),
- "Babiole Brillante":      ("💎", "Personne ne sait ce que c'est.", "coins", 3),
- "Photo Ridicule":         ("🤳", "Elle fait rire tout le monde.", "humeur", 3),
- "Pot de Terre":           ("🪴", "Il y dort parfois.", "humeur", 2),
+# ── 🎒 Collection d'objets : nom → (emoji, description, effet, bonus, rareté) ──
+PET_OBJ_RARETES = {
+    "commun":     ("⚪", "Commun",      0x95a5a6, 45),
+    "peucommun":  ("🟢", "Peu commun",  0x2ecc71, 28),
+    "rare":       ("🔵", "Rare",        0x3498db, 16),
+    "epique":     ("🟣", "Épique",      0x9b59b6, 8),
+    "legendaire": ("🟡", "Légendaire",  0xf1c40f, 2.5),
+    "mythique":   ("🔴", "Mythique",    0xe74c3c, 0.5),
 }
+
+PET_OBJETS_TROUVES = {
+    # ⚪ Communs
+    "Chaussette Mystérieuse": ("🧦", "Il refuse désormais de dormir sans elle.", "humeur", 3, "commun"),
+    "Vieille Peluche":        ("🧸", "Elle a perdu un œil. Il l'aime encore plus.", "humeur", 3, "commun"),
+    "Carton Douillet":        ("📦", "Un classique indémodable.", "humeur", 4, "commun"),
+    "Balle Rebondissante":    ("🎾", "Elle finit toujours sous le meuble.", "humeur", 3, "commun"),
+    "Bout de Ficelle":        ("🧵", "Trois heures d'occupation garanties.", "humeur", 2, "commun"),
+    "Feuille Morte":          ("🍂", "Il l'a choisie parmi mille autres.", "humeur", 2, "commun"),
+    "Bouchon en Liège":       ("🍾", "Il le pousse du museau à travers la maison.", "humeur", 2, "commun"),
+    "Photo Ridicule":         ("🤳", "Elle fait rire tout le monde.", "humeur", 3, "commun"),
+    # 🟢 Peu communs
+    "Écharpe Mouillée":       ("🧣", "Elle a séché. Elle sent encore un peu.", "humeur", 4, "peucommun"),
+    "Photo Attendrissante":   ("📸", "Tu la regardes plus souvent que tu ne l'admets.", "humeur", 4, "peucommun"),
+    "Pot de Terre":           ("🪴", "Il y dort parfois.", "humeur", 3, "peucommun"),
+    "Plume Bleue":            ("🪶", "Elle vient d'un oiseau que personne n'a vu.", "xp", 4, "peucommun"),
+    "Coquillage Poli":        ("🐚", "On entend la mer dedans. Ou le radiateur.", "humeur", 5, "peucommun"),
+    "Marron Brillant":        ("🌰", "Il le cache et oublie où.", "coins", 3, "peucommun"),
+    "Vieille Chaussure":      ("👟", "Elle n'était pas à toi. Espérons.", "humeur", 4, "peucommun"),
+    # 🔵 Rares
+    "Petite Clé":             ("🗝️", "Elle n'ouvre rien de connu.", "xp", 6, "rare"),
+    "Champignon Étrange":     ("🍄", "Il brille faiblement dans le noir.", "xp", 6, "rare"),
+    "Bille d'Agate":          ("🔮", "Elle roule toujours vers la même pièce.", "roll", 3, "rare"),
+    "Médaille Ternie":        ("🏅", "Quelqu'un l'a gagnée. Il y a longtemps.", "coins", 6, "rare"),
+    "Carte Postale":          ("📮", "Elle vient d'un endroit qui n'existe plus.", "humeur", 7, "rare"),
+    "Grelot d'Argent":        ("🔔", "On l'entend même quand il ne bouge pas.", "humeur", 6, "rare"),
+    # 🟣 Épiques
+    "Cristal":                ("💎", "Il change de couleur selon l'heure.", "coins", 9, "epique"),
+    "Pierre Lunaire":         ("🌙", "Elle est froide, même en plein soleil.", "xp", 9, "epique"),
+    "Boussole Cassée":        ("🧭", "Elle indique toujours la maison.", "roll", 5, "epique"),
+    "Flacon Vide":            ("🧪", "Il reste une odeur qu'on n'identifie pas.", "xp", 8, "epique"),
+    # 🟡 Légendaires
+    "Fragment d'Étoile":      ("⭐", "Il est tombé du ciel un soir de novembre.", "xp", 14, "legendaire"),
+    "Clé Dorée":              ("🔑", "Elle ouvre quelque chose. Un jour tu sauras quoi.", "coins", 14, "legendaire"),
+    "Sablier Minuscule":      ("⏳", "Le sable ne descend jamais complètement.", "roll", 8, "legendaire"),
+    # 🔴 Mythiques
+    "Cœur de Verre":          ("💗", "Il bat très légèrement quand tu le prends.", "humeur", 20, "mythique"),
+    "Larme de Dragon":        ("🐉", "Personne au QG n'en a jamais vu deux.", "coins", 20, "mythique"),
+}
+
+def objet_rarete(nom):
+    """(emoji_rareté, nom_rareté, couleur) d'un objet"""
+    r = PET_OBJETS_TROUVES.get(nom, (None, None, None, None, "commun"))[4]
+    e, n, coul, _ = PET_OBJ_RARETES[r]
+    return e, n, coul, r
+
+def tirer_objet(uid=None, bonus_rare=0):
+    """Tire un objet selon les raretés. `bonus_rare` favorise les raretés élevées."""
+    poids = {}
+    for r, (_, _, _, p) in PET_OBJ_RARETES.items():
+        mult = 1.0
+        if r in ("rare", "epique", "legendaire", "mythique"):
+            mult += bonus_rare
+        poids[r] = p * mult
+    if uid and pet_a_particularite(uid, "objet"):
+        for r in ("rare", "epique", "legendaire", "mythique"):
+            poids[r] *= 1.6
+    if uid and pet_a_trait(uid, "curieux"):
+        for r in ("epique", "legendaire", "mythique"):
+            poids[r] *= 1.3
+    rarete = random.choices(list(poids), weights=list(poids.values()))[0]
+    lot = [n for n, v in PET_OBJETS_TROUVES.items() if v[4] == rarete]
+    return random.choice(lot) if lot else random.choice(list(PET_OBJETS_TROUVES))
+
+def bonus_objets(uid, type_bonus):
+    """Bonus cumulé de la collection d'objets"""
+    pid, pdb, st = get_active_pet(uid)
+    if not st:
+        return 0
+    total = 0
+    for o in st.get("objets", []):
+        conf = PET_OBJETS_TROUVES.get(o)
+        if conf and conf[2] == type_bonus:
+            total += conf[3]
+    return total
 
 PET_HABITUDES = {
  "joueur":    ("🎾", "Adore jouer",            "parties",  25),
@@ -13362,15 +13831,29 @@ class PetEventView(ui.View):
             resultat = f"💰 **{'+' if val >= 0 else ''}{val:,} pièces**"
         elif typ == "objet":
             pst.setdefault("objets", [])
-            if val not in pst["objets"]:
-                pst["objets"].append(val)
+            # Objet imposé par l'événement, sinon tirage à la rareté
+            nom_o = val if val in PET_OBJETS_TROUVES else tirer_objet(uid)
+            if nom_o in pst["objets"]:
+                nom_o = tirer_objet(uid)
+            if nom_o not in pst["objets"]:
+                pst["objets"].append(nom_o)
+                premier = len(pst["objets"]) == 1
                 if not pst.get("objet_prefere"):
-                    pst["objet_prefere"] = val
-                emo, desc, eff, bonus = PET_OBJETS_TROUVES.get(val, ("🎁", "", "humeur", 2))
-                resultat = f"{emo} **Objet obtenu : {val}**\n*{desc}*\n└ +{bonus} % {eff}"
+                    pst["objet_prefere"] = nom_o
+                emo, desc, eff, bonus, rar = PET_OBJETS_TROUVES[nom_o]
+                r_emo, r_nom, r_coul, _ = objet_rarete(nom_o)
+                LAB = {"coins":"pièces","xp":"XP","roll":"rolls","humeur":"humeur"}
+                resultat = (f"{emo} **{nom_o}**  {r_emo} *{r_nom}*\n*{desc}*\n"
+                            f"└ +{bonus} % {LAB.get(eff, eff)}")
+                pet_carnet_note(uid, f"{emo} A trouvé **{nom_o}** ({r_nom}).",
+                                important=rar in ("epique", "legendaire", "mythique") or premier)
+                if rar in ("legendaire", "mythique"):
+                    gazette_fait("divers",
+                                 f"Le compagnon de <@{uid}> a déniché {emo} **{nom_o}** — un objet {r_nom} !", 4)
+                pet_stat(uid, "objets_trouves")
             else:
                 st["humeur"] = min(100, st["humeur"] + 8)
-                resultat = f"🎁 Il en avait déjà un… ❤️ Humeur **+8**"
+                resultat = "🎁 Il en avait déjà un… ❤️ Humeur **+8**"
         elif typ == "expe":
             resultat = "🎒 *Prépare-le avec `.petexpedition <lieu>` !*"
         elif typ == "aventure":
@@ -13563,7 +14046,7 @@ async def decouvrir_particularite(uid, channel):
     rarete = ("🌟 EXTRÊMEMENT RARE" if poids <= 20 else
               "💎 Très rare" if poids <= 60 else
               "✨ Rare" if poids <= 110 else "Peu commune")
-    pet_carnet_note(uid, f"✨ Sa particularité **{nom}** a été découverte !")
+    pet_carnet_note(uid, f"✨ Sa particularité **{nom}** a été découverte !", important=True)
     if channel:
         try:
             await channel.send(embed=discord.Embed(
@@ -13631,26 +14114,38 @@ PET_MEUBLES = {
     "hamac":     ("🛏️", "Hamac suspendu",    4000, "energie_lente",25, "Il a mis deux semaines à comprendre comment monter."),
     "cheminee":  ("🔥", "Cheminée",          9000, "humeur_lente", 30, "L'endroit le plus disputé de la maison en hiver."),
     "bibli":     ("📚", "Petite bibliothèque",6000,"xp_passif",    4,  "Il ne lit pas. Il dort dessus. C'est déjà ça."),
+    # ── Nouvelles pièces ──
+    "placard":   ("🗄️", "Placard à provisions",4500,"faim_lente",  20, "Il sait exactement ce qu'il y a dedans."),
+    "baignoire": ("🛁", "Petite baignoire",  5500, "proprete_lente",30, "Il la déteste. Il y va quand même."),
+    "serviette": ("🧻", "Serviette moelleuse",2200,"proprete_lente",18, "Il s'y roule pendant dix minutes après le bain."),
+    "console":   ("🎮", "Console de jeu",    7000, "humeur_lente", 25, "Il appuie sur les boutons. Il gagne parfois."),
+    "circuit":   ("🏎️", "Circuit de billes", 3800, "humeur_lente", 16, "Il regarde les billes descendre. En boucle."),
+    "roue":      ("⚙️", "Roue d'exercice",   4200, "energie_lente",20, "Il court dedans à 3 h du matin."),
+    "grattoir":  ("🪵", "Grand grattoir",    3200, "energie_lente",18, "Le canapé lui dit merci."),
+    "coussin":   ("🪑", "Coussin de lecture",2800, "xp_passif",     3, "Il s'y installe pendant que tu lis."),
 }
 
 
 # ── 🏡 Pièces du refuge : chaque meuble appartient à une pièce ──
 PET_PIECES = {
-    "chambre":  ("🛏️", "Chambre",     ["panier", "fenetre", "cheminee", "hamac"]),
-    "salon":    ("🛋️", "Salon",       ["jouet", "tapis"]),
-    "cuisine":  ("🍖", "Cuisine",     ["gamelle"]),
-    "jardin":   ("🌿", "Jardin",      ["jardin", "arbre"]),
-    "calme":    ("📚", "Coin calme",  ["bibli"]),
+    "chambre":  ("🛏️", "Chambre",       ["panier", "fenetre", "cheminee", "hamac"]),
+    "salon":    ("🛋️", "Salon",         ["jouet", "tapis"]),
+    "cuisine":  ("🍖", "Cuisine",       ["gamelle", "placard"]),
+    "bain":     ("🛁", "Salle de bain", ["baignoire", "serviette"]),
+    "jeux":     ("🎮", "Salle de jeux", ["console", "circuit"]),
+    "sport":    ("🏋️", "Salle de sport", ["roue", "grattoir"]),
+    "jardin":   ("🌿", "Jardin",        ["jardin", "arbre"]),
+    "calme":    ("📚", "Coin calme",    ["bibli", "coussin"]),
 }
 
 # ── Niveaux d'évolution du refuge ──
 PET_REFUGE_NIVEAUX = [
     (0,  "🏚️", "Petite pièce",       "Quatre murs et beaucoup de bonne volonté."),
-    (2,  "🏠", "Petit refuge",        "Ça commence à ressembler à quelque chose."),
-    (4,  "🏡", "Maison cosy",         "On s'y sent bien. Lui le premier."),
-    (6,  "🏘️", "Grande maison",       "Il a de la place pour courir maintenant."),
-    (8,  "🏰", "Villa",               "Le luxe. Il ne veut plus sortir."),
-    (10, "🌴", "Domaine légendaire",  "Le plus beau refuge du QG."),
+    (3,  "🏠", "Petit refuge",        "Ça commence à ressembler à quelque chose."),
+    (6,  "🏡", "Maison cosy",         "On s'y sent bien. Lui le premier."),
+    (10, "🏘️", "Grande maison",       "Il a de la place pour courir maintenant."),
+    (14, "🏰", "Villa",               "Le luxe. Il ne veut plus sortir."),
+    (18, "🌴", "Domaine légendaire",  "Le plus beau refuge du QG."),
 ]
 
 def refuge_niveau(nb_meubles):
@@ -13809,7 +14304,8 @@ async def refuge_cmd(ctx, action: str = None, *, objet: str = None):
                 "energie_lente": "⚡ énergie conservée", "xp_passif": "⭐ XP passive"}
     if action and action.lower() in ("liste", "catalogue", "tout"):
         EFFETS_L = {"humeur_lente": "❤️ humeur préservée", "faim_lente": "🍖 faim ralentie",
-                    "energie_lente": "⚡ énergie conservée", "xp_passif": "⭐ XP passive"}
+                    "energie_lente": "⚡ énergie conservée", "proprete_lente": "🧼 propreté conservée",
+                    "xp_passif": "⭐ XP passive"}
         e = discord.Embed(
             title="🏡 Catalogue du refuge",
             description=("*Chaque meuble se range dans une pièce et aide ton compagnon au quotidien.*\n"
@@ -13856,7 +14352,7 @@ async def refuge_cmd(ctx, action: str = None, *, objet: str = None):
         if _av[4] != _ap[4]:
             _msg += (f"\n\n### {_ap[1]} Le refuge s'agrandit !\n"
                      f"Il devient **{_ap[2]}** *(niveau {_ap[4]})*\n*{_ap[3]}*")
-            pet_carnet_note(uid, f"{_ap[1]} Son refuge est devenu **{_ap[2]}**.")
+            pet_carnet_note(uid, f"{_ap[1]} Son refuge est devenu **{_ap[2]}**.", important=True)
         return await ctx.send(embed=discord.Embed(
             title=f"🏡 {emo} {nom} installé !",
             description=_msg, color=0x2ecc71))
@@ -13893,15 +14389,20 @@ async def refuge_cmd(ctx, action: str = None, *, objet: str = None):
     EFFETS = [("humeur_lente", "❤️", "Humeur préservée", "%"),
               ("faim_lente",   "🍖", "Faim ralentie",    "%"),
               ("energie_lente","⚡", "Énergie conservée", "%"),
+              ("proprete_lente","🧼","Propreté conservée","%"),
               ("xp_passif",    "⭐", "XP passive",       "/h")]
     lignes_e = []
     for typ, emo, lab, unite in EFFETS:
         v = bonus_refuge(uid, typ)
         if v:
             lignes_e.append(f"{emo} {lab} **+{v}{unite}**")
+    _sal = saletes_refuge(uid)
+    _se, _sl, _sd = etat_refuge_texte(_sal)
     embed.add_field(
         name="━━━━━━━━━━━━━━━━━━",
         value=(f"🐾 **{pet_nom_decore(uid, pdb)}**\n{pet_humeur_texte(st)}\n\n"
+               f"{_se} Refuge **{_sl}** — *{_sd}*"
+               + ("\n➡️ `.nettoyer`" if _sal >= 35 else "") + "\n\n"
                + ("\n".join(lignes_e) if lignes_e
                   else "*Aucun effet — installe des meubles pour l'aider au quotidien.*")),
         inline=False)
@@ -13918,7 +14419,8 @@ async def refuge_cmd(ctx, action: str = None, *, objet: str = None):
     dispo = [(k, v) for k, v in PET_MEUBLES.items() if k not in ref]
     if dispo:
         EFF_COURT = {"humeur_lente": "❤️ humeur", "faim_lente": "🍖 faim",
-                     "energie_lente": "⚡ énergie", "xp_passif": "⭐ XP passive"}
+                     "energie_lente": "⚡ énergie", "proprete_lente": "🧼 propreté",
+                     "xp_passif": "⭐ XP passive"}
         lot = sorted(dispo, key=lambda x: x[1][2])[:5]
         embed.add_field(name="🛒 À installer",
                         value="\n".join(
@@ -14091,7 +14593,7 @@ class EvolutionView(ui.View):
         st.pop("evolution_prete", None)
         st.setdefault("evolutions", []).append(suiv[0])
         nom_pet = st.get("surnom") or pdb["nom"]
-        pet_carnet_note(uid, f"✨ A évolué en **{suiv[2]}** — Évolution {suiv[1]} !")
+        pet_carnet_note(uid, f"✨ A évolué en **{suiv[2]}** — Évolution {suiv[1]} !", important=True)
         pet_stat(uid, "evolutions")
         save_all_data()
 
@@ -14222,7 +14724,7 @@ async def petnom_cmd(ctx, *, nouveau: str = None):
         return await ctx.send("❌ Nom invalide.")
     ancien = pst.get("surnom") or pdb["nom"]
     pst["surnom"] = nom
-    pet_carnet_note(uid, f"✏️ S'appelle désormais **{nom}**.")
+    pet_carnet_note(uid, f"✏️ S'appelle désormais **{nom}**.", important=True)
     save_all_data()
     await ctx.send(embed=discord.Embed(
         title="✏️ Nouveau nom !",
@@ -14456,44 +14958,82 @@ async def petcadeau_cmd(ctx, ami: discord.Member = None, *, objet: str = None):
                      f"{random.choice(REACTIONS)}\n\n{reaction}\n💖 Relation **+1**"),
         color=0xe91e63))
 
-@bot.command(name="petamis", aliases=["amitiepet", "petfriends"])
+@bot.command(name="petamis", aliases=["amitiepet", "petfriends", "petrelations"])
 async def petamis_cmd(ctx, membre: discord.Member = None):
-    """Les amitiés de ton compagnon — .petamis"""
+    """Les relations de ton compagnon — .petamis"""
     cible = membre or ctx.author
     uid = str(cible.id)
-    pid, pdb, _ = get_active_pet(uid)
+    pid, pdb, pst = get_active_pet(uid)
     if not pid:
         return await ctx.send(f"🐾 **{cible.display_name}** n'a pas de compagnon actif.")
-    amis = []
+    pet_init_perso(uid)
+    nom_moi = pet_nom_decore(uid, pdb)
+
+    relations = []
     for cle, pts in petamitie.items():
-        if uid not in cle.split("|") or pts <= 0:
+        parties = cle.split("|")
+        if uid not in parties or pts == 0:
             continue
-        autre = [x for x in cle.split("|") if x != uid][0]
+        autre = next((x for x in parties if x != uid), None)
+        if not autre:
+            continue
         m = ctx.guild.get_member(int(autre)) if ctx.guild else None
         if not m:
             continue
-        ap, _, dp, ai = get_active_pet(autre)
-        (_, emo_p, nom_p, _, bonus), _ = palier_relation(pts)
-        amis.append((pts, m, ap, dp, f"{emo_p} {nom_p}", bonus))
-    if not amis:
+        a_pid, a_pdb, a_pst = get_active_pet(autre)
+        if not a_pid:
+            continue
+        (_, emo_p, nom_p, desc_p, bonus), _ = palier_relation(pts)
+        nom_autre = a_pst.get("surnom") or a_pdb["nom"]
+        deco = "".join(PET_ACCESSOIRES[x][0] for x in pet_accessoires(autre)
+                       if x in PET_ACCESSOIRES)
+        relations.append({
+            "pts": pts, "membre": m, "emoji": a_pdb["emoji"],
+            "nom": nom_autre + (f" {deco}" if deco else ""),
+            "emo_p": emo_p, "nom_p": nom_p, "desc_p": desc_p, "bonus": bonus,
+        })
+
+    if not relations:
         return await ctx.send(embed=discord.Embed(
-            title=f"🐾 Les amitiés de {pdb['emoji']} {pdb['nom']}",
+            title=f"🐾 Les relations de {nom_moi}",
             description=("*Il n'a encore rencontré personne.*\n\n"
-                         "`.petvisite @ami` — chaque rencontre renforce leur amitié.\n"
-                         "Plus ils se voient, plus les récompenses grossissent."),
-            color=0xe91e63))
-    amis.sort(key=lambda x: -x[0])
-    lignes = []
-    for pts, m, ap, dp, nom_p, bonus in amis[:10]:
-        emo = dp["emoji"] if dp else "🐾"
-        nom_a = dp["nom"] if dp else "son compagnon"
-        deco_a = "".join(PET_ACCESSOIRES[x][0] for x in pet_accessoires(autre) if x in PET_ACCESSOIRES)
-        lignes.append(f"{emo} **{nom_a}**{(' ' + deco_a) if deco_a else ''} *({m.display_name})*\n"
-                      f"└ {nom_p} · **{pts}** rencontre(s)" + (f" · +{bonus} p" if bonus else ""))
-    await ctx.send(embed=discord.Embed(
-        title=f"🐾 Les amitiés de {pdb['emoji']} {pdb['nom']}",
-        description="\n".join(lignes),
-        color=0xe91e63).set_footer(text=f"{len(amis)} ami(s) · `.petvisite @membre` pour les revoir"))
+                         "`.petvisite @ami` — chaque rencontre renforce leur relation.\n"
+                         "*De 😡 Ennemis à 👑 Duo légendaire — plus ils se voient, "
+                         "plus les récompenses grossissent.*"),
+            color=0x95a5a6))
+
+    relations.sort(key=lambda x: -x["pts"])
+    amis = [r for r in relations if r["pts"] > 0]
+    rivaux = [r for r in relations if r["pts"] < 0]
+
+    embed = discord.Embed(
+        title=f"🐾 Les relations de {nom_moi}",
+        description=f"*{len(relations)} relation(s) tissée(s) au fil des rencontres.*",
+        color=0xe91e63)
+
+    if amis:
+        lignes = []
+        for r in amis[:10]:
+            b = f"  ·  +{r['bonus']} p" if r["bonus"] else ""
+            lignes.append(f"{r['emoji']} **{r['nom']}** *({r['membre'].display_name})*\n"
+                          f"└ {r['emo_p']} {r['nom_p']}  ·  **{r['pts']}** rencontre(s){b}")
+        embed.add_field(name="💞 Amitiés", value="\n".join(lignes)[:1024], inline=False)
+
+    if rivaux:
+        lignes = [f"{r['emoji']} **{r['nom']}** *({r['membre'].display_name})*\n"
+                  f"└ {r['emo_p']} {r['nom_p']} — *{r['desc_p']}*" for r in rivaux[:5]]
+        embed.add_field(name="💢 Tensions", value="\n".join(lignes)[:1024], inline=False)
+
+    meilleur = amis[0] if amis else None
+    if meilleur and meilleur["pts"] >= 13:
+        embed.add_field(
+            name="💖 Meilleur ami",
+            value=(f"{meilleur['emoji']} **{meilleur['nom']}** — {meilleur['emo_p']} {meilleur['nom_p']}\n"
+                   f"*`.petduo @{meilleur['membre'].display_name}` pour leurs activités exclusives.*"),
+            inline=False)
+
+    embed.set_footer(text="`.petvisite @membre` pour renforcer une relation")
+    await ctx.send(embed=embed)
 
 
 @bot.command(name="pet", aliases=["compagnon"])
@@ -14652,7 +15192,8 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
                 title="🏅 Nouveau titre !",
                 description=f"# {e_t}\n**{nom_perso}** devient **« {n_t} »**", color=0xf1c40f))
         save_all_data()
-        await tenter_event_vie(ctx, uid)
+        if not await tenter_betise(ctx, uid):
+            await tenter_event_vie(ctx, uid)
         return
     action = action.lower()
     if action in ("liste", "list", "collection"):
@@ -20631,7 +21172,7 @@ async def on_ready():
     bot.add_view(GirlsRoleView())
     # Annonce de mise à jour si la version a changé
     try:
-        if derniere_version.get("v") != BOT_VERSION:
+        if str(derniere_version.get("v", "")) != BOT_VERSION:
             derniere_version["v"] = BOT_VERSION
             save_all_data()
             for g in bot.guilds:
