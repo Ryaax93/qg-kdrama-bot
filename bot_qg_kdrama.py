@@ -1299,7 +1299,14 @@ def build_help_pages(guild, is_admin=False):
         "`.petcadeau @ami <objet>` — 🎁 Offrir un cadeau à son compagnon\n"
         "`.petbebe [@ami]` — 🍼 Sa famille · un petit dès **👑 Duo légendaire**\n"
         "`.petproteger` — 🛡️ Ses chances de te défendre contre les vols\n"
-        "`.petensemble` — 🐾 **Une sortie à deux** *(6 activités à étapes)*"
+        "`.petensemble` — 🐾 **Une sortie à deux** *(6 activités à étapes)*\n"
+        "`.petjouets` — 🧸 **32 jouets** · `.petjouets jouer <jouet>`\n"
+        "`.petreve` — 💤 **Regarde-le rêver** *(ses rêves parlent de sa vraie vie)*"
+    ), inline=False)
+    e.add_field(name="🍖 Le nourrir", value=(
+        "`.petshop nourriture` → `.petacheter <aliment>` → `.petmanger <aliment>`\n"
+        "**56 aliments** en 5 catégories · `.nourrir` reste le repas standard\n"
+        "`.petmenu` — 🍽️ Ce qu'il adore, tolère ou déteste *(à découvrir)*"
     ), inline=False)
     e.add_field(name="🎒 Aventures & collection", value=(
         "`.petexpedition` — 4 lieux · il part 1 à 4 h et rapporte un butin\n"
@@ -10571,7 +10578,8 @@ async def petaction_cmd(ctx):
     leveled, lvl = give_pet_xp(uid, conf["xp"])
 
     _deco = "".join(PET_ACCESSOIRES[a][0] for a in pet_accessoires(uid) if a in PET_ACCESSOIRES)
-    texte = random.choice(conf["textes"]).format(e=pdb["emoji"], n=pdb["nom"] + (f" {_deco}" if _deco else ""))
+    texte = _sans_repet(uid, "action_" + action, conf["textes"], memoire=3).format(
+        e=pdb["emoji"], n=pdb["nom"] + (f" {_deco}" if _deco else ""))
     embed = discord.Embed(
         title=f"{conf['emoji']}  {action.capitalize()}",
         description=(f"*{texte}*" + (f"\n\n> {raison} — c'était vraiment nécessaire." if urgent else "")),
@@ -11827,24 +11835,22 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "3.2.0"
+BOT_VERSION = "3.3.0"
 CHANGELOG = {
-    "titre": "Ton compagnon vit sa propre histoire 🌱",
+    "titre": "Une tonne de contenu pour les compagnons 🍖",
     "ajouts": [
-        "🎲 **Moteur d'événements** — une même scène change selon son caractère, son humeur, l'heure et sa pièce",
-        "🌌 **Moments uniques** — très rares, gardés à vie dans son carnet *(les étoiles, la neige, l'orage…)*",
-        "🧩 **Histoires en plusieurs épisodes** — elles se déroulent sur des jours",
-        "🛡️ `.petproteger` — il peut **s'interposer** quand on te braque",
-        "🐾 `.petensemble` — **6 sorties à deux** : pêche, film, camping, shopping, pique-nique, fête foraine",
-        "🎯 `.petentrainer` — vraies sessions : retrouver l'objet, mémoire, réflexe",
-        "🗣️ **Il apprend tes expressions** — dis-lui souvent « bonne nuit » et il ira se coucher",
-        "🌱 **Traits issus de son vécu** — 🦁 Courageux, 🤝 Sociable, 🛡️ Protecteur… selon ce qu'il a réellement vécu",
-        "💞 **Confiance** — une seule nouvelle jauge, qui monte avec vos moments partagés",
+        "🍖 **56 aliments** en 5 catégories — `.petshop nourriture` → `.petacheter` → `.petmanger`",
+        "🍽️ **Goûts alimentaires** — il adore, aime, tolère ou déteste. À toi de découvrir. `.petmenu`",
+        "🧸 **32 jouets** avec 5 à 9 réactions chacun — `.petjouets`",
+        "💤 `.petreve` — **79 rêves** construits à partir de sa vraie vie *(son ami, son objet, ses sorties)*",
+        "🌌 **16 moments uniques** *(avant 7)* — cheminée en hiver, papillon sur le nez, son anniversaire…",
+        "🧩 **9 histoires en épisodes** *(avant 3)* — la clé dorée, l'oiseau, les empreintes, la lettre…",
+        "🐾 `.petensemble` — **79 situations** au lieu de 22",
+        "🧠 **Anti-répétition partout** — plus jamais deux fois la même scène d'affilée",
     ],
     "correctifs": [
-        "`.petamis` corrigée et enrichie *(amitiés, tensions, meilleur ami)*",
+        "Les réactions ne se répètent plus sur les bêtises, dialogues, meubles et interactions",
         "Le `.help` ne contient plus de commande en double",
-        "`.dormir` fonctionne quand le pet est épuisé, même en cooldown",
     ],
 }
 
@@ -12943,7 +12949,7 @@ async def petparler_cmd(ctx, *, message: str = None):
             pool += PET_REPLIQUES[t] * 2
     if cle_r == "nuit": pool += PET_REPLIQUES["nuit"]
     pool += PET_REPLIQUES["neutre"]
-    replique = random.choice(pool)
+    replique = _sans_repet(uid, "replique", pool, memoire=8)
 
     st["humeur"] = min(100, st["humeur"] + 3)
     pet_stat(uid, "discussions")
@@ -13052,7 +13058,11 @@ async def tenter_betise(ctx, uid):
     pst["derniere_betise"] = _t.time()
 
     poids = {"commune": 60, "rare": 32, "tresrare": 8}
-    lot = random.choices(PET_BETISES, weights=[poids[b[4]] for b in PET_BETISES])[0]
+    _vus = pst.setdefault("vus", {}).get("betise", [])
+    _frais = [b for b in PET_BETISES if b[1] not in _vus]
+    _pool = _frais or PET_BETISES
+    lot = random.choices(_pool, weights=[poids[b[4]] for b in _pool])[0]
+    pst["vus"]["betise"] = (_vus + [lot[1]])[-6:]
     emo, action, detail, degats, rar = lot
     nom_pet = pst.get("surnom") or pdb["nom"]
 
@@ -13484,6 +13494,7 @@ async def petshop_cmd(ctx, categorie: str = None):
         "meubles":    ("🪑", "Meubles",    "Aménage son refuge"),
         "accessoires":("👗", "Accessoires","Habille-le, c'est visible partout"),
         "cadeaux":    ("🎁", "Cadeaux",    "À offrir aux compagnons des autres"),
+        "nourriture": ("🍖", "Nourriture", "56 aliments — découvre ce qu'il aime"),
     }
     cle = normalize_str(categorie or "")
     if cle not in CATS:
@@ -13539,6 +13550,24 @@ async def petshop_cmd(ctx, categorie: str = None):
             e.add_field(name="\u200b" if i else "👗 Garde-robe",
                         value="\n".join(lignes[i:i+6]), inline=False)
         e.set_footer(text="`.garderobe acheter <objet>` · 3 accessoires portés maximum")
+
+    elif cle == "nourriture":
+        garde = pst.get("garde_manger", {}) if pst else {}
+        gouts = gouts_repas(uid) if pid else {}
+        SYM = {"adore":"😍","aime":"😊","neutre":"😐","deteste":"😖"}
+        for cat, (c_emo, c_nom, c_desc) in CAT_NOURRITURE.items():
+            lot = [(n, v) for n, v in PET_NOURRITURE.items()
+                   if v[1] == cat and nourriture_dispo(n)]
+            if not lot:
+                continue
+            lignes = []
+            for n, v in sorted(lot, key=lambda x: x[1][3]):
+                g = SYM.get(gouts.get(n), "")
+                stock = f" ×{garde[n]}" if garde.get(n) else ""
+                lignes.append(f"{v[0]} **{n}** `{v[3]:,}p` +{v[2]}{g}{stock}")
+            e.add_field(name=f"{c_emo} {c_nom} — *{c_desc}*",
+                        value="  ·  ".join(lignes)[:1024], inline=False)
+        e.set_footer(text="`.petacheter <aliment> [quantité]` · `.petmanger` pour lui donner")
 
     else:
         e.add_field(name="🎁 À offrir", value=(
@@ -13694,18 +13723,95 @@ class ActiviteView(ui.View):
        [("🎁","Machine à pinces"),("🎪","Le spectacle"),("🚪","Rentrer")]],
     }
     RESULTATS = {
-     "peche": ["🐟 Un poisson ! Un vrai !", "👢 Une vieille chaussure. Classique.",
-               "🧦 Une chaussette. Comment ?", "😂 Rien du tout. Mais quel après-midi.",
-               "📦 Quelque chose de lourd remonte…"],
-     "camper": ["🌌 La nuit a été magnifique.", "🌧️ Il a plu. Vous avez ri quand même.",
-                "🔥 Le feu a tenu jusqu'au matin.", "😂 La tente s'est effondrée à 2 h."],
-     "shopping": ["🛍️ Il a choisi lui-même. Tu as payé.", "😂 Il s'est endormi dans un panier.",
-                  "🧸 Il refuse de lâcher une peluche.", "🚪 Vous repartez sans rien. Enfin, presque."],
-     "picnic": ["🥪 Il a mangé la moitié de ta part.", "🐝 Une guêpe. Panique générale.",
-                "😴 Vous vous êtes endormis tous les deux.", "🌸 Il t'a rapporté une fleur."],
-     "foraine": ["🎁 Il a gagné une peluche. Enfin, tu l'as gagnée pour lui.",
-                 "😱 Le manège lui a fait peur. Une seule fois suffit.",
-                 "🍭 Il a du sucre jusque sur le front.", "😂 Il a fait tomber tous les lots du stand."],
+     "peche": [
+      "🐟 Un poisson ! Un vrai ! {p} n'en revient pas.",
+      "🐠 Un poisson aux couleurs impossibles. Vous le relâchez.",
+      "👢 Une vieille botte. {p} la trouve fascinante.",
+      "🧦 Une chaussette. Au fond d'un lac. Comment ?",
+      "📦 Une petite boîte fermée remonte au bout de la ligne.",
+      "💎 Quelque chose brille dans la vase. Vous n'y croyez pas.",
+      "🦀 Un crabe. Il pince {p}. Match terminé.",
+      "🌿 Des algues. Beaucoup d'algues. Uniquement des algues.",
+      "😂 La ligne s'emmêle autour de {p}. Il faut dix minutes pour le libérer.",
+      "🐾 {p} tombe presque à l'eau. Presque.",
+      "🎣 Un poisson énorme mord… et casse la ligne. Vous en parlerez longtemps.",
+      "🪵 Une branche. {p} la garde. Elle est à lui maintenant.",
+      "🐸 Une grenouille saute sur la tête de {p}. Cri général.",
+      "🫧 Rien du tout. Mais le silence était parfait.",
+      "🐟 Trois poissons d'un coup. {p} est en état de choc.",
+      "🥾 Une deuxième botte. La paire est complète.",
+      "🌊 Un orage arrive. Repli stratégique.",
+      "🦆 Un canard vous vole l'appât sous le nez.",
+      "😴 {p} s'endort au bord de l'eau. La pêche attendra.",
+      "🪝 L'hameçon accroche… le pantalon de quelqu'un. Excuses présentées.",
+      "🐢 Une tortue. Elle vous regarde. Vous la regardez. Elle repart.",
+      "✨ L'eau devient parfaitement immobile pendant une minute. Étrange.",
+      "🎏 Un vieux fanion remonte. Il vient d'on ne sait où.",
+      "🐙 Quelque chose de gros bouge sous la surface. Vous ne saurez jamais quoi.",
+     ],
+     "camper": [
+      "🌌 La nuit a été magnifique. Vous avez compté les étoiles.",
+      "🌧️ Il a plu. Vous avez ri quand même.",
+      "🔥 Le feu a tenu jusqu'au matin. {p} n'a pas bougé.",
+      "😂 La tente s'est effondrée à 2 h. Sur vous deux.",
+      "🦉 Un hibou a hululé toute la nuit. {p} lui a répondu.",
+      "🐾 {p} a disparu deux minutes. Il n'expliquera jamais où il était.",
+      "🍡 Des chamallows grillés. {p} en a mangé la moitié.",
+      "😱 Un bruit dans les buissons. C'était un hérisson. Panique quand même.",
+      "🌠 Une étoile filante. Vous avez fait un vœu tous les deux.",
+      "🎒 {p} a trouvé quelque chose en creusant près de la tente.",
+      "🐜 Des fourmis dans le sac de couchage. Nuit compliquée.",
+      "🌄 Vous vous êtes réveillés avant le soleil. Ça valait le coup.",
+      "😴 {p} a refusé de dormir. Il a monté la garde jusqu'à l'aube.",
+      "🎵 Vous avez chanté. Mal. Personne ne s'est plaint.",
+      "🌫️ Le brouillard au matin. Le monde avait disparu.",
+     ],
+     "shopping": [
+      "🛍️ Il a choisi lui-même. Tu as payé. Comme prévu.",
+      "😂 {p} s'est endormi dans un panier. Un employé l'a photographié.",
+      "🧸 Il refuse de lâcher une peluche. La négociation dure vingt minutes.",
+      "🚪 Vous repartez sans rien. Enfin, presque rien.",
+      "💥 {p} a fait tomber une pyramide de boîtes. Toute la pyramide.",
+      "🏷️ Il s'assoit devant une réduction. Il a compris quelque chose ?",
+      "😾 Il déteste ce rayon. Il refuse d'y entrer. C'est définitif.",
+      "🥺 Il s'assoit devant la vitrine et refuse de partir.",
+      "🎀 Le vendeur lui offre quelque chose. Il a craqué comme tout le monde.",
+      "🛒 {p} monte dans le chariot et s'y installe pour la durée des courses.",
+      "😱 Un aspirateur en démonstration. Fuite immédiate.",
+      "🍖 Il trouve le rayon nourriture tout seul. Instinct pur.",
+      "👀 Il fixe un autre compagnon à trois rayons de là. Le duel visuel dure.",
+     ],
+     "picnic": [
+      "🥪 Il a mangé la moitié de ta part. Tu n'as rien vu venir.",
+      "🐝 Une guêpe. Panique générale. Le pique-nique est déplacé.",
+      "😴 Vous vous êtes endormis tous les deux au soleil.",
+      "🌸 Il t'a rapporté une fleur. Il l'a choisie, visiblement.",
+      "🐦 Un oiseau vole une miette. {p} déclare la guerre.",
+      "🎾 Une partie improvisée dans l'herbe. Deux heures.",
+      "🌧️ Trois gouttes. Repli sous un arbre. Ça a duré cinq minutes.",
+      "🐜 Une file de fourmis traverse la nappe. {p} les observe, hypnotisé.",
+      "🧺 Il s'installe dans le panier vide. Il y reste.",
+      "🦋 Un papillon. Poursuite. Zéro chance.",
+      "😂 {p} se roule dans l'herbe pendant dix minutes sans raison.",
+      "🍉 Il découvre la pastèque. Le monde change.",
+      "🌳 Un autre compagnon passe. Ils s'observent. Ils s'ignorent. Correct.",
+     ],
+     "foraine": [
+      "🎁 Il a gagné une peluche. Enfin, tu l'as gagnée pour lui.",
+      "😱 Le manège lui a fait peur. Une seule fois suffit.",
+      "🍭 Il a du sucre jusque sur le front. Personne ne sait comment.",
+      "😂 Il a fait tomber tous les lots du stand. Tous.",
+      "🎡 La grande roue. Il a regardé toute la ville sans bouger une oreille.",
+      "🎯 Trois tirs, trois échecs. {p} te regarde avec pitié.",
+      "🏚️ La maison hantée. Il n'a pas eu peur. Toi si.",
+      "🎪 Un spectacle. {p} s'est endormi au milieu.",
+      "🍿 Il vole du pop-corn à un inconnu. L'inconnu rit.",
+      "🎠 Le carrousel. Il refuse de descendre. Trois tours de plus.",
+      "📸 Une photo dans le photomaton. Elle est floue. Elle est parfaite.",
+      "🎈 Un ballon lui échappe. Il le regarde monter, très longtemps.",
+      "🕹️ La machine à pinces. Contre toute attente, il gagne.",
+      "🎺 La fanfare passe. {p} suit le défilé sur vingt mètres.",
+     ],
     }
 
     def _construire(self):
@@ -13760,7 +13866,9 @@ class ActiviteView(ui.View):
                 title=f"{ACTIVITES[self.cle][0]} {ACTIVITES[self.cle][1]}",
                 description=f"➡️ *{label}*\n\n**{SUITES[self.cle]}**\n\n*Et maintenant ?*",
                 color=0x1abc9c), view=self)
-        res = random.choice(self.RESULTATS[self.cle])
+        pid, pdb, pst = get_active_pet(self.uid)
+        res = _sans_repet(self.uid, "act_" + self.cle, self.RESULTATS[self.cle], memoire=8)
+        res = res.replace("{p}", f"**{pet_nom_decore(self.uid, pdb)}**")
         await self.terminer(interaction, f"{self.choix1} → {label}", res)
 
     async def terminer(self, interaction, parcours, resultat, extra=None):
@@ -14060,6 +14168,581 @@ async def petensemble_cmd(ctx, activite: str = None):
         description=f"{INTROS[cle]}\n\n*Par quoi commencez-vous ?*",
         color=0x1abc9c), view=vue)
 
+
+
+
+# ============================================================
+#  💤 RÊVES — construits à partir de la vie réelle du pet
+# ============================================================
+REVES = {
+ "absurde": [
+  "rêve qu'il est un pain. Il n'a pas l'air dérangé.",
+  "rêve qu'il court, mais ses pattes ne touchent pas le sol.",
+  "rêve qu'il parle. Personne ne comprend, comme d'habitude.",
+  "rêve d'un couloir infini rempli de portes qui mènent toutes au frigo.",
+  "rêve qu'il est très grand. Ou que tout est très petit. Il ne sait pas.",
+  "rêve qu'il tombe. Il sursaute. Il se rendort. Il retombe.",
+  "rêve d'un escalier qui monte et descend en même temps.",
+  "rêve qu'il a des ailes. Il ne les utilise pas.",
+  "rêve qu'il est poursuivi par une chaussette géante.",
+  "rêve qu'il gagne un concours dont personne ne connaît les règles.",
+  "rêve qu'il pleut des croquettes. C'est visiblement un bon rêve.",
+  "rêve qu'il est deux. Les deux se disputent.",
+  "rêve d'une porte qu'il ne peut pas ouvrir. Elle est déjà ouverte.",
+  "rêve qu'il fait la queue. Il ne sait pas pour quoi. Il attend quand même.",
+ ],
+ "nourriture": [
+  "rêve d'un buffet sans fin. Il sourit dans son sommeil.",
+  "rêve que sa gamelle se remplit toute seule. Encore et encore.",
+  "rêve de **{repas}**. Beaucoup de **{repas}**.",
+  "rêve qu'il vole la nourriture de tout le monde et que personne ne dit rien.",
+  "mâchouille dans le vide. On devine le sujet du rêve.",
+  "rêve d'une montagne de friandises. Il est au sommet.",
+  "rêve qu'il ouvre le frigo tout seul. Le rêve ultime.",
+  "rêve qu'on lui dit non. C'est un cauchemar, en fait.",
+ ],
+ "aventure": [
+  "rêve qu'il explore une forêt sans fin.",
+  "rêve d'une montagne qu'il gravit sans jamais fatiguer.",
+  "rêve qu'il découvre une pièce secrète dans le refuge.",
+  "rêve qu'il part très loin et retrouve son chemin sans effort.",
+  "rêve d'un océan. Il n'a jamais vu la mer.",
+  "rêve qu'il trouve un trésor. Un vrai. Avec un coffre.",
+  "court dans son sommeil. Une expédition, sûrement.",
+ ],
+ "proprietaire": [
+  "rêve de toi. Sa queue remue doucement.",
+  "rêve que vous marchez quelque part, sans destination.",
+  "rêve que tu ne pars jamais. Il dort mieux ce soir.",
+  "rêve du jour où tu l'as adopté. Il s'en souvient.",
+  "rêve que tu l'appelles. Il répond, dans son sommeil.",
+  "rêve d'une journée entière avec toi. Rien d'autre.",
+ ],
+ "ami": [
+  "rêve qu'il part en voyage avec **{ami}**.",
+  "rêve qu'il joue avec **{ami}** dans un jardin immense.",
+  "rêve que **{ami}** habite ici, définitivement.",
+  "rêve qu'il partage sa gamelle avec **{ami}**. Un vrai geste.",
+  "rêve d'une course contre **{ami}**. Il gagne. Évidemment.",
+ ],
+ "rival": [
+  "rêve qu'il gagne enfin contre **{rival}**.",
+  "rêve que **{rival}** admet sa défaite. Enfin.",
+  "grogne doucement dans son sommeil. On devine à qui il pense.",
+  "rêve d'un duel épique. Le résultat reste flou.",
+ ],
+ "jouet": [
+  "rêve que **{objet}** mesure trois mètres et le poursuit dans le refuge. 💀",
+  "rêve qu'il retrouve **{objet}** au fond d'un puits.",
+  "rêve d'une pièce entièrement remplie de jouets.",
+  "rêve que **{objet}** parle. Ça ne l'étonne même pas.",
+  "serre quelque chose d'invisible contre lui.",
+ ],
+ "refuge": [
+  "rêve que le refuge devient un palais.",
+  "rêve qu'il a une pièce rien qu'à lui, avec son nom sur la porte.",
+  "rêve que tous les meubles se déplacent tout seuls.",
+  "rêve d'un lit dix fois plus grand que son panier.",
+  "rêve que la maison n'a plus de portes fermées.",
+ ],
+ "mystere": [
+  "rêve de quelqu'un qu'il ne connaît pas. Mais qu'il reconnaît.",
+  "rêve d'une lumière au bout d'un couloir. Il n'y va pas.",
+  "rêve d'une voix qui l'appelle par un autre nom.",
+  "rêve d'un endroit où il est déjà allé. Sauf que non.",
+  "s'agite. Puis se calme d'un coup. Comme si on l'avait rassuré.",
+  "rêve d'une porte qui n'existe pas dans le refuge.",
+ ],
+ "cauchemar": [
+  "sursaute d'un coup, regarde partout, se rendort.",
+  "gémit doucement. Tu poses une main sur lui. Ça s'arrête.",
+  "rêve que sa gamelle est vide. Pour toujours.",
+  "rêve qu'il est seul dans une maison vide.",
+  "rêve du bruit de l'aspirateur. L'horreur absolue.",
+  "rêve qu'il perd **{objet}**. Il se réveille en le cherchant.",
+ ],
+ "sortie": [
+  "rêve de votre après-midi pêche. Il attrape quelque chose d'énorme.",
+  "rêve de la fête foraine. Tout tourne, tout brille.",
+  "rêve du film que vous avez regardé. Il en fait une version différente.",
+  "rêve du pique-nique. Il mange tout, cette fois.",
+  "rêve de la nuit sous la tente. Il monte la garde.",
+ ],
+ "victoire": [
+  "rêve qu'il gagne une course. Le public l'acclame.",
+  "rêve qu'on lui remet une médaille. Il la mange.",
+  "rêve qu'il est le meilleur compagnon du QG. Il l'est peut-être.",
+  "rêve qu'il sauve tout le monde. Personne ne saura jamais.",
+ ],
+ "saison": [
+  "rêve de neige. Beaucoup de neige.",
+  "rêve d'un été qui ne finit jamais.",
+  "rêve de feuilles mortes dans lesquelles il plonge.",
+  "rêve d'un sapin décoré rien que pour lui.",
+ ],
+}
+
+def generer_reve(uid):
+    """Un rêve construit à partir de ce que le pet a réellement vécu"""
+    pid, pdb, pst = get_active_pet(uid)
+    if not pst:
+        return None
+    K = _ctx_pet(uid)
+    poids = {"absurde": 22, "nourriture": 14, "aventure": 12, "proprietaire": 12,
+             "refuge": 8, "mystere": 6, "cauchemar": 8, "victoire": 6, "saison": 4}
+    if K["objets"] or pst.get("objet_prefere"):
+        poids["jouet"] = 12
+    if K["meilleur"]:
+        poids["ami"] = 14
+    if K["rival"]:
+        poids["rival"] = 8
+    if pst.get("gouts_act", {}).get("act"):
+        poids["sortie"] = 12
+    if pst.get("confiance", 0) > 50:
+        poids["proprietaire"] += 8
+    if pet_a_trait(uid, "peureux"):
+        poids["cauchemar"] += 6
+    if pet_a_trait(uid, "gourmand") or pet_a_trait(uid, "glouton"):
+        poids["nourriture"] += 10
+    if pet_a_trait(uid, "aventurier"):
+        poids["aventure"] += 8
+    cat = random.choices(list(poids), weights=list(poids.values()))[0]
+    texte = _sans_repet(uid, "reve_" + cat, REVES[cat], memoire=4)
+
+    # Remplacements depuis la vie réelle
+    ami_nom, rival_nom = "son ami", "son rival"
+    for cle, dest in (("meilleur", "ami"), ("rival", "rival")):
+        if K[cle]:
+            autre = next((x for x in K[cle].split("|") if x != uid), None)
+            if autre:
+                _, a_pdb, a_pst = get_active_pet(autre)
+                if a_pdb:
+                    n = a_pst.get("surnom") or a_pdb["nom"]
+                    if dest == "ami": ami_nom = n
+                    else: rival_nom = n
+    objet = pst.get("objet_prefere") or (random.choice(K["objets"]) if K["objets"] else "son jouet")
+    repas = pst.get("repas_prefere") or "quelque chose de bon"
+    texte = (texte.replace("{ami}", ami_nom).replace("{rival}", rival_nom)
+                  .replace("{objet}", objet).replace("{repas}", repas))
+    return cat, texte
+
+
+# ============================================================
+#  🧸 JOUETS
+# ============================================================
+# nom : (emoji, prix, type de jeu) — le type détermine le pool de réactions
+PET_JOUETS = {
+ "Balle":            ("🎾", 300, "lance"),   "Petit ballon":     ("⚽", 400, "lance"),
+ "Frisbee":          ("🥏", 500, "lance"),   "Yo-yo":            ("🪀", 350, "lance"),
+ "Pelote":           ("🧶", 250, "roule"),   "Souris mécanique": ("🐭", 450, "roule"),
+ "Petite voiture":   ("🚗", 400, "roule"),   "Canard":           ("🦆", 300, "roule"),
+ "Plume":            ("🪶", 200, "chasse"),  "Baguette jouet":   ("🪄", 350, "chasse"),
+ "Machine à bulles": ("🫧", 900, "chasse"),  "Cerf-volant":      ("🪁", 700, "chasse"),
+ "Peluche":          ("🧸", 500, "calin"),   "Doudou lapin":     ("🐰", 550, "calin"),
+ "Couverture":       ("🧺", 400, "calin"),   "Clochette":        ("🔔", 200, "calin"),
+ "Corde":            ("🪢", 350, "tire"),    "Chaussette nouée": ("🧦", 150, "tire"),
+ "Puzzle":           ("🧩", 800, "reflechit"),"Cible":           ("🎯", 700, "reflechit"),
+ "Petit robot":      ("🤖", 1200,"reflechit"),"Télescope":       ("🔭", 1500,"reflechit"),
+ "Mini piano":       ("🎹", 1100,"bruit"),   "Tambour":          ("🥁", 800, "bruit"),
+ "Micro":            ("🎤", 900, "bruit"),   "Console":          ("🎮", 1400,"bruit"),
+ "Carton":           ("📦", 100, "cachette"),"Tunnel":           ("🧺", 900, "cachette"),
+ "Château miniature":("🏰", 1600,"cachette"),"Toboggan":         ("🛝", 1300,"cachette"),
+ "Kit dessin":       ("🎨", 600, "creatif"), "Skate":            ("🛹", 1000,"creatif"),
+}
+
+JOUET_REACTIONS = {
+ "lance": [
+  "{p} rapporte {j} fièrement et le dépose à tes pieds.",
+  "{p} court après {j}… et passe complètement à côté. 💀",
+  "{p} attrape {j} en plein vol. Personne ne l'a filmé.",
+  "{p} refuse catégoriquement de rendre {j}. Négociation impossible.",
+  "{j} finit sous un meuble. {p} regarde le meuble. Puis toi.",
+  "{p} rapporte {j}, puis repart avec avant que tu le prennes.",
+  "{p} attend que tu lances. Tu fais semblant. Il n'est pas dupe.",
+  "{p} s'endort avec {j} entre les pattes au bout de dix minutes.",
+  "{p} rapporte {j}… et un caillou en bonus. Cadeau.",
+ ],
+ "roule": [
+  "{p} pousse {j} du museau à travers toute la maison.",
+  "{p} fait rouler {j} sous le canapé, puis abandonne le projet.",
+  "{p} chasse {j} pendant six minutes sans jamais l'attraper.",
+  "{p} attrape {j}, le lâche, le rattrape, le relâche. Cycle infini.",
+  "{j} roule tout seul. {p} recule prudemment.",
+  "{p} s'assoit sur {j}. Il ne roulera plus.",
+  "{p} joue avec {j} très sérieusement. Personne ne rigole ici.",
+ ],
+ "chasse": [
+  "{p} bondit après {j} et retombe très mal. Il fait comme si de rien n'était.",
+  "{p} suit {j} des yeux, immobile, prêt à bondir. Il ne bondit jamais.",
+  "{p} attrape {j} du premier coup. Il ne s'y attendait pas non plus.",
+  "{p} fait trois pirouettes en poursuivant {j}. Zéro attrapé.",
+  "{p} s'arrête net et fait semblant de ne pas avoir joué.",
+  "{p} chasse {j} jusqu'à s'écrouler de fatigue. Ça valait le coup.",
+  "{p} tape {j} avec une patte, très délicatement. Puis très fort.",
+ ],
+ "calin": [
+  "{p} s'endort en serrant {j} contre lui.",
+  "{p} transporte {j} de pièce en pièce toute la journée.",
+  "{p} refuse de dormir sans {j}. C'est non négociable.",
+  "{p} lave consciencieusement {j}. Ça prend un moment.",
+  "{p} cache {j} pour que personne ne le prenne.",
+  "{p} pose {j} sur toi. C'est un honneur.",
+ ],
+ "tire": [
+  "{p} tire sur {j} de toutes ses forces. Il gagne. Tu as lâché.",
+  "{p} grogne en tirant. C'est du théâtre, mais c'est convaincant.",
+  "{p} lâche {j} d'un coup. Tu tombes. Il trouve ça très drôle.",
+  "{p} traîne {j} dans toute la maison comme un trophée.",
+  "Match nul après quatre minutes. Les deux camps sont épuisés.",
+ ],
+ "reflechit": [
+  "{p} observe {j} longuement. On voit les rouages tourner.",
+  "{p} résout {j} du premier coup. Tu ne t'y attendais pas.",
+  "{p} tape {j} jusqu'à ce que ça marche. Méthode brutale mais efficace.",
+  "{p} abandonne {j} au bout de trente secondes. Trop d'efforts.",
+  "{p} trouve une solution que personne n'avait prévue. Elle marche.",
+  "{p} s'assoit devant {j} et attend qu'il se résolve tout seul.",
+ ],
+ "bruit": [
+  "{p} fait un vacarme épouvantable avec {j}. Il est très fier.",
+  "{p} appuie sur {j} en boucle. Vingt minutes. Sans pause.",
+  "{p} sursaute au premier son de {j}, puis recommence quand même.",
+  "{p} joue de {j} à 3 h du matin. Personne ne dort.",
+  "{p} découvre qu'il peut faire du bruit. Le monde ne sera plus le même.",
+  "{p} accompagne {j} de ses propres sons. Le duo est douteux.",
+ ],
+ "cachette": [
+  "{p} entre dans {j} et refuse d'en sortir.",
+  "{p} ne rentre pas dans {j}. Il rentre quand même. À moitié.",
+  "{p} t'observe depuis {j}. Seuls ses yeux dépassent.",
+  "{p} dort dans {j} pendant trois heures.",
+  "{p} a transformé {j} en base secrète. Accès interdit.",
+  "{p} traverse {j} à toute vitesse, dix fois d'affilée.",
+ ],
+ "creatif": [
+  "{p} marche dedans. Il y a maintenant des traces partout.",
+  "{p} produit quelque chose. On ne sait pas quoi. C'est beau quand même.",
+  "{p} utilise {j} d'une façon que personne n'avait imaginée.",
+  "{p} s'installe sur {j} et considère le travail terminé.",
+ ],
+}
+JOUET_TRAITS = {
+ "farceur":   ["😈 {p} cache {j} pendant que tu regardes ailleurs.",
+               "😈 {p} fait semblant de rapporter {j}, puis part en courant."],
+ "paresseux": ["😴 {p} joue avec {j} sans se lever.Technique imparable.",
+               "😴 {p} regarde {j} rouler. C'est déjà de l'effort."],
+ "possessif": ["🧸 {p} ne laisse personne toucher {j}. Personne."],
+ "sportif":   ["💪 {p} enchaîne les allers-retours sans jamais s'arrêter."],
+ "curieux":   ["👀 {p} démonte {j} pour comprendre comment ça marche."],
+ "calin":     ["🤗 {p} finit par abandonner {j} pour venir se coller à toi."],
+ "peureux":   ["🥺 {p} met dix minutes à s'approcher de {j}."],
+}
+
+@bot.command(name="petjouets", aliases=["jouets", "coffrejouets"])
+async def petjouets_cmd(ctx, action: str = None, *, nom: str = None):
+    """Les jouets de ton compagnon — .petjouets [acheter|jouer] <jouet>"""
+    import time as _t
+    uid = str(ctx.author.id)
+    pid, pdb, pst = get_active_pet(uid)
+    if not pid:
+        return await ctx.send("🐾 Tu n'as pas de compagnon actif !")
+    pet_init_perso(uid)
+    coffre = pst.setdefault("jouets", [])
+    act = normalize_str(action or "")
+
+    if act in ("acheter", "achat"):
+        if not nom:
+            return await ctx.send("❌ `.petjouets acheter balle`")
+        cle = next((k for k in PET_JOUETS if normalize_str(nom) == normalize_str(k)), None) or \
+              next((k for k in PET_JOUETS if normalize_str(nom) in normalize_str(k)), None)
+        if not cle:
+            return await ctx.send(f"❌ `{nom}` n'existe pas — `.petjouets` pour la liste.")
+        if cle in coffre:
+            return await ctx.send(f"❌ Il possède déjà **{cle}**.")
+        emo, prix, typ = PET_JOUETS[cle]
+        if economy_data[uid]["coins"] < prix:
+            return await ctx.send(f"❌ Il te faut **{prix:,} pièces**.")
+        economy_data[uid]["coins"] -= prix
+        coffre.append(cle)
+        premier = len(coffre) == 1
+        if premier:
+            pet_carnet_note(uid, f"{emo} A reçu son tout premier jouet : **{cle}**.", important=True)
+        save_all_data()
+        return await ctx.send(embed=discord.Embed(
+            title=f"{emo} {cle}",
+            description=(f"**{pet_nom_decore(uid, pdb)}** l'inspecte déjà sous tous les angles.\n\n"
+                         f"*`.petjouets jouer {cle.lower()}` pour l'utiliser.*"),
+            color=0x2ecc71))
+
+    if act in ("jouer", "utiliser"):
+        if not nom:
+            return await ctx.send("❌ `.petjouets jouer balle`")
+        cle = next((k for k in coffre if normalize_str(nom) == normalize_str(k)), None) or \
+              next((k for k in coffre if normalize_str(nom) in normalize_str(k)), None)
+        if not cle:
+            return await ctx.send(f"❌ Il ne possède pas **{nom}** — `.petjouets acheter {nom}`")
+        st = pet_etat(uid)
+        reste = 2700 - (_t.time() - st["dernier"].get("jouet_" + cle, 0))
+        if reste > 0:
+            return await ctx.send(f"⏳ Il vient de jouer avec — encore **{int(reste//60)} min**.",
+                                  delete_after=8)
+        st["dernier"]["jouet_" + cle] = _t.time()
+        emo, prix, typ = PET_JOUETS[cle]
+        pool = list(JOUET_REACTIONS[typ])
+        for t in pst.get("traits", []):
+            pool += JOUET_TRAITS.get(t, []) * 2
+        texte = _sans_repet(uid, "jouet_" + typ, pool).replace(
+            "{p}", f"**{pet_nom_decore(uid, pdb)}**").replace("{j}", f"**{cle}**")
+        st["humeur"] = min(100, st["humeur"] + 14)
+        st["energie"] = max(0, st["energie"] - 8)
+        give_pet_xp(uid, 25)
+        pet_stat(uid, "parties")
+        # Un jouet très utilisé devient le préféré
+        cpt = pst.setdefault("jouets_cpt", {})
+        cpt[cle] = cpt.get(cle, 0) + 1
+        extra = ""
+        if cpt[cle] == 8 and pst.get("jouet_prefere") != cle:
+            pst["jouet_prefere"] = cle
+            extra = f"\n\n❤️ **{cle}** est devenu son jouet préféré !"
+            pet_carnet_note(uid, f"{emo} **{cle}** est devenu son jouet préféré.", important=True)
+        save_all_data()
+        e = discord.Embed(title=f"{emo} {cle}", description=texte + extra, color=0xe91e63)
+        e.set_footer(text=f"❤️ +14 humeur · ⭐ +25 XP · joué {cpt[cle]} fois")
+        await ctx.send(embed=e)
+        return await verifier_traits_acquis(uid, ctx.channel)
+
+    # ── Vue du coffre ──
+    pref = pst.get("jouet_prefere")
+    cpt = pst.get("jouets_cpt", {})
+    e = discord.Embed(
+        title=f"🧸 Les jouets de {pet_nom_decore(uid, pdb)}",
+        description=f"**{len(coffre)} / {len(PET_JOUETS)}** jouets possédés",
+        color=0xe91e63)
+    if coffre:
+        lignes = [f"{PET_JOUETS[j][0]} **{j}**" + (" ❤️" if j == pref else "")
+                  + (f" · *{cpt[j]}×*" if cpt.get(j) else "") for j in coffre]
+        e.add_field(name="🎁 Son coffre", value="\n".join(lignes)[:1024], inline=False)
+    TYPES = {"lance":"🎾 À lancer","roule":"⚽ À faire rouler","chasse":"🪶 À chasser",
+             "calin":"🧸 Doudous","tire":"🪢 Tir à la corde","reflechit":"🧩 Réflexion",
+             "bruit":"🎹 Bruyants","cachette":"📦 Cachettes","creatif":"🎨 Créatifs"}
+    for typ, lab in TYPES.items():
+        lot = [(k, v) for k, v in PET_JOUETS.items() if v[2] == typ and k not in coffre]
+        if lot:
+            e.add_field(name=lab, value="  ·  ".join(
+                f"{v[0]} **{k}** `{v[1]:,}p`" for k, v in lot)[:1024], inline=False)
+    e.set_footer(text="`.petjouets acheter <jouet>` · `.petjouets jouer <jouet>`")
+    await ctx.send(embed=e)
+
+@bot.command(name="petreve", aliases=["reve", "petdodo"])
+async def petreve_cmd(ctx):
+    """Regarde ton compagnon dormir — .petreve"""
+    import time as _t
+    uid = str(ctx.author.id)
+    pid, pdb, pst = get_active_pet(uid)
+    if not pid:
+        return await ctx.send("🐾 Tu n'as pas de compagnon actif !")
+    pet_init_perso(uid)
+    st = pet_etat(uid)
+    if st["energie"] > 70 and not est_nuit():
+        return await ctx.send(embed=discord.Embed(
+            description=(f"😳 **{pet_nom_decore(uid, pdb)}** est parfaitement réveillé.\n"
+                         f"*Reviens quand il sera fatigué, ou la nuit.*"),
+            color=0x95a5a6))
+    reste = 5400 - (_t.time() - st["dernier"].get("reve", 0))
+    if reste > 0:
+        return await ctx.send(f"😴 Il dort paisiblement — reviens dans **{int(reste//60)} min**.",
+                              delete_after=8)
+    st["dernier"]["reve"] = _t.time()
+    r = generer_reve(uid)
+    if not r:
+        return await ctx.send("😴 Il dort, mais on ne sait pas à quoi il rêve.")
+    cat, texte = r
+    CAT_EMO = {"absurde":"😂","nourriture":"🍖","aventure":"🗺️","proprietaire":"❤️",
+               "ami":"🐾","rival":"💢","jouet":"🧸","refuge":"🏠","mystere":"🌌",
+               "cauchemar":"😱","sortie":"🎡","victoire":"🏆","saison":"🎄"}
+    st["humeur"] = min(100, st["humeur"] + (2 if cat != "cauchemar" else -2))
+    st["energie"] = min(100, st["energie"] + 6)
+    pst.setdefault("vecu", {})
+    pst["vecu"]["reves"] = pst["vecu"].get("reves", 0) + 1
+    if cat == "mystere" and random.random() < 0.25:
+        pet_carnet_note(uid, f"🌌 A fait un rêve étrange : *{texte[:70]}…*", important=True)
+    save_all_data()
+    await ctx.send(embed=discord.Embed(
+        title=f"💤  {CAT_EMO[cat]}",
+        description=f"**{pet_nom_decore(uid, pdb)}** {texte}",
+        color=0x2c2f4a if cat == "cauchemar" else 0x9b59b6
+    ).set_footer(text=f"{pet_humeur_texte(st)} · il récupère un peu d'énergie"))
+
+@bot.command(name="petacheter", aliases=["acheternourriture", "petcourses"])
+async def petacheter_cmd(ctx, *, arg: str = None):
+    """Achète de la nourriture — .petacheter <aliment> [quantité]"""
+    uid = str(ctx.author.id)
+    pid, pdb, pst = get_active_pet(uid)
+    if not pid:
+        return await ctx.send("🐾 Tu n'as pas de compagnon actif !")
+    if not arg:
+        return await ctx.send("❌ `.petacheter poulet 3` — `.petshop nourriture` pour la liste.")
+    mots = arg.rsplit(" ", 1)
+    qte = 1
+    nom_rech = arg
+    if len(mots) == 2 and mots[1].isdigit():
+        qte = max(1, min(20, int(mots[1])))
+        nom_rech = mots[0]
+    nom = next((k for k in PET_NOURRITURE if normalize_str(nom_rech) == normalize_str(k)), None)
+    if not nom:
+        nom = next((k for k in PET_NOURRITURE if normalize_str(nom_rech) in normalize_str(k)), None)
+    if not nom:
+        return await ctx.send(f"❌ `{nom_rech}` n'existe pas — `.petshop nourriture` pour la liste.")
+    if not nourriture_dispo(nom):
+        return await ctx.send(f"🎃 **{nom}** n'est vendu qu'à sa saison. Reviens plus tard !")
+    emo, cat, faim, prix, sais = PET_NOURRITURE[nom]
+    total = prix * qte
+    if economy_data[uid]["coins"] < total:
+        return await ctx.send(f"❌ Il te faut **{total:,} pièces** *(tu en as {economy_data[uid]['coins']:,})*.")
+    economy_data[uid]["coins"] -= total
+    pst.setdefault("garde_manger", {})
+    pst["garde_manger"][nom] = pst["garde_manger"].get(nom, 0) + qte
+    save_all_data()
+    await ctx.send(embed=discord.Embed(
+        description=(f"{emo} **{nom}** ×{qte} ajouté au garde-manger.\n"
+                     f"💰 **−{total:,} pièces**\n\n*`.petmanger {nom.lower()}` pour lui donner.*"),
+        color=0x2ecc71))
+
+@bot.command(name="petmanger", aliases=["petnourriture", "faimanger"])
+async def petmanger_cmd(ctx, *, aliment: str = None):
+    """Donne un aliment précis à ton compagnon — .petmanger <aliment>"""
+    uid = str(ctx.author.id)
+    pid, pdb, pst = get_active_pet(uid)
+    if not pid:
+        return await ctx.send("🐾 Tu n'as pas de compagnon actif !")
+    pet_init_perso(uid)
+    st = pet_etat(uid)
+    garde = pst.setdefault("garde_manger", {})
+
+    if not aliment:
+        if not garde:
+            return await ctx.send(embed=discord.Embed(
+                title="🍖 Garde-manger vide",
+                description=("Tu n'as aucune nourriture en réserve.\n\n"
+                             "*`.petshop nourriture` pour en acheter.*\n"
+                             "*`.nourrir` reste disponible pour un repas standard.*"),
+                color=0x95a5a6))
+        gouts = gouts_repas(uid)
+        SYM = {"adore":"😍","aime":"😊","neutre":"😐","deteste":"😖"}
+        lignes = []
+        for nom, n in sorted(garde.items(), key=lambda x: -x[1]):
+            if n <= 0 or nom not in PET_NOURRITURE:
+                continue
+            emo, cat, faim, prix, sais = PET_NOURRITURE[nom]
+            g = SYM.get(gouts.get(nom), "❔")
+            lignes.append(f"{emo} **{nom}** ×{n} · +{faim} faim  {g}")
+        return await ctx.send(embed=discord.Embed(
+            title=f"🍖 Garde-manger de {pst.get('surnom') or pdb['nom']}",
+            description="\n".join(lignes) + "\n\n*`.petmanger <aliment>` · ❔ = goût encore inconnu*",
+            color=0xe91e63).set_footer(text=f"Faim actuelle : {int(st['faim'])}/100"))
+
+    nom = next((k for k in PET_NOURRITURE if normalize_str(aliment) == normalize_str(k)), None)
+    if not nom:
+        nom = next((k for k in PET_NOURRITURE if normalize_str(aliment) in normalize_str(k)), None)
+    if not nom:
+        return await ctx.send(f"❌ `{aliment}` n'existe pas — `.petmanger` pour voir ta réserve.")
+    if garde.get(nom, 0) <= 0:
+        return await ctx.send(f"❌ Tu n'as pas de **{nom}** — `.petshop nourriture` pour en acheter.")
+
+    emo, cat, faim, prix, sais = PET_NOURRITURE[nom]
+    garde[nom] -= 1
+    if garde[nom] <= 0:
+        garde.pop(nom, None)
+
+    gouts = gouts_repas(uid)
+    premiere = nom not in gouts
+    if premiere:
+        gouts[nom] = _tirer_gout(uid, nom)
+    gout = gouts[nom]
+
+    # Effets selon le goût
+    MULT = {"adore": 1.25, "aime": 1.0, "neutre": 0.9, "deteste": 0.6}
+    HUM = {"adore": 22, "aime": 12, "neutre": 5, "deteste": -6}
+    reel = int(faim * MULT[gout])
+    st["faim"] = max(0, st["faim"] - reel)
+    st["humeur"] = max(0, min(100, st["humeur"] + HUM[gout] + (8 if cat == "friandise" else 0)))
+    give_pet_xp(uid, 15 if cat != "premium" else 40)
+    pet_stat(uid, "repas")
+
+    nom_pet = f"**{pet_nom_decore(uid, pdb)}**"
+    pool = list(REACTIONS_REPAS[gout])
+    for t in pst.get("traits", []):
+        pool += REACTIONS_TRAIT_REPAS.get(t, []) * 2
+    if st["faim"] > 70:
+        pool += REACTIONS_TRAIT_REPAS["affame"] * 2
+    texte = _sans_repet(uid, "repas", pool).replace("{p}", nom_pet)
+
+    SYM = {"adore":"😍 Il adore ça !","aime":"😊 Il aime bien.",
+           "neutre":"😐 Ça lui est égal.","deteste":"😖 Il n'aime pas du tout."}
+    embed = discord.Embed(
+        title=f"{emo} {nom}",
+        description=f"{texte}\n\n**{SYM[gout]}**",
+        color={"adore":0xf1c40f,"aime":0x2ecc71,"neutre":0x95a5a6,"deteste":0xe74c3c}[gout])
+    embed.add_field(name="🍽️ Effet",
+                    value=f"🍖 Faim **−{reel}**  ·  ❤️ Humeur **{'+' if HUM[gout]>=0 else ''}{HUM[gout]}**",
+                    inline=False)
+    if premiere:
+        embed.set_footer(text=f"✨ Première fois qu'il goûte ça · {len(gouts)}/{len(PET_NOURRITURE)} aliments découverts")
+        if gout in ("adore", "deteste"):
+            pet_carnet_note(uid, f"{emo} A découvert qu'il "
+                                 f"{'adore' if gout == 'adore' else 'déteste'} **{nom}**.",
+                            important=True)
+    else:
+        embed.set_footer(text=f"Faim : {int(st['faim'])}/100 · {len(gouts)}/{len(PET_NOURRITURE)} aliments découverts")
+
+    # Aliment préféré = le premier "adore" découvert
+    if gout == "adore" and not pst.get("repas_prefere"):
+        pst["repas_prefere"] = nom
+        embed.add_field(name="❤️ Son plat préféré !",
+                        value=f"{emo} **{nom}** devient son repas favori.", inline=False)
+        pet_carnet_note(uid, f"{emo} **{nom}** est devenu son plat préféré.", important=True)
+    save_all_data()
+    await ctx.send(embed=embed)
+    await verifier_traits_acquis(uid, ctx.channel)
+
+@bot.command(name="petmenu", aliases=["goutsrepas", "petplats"])
+async def petmenu_cmd(ctx, membre: discord.Member = None):
+    """Ce que ton compagnon aime manger — .petmenu"""
+    cible = membre or ctx.author
+    uid = str(cible.id)
+    pid, pdb, pst = get_active_pet(uid)
+    if not pid:
+        return await ctx.send(f"🐾 **{cible.display_name}** n'a pas de compagnon actif.")
+    gouts = gouts_repas(uid)
+    if not gouts:
+        return await ctx.send(embed=discord.Embed(
+            title="🍽️ Menu inconnu",
+            description=("*Tu ne sais pas encore ce qu'il aime.*\n\n"
+                         "Donne-lui différents aliments avec `.petmanger` pour découvrir ses goûts.\n"
+                         f"*Il y a **{len(PET_NOURRITURE)} aliments** à faire goûter.*"),
+            color=0x95a5a6))
+    par_gout = {"adore": [], "aime": [], "neutre": [], "deteste": []}
+    for nom, g in gouts.items():
+        if nom in PET_NOURRITURE:
+            par_gout[g].append(f"{PET_NOURRITURE[nom][0]} {nom}")
+    TITRES = {"adore":("😍","Il adore"), "aime":("😊","Il aime bien"),
+              "neutre":("😐","Ça lui est égal"), "deteste":("😖","Il déteste")}
+    embed = discord.Embed(
+        title=f"🍽️ Le menu de {pet_nom_decore(uid, pdb)}",
+        description=f"**{len(gouts)} / {len(PET_NOURRITURE)}** aliments goûtés",
+        color=0xe91e63)
+    pref = pst.get("repas_prefere")
+    if pref and pref in PET_NOURRITURE:
+        embed.add_field(name="❤️ Son plat préféré",
+                        value=f"{PET_NOURRITURE[pref][0]} **{pref}**", inline=False)
+    for g in ("adore","aime","neutre","deteste"):
+        if par_gout[g]:
+            e_g, t_g = TITRES[g]
+            embed.add_field(name=f"{e_g} {t_g} ({len(par_gout[g])})",
+                            value="  ·  ".join(par_gout[g])[:1024], inline=False)
+    embed.set_footer(text="`.petmanger <aliment>` pour lui faire goûter autre chose")
+    await ctx.send(embed=embed)
+
 @bot.command(name="petproteger", aliases=["protection", "petgarde"])
 async def petproteger_cmd(ctx):
     """Les capacités de protection de ton compagnon — .petproteger"""
@@ -14179,7 +14862,7 @@ async def petutiliser_cmd(ctx, *, meuble: str = None):
 
     emo, verbe, scenes, eff, val = MEUBLES_INTERACTIONS[cle]
     nom_pet = pst.get("surnom") or pdb["nom"]
-    scene = random.choice(scenes)
+    scene = _sans_repet(uid, "meuble_" + cle, scenes, memoire=3)
 
     if eff == "xp":
         l, lv = give_pet_xp(uid, val)
@@ -14638,6 +15321,155 @@ async def petexpedition_cmd(ctx, lieu: str = None):
 
 
 
+
+# ============================================================
+#  🍖 NOURRITURE
+# ============================================================
+# nom : (emoji, catégorie, faim, prix, saison|None)
+PET_NOURRITURE = {
+ # ── 🥕 Petites faims (+5 à +25) ──
+ "Carotte":        ("🥕","petite",10,60,None),   "Pomme":          ("🍎","petite",12,70,None),
+ "Banane":         ("🍌","petite",14,80,None),   "Fraises":        ("🍓","petite",12,90,None),
+ "Myrtilles":      ("🫐","petite",10,90,None),   "Biscuit":        ("🥨","petite",15,80,None),
+ "Petit cookie":   ("🍪","petite",13,70,None),   "Morceau de pain":("🥖","petite",16,50,None),
+ "Fromage":        ("🧀","petite",20,120,None),  "Œuf":            ("🥚","petite",18,100,None),
+ "Pastèque":       ("🍉","petite",15,110,None),  "Noisettes":      ("🌰","petite",8,60,None),
+ "Concombre":      ("🥒","petite",9,50,None),    "Raisins":        ("🍇","petite",13,100,None),
+ "Maïs":           ("🌽","petite",17,80,None),
+ # ── 🍗 Repas (+30 à +70) ──
+ "Poulet":         ("🍗","repas",45,320,None),   "Steak":          ("🥩","repas",60,480,None),
+ "Viande":         ("🍖","repas",50,380,None),   "Poisson":        ("🐟","repas",42,300,None),
+ "Riz":            ("🍚","repas",35,200,None),   "Pâtes":          ("🍝","repas",38,240,None),
+ "Ragoût":         ("🥘","repas",58,450,None),   "Soupe":          ("🍲","repas",33,220,None),
+ "Sandwich":       ("🥪","repas",36,260,None),   "Curry":          ("🍛","repas",52,400,None),
+ "Sushi":          ("🍣","repas",48,520,None),   "Pancakes":       ("🥞","repas",40,300,None),
+ "Brochette":      ("🍢","repas",44,340,None),   "Ramen":          ("🍜","repas",55,420,None),
+ "Tacos":          ("🌮","repas",41,310,None),   "Omelette":       ("🍳","repas",37,250,None),
+ # ── 👑 Premium (rassasie presque tout) ──
+ "Steak royal":    ("🥩","premium",85,1400,None),   "Plateau premium":("🍣","premium",90,1800,None),
+ "Bento luxueux":  ("🍱","premium",88,1600,None),   "Repas de fête":  ("🦞","premium",95,2400,None),
+ "Gâteau d'anniversaire":("🎂","premium",80,1500,None),
+ "Poulet doré":    ("🍗","premium",92,2000,None),   "Friandise étoilée":("✨","premium",100,3500,None),
+ # ── 🍬 Friandises (peu de faim, beaucoup de plaisir) ──
+ "Cookie":         ("🍪","friandise",12,150,None), "Donut":          ("🍩","friandise",15,180,None),
+ "Cupcake":        ("🧁","friandise",14,190,None), "Glace":          ("🍦","friandise",10,200,None),
+ "Chocolat doux":  ("🍫","friandise",16,220,None), "Sucette":        ("🍭","friandise",8,120,None),
+ "Croissant":      ("🥐","friandise",18,160,None), "Macaron":        ("🍬","friandise",11,210,None),
+ "Barbe à papa":   ("🍡","friandise",9,170,None),  "Pudding":        ("🍮","friandise",17,230,None),
+ # ── 🎃 Saisonnier ──
+ "Biscuit citrouille":("🎃","saison",22,250,10),  "Cookie de Noël": ("🎄","saison",25,250,12),
+ "Fraise cœur":    ("❤️","saison",18,250,2),      "Glace polaire":  ("❄️","saison",20,250,1),
+ "Chocolat chaud": ("☕","saison",24,250,12),      "Œuf surprise":   ("🥚","saison",30,300,4),
+ "Pastèque d'été": ("🍉","saison",26,250,7),       "Bonbon fantôme": ("👻","saison",15,280,10),
+}
+CAT_NOURRITURE = {
+ "petite":    ("🥕","Petites faims","De quoi patienter."),
+ "repas":     ("🍗","Repas","Un vrai repas complet."),
+ "premium":   ("👑","Premium","Le grand jeu."),
+ "friandise": ("🍬","Friandises","Peu nourrissant, beaucoup de bonheur."),
+ "saison":    ("🎃","Saisonnier","Seulement à certaines périodes."),
+}
+
+# ── Réactions selon le goût découvert ──
+REACTIONS_REPAS = {
+ "adore": [
+   "😍 {p} fixe déjà l'assiette vide. Il en veut clairement encore.",
+   "🤩 {p} a englouti ça en quatre secondes. Record personnel.",
+   "❤️ {p} fait un bruit qu'il ne fait jamais d'habitude. C'est bon signe.",
+   "🥰 {p} lèche la gamelle pendant trois minutes après. Par respect.",
+   "✨ {p} tourne autour de toi. Il en redemande. Ouvertement.",
+   "😋 {p} ferme les yeux en mangeant. Il savoure.",
+   "🎉 {p} fait le tour de la pièce en courant avant de manger. L'excitation.",
+ ],
+ "aime": [
+   "😊 {p} mange de bon cœur, sans se presser.",
+   "🙂 {p} finit tout, puis va se coucher, satisfait.",
+   "😌 {p} mange proprement. Rare, mais ça arrive.",
+   "👍 {p} apprécie visiblement. Il reviendra.",
+   "😄 {p} remue en mangeant. Bon signe.",
+ ],
+ "neutre": [
+   "😐 {p} mange. Sans plus. C'est mangé, c'est l'essentiel.",
+   "🤷 {p} termine son assiette avec l'enthousiasme d'un fonctionnaire.",
+   "😶 {p} mange, puis te regarde comme s'il attendait autre chose.",
+   "🍽️ {p} finit tout, mais ne remercie personne.",
+   "😑 {p} mange en te fixant. Ambiance.",
+ ],
+ "deteste": [
+   "😖 {p} mâche lentement… On va dire qu'il fait un effort.",
+   "🤢 {p} renifle, recule, revient, renifle encore. Négociation en cours.",
+   "😤 {p} pousse l'assiette du museau. Message clair.",
+   "🙄 {p} mange trois bouchées et abandonne le projet.",
+   "😾 {p} te regarde longuement. Tu as trahi sa confiance.",
+   "💀 {p} enterre symboliquement la nourriture sous une couverture.",
+ ],
+}
+REACTIONS_TRAIT_REPAS = {
+ "gourmand":  ["🍖 {p} avait déjà tout mangé avant que tu poses l'assiette.",
+               "🍖 {p} a mangé si vite qu'il semble lui-même surpris."],
+ "glouton":   ["🍽️ {p} finit son assiette et regarde celle des autres.",
+               "🍽️ Il n'a pas mâché. Pas une seule fois."],
+ "maniaque":  ["🧼 {p} trie sa nourriture avant de commencer. Il a des critères.",
+               "🧼 Il mange proprement, puis nettoie autour. Impeccable."],
+ "tetu":      ["😤 {p} refuse de manger tant que tu le regardes.",
+               "😤 Il attend que tu partes. Puis il mange. Bien sûr."],
+ "peureux":   ["🥺 {p} mange en surveillant les alentours entre chaque bouchée."],
+ "farceur":   ["😈 {p} renverse la moitié avant de manger l'autre. Par principe."],
+ "affame":    ["😭 {p} n'a pas attendu. L'assiette est déjà vide."],
+}
+
+def _sans_repet(uid, cle, pool, memoire=6):
+    """Choisit dans `pool` en évitant ce qui vient d'être vu.
+    La rareté est préservée : on filtre, on ne repondère pas."""
+    if not pool:
+        return ""
+    pid, pdb, st = get_active_pet(uid)
+    if not st:
+        return random.choice(pool)
+    vus = st.setdefault("vus", {}).setdefault(cle, [])
+    frais = [x for x in pool if x not in vus]
+    choix = random.choice(frais or pool)
+    vus.append(choix)
+    st["vus"][cle] = vus[-memoire:]
+    # On plafonne la mémoire globale pour ne pas gonfler la sauvegarde
+    if len(st["vus"]) > 20:
+        for k in list(st["vus"])[:-20]:
+            st["vus"].pop(k, None)
+    return choix
+
+def gouts_repas(uid):
+    """Découvre progressivement ce que le pet aime. Structure : {"Poulet": "adore"}"""
+    pid, pdb, st = get_active_pet(uid)
+    if not st:
+        return {}
+    st.setdefault("gouts_repas", {})
+    return st["gouts_repas"]
+
+def _tirer_gout(uid, nom):
+    """Attribue un goût à un aliment, influencé par le caractère"""
+    poids = {"adore": 15, "aime": 35, "neutre": 35, "deteste": 15}
+    cat = PET_NOURRITURE[nom][1]
+    if pet_a_trait(uid, "gourmand") or pet_a_trait(uid, "glouton"):
+        poids["adore"] += 20; poids["deteste"] -= 10
+    if pet_a_trait(uid, "maniaque"):
+        poids["deteste"] += 12
+    if cat == "friandise":
+        poids["adore"] += 15
+    if cat == "premium":
+        poids["adore"] += 25; poids["deteste"] -= 10
+    poids = {k: max(1, v) for k, v in poids.items()}
+    return random.choices(list(poids), weights=list(poids.values()))[0]
+
+def saison_actuelle_mois():
+    return datetime.datetime.now().month
+
+def nourriture_dispo(nom):
+    """Les aliments saisonniers ne sont vendus qu'à leur période"""
+    conf = PET_NOURRITURE.get(nom)
+    if not conf or conf[4] is None:
+        return True
+    return conf[4] == saison_actuelle_mois()
+
 # ============================================================
 #  🎲 MOTEUR D'ÉVÉNEMENTS MODULAIRE
 # ============================================================
@@ -14996,6 +15828,48 @@ MOMENTS_UNIQUES = [
   "texte":"{p} fait un truc qu'il n'avait jamais fait.\nIl vient poser sa tête sur ton genou et ferme les yeux.\nIl a mis {jours} jours. Mais il l'a fait.",
   "choix":[("🤗 Ne pas bouger","confiance",10),("📸 Garder ce moment","souvenir",0)],
   "memoire":"✨ A posé sa tête sur ton genou pour la première fois."},
+ {"id":"cheminee_hiver","titre":"🔥 Devant le feu","si":{"meuble":["cheminee"],"energie_max":40},"proba":0.05,
+  "texte":"{p} s'est endormi devant la cheminée.\nLe feu projette des ombres sur le mur. Il ne bougera plus de la nuit.",
+  "choix":[("🔥 S'asseoir à côté","confiance",6),("🧣 Poser une couverture","confiance",7),
+           ("📸 Garder l'image","souvenir",0)],
+  "memoire":"🔥 S'est endormi devant la cheminée, un soir d'hiver."},
+ {"id":"anniversaire","titre":"🎂 C'est son jour","si":{"jours_min":365},"proba":0.15,
+  "texte":"Ça fait exactement un an aujourd'hui.\n{p} ne le sait pas. Mais toi si.",
+  "choix":[("🎂 Lui préparer quelque chose","confiance",10),("🎁 Lui offrir un cadeau","objet",0),
+           ("🤗 Juste être là","confiance",8)],
+  "memoire":"🎂 A fêté son anniversaire avec toi."},
+ {"id":"fenetre_pluie","titre":"🌧️ La pluie contre la vitre","si":{"meuble":["fenetre"],"moment":["soir","nuit"]},"proba":0.05,
+  "texte":"{p} regarde la pluie glisser sur la vitre.\nIl suit une goutte des yeux. Puis une autre. Il pourrait rester des heures.",
+  "choix":[("☕ Regarder avec lui","confiance",6),("🎵 Mettre de la musique","humeur",10),
+           ("😴 Le laisser","humeur",3)],
+  "memoire":"🌧️ A regardé la pluie avec toi, un soir."},
+ {"id":"jardin_papillon","titre":"🦋 Un papillon","si":{"meuble":["jardin"],"moment":["matin","aprem"]},"proba":0.04,
+  "texte":"Un papillon s'est posé sur le nez de {p}.\nIl ne bouge plus du tout. Il retient sa respiration.",
+  "choix":[("📸 Vite, une photo","souvenir",0),("🤫 Ne rien faire","confiance",5),
+           ("😂 Rire","humeur",8)],
+  "memoire":"🦋 Un papillon s'est posé sur son nez."},
+ {"id":"miroir","titre":"🪞 Face à lui-même","si":{"jours_min":5},"proba":0.03,
+  "texte":"{p} vient de comprendre que le reflet, c'était lui.\nIl reste là. Il réfléchit. Quelque chose a changé dans son regard.",
+  "choix":[("🪞 L'observer","confiance",4),("🤗 Le rassurer","confiance",6),
+           ("📸 Immortaliser","souvenir",0)],
+  "memoire":"🪞 A compris que le reflet, c'était lui."},
+ {"id":"vieux_jours","titre":"👑 Les années passent","si":{"jours_min":180,"confiance_min":60},"proba":0.06,
+  "texte":"{p} dort plus qu'avant. Il court moins vite.\nMais il vient toujours te voir quand tu rentres. Tous les jours. Sans exception.",
+  "choix":[("🤗 Rester avec lui","confiance",12),("📖 Repenser à tout ça","souvenir",0)],
+  "memoire":"👑 Vous avez traversé beaucoup de choses ensemble."},
+ {"id":"nuit_parfaite","titre":"🌠 Une nuit particulière","si":{"moment":["nuit"],"humeur_min":90,"confiance_min":50},"proba":0.03,
+  "texte":"Il y a quelque chose de différent ce soir.\n{p} est parfaitement calme, parfaitement heureux.\nLe monde entier semble suspendu.",
+  "choix":[("🌠 Profiter du moment","confiance",10),("📸 Ne jamais oublier ça","souvenir",0)],
+  "memoire":"🌠 Une nuit où tout était exactement à sa place."},
+ {"id":"apres_sortie","titre":"🌅 Le retour","si":{"moment":["matin"],"jours_min":15},"proba":0.04,
+  "texte":"Vous rentrez de votre sortie. Le soleil se lève.\n{p} marche à côté de toi, épuisé et parfaitement content.",
+  "choix":[("🌅 S'arrêter un instant","confiance",7),("🏠 Rentrer se coucher","humeur",8),
+           ("📸 Une dernière photo","souvenir",0)],
+  "memoire":"🌅 Un lever de soleil au retour d'une sortie."},
+ {"id":"objet_mythique","titre":"🔴 Quelque chose d'extraordinaire","si":{"jours_min":45},"proba":0.02,
+  "texte":"{p} a rapporté quelque chose.\nTu n'as jamais rien vu de tel. Lui non plus, visiblement.",
+  "choix":[("💎 L'examiner de près","objet",0),("🧸 Le lui laisser","confiance",8)],
+  "memoire":"🔴 A trouvé quelque chose d'extraordinaire."},
 ]
 
 # ── 🧩 Histoires en plusieurs épisodes ──
@@ -15023,6 +15897,55 @@ HISTOIRES_PETS = {
    ("Cette fois il est monté jusqu'en haut. Il t'attend devant une porte fermée.", None),
    ("Derrière la porte : un vieux carton. À l'intérieur, quelque chose lui appartenait.", "objet"),
    ("Depuis, {p} dort avec. Il ne dira jamais d'où ça venait.", "memoire"),
+  ]},
+ "cle_doree": {"titre":"🗝️ La clé dorée", "jours_min":25,
+  "episodes":[
+   ("{p} a rapporté une petite clé dorée. Elle n'ouvre rien de connu.", None),
+   ("Il l'a cachée. Puis ressortie. Il la déplace tous les jours.", None),
+   ("Ce matin, la clé était posée devant une porte. Celle du placard du fond.", None),
+   ("Derrière : une boîte fermée. La clé rentre parfaitement.", "objet"),
+   ("La boîte contenait quelque chose. {p} n'a jamais voulu que tu la refermes.", "memoire"),
+  ]},
+ "oiseau": {"titre":"🐦 L'oiseau de la fenêtre", "jours_min":15,
+  "episodes":[
+   ("Un oiseau s'est posé à la fenêtre. {p} l'observe sans bouger.", None),
+   ("Il revient chaque matin, à la même heure. {p} l'attend maintenant.", None),
+   ("Ils sont assis de part et d'autre de la vitre. Un rituel s'est installé.", None),
+   ("L'oiseau a laissé une plume sur le rebord. Un cadeau, peut-être.", "objet"),
+   ("L'hiver arrive. L'oiseau ne revient plus. {p} regarde encore, parfois.", "memoire"),
+  ]},
+ "empreintes": {"titre":"🐾 Les empreintes inconnues", "jours_min":40,
+  "episodes":[
+   ("Il y a des empreintes dans le jardin. Ce ne sont pas celles de {p}.", None),
+   ("Elles sont revenues. Plus près de la maison, cette fois.", None),
+   ("{p} passe ses nuits à la fenêtre. Il attend quelque chose.", None),
+   ("Cette nuit, il y avait un autre animal dans le jardin. Ils se sont regardés.", None),
+   ("Au matin, quelque chose avait été déposé devant la porte.", "objet"),
+   ("{p} dort mieux depuis. Comme si une question avait trouvé sa réponse.", "memoire"),
+  ]},
+ "lettre": {"titre":"✉️ La lettre sans nom", "jours_min":50,
+  "episodes":[
+   ("{p} a traîné une enveloppe jusqu'au salon. Il n'y a aucun nom dessus.", None),
+   ("Tu l'as posée sur l'étagère. Le lendemain, elle était de nouveau par terre.", None),
+   ("Il insiste depuis trois jours. Il veut vraiment que tu l'ouvres.", None),
+   ("Tu l'ouvres enfin. À l'intérieur, une photo d'un endroit que tu ne connais pas.", "objet"),
+   ("{p} a reniflé la photo longuement. Puis il s'est couché dessus.", "memoire"),
+  ]},
+ "jouet_perdu": {"titre":"🧸 Le jouet qui n'appartient à personne", "jours_min":30,
+  "episodes":[
+   ("{p} est rentré avec un jouet. Ce n'est pas le sien. Il n'est à personne.", None),
+   ("Il en prend un soin particulier. Il ne joue même pas avec.", None),
+   ("Tu l'as retrouvé posé près de la porte. Comme s'il attendait quelqu'un.", None),
+   ("Il l'a finalement adopté. C'est le sien maintenant.", "objet"),
+   ("Il dort avec, tous les soirs. On ne saura jamais d'où il venait.", "memoire"),
+  ]},
+ "porte": {"titre":"🌙 Les rêves de la porte", "jours_min":60,
+  "episodes":[
+   ("{p} s'est réveillé en fixant la porte du couloir. Il n'a plus dormi.", None),
+   ("Ça recommence chaque nuit. Toujours la même porte, toujours à la même heure.", None),
+   ("Tu l'as ouverte. Il n'y a rien. {p} entre quand même et fait le tour.", None),
+   ("Il a gratté sous une lame de parquet. Il y avait quelque chose.", "objet"),
+   ("Depuis, il dort profondément. La porte ne l'intéresse plus.", "memoire"),
   ]},
 }
 
@@ -15453,6 +16376,13 @@ async def tenter_scene(ctx, uid):
     pst["scenes_vues"] = pst["scenes_vues"][-5:]
 
     decor, reaction, _ = rendu_scene(uid, sc)
+    # Si cette réaction précise vient d'être vue, on retire un nouveau rendu
+    for _ in range(3):
+        if reaction not in pst.get("vus", {}).get("reaction", []):
+            break
+        decor, reaction, _ = rendu_scene(uid, sc)
+    pst.setdefault("vus", {}).setdefault("reaction", []).append(reaction)
+    pst["vus"]["reaction"] = pst["vus"]["reaction"][-10:]
     if random.random() < 0.45:
         vue = SceneView(uid, decor, reaction)
         await ctx.send(embed=discord.Embed(
