@@ -1311,6 +1311,8 @@ def build_help_pages(guild, is_admin=False):
     e.add_field(name="🎒 Aventures & collection", value=(
         "`.petexpedition` — 4 lieux · il part 1 à 4 h et rapporte un butin\n"
         "`.petobjets` — Sa collection *(30 objets, 6 raretés)*\n"
+        "`.petseries` — 🎒 **12 séries** *(131 objets, titre à la complétion)*\n"
+        "`.marchand` — 📦 **Le marchand itinérant** *(différent chaque jour)*\n"
         "*Il fait parfois des **bêtises** et vit des **événements** quand tu ouvres `.pet`.*\n"
         "*L'event **🏃 Course de Compagnons** met tous les pets en compétition.*"
     ), inline=False)
@@ -11843,17 +11845,19 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "3.4.0"
+BOT_VERSION = "3.5.0"
 CHANGELOG = {
-    "titre": "Boutique navigable et rencontres refaites 🐾",
+    "titre": "Collections, marchands et caractères croisés 🎒",
     "ajouts": [
-        "🛍️ **`.petshop` entièrement repensé** — 9 rayons navigables avec ◀️ ▶️ et un menu déroulant",
-        "🐾 **`.petvisite` refait** — on voit d'abord la scène entre les deux compagnons, ensuite les gains",
-        "⏳ Le temps réel avant la prochaine visite s'affiche *(plus de « toutes les 6 heures »)*",
-        "🎬 **Titres dynamiques** — ☀️ Un moment tranquille, 🎾 Une partie improvisée, 😈 Encore une bêtise…",
-        "📖 **Jalons du duo** — 1, 10, 25, 50 et 100 rencontres déclenchent une phrase spéciale",
+        "🎒 `.petseries` — **12 séries de collection, 131 objets** · un titre à chaque série complétée",
+        "📦 `.marchand` — **8 marchands itinérants**, un différent chaque jour, avec des objets secrets",
+        "🎭 **15 combinaisons de traits** — Farceur + Gourmand = Chapardeur, Paresseux + Protecteur = Gardien Endormi…",
+        "🛍️ **`.petshop` navigable** — 9 rayons avec ◀️ ▶️ et menu déroulant",
+        "🐾 **`.petvisite` refait** — la scène d'abord, les gains ensuite",
+        "⏳ Temps réel avant la prochaine visite",
     ],
     "correctifs": [
+        "`.petensemble` avait perdu son contenu enrichi — **79 situations restaurées**",
         "Le niveau supérieur ne s'affiche que s'il vient réellement d'arriver",
         "Le `.help` ne contient plus de commande en double",
     ],
@@ -13985,6 +13989,379 @@ def generer_reve(uid):
     return cat, texte
 
 
+
+
+
+# ============================================================
+#  📦 MARCHAND ITINÉRANT
+# ============================================================
+MARCHANDS = {
+ "mysterieux": ("🧙","Le Marchand Mystérieux","Il n'était pas là hier. Il ne sera plus là demain.",
+   0x9b59b6, ["mysterieux","celestes","cristaux"], None),
+ "jouets":     ("🧸","Le Marchand de Jouets","Sa charrette déborde. Ça grince de partout.",
+   0xe67e22, ["vieuxjouets","absurdes"], "jouet"),
+ "antiquaire": ("🏺","L'Antiquaire","Chaque objet a une histoire. Il ne la raconte jamais.",
+   0xc19a6b, ["tresors","perdus","souvenirs"], None),
+ "nocturne":   ("🌙","Le Marchand Nocturne","Il n'ouvre qu'entre minuit et six heures.",
+   0x2c2f4a, ["celestes","mysterieux"], None),
+ "deco":       ("🎀","Le Marchand Déco","Il connaît les meubles mieux que toi.",
+   0xff6fd8, ["fleurs","coquillages"], "meuble"),
+ "halloween":  ("🎃","Le Marchand d'Halloween","Il sent la citrouille et la fumée.",
+   0xff7518, ["mysterieux","absurdes"], "nourriture"),
+ "noel":       ("🎄","Le Marchand de Noël","Ses clochettes s'entendent de loin.",
+   0xc0392b, ["souvenirs","cristaux"], "nourriture"),
+ "printemps":  ("🌸","Le Marchand de Printemps","Il apporte des choses qui poussent.",
+   0x2ecc71, ["fleurs","plumes"], "nourriture"),
+}
+MARCHAND_REPLIQUES = [
+ "« Regarde. Prends ton temps. Je ne suis pas pressé. »",
+ "« Ces objets ont voyagé plus que toi et moi réunis. »",
+ "« Ce que tu ne prends pas aujourd'hui, un autre le prendra. »",
+ "« Je ne vends pas. Je place. Ce n'est pas pareil. »",
+ "« Ton compagnon a l'air de savoir ce qu'il veut. »",
+ "« Ne demande pas d'où ça vient. Tu ne veux pas savoir. »",
+ "« J'ai fait un long chemin. Fais-moi plaisir, regarde au moins. »",
+]
+MARCHAND_SECRET = [
+ "👀 Le marchand regarde ton compagnon longuement.\n« Celui-là a l'œil. »",
+ "👀 Il s'arrête net, observe ton compagnon, puis fouille sous sa charrette.\n« Pour lui, alors. »",
+ "👀 « Tiens donc. » Il écarte une bâche.\n« Je ne montre pas ça à tout le monde. »",
+]
+
+def marchand_du_jour():
+    """Le marchand présent aujourd'hui — dépend de la date et de l'heure"""
+    now = datetime.datetime.now()
+    if now.month == 10: return "halloween"
+    if now.month == 12: return "noel"
+    if now.month in (3, 4): return "printemps"
+    if est_nuit(): return "nocturne"
+    graine = now.timetuple().tm_yday
+    ordinaires = ["mysterieux", "jouets", "antiquaire", "deco"]
+    return ordinaires[graine % len(ordinaires)]
+
+@bot.command(name="marchand", aliases=["petmarchand", "itinerant"])
+async def marchand_cmd(ctx, achat: str = None):
+    """Le marchand itinérant du jour — .marchand [objet]"""
+    import time as _t
+    uid = str(ctx.author.id)
+    pid, pdb, pst = get_active_pet(uid)
+    if not pid:
+        return await ctx.send("🐾 Le marchand ne parle qu'aux propriétaires de compagnons.")
+    pet_init_perso(uid)
+    cle = marchand_du_jour()
+    emo, nom, desc, coul, series, bonus_cat = MARCHANDS[cle]
+
+    # ── Stock du jour, stable pour la journée ──
+    jour = datetime.datetime.now().strftime("%Y%m%d")
+    stock_cache = pst.setdefault("marchand", {})
+    if stock_cache.get("jour") != jour or stock_cache.get("qui") != cle:
+        rng = random.Random(f"{uid}{jour}{cle}")
+        pool = []
+        for s in series:
+            pool += [(o, s) for o in COLLECTIONS_SERIES[s][3]
+                     if o not in pst.get("series", [])]
+        rng.shuffle(pool)
+        offre = [{"obj": o, "serie": s, "prix": rng.choice([1200, 1800, 2500, 3500, 5000])}
+                 for o, s in pool[:4]]
+        # Un objet secret, si le compagnon a l'œil
+        secret = None
+        chance = 0.12 + (0.10 if pet_a_trait(uid, "curieux") else 0) \
+                      + (0.08 if pet_a_particularite(uid, "objet") else 0) \
+                      + (0.06 if pet_a_trait(uid, "malin") else 0)
+        if pool[4:] and rng.random() < min(0.4, chance):
+            o, s = pool[4]
+            secret = {"obj": o, "serie": s, "prix": rng.choice([7000, 9000, 12000])}
+        stock_cache.update({"jour": jour, "qui": cle, "offre": offre,
+                            "secret": secret, "vendus": []})
+        save_all_data()
+
+    offre = stock_cache.get("offre", [])
+    secret = stock_cache.get("secret")
+    vendus = stock_cache.get("vendus", [])
+    dispo = [x for x in offre if x["obj"] not in vendus]
+
+    # ── Achat ──
+    if achat:
+        q = normalize_str(achat)
+        cible = next((x for x in dispo if q in normalize_str(x["obj"])), None)
+        if not cible and secret and secret["obj"] not in vendus and q in normalize_str(secret["obj"]):
+            cible = secret
+        if not cible:
+            return await ctx.send(f"❌ Le marchand n'a pas `{achat}` aujourd'hui.")
+        if economy_data[uid]["coins"] < cible["prix"]:
+            return await ctx.send(f"❌ Il te faut **{cible['prix']:,} pièces**.")
+        economy_data[uid]["coins"] -= cible["prix"]
+        vendus.append(cible["obj"])
+        stock_cache["vendus"] = vendus
+        await ajouter_objet_serie(uid, cible["obj"], ctx.channel)
+        s_emo, s_nom = COLLECTIONS_SERIES[cible["serie"]][0], COLLECTIONS_SERIES[cible["serie"]][1]
+        pet_carnet_note(uid, f"{s_emo} A acquis **{cible['obj']}** chez {nom}.",
+                        important=(cible is secret))
+        save_all_data()
+        return await ctx.send(embed=discord.Embed(
+            title=f"{emo} Marché conclu",
+            description=(f"{s_emo} **{cible['obj']}**\n*Série : {s_nom}*\n\n"
+                         f"💰 **−{cible['prix']:,} pièces**\n\n"
+                         f"*« Prends-en soin. »*"),
+            color=coul))
+
+    # ── Vitrine ──
+    e = discord.Embed(title=f"{emo}  {nom}",
+        description=f"*{desc}*\n\n> {random.choice(MARCHAND_REPLIQUES)}", color=coul)
+    if dispo:
+        e.add_field(name="🛒 Sa marchandise du jour", value="\n".join(
+            f"{COLLECTIONS_SERIES[x['serie']][0]} **{x['obj']}** — **{x['prix']:,} p**\n"
+            f"　*série {COLLECTIONS_SERIES[x['serie']][1]}*" for x in dispo), inline=False)
+    else:
+        e.add_field(name="🛒 Sa marchandise du jour",
+                    value="*Il a tout vendu. Reviens demain.*", inline=False)
+    if secret and secret["obj"] not in vendus:
+        e.add_field(name="✨ Il sort quelque chose de sous la bâche",
+                    value=(f"{random.choice(MARCHAND_SECRET)}\n\n"
+                           f"{COLLECTIONS_SERIES[secret['serie']][0]} **{secret['obj']}** — "
+                           f"**{secret['prix']:,} p**"), inline=False)
+    e.add_field(name="\u200b",
+                value=f"💰 Tu as **{economy_data[uid]['coins']:,} pièces**", inline=False)
+    e.set_footer(text="`.marchand <objet>` pour acheter · un marchand différent chaque jour")
+    await ctx.send(embed=e)
+
+# ============================================================
+#  🎭 COMBINAISONS DE TRAITS
+# ============================================================
+# Deux traits ensemble créent des comportements que ni l'un ni l'autre n'aurait seul
+COMBOS_TRAITS = {
+ ("farceur","gourmand"):   ("😈🍖","Chapardeur", [
+   "{p} a volé de la nourriture. Encore. Il ne s'en cache même plus.",
+   "{p} attend que tu tournes la tête pour piquer dans ton assiette.",
+   "Une part a disparu. {p} n'a rien vu. {p} a des miettes sur le museau."]),
+ ("paresseux","protecteur"):("😴🛡️","Gardien Endormi", [
+   "{p} dort profondément… puis ouvre un œil au moindre bruit suspect.",
+   "Il n'a pas bougé de la journée. Mais il s'est levé quand on a sonné.",
+   "{p} monte la garde. Allongé. Les yeux fermés. Mais il monte la garde."]),
+ ("timide","affectueux"):   ("🫣❤️","Fidèle Discret", [
+   "{p} se colle à toi dès qu'il n'y a plus personne d'autre.",
+   "Avec les autres il se cache. Avec toi il ne te lâche pas.",
+   "{p} attend que tout le monde parte pour venir réclamer un câlin."]),
+ ("courageux","curieux"):   ("🦁👀","Explorateur Intrépide", [
+   "{p} s'approche de ce qui fait peur à tout le monde. Sans hésiter.",
+   "Un bruit étrange. {p} y va. Directement.",
+   "{p} a ouvert une porte que personne n'osait ouvrir."]),
+ ("calin","solitaire"):     ("🤗🌙","Câlin Exigeant", [
+   "{p} veut un câlin. Maintenant. Et après, qu'on le laisse tranquille.",
+   "Il vient se coller trois minutes, puis repart. Le contrat est clair."]),
+ ("gourmand","maniaque"):   ("🍖🧼","Fin Gourmet", [
+   "{p} trie sa nourriture par ordre de préférence avant de commencer.",
+   "Il mange beaucoup. Mais avec une distinction remarquable."]),
+ ("peureux","protecteur"):  ("🥺🛡️","Brave Malgré Tout", [
+   "{p} tremble. Mais il reste devant toi.",
+   "Il a peur de tout. Sauf quand il s'agit de te défendre."]),
+ ("sportif","paresseux"):   ("💪😴","Sprint et Sieste", [
+   "{p} court comme un fou pendant six minutes, puis dort trois heures.",
+   "Deux vitesses : plein régime, ou coma."]),
+ ("bavard","solitaire"):    ("🗣️🌙","Monologueur", [
+   "{p} parle beaucoup. À personne en particulier.",
+   "Il commente sa journée dans une pièce vide."]),
+ ("farceur","malin"):       ("😈🦊","Génie du Chaos", [
+   "{p} a ouvert le placard, pris ce qu'il voulait, et refermé derrière lui.",
+   "Le désordre est trop bien organisé pour être un accident."]),
+ ("aventurier","peureux"):  ("🏃🥺","Aventurier Prudent", [
+   "{p} veut sortir. {p} a peur de sortir. Le dilemme dure vingt minutes.",
+   "Il avance de trois pas, recule de deux. Progression lente mais réelle."]),
+ ("cupide","possessif"):    ("🤑🧸","Dragon sur son Trésor", [
+   "{p} a rassemblé toutes ses affaires en un seul tas. Il dort dessus.",
+   "Personne n'approche de sa collection. Personne."]),
+ ("intello","curieux"):     ("📚👀","Petit Chercheur", [
+   "{p} observe, teste, recommence. Il finit toujours par comprendre.",
+   "Il a résolu un problème que tu n'avais pas remarqué."]),
+ ("fetard","calin"):        ("🎉🤗","Boute-en-Train", [
+   "{p} veut que tout le monde participe. Surtout toi.",
+   "Dès qu'il y a du monde, il fait le tour pour saluer chacun."]),
+ ("tetu","protecteur"):     ("😤🛡️","Inflexible", [
+   "{p} s'est mis devant la porte. Il ne bougera pas. Point.",
+   "Il a décidé que c'était sa mission. La discussion est close."]),
+}
+
+def combos_actifs(uid):
+    """Les combinaisons de traits présentes chez ce compagnon"""
+    pid, pdb, st = get_active_pet(uid)
+    if not st:
+        return []
+    traits = set(st.get("traits", []))
+    return [(paire, conf) for paire, conf in COMBOS_TRAITS.items()
+            if set(paire) <= traits]
+
+async def tenter_combo(ctx, uid):
+    """Une scène née d'une combinaison de traits — rare et spécifique"""
+    import time as _t
+    pid, pdb, pst = get_active_pet(uid)
+    if not pst:
+        return False
+    actifs = combos_actifs(uid)
+    if not actifs:
+        return False
+    if _t.time() - pst.get("dernier_combo", 0) < 7200:
+        return False
+    if random.random() > 0.28:
+        return False
+    pst["dernier_combo"] = _t.time()
+    paire, (emo, nom, scenes) = random.choice(actifs)
+    texte = _sans_repet(uid, "combo_" + nom, scenes, memoire=3).replace(
+        "{p}", f"**{pet_nom_decore(uid, pdb)}**")
+    st = pet_etat(uid)
+    st["humeur"] = min(100, st["humeur"] + 5)
+    save_all_data()
+    e = discord.Embed(title=f"{emo}  {nom}", description=f"*{texte}*", color=0x9b59b6)
+    e.set_footer(text=f"Un comportement né de : "
+                      + " + ".join(PET_TRAITS[t][1] for t in paire if t in PET_TRAITS))
+    await ctx.send(embed=e)
+    return True
+
+# ============================================================
+#  🎒 SÉRIES DE COLLECTION
+# ============================================================
+COLLECTIONS_SERIES = {
+ "coquillages": ("🐚","Coquillages","Ramassés au bord de l'eau",
+   ["Coquillage Nacré","Coquillage Strié","Coquillage Rose","Conque Bleue","Bigorneau Doré",
+    "Coquillage Spiralé","Nacre Brisée","Coquillage Blanc","Coquille d'Ormeau","Coquillage Noir"]),
+ "pierres": ("🪨","Pierres étranges","Elles n'ont rien à faire là",
+   ["Caillou Plat","Pierre Ronde","Galet Rayé","Silex","Pierre Percée","Roche Volcanique",
+    "Pierre Verte","Ardoise","Quartz Brut","Pierre Chaude","Pierre qui Flotte","Météorite"]),
+ "plumes": ("🪶","Plumes","Chacune vient d'un oiseau différent",
+   ["Plume Grise","Plume Blanche","Plume Rayée","Plume Duveteuse","Plume Noire",
+    "Plume Irisée","Plume de Nuit","Plume Dorée","Plume Impossible"]),
+ "fleurs": ("🌸","Fleurs","Cueillies, pas achetées",
+   ["Pâquerette","Pissenlit","Coquelicot","Trèfle","Bleuet","Bouton d'Or","Violette",
+    "Fleur de Cerisier","Chardon","Fleur de Nuit","Rose Sauvage","Fleur Inconnue"]),
+ "perdus": ("🧦","Objets perdus","Ils appartenaient à quelqu'un",
+   ["Chaussette Dépareillée","Bouton","Élastique","Clé Anonyme","Ticket Froissé","Lacet",
+    "Pièce Étrangère","Bague Simple","Lunette Cassée","Photo Découpée","Carnet Vide",
+    "Porte-Clés","Badge Rouillé","Trombone Tordu"]),
+ "tresors": ("🏺","Trésors anciens","Beaucoup plus vieux que lui",
+   ["Tesson de Poterie","Médaillon Terni","Pièce Antique","Fibule","Perle Ancienne",
+    "Sceau Brisé","Amulette","Fragment de Statue","Fiole Scellée","Tablette Gravée"]),
+ "celestes": ("🌌","Objets célestes","Ils ne viennent pas d'ici",
+   ["Poussière d'Étoile","Éclat Lunaire","Fragment Froid","Pierre Tombée du Ciel",
+    "Cristal Nocturne","Larme d'Étoile","Éclat d'Aurore","Cœur de Comète"]),
+ "absurdes": ("😂","Objets absurdes","Personne ne sait pourquoi",
+   ["Cuillère Tordue","Canard en Plastique","Moitié de Ciseaux","Dentier","Chapeau Minuscule",
+    "Tong Solitaire","Pion d'Échecs","Bouchon Sifflant","Éponge Fossilisée","Peigne à Trois Dents",
+    "Poignée de Porte","Ressort","Mini Trophée","Faux Nez"]),
+ "souvenirs": ("📷","Souvenirs","Des moments figés",
+   ["Photo Floue","Polaroid Jauni","Ticket de Cinéma","Carte Postale Vierge","Photo de Groupe",
+    "Négatif","Photo Déchirée","Instantané Raté","Portrait Inconnu","Photo du Duo"]),
+ "cristaux": ("💎","Cristaux","Ils changent avec la lumière",
+   ["Quartz Rose","Améthyste","Cristal Laiteux","Éclat Bleu","Prisme","Cristal Fendu",
+    "Géode","Cristal Sombre","Cristal Chantant","Cœur de Cristal"]),
+ "mysterieux": ("🗝️","Objets mystérieux","Aucune explication",
+   ["Clé sans Serrure","Boîte Scellée","Carte Illisible","Lettre Vierge","Anneau Froid",
+    "Miroir Terni","Sablier Arrêté","Cadenas Ouvert","Poupée de Chiffon","Cahier Chiffré"]),
+ "vieuxjouets": ("🧸","Vieux jouets","Ils ont déjà vécu",
+   ["Ours Décousu","Petit Train","Toupie","Bille Fêlée","Robot Rouillé","Cheval de Bois",
+    "Yo-yo Cassé","Figurine Effacée","Kaléidoscope","Boîte à Musique","Cerceau","Osselets"]),
+}
+# Récompense à la complétion d'une série
+COLLECTION_RECOMPENSES = {
+ "coquillages": ("🏅","Ramasseur de Mer"),   "pierres":    ("🏅","Géologue Amateur"),
+ "plumes":      ("🏅","Plumeteur"),           "fleurs":     ("🏅","Cueilleur"),
+ "perdus":      ("🏅","Bureau des Objets Trouvés"), "tresors": ("🏅","Archéologue"),
+ "celestes":    ("🏅","Voyageur d'Étoiles"),  "absurdes":   ("🏅","Collectionneur du Bizarre"),
+ "souvenirs":   ("🏅","Gardien de Souvenirs"),"cristaux":   ("🏅","Tailleur de Cristaux"),
+ "mysterieux":  ("🏅","Chercheur d'Énigmes"), "vieuxjouets":("🏅","Antiquaire du Jouet"),
+}
+
+def _serie_de(objet):
+    for cle, (emo, nom, desc, lot) in COLLECTIONS_SERIES.items():
+        if objet in lot:
+            return cle, emo, nom
+    return None, None, None
+
+def tirer_objet_serie(uid, bonus_rare=0.0):
+    """Tire un objet d'une série — complète le tirage classique"""
+    pid, pdb, pst = get_active_pet(uid)
+    possedes = set(pst.get("series", [])) if pst else set()
+    pool = [(o, cle) for cle, (_, _, _, lot) in COLLECTIONS_SERIES.items()
+            for o in lot if o not in possedes]
+    if not pool:
+        return None
+    return random.choice(pool)[0]
+
+async def ajouter_objet_serie(uid, objet, channel=None):
+    """Ajoute un objet de série et annonce la complétion éventuelle"""
+    pid, pdb, pst = get_active_pet(uid)
+    if not pst:
+        return False
+    pst.setdefault("series", [])
+    if objet in pst["series"]:
+        return False
+    pst["series"].append(objet)
+    cle, emo, nom = _serie_de(objet)
+    if not cle:
+        return True
+    lot = COLLECTIONS_SERIES[cle][3]
+    poss = [o for o in lot if o in pst["series"]]
+    if len(poss) == len(lot):
+        t_emo, t_nom = COLLECTION_RECOMPENSES[cle]
+        pst.setdefault("titres_series", [])
+        if cle not in pst["titres_series"]:
+            pst["titres_series"].append(cle)
+            pet_carnet_note(uid, f"{emo} A complété la collection **{nom}** !", important=True)
+            gazette_fait("divers", f"Le compagnon de <@{uid}> a complété la collection "
+                                   f"{emo} **{nom}** !", 5)
+            if channel:
+                try:
+                    await channel.send(embed=discord.Embed(
+                        title=f"{emo}  COLLECTION COMPLÈTE !",
+                        description=(f"# {nom}\n*{COLLECTIONS_SERIES[cle][2]}*\n\n"
+                                     f"**{len(lot)}/{len(lot)}** objets réunis.\n\n"
+                                     f"🏅 Titre débloqué : **{t_nom}**"),
+                        color=0xf1c40f))
+                except Exception:
+                    pass
+    return True
+
+@bot.command(name="petseries", aliases=["series-pet", "collections"])
+async def petseries_cmd(ctx, serie: str = None):
+    """Les séries de collection — .petseries [série]"""
+    uid = str(ctx.author.id)
+    pid, pdb, pst = get_active_pet(uid)
+    if not pid:
+        return await ctx.send("🐾 Tu n'as pas de compagnon actif !")
+    pet_init_perso(uid)
+    poss = set(pst.get("series", []))
+    faits = pst.get("titres_series", [])
+
+    cle = normalize_str(serie or "")
+    match = next((k for k in COLLECTIONS_SERIES
+                  if cle and (cle in k or cle in normalize_str(COLLECTIONS_SERIES[k][1]))), None)
+    if match:
+        emo, nom, desc, lot = COLLECTIONS_SERIES[match]
+        lignes = [f"{'✅' if o in poss else '🔒'} {o if o in poss else '*???*'}" for o in lot]
+        e = discord.Embed(
+            title=f"{emo}  {nom}",
+            description=(f"*{desc}*\n\n**{len([o for o in lot if o in poss])} / {len(lot)}**"
+                         + ("  ·  🏅 **complétée !**" if match in faits else "")),
+            color=0xf1c40f if match in faits else 0xe91e63)
+        for i in range(0, len(lignes), 8):
+            e.add_field(name="\u200b", value="\n".join(lignes[i:i+8]), inline=True)
+        e.set_footer(text="Il les trouve en expédition, en sortie et lors des événements")
+        return await ctx.send(embed=e)
+
+    total = sum(len(v[3]) for v in COLLECTIONS_SERIES.values())
+    e = discord.Embed(
+        title=f"🎒 Les collections de {pet_nom_decore(uid, pdb)}",
+        description=(f"**{len(poss)} / {total}** objets réunis  ·  "
+                     f"**{len(faits)} / {len(COLLECTIONS_SERIES)}** séries complètes\n"
+                     f"*`.petseries <nom>` pour le détail d'une série.*"),
+        color=0xe91e63)
+    for k, (emo, nom, desc, lot) in COLLECTIONS_SERIES.items():
+        n = len([o for o in lot if o in poss])
+        f = max(0, min(8, int(n / len(lot) * 8)))
+        marque = " 🏅" if k in faits else ""
+        e.add_field(name=f"{emo} {nom}{marque}",
+                    value=f"`{'▰'*f}{'▱'*(8-f)}` {n}/{len(lot)}", inline=True)
+    e.set_footer(text="Compléter une série débloque un titre pour ton compagnon")
+    await ctx.send(embed=e)
+
 # ============================================================
 #  🧸 JOUETS
 # ============================================================
@@ -14476,18 +14853,95 @@ class ActiviteView(ui.View):
        [("🎁","Machine à pinces"),("🎪","Le spectacle"),("🚪","Rentrer")]],
     }
     RESULTATS = {
-     "peche": ["🐟 Un poisson ! Un vrai !", "👢 Une vieille chaussure. Classique.",
-               "🧦 Une chaussette. Comment ?", "😂 Rien du tout. Mais quel après-midi.",
-               "📦 Quelque chose de lourd remonte…"],
-     "camper": ["🌌 La nuit a été magnifique.", "🌧️ Il a plu. Vous avez ri quand même.",
-                "🔥 Le feu a tenu jusqu'au matin.", "😂 La tente s'est effondrée à 2 h."],
-     "shopping": ["🛍️ Il a choisi lui-même. Tu as payé.", "😂 Il s'est endormi dans un panier.",
-                  "🧸 Il refuse de lâcher une peluche.", "🚪 Vous repartez sans rien. Enfin, presque."],
-     "picnic": ["🥪 Il a mangé la moitié de ta part.", "🐝 Une guêpe. Panique générale.",
-                "😴 Vous vous êtes endormis tous les deux.", "🌸 Il t'a rapporté une fleur."],
-     "foraine": ["🎁 Il a gagné une peluche. Enfin, tu l'as gagnée pour lui.",
-                 "😱 Le manège lui a fait peur. Une seule fois suffit.",
-                 "🍭 Il a du sucre jusque sur le front.", "😂 Il a fait tomber tous les lots du stand."],
+     "peche": [
+      "🐟 Un poisson ! Un vrai ! {p} n'en revient pas.",
+      "🐠 Un poisson aux couleurs impossibles. Vous le relâchez.",
+      "👢 Une vieille botte. {p} la trouve fascinante.",
+      "🧦 Une chaussette. Au fond d'un lac. Comment ?",
+      "📦 Une petite boîte fermée remonte au bout de la ligne.",
+      "💎 Quelque chose brille dans la vase. Vous n'y croyez pas.",
+      "🦀 Un crabe. Il pince {p}. Match terminé.",
+      "🌿 Des algues. Beaucoup d'algues. Uniquement des algues.",
+      "😂 La ligne s'emmêle autour de {p}. Il faut dix minutes pour le libérer.",
+      "🐾 {p} tombe presque à l'eau. Presque.",
+      "🎣 Un poisson énorme mord… et casse la ligne. Vous en parlerez longtemps.",
+      "🪵 Une branche. {p} la garde. Elle est à lui maintenant.",
+      "🐸 Une grenouille saute sur la tête de {p}. Cri général.",
+      "🫧 Rien du tout. Mais le silence était parfait.",
+      "🐟 Trois poissons d'un coup. {p} est en état de choc.",
+      "🥾 Une deuxième botte. La paire est complète.",
+      "🌊 Un orage arrive. Repli stratégique.",
+      "🦆 Un canard vous vole l'appât sous le nez.",
+      "😴 {p} s'endort au bord de l'eau. La pêche attendra.",
+      "🪝 L'hameçon accroche… le pantalon de quelqu'un. Excuses présentées.",
+      "🐢 Une tortue. Elle vous regarde. Vous la regardez. Elle repart.",
+      "✨ L'eau devient parfaitement immobile pendant une minute. Étrange.",
+      "🎏 Un vieux fanion remonte. Il vient d'on ne sait où.",
+      "🐙 Quelque chose de gros bouge sous la surface. Vous ne saurez jamais quoi.",
+     ],
+     "camper": [
+      "🌌 La nuit a été magnifique. Vous avez compté les étoiles.",
+      "🌧️ Il a plu. Vous avez ri quand même.",
+      "🔥 Le feu a tenu jusqu'au matin. {p} n'a pas bougé.",
+      "😂 La tente s'est effondrée à 2 h. Sur vous deux.",
+      "🦉 Un hibou a hululé toute la nuit. {p} lui a répondu.",
+      "🐾 {p} a disparu deux minutes. Il n'expliquera jamais où il était.",
+      "🍡 Des chamallows grillés. {p} en a mangé la moitié.",
+      "😱 Un bruit dans les buissons. C'était un hérisson. Panique quand même.",
+      "🌠 Une étoile filante. Vous avez fait un vœu tous les deux.",
+      "🎒 {p} a trouvé quelque chose en creusant près de la tente.",
+      "🐜 Des fourmis dans le sac de couchage. Nuit compliquée.",
+      "🌄 Vous vous êtes réveillés avant le soleil. Ça valait le coup.",
+      "😴 {p} a refusé de dormir. Il a monté la garde jusqu'à l'aube.",
+      "🎵 Vous avez chanté. Mal. Personne ne s'est plaint.",
+      "🌫️ Le brouillard au matin. Le monde avait disparu.",
+     ],
+     "shopping": [
+      "🛍️ Il a choisi lui-même. Tu as payé. Comme prévu.",
+      "😂 {p} s'est endormi dans un panier. Un employé l'a photographié.",
+      "🧸 Il refuse de lâcher une peluche. La négociation dure vingt minutes.",
+      "🚪 Vous repartez sans rien. Enfin, presque rien.",
+      "💥 {p} a fait tomber une pyramide de boîtes. Toute la pyramide.",
+      "🏷️ Il s'assoit devant une réduction. Il a compris quelque chose ?",
+      "😾 Il déteste ce rayon. Il refuse d'y entrer. C'est définitif.",
+      "🥺 Il s'assoit devant la vitrine et refuse de partir.",
+      "🎀 Le vendeur lui offre quelque chose. Il a craqué comme tout le monde.",
+      "🛒 {p} monte dans le chariot et s'y installe pour la durée des courses.",
+      "😱 Un aspirateur en démonstration. Fuite immédiate.",
+      "🍖 Il trouve le rayon nourriture tout seul. Instinct pur.",
+      "👀 Il fixe un autre compagnon à trois rayons de là. Le duel visuel dure.",
+     ],
+     "picnic": [
+      "🥪 Il a mangé la moitié de ta part. Tu n'as rien vu venir.",
+      "🐝 Une guêpe. Panique générale. Le pique-nique est déplacé.",
+      "😴 Vous vous êtes endormis tous les deux au soleil.",
+      "🌸 Il t'a rapporté une fleur. Il l'a choisie, visiblement.",
+      "🐦 Un oiseau vole une miette. {p} déclare la guerre.",
+      "🎾 Une partie improvisée dans l'herbe. Deux heures.",
+      "🌧️ Trois gouttes. Repli sous un arbre. Ça a duré cinq minutes.",
+      "🐜 Une file de fourmis traverse la nappe. {p} les observe, hypnotisé.",
+      "🧺 Il s'installe dans le panier vide. Il y reste.",
+      "🦋 Un papillon. Poursuite. Zéro chance.",
+      "😂 {p} se roule dans l'herbe pendant dix minutes sans raison.",
+      "🍉 Il découvre la pastèque. Le monde change.",
+      "🌳 Un autre compagnon passe. Ils s'observent. Ils s'ignorent. Correct.",
+     ],
+     "foraine": [
+      "🎁 Il a gagné une peluche. Enfin, tu l'as gagnée pour lui.",
+      "😱 Le manège lui a fait peur. Une seule fois suffit.",
+      "🍭 Il a du sucre jusque sur le front. Personne ne sait comment.",
+      "😂 Il a fait tomber tous les lots du stand. Tous.",
+      "🎡 La grande roue. Il a regardé toute la ville sans bouger une oreille.",
+      "🎯 Trois tirs, trois échecs. {p} te regarde avec pitié.",
+      "🏚️ La maison hantée. Il n'a pas eu peur. Toi si.",
+      "🎪 Un spectacle. {p} s'est endormi au milieu.",
+      "🍿 Il vole du pop-corn à un inconnu. L'inconnu rit.",
+      "🎠 Le carrousel. Il refuse de descendre. Trois tours de plus.",
+      "📸 Une photo dans le photomaton. Elle est floue. Elle est parfaite.",
+      "🎈 Un ballon lui échappe. Il le regarde monter, très longtemps.",
+      "🕹️ La machine à pinces. Contre toute attente, il gagne.",
+      "🎺 La fanfare passe. {p} suit le défilé sur vingt mètres.",
+     ],
     }
 
     def _construire(self):
@@ -14542,7 +14996,9 @@ class ActiviteView(ui.View):
                 title=f"{ACTIVITES[self.cle][0]} {ACTIVITES[self.cle][1]}",
                 description=f"➡️ *{label}*\n\n**{SUITES[self.cle]}**\n\n*Et maintenant ?*",
                 color=0x1abc9c), view=self)
-        res = random.choice(self.RESULTATS[self.cle])
+        pid, pdb, pst = get_active_pet(self.uid)
+        res = _sans_repet(self.uid, "act_" + self.cle, self.RESULTATS[self.cle], memoire=8)
+        res = res.replace("{p}", f"**{pet_nom_decore(self.uid, pdb)}**")
         await self.terminer(interaction, f"{self.choix1} → {label}", res)
 
     async def terminer(self, interaction, parcours, resultat, extra=None):
@@ -15252,6 +15708,11 @@ async def petexpedition_cmd(ctx, lieu: str = None):
             xp_p = 40 * heures
             l, lv = give_pet_xp(uid, xp_p)
             butin = [f"💰 **{pieces:,} pièces**", f"⭐ **+{xp_p} XP** pour {pdb['nom']}"]
+            if random.random() < 0.35:
+                _os = tirer_objet_serie(uid)
+                if _os and await ajouter_objet_serie(uid, _os, ctx.channel):
+                    _sc, _se, _sn = _serie_de(_os)
+                    butin.append(f"{_se} **{_os}** — *série {_sn}*")
             if random.random() < 0.4 + heures * 0.1:
                 _o = tirer_objet(uid, bonus_rare=heures * 0.25)
                 pst.setdefault("objets", [])
@@ -17812,9 +18273,12 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
         # ── 5. PERSONNALITÉ ──
         traits = pstate.get("traits", [])
         if traits:
-            embed.add_field(name="🧠 Personnalité",
-                            value="\n".join(f"{PET_TRAITS[t][0]} **{PET_TRAITS[t][1]}**"
-                                            for t in traits if t in PET_TRAITS), inline=True)
+            val_t = "\n".join(f"{PET_TRAITS[t][0]} **{PET_TRAITS[t][1]}**"
+                              for t in traits if t in PET_TRAITS)
+            _cb = combos_actifs(uid)
+            if _cb:
+                val_t += "\n\n" + "\n".join(f"{cf[0]} *{cf[1]}*" for _, cf in _cb[:2])
+            embed.add_field(name="🧠 Personnalité", value=val_t, inline=True)
 
         # ── 6. PARTICULARITÉ ──
         if part:
@@ -17888,6 +18352,8 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
         await verifier_traits_histoire(uid, ctx.channel)
         save_all_data()
         if await tenter_moment_unique(ctx, uid):
+            return
+        if await tenter_combo(ctx, uid):
             return
         if await tenter_histoire(ctx, uid):
             return
