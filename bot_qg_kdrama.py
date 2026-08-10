@@ -1273,8 +1273,9 @@ def build_help_pages(guild, is_admin=False):
     ), inline=False)
     e.add_field(name="💗 S'en occuper", value=(
         "`.nourrir` 🍖 — **choisis l'aliment**, sans cooldown\n"
-        "`.laver` 🛁 · `.promener` 🚶\n"
-        "`.jouer` 🎾 · `.dormir` 😴 · `.caresser` 🫶\n"
+        "`.jouer` 🎾 — **choisis le jouet**, ou une partie improvisée\n"
+        "`.laver` 🛁 · `.promener` 🚶 · `.dormir` 😴 · `.caresser` 🫶\n"
+
         "*Un compagnon négligé voit son bonus **divisé par deux**.*\n"
         "*Un besoin urgent passe avant le temps d'attente.*"
     ), inline=False)
@@ -1313,6 +1314,7 @@ def build_help_pages(guild, is_admin=False):
         "`.petexpedition` — 4 lieux · il part 1 à 4 h et rapporte un butin\n"
         "`.petobjets` — Sa collection *(30 objets, 6 raretés)*\n"
         "`.petsouvenirs` — 🧸 Ses objets sentimentaux *(nommables)*\n"
+        "`.petinventaire` — 🎒 **Tout ce que tu possèdes** · `.petreparer` si un objet manque\n"
         "`.petseries` — 🎒 **12 séries** *(131 objets, titre à la complétion)*\n"
         "`.marchand` — 📦 **Le marchand itinérant** *(différent chaque jour)*\n"
         "*Il fait parfois des **bêtises** et vit des **événements** quand tu ouvres `.pet`.*\n"
@@ -1567,7 +1569,8 @@ def build_help_pages(guild, is_admin=False):
         "`.givexp @membre <montant>` — Donner de l'XP\n"
         "`.giveamelioration @membre <n>` — Donner des points d'amélioration\n"
         "`.recalcamelioration [@membre]` — Recalculer les points selon le niveau\n"
-        "`.resetniveaupets confirmer` — Remettre **tous les pets au niveau 1**"
+        "`.resetniveaupets confirmer` — Remettre **tous les pets au niveau 1**\n"
+        "`.reparerpets` — Récupérer les objets manquants de tous les membres"
     ), inline=False)
     e.add_field(name="🔄 Réinitialisation", value=(
         "`.reset` — Voir les cibles disponibles\n"
@@ -10412,38 +10415,32 @@ def give_pet_xp(uid, amount=1):
 #  🐾 INTERACTIONS AVEC LES COMPAGNONS
 # ============================================================
 PET_ACTIONS = {
-    "nourrir": {"emoji": "🍖", "xp": 25, "cout": 200, "cd": 4,
-        "humeur": 25, "faim": -40,
+    "nourrir": {"emoji": "🍖", "xp": 25, "cout": 200, "cd": 0, "humeur": 25, "faim": -40,
         "textes": ["{e} **{n}** engloutit sa gamelle en trois bouchées et te réclame déjà la suite.",
                    "{e} **{n}** mange proprement, puis vient frotter sa tête contre ta main.",
                    "{e} **{n}** renifle son repas… puis le dévore d'un coup. Il adore ça.",
                    "{e} **{n}** trie ses croquettes avant de manger. Difficile, mais rassasié."]},
-    "laver": {"emoji": "🛁", "xp": 20, "cout": 150, "cd": 8,
-        "humeur": 10, "proprete": 60,
+    "laver": {"emoji": "🛁", "xp": 20, "cout": 150, "cd": 0, "humeur": 10, "proprete": 60,
         "textes": ["{e} **{n}** proteste dans l'eau tiède… puis se laisse faire et ferme les yeux.",
                    "{e} **{n}** s'ébroue et te trempe entièrement. Ça valait le coup, il brille.",
                    "{e} **{n}** joue avec la mousse et en met partout. Propre, mais la salle de bain non.",
                    "{e} **{n}** sort du bain tout gonflé et fier de lui."]},
-    "promener": {"emoji": "🚶", "xp": 35, "cout": 0, "cd": 6,
-        "humeur": 30, "energie": -25,
+    "promener": {"emoji": "🚶", "xp": 35, "cout": 0, "cd": 0, "humeur": 30, "energie": -25,
         "textes": ["{e} **{n}** tire sur la laisse pendant tout le trajet. Vous avez fait le double du chemin prévu.",
                    "{e} **{n}** salue tous les passants du quartier. Vous rentrez tard, mais heureux.",
                    "{e} **{n}** s'arrête devant chaque vitrine de ramyeon. Impossible de le faire avancer.",
                    "{e} **{n}** découvre une flaque. Tu regrettes déjà le bain d'hier."]},
-    "jouer": {"emoji": "🎾", "xp": 30, "cout": 0, "cd": 3,
-        "humeur": 35, "energie": -20,
+    "jouer": {"emoji": "🎾", "xp": 30, "cout": 0, "cd": 0, "humeur": 35, "energie": -20,
         "textes": ["{e} **{n}** rapporte la balle… puis refuse catégoriquement de la lâcher.",
                    "{e} **{n}** court en cercles pendant dix minutes sans raison apparente.",
                    "{e} **{n}** te bat trois fois de suite à cache-cache. Tu ne comprends pas comment.",
                    "{e} **{n}** s'endort sur le jouet au milieu de la partie."]},
-    "dormir": {"emoji": "😴", "xp": 15, "cout": 0, "cd": 8,
-        "humeur": 10, "energie": 70,
+    "dormir": {"emoji": "😴", "xp": 15, "cout": 0, "cd": 0, "humeur": 10, "energie": 70,
         "textes": ["{e} **{n}** se roule en boule contre toi et s'endort en quelques secondes.",
                    "{e} **{n}** ronfle doucement. Tu n'oses plus bouger.",
                    "{e} **{n}** rêve — ses pattes s'agitent dans le vide.",
                    "{e} **{n}** occupe les trois quarts du lit. Tu dormiras sur le bord."]},
-    "caresser": {"emoji": "🫶", "xp": 10, "cout": 0, "cd": 1,
-        "humeur": 15,
+    "caresser": {"emoji": "🫶", "xp": 10, "cout": 0, "cd": 0, "humeur": 15,
         "textes": ["{e} **{n}** ferme les yeux et se laisse aller complètement.",
                    "{e} **{n}** ronronne — enfin, à sa manière.",
                    "{e} **{n}** réclame encore en poussant ta main du museau.",
@@ -10608,6 +10605,132 @@ async def donner_aliment(source, uid, nom):
     save_all_data()
     await envoyer(embed=embed)
 
+
+class JouerView(ui.View):
+    """Choix du jouet — depuis l'inventaire du joueur"""
+    def __init__(self, uid, jouets, timeout=120):
+        super().__init__(timeout=timeout)
+        self.uid = uid
+        pid, pdb, pst = get_active_pet(uid)
+        pref = pst.get("jouet_prefere") if pst else None
+        cpt = pst.get("jouets_cpt", {}) if pst else {}
+        TYPE_LAB = {"lance":"à lancer","roule":"à faire rouler","chasse":"à chasser",
+                    "calin":"doudou","tire":"tir à la corde","reflechit":"réflexion",
+                    "bruit":"bruyant","cachette":"cachette","creatif":"créatif"}
+        opts = []
+        for j in sorted(jouets, key=lambda x: -cpt.get(x, 0))[:24]:
+            emo, prix, typ = PET_JOUETS[j]
+            opts.append(discord.SelectOption(
+                label=(f"{j}" + (" ❤️" if j == pref else ""))[:100], emoji=emo, value=j,
+                description=f"{TYPE_LAB.get(typ, typ)}"
+                            + (f" · joué {cpt[j]}×" if cpt.get(j) else "")[:100]))
+        opts.append(discord.SelectOption(label="Jouer sans jouet", emoji="🐾", value="__rien__",
+                                         description="Une partie improvisée"))
+        sel = ui.Select(placeholder="🎾 Avec quoi voulez-vous jouer ?", options=opts)
+        async def cb(interaction):
+            if str(interaction.user.id) != self.uid:
+                return await interaction.response.send_message(
+                    "❌ Ce n'est pas ton compagnon !", ephemeral=True)
+            for it in self.children:
+                it.disabled = True
+            await interaction.response.edit_message(view=self)
+            await jouer_avec(interaction, self.uid, sel.values[0])
+            self.stop()
+        sel.callback = cb
+        self.add_item(sel)
+
+JOUER_SANS = [
+ "{p} court après ta main. Il ne l'attrapera jamais. Il essaiera quand même.",
+ "{p} et toi improvisez une partie de cache-cache. Il se cache toujours au même endroit.",
+ "{p} bondit sur une ombre au mur. L'ombre gagne.",
+ "{p} tourne autour de toi de plus en plus vite. Puis s'arrête net.",
+ "{p} vous entraîne dans une course dans le couloir. Tu perds.",
+ "{p} fait semblant de t'attaquer, puis se roule sur le dos pour un ventre-gratouille.",
+]
+
+async def jouer_avec(source, uid, jouet):
+    """Séance de jeu — avec ou sans jouet"""
+    import time as _t
+    envoyer = source.followup.send if hasattr(source, "followup") else source.send
+    pid, pdb, pst = get_active_pet(uid)
+    st = pet_etat(uid)
+    nom_pet = f"**{pet_nom_decore(uid, pdb)}**"
+
+    if jouet == "__rien__":
+        texte = _sans_repet(uid, "jouer_rien", JOUER_SANS).replace("{p}", nom_pet)
+        titre, emo_j = "🐾 Une partie improvisée", "🐾"
+        gain_h, gain_x = 12, 20
+        extra = ""
+    else:
+        if not possede(uid, "toy_" + jouet):
+            return await envoyer(f"❌ Tu ne possèdes pas **{jouet}**.")
+        emo_j, prix, typ = PET_JOUETS[jouet]
+        pool = list(JOUET_REACTIONS[typ])
+        for t in pst.get("traits", []):
+            pool += JOUET_TRAITS.get(t, []) * 2
+        texte = _sans_repet(uid, "jouet_" + typ, pool).replace(
+            "{p}", nom_pet).replace("{j}", f"**{jouet}**")
+        titre = f"{emo_j} {jouet}"
+        gain_h, gain_x = 16, 25
+        cpt = pst.setdefault("jouets_cpt", {})
+        cpt[jouet] = cpt.get(jouet, 0) + 1
+        extra = ""
+        if cpt[jouet] == 8 and pst.get("jouet_prefere") != jouet:
+            pst["jouet_prefere"] = jouet
+            extra = f"\n\n❤️ **{jouet}** est devenu son jouet préféré !"
+            pet_carnet_note(uid, f"{emo_j} **{jouet}** est devenu son jouet préféré.", important=True)
+
+    st["humeur"] = min(100, st["humeur"] + gain_h)
+    st["energie"] = max(0, st["energie"] - 10)
+    give_pet_xp(uid, gain_x)
+    pet_stat(uid, "parties")
+    salir_refuge(uid, 2)
+    st["dernier"]["jouer"] = _t.time()
+    save_all_data()
+
+    e = discord.Embed(title=titre, description=texte + extra, color=0xe91e63)
+    e.add_field(name="✨ Effets",
+                value=f"❤️ Humeur **+{gain_h}**  ·  ⚡ Énergie **−10**  ·  ⭐ **+{gain_x} XP**",
+                inline=False)
+    e.set_footer(text=pet_humeur_texte(st))
+    await envoyer(embed=e)
+
+@bot.command(name="jouer", aliases=["jouets-jouer"])
+async def jouer_cmd(ctx, *, jouet: str = None):
+    """Joue avec ton compagnon — .jouer [jouet]"""
+    import time as _t
+    uid = str(ctx.author.id)
+    pid, pdb, pst = get_active_pet(uid)
+    if not pid:
+        return await ctx.send("🐾 Tu n'as pas de compagnon actif ! Rends-toi dans `.shop`.")
+    pet_init_perso(uid)
+    st = pet_etat(uid)
+    if st["energie"] < 15:
+        return await ctx.send(embed=discord.Embed(
+            title="😴 Il est épuisé",
+            description="*Laisse-le récupérer avant de rejouer.*\n\n➡️ `.dormir`",
+            color=0x95a5a6))
+    if _t.time() - st["dernier"].get("jouer", 0) < 90:
+        return await ctx.send("⏳ Doucement — laisse-lui le temps de souffler.", delete_after=6)
+
+    jouets = stock_jouets(uid)
+    if jouet:
+        j = next((k for k in jouets if normalize_str(jouet) == normalize_str(k)), None) or \
+            next((k for k in jouets if normalize_str(jouet) in normalize_str(k)), None)
+        if not j:
+            return await ctx.send(f"❌ Tu ne possèdes pas **{jouet}** — `.petshop` rayon jouets.")
+        return await jouer_avec(ctx, uid, j)
+
+    if not jouets:
+        return await jouer_avec(ctx, uid, "__rien__")
+
+    e = discord.Embed(
+        title=f"🎾 Avec quoi jouer avec {pst.get('surnom') or pdb['nom']} ?",
+        description=(f"*{len(jouets)} jouet(s) dans ton inventaire.*\n"
+                     f"⚡ Énergie : **{int(st['energie'])} %**"),
+        color=0xe91e63)
+    await ctx.send(embed=e, view=JouerView(uid, jouets))
+
 @bot.command(name="nourrir", aliases=["gamelle", "repas"])
 async def nourrir_cmd(ctx, *, aliment: str = None):
     """Nourris ton compagnon — .nourrir [aliment]"""
@@ -10642,7 +10765,7 @@ async def nourrir_cmd(ctx, *, aliment: str = None):
                      f"*{len(stock)} aliment(s) en réserve.*"),
         color=0xe67e22), view=NourrirView(uid, stock))
 
-@bot.command(name="petaction", aliases=["laver", "promener", "jouer", "dormir", "caresser"])
+@bot.command(name="petaction", aliases=["laver", "promener", "dormir", "caresser"])
 async def petaction_cmd(ctx):
     """Interagis avec ton compagnon — .nourrir .laver .promener .jouer .dormir .caresser"""
     import time as _t
@@ -10650,7 +10773,8 @@ async def petaction_cmd(ctx):
     if action == "petaction":
         return await ctx.send(embed=discord.Embed(
             title="🐾 S'occuper de son compagnon",
-            description=("`.nourrir` 🍖 — choisis un aliment de ta réserve\n"
+            description=("*Plus de temps d'attente : c'est **son état** qui décide.*\n\n"
+                         "`.nourrir` 🍖 — choisis un aliment de ta réserve\n"
                          "`.laver` 🛁 — 150 p · le rend propre, +20 XP\n"
                          "`.promener` 🚶 — gratuit · le rend heureux, +35 XP\n"
                          "`.jouer` 🎾 — gratuit · le meilleur pour l'humeur, +30 XP\n"
@@ -10666,41 +10790,52 @@ async def petaction_cmd(ctx):
     st = pet_etat(uid)
     conf = PET_ACTIONS[action]
 
-    # ── Le besoin urgent passe avant le cooldown ──
-    URGENCES = {
-        "dormir":   ("energie",  lambda v: v < 35,  "😴 Il tombe de fatigue"),
-        "nourrir":  ("faim",     lambda v: v > 65,  "🍖 Il a vraiment faim"),
-        "laver":    ("proprete", lambda v: v < 35,  "🛁 Il est vraiment sale"),
-        "jouer":    ("humeur",   lambda v: v < 40,  "🎾 Il déprime"),
-        "caresser": ("humeur",   lambda v: v < 50,  "🫶 Il a besoin de réconfort"),
-        "promener": ("humeur",   lambda v: v < 40,  "🚶 Il tourne en rond"),
+    # ── Plus de cooldown : c'est l'ÉTAT du compagnon qui décide ──
+    SEUILS = {
+        "dormir":   ("energie",  lambda v: v < 85,  "😴 Il n'a pas sommeil",
+                     "Il vient de dormir, il est en pleine forme."),
+        "nourrir":  ("faim",     lambda v: v > 12,  "🍖 Il n'a pas faim",
+                     "Il vient de manger — laisse-le digérer."),
+        "laver":    ("proprete", lambda v: v < 88,  "🛁 Il est déjà tout propre",
+                     "Inutile de le relaver tout de suite."),
+        "jouer":    ("energie",  lambda v: v > 15,  "😴 Il est épuisé",
+                     "Laisse-le récupérer avant de rejouer."),
+        "promener": ("energie",  lambda v: v > 20,  "😴 Il est trop fatigué",
+                     "Une balade demande de l'énergie."),
+        "caresser": ("humeur",   lambda v: v < 100, "🥰 Il est déjà au maximum",
+                     "Il ne pourrait pas être plus heureux."),
     }
-    urgent = False
-    raison = ""
-    if action in URGENCES:
-        cle_u, test, txt = URGENCES[action]
-        if test(st[cle_u]):
-            urgent = True
-            raison = txt
+    urgent, raison = False, ""
+    if action in SEUILS:
+        cle_s, test, titre_ko, desc_ko = SEUILS[action]
+        if not test(st[cle_s]):
+            besoins = []
+            if st["faim"] > 55: besoins.append("🍖 `.nourrir`")
+            if st["energie"] < 40: besoins.append("😴 `.dormir`")
+            if st["proprete"] < 45: besoins.append("🛁 `.laver`")
+            if st["humeur"] < 60: besoins.append("🎾 `.jouer`")
+            besoins = [b for b in besoins if action not in b]
+            return await ctx.send(embed=discord.Embed(
+                title=titre_ko,
+                description=(f"*{desc_ko}*"
+                             + (f"\n\n**En revanche, il aimerait bien :**\n"
+                                + "  ·  ".join(besoins) if besoins else "")),
+                color=0x95a5a6))
+        URGENCES = {"dormir": ("energie", 35), "nourrir": ("faim", 65),
+                    "laver": ("proprete", 35), "jouer": ("humeur", 40),
+                    "promener": ("humeur", 40), "caresser": ("humeur", 50)}
+        if action in URGENCES:
+            cu, seuil = URGENCES[action]
+            urgent = (st[cu] > seuil) if cu == "faim" else (st[cu] < seuil)
+            raison = {"dormir": "😴 Il tombait de fatigue", "nourrir": "🍖 Il avait vraiment faim",
+                      "laver": "🛁 Il en avait bien besoin", "jouer": "🎾 Il s'ennuyait ferme",
+                      "promener": "🚶 Il tournait en rond", "caresser": "🫶 Il en avait besoin"}.get(action, "")
 
+    # Anti-spam minimal : 90 secondes entre deux fois la même action
     dernier = st["dernier"].get(action, 0)
-    reste = conf["cd"] * 3600 - (_t.time() - dernier)
-    # Anti-spam : même en urgence, 20 minutes minimum entre deux fois
-    if urgent:
-        reste = min(reste, 1200 - (_t.time() - dernier))
-    if reste > 0:
-        h, m = divmod(int(reste) // 60, 60)
-        temps = f"**{h}h{m:02d}**" if h else f"**{m} min**"
-        besoins_alt = []
-        if st["faim"] > 65 and action != "nourrir": besoins_alt.append("🍖 `.nourrir`")
-        if st["energie"] < 35 and action != "dormir": besoins_alt.append("😴 `.dormir`")
-        if st["proprete"] < 35 and action != "laver": besoins_alt.append("🛁 `.laver`")
-        if st["humeur"] < 40 and action != "jouer": besoins_alt.append("🎾 `.jouer`")
-        msg = (f"⏳ **{pdb['nom']}** vient de {'dormir' if action=='dormir' else 'en profiter'} — "
-               f"reviens dans {temps}.")
-        if besoins_alt:
-            msg += f"\n*En attendant, il a besoin de : {'  ·  '.join(besoins_alt)}*"
-        return await ctx.send(msg, delete_after=12)
+    if _t.time() - dernier < 90:
+        return await ctx.send("⏳ Doucement — laisse-lui le temps d'apprécier.", delete_after=6)
+
     if conf["cout"] and economy_data[uid]["coins"] < conf["cout"]:
         return await ctx.send(f"❌ Il te faut **{conf['cout']} pièces** pour ça !")
     if conf["cout"]:
@@ -11974,24 +12109,21 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "3.6.0"
+BOT_VERSION = "3.7.0"
 CHANGELOG = {
-    "titre": "Un vrai petit compagnon qui vit chez toi 🏠",
+    "titre": "Inventaire unifié et compagnon qui comprend 💬",
     "ajouts": [
-        "🏠 **Propreté du refuge** — une vraie barre séparée de celle du pet, avec 5 états et 4 meubles d'entretien",
-        "🏡 **`.refuge` en direct** — tu vois ce qui se passe chez lui *en ce moment*, pas juste une liste",
-        "🍖 **`.nourrir` refait** — choisis l'aliment dans un menu, **sans cooldown**, avec barre avant/après",
-        "🎒 **Inventaire unifié** — la nourriture et les jouets sont dans **ton** inventaire *(migration automatique)*",
-        "🐾 **`.pet` devient un hub** — un menu pour aller partout, les commandes directes marchent toujours",
-        "🎀 **Garde-robe en 3 sections** — portés / dans le coffre / à acheter",
-        "🎭 **Réactions aux accessoires** — il adore, tolère ou déteste ce que tu lui mets",
-        "🧸 `.petsouvenirs` — ses **objets sentimentaux**, que tu peux baptiser *(« Boubou »)*",
-        "📊 **Bilan de vie** à 30, 100, 365 et 730 jours",
+        "💬 **`.petparler` comprend ce que tu dis** — 10 intentions, 79 expressions reconnues",
+        "🎾 **`.jouer` utilise tes vrais jouets** — choisis-le dans un menu, ou pars sur une partie improvisée",
+        "🎒 `.petinventaire` — **tout ce que tu possèdes**, rangé par catégorie",
+        "🔧 `.petreparer` — récupère les objets achetés qui n'apparaissaient pas",
+        "⏱️ **Plus aucun temps d'attente sur les besoins** — c'est l'état du compagnon qui décide",
     ],
     "correctifs": [
-        "La propreté du pet et celle du refuge ne sont plus confondues",
-        "Le refuge se salit **beaucoup plus lentement** — 14 jours d'absence et il reste à 25 %",
-        "Le `.help` ne contient plus de commande en double",
+        "🚨 **Objets fantômes corrigés** — les achats chez le marchand arrivent enfin dans l'inventaire",
+        "Deux objets portaient le même nom *(Canard)* — ils sont maintenant distincts",
+        "**Registre unifié de 334 objets** : plus rien ne peut être vendu sans exister vraiment",
+        "Le refuge se salit beaucoup plus lentement",
     ],
 }
 
@@ -12947,6 +13079,93 @@ def pet_carnet_note(uid, texte, important=False):
 
 
 
+
+# ============================================================
+#  💬 MOTEUR D'INTENTIONS — il comprend ce que tu dis
+# ============================================================
+INTENTIONS = {
+ "compliment": {
+   "mots": ["bravo","bien joue","c'est bien","tres bien","super","genial","magnifique","trop beau",
+            "tu es beau","tu es belle","good boy","good girl","fier de toi","parfait","incroyable"],
+   "emoji": "🎉", "humeur": 10, "confiance": 3,
+   "reponses": ["*se redresse fièrement. Il sait très bien ce que ça veut dire.*",
+                "*remue de tout son corps. Le compliment est bien reçu.*",
+                "*fait un petit tour sur lui-même. Il en redemande.*",
+                "*te regarde avec une expression qu'on ne peut décrire que comme de la fierté.*"]},
+ "reproche": {
+   "mots": ["non","pas bien","arrete","c'est mal","vilain","mechant","stop","tu exageres"],
+   "emoji": "😔", "humeur": -6, "confiance": 0,
+   "reponses": ["*baisse les oreilles et évite ton regard.*",
+                "*s'assoit et te fixe d'un air coupable. Il a compris.*",
+                "*recule d'un pas. Il ne recommencera pas. Enfin, peut-être.*",
+                "*pose la tête au sol. Le message est passé.*"]},
+ "affection": {
+   "mots": ["je t'aime","tu me manques","mon bebe","mon coeur","mon amour","adorable",
+            "tu es tout pour moi","je suis content","tu es le meilleur"],
+   "emoji": "❤️", "humeur": 14, "confiance": 5,
+   "reponses": ["*vient se blottir contre toi sans hésiter une seconde.*",
+                "*pose sa tête sur ta main et ferme les yeux.*",
+                "*se colle à toi et ne bouge plus. Message reçu.*",
+                "*émet un son très doux qu'il ne fait qu'avec toi.*"]},
+ "question": {
+   "mots": ["ça va","ca va","comment tu vas","tu fais quoi","tu es ou","tu dors","tu m'entends",
+            "tu veux","qu'est-ce que","pourquoi"],
+   "emoji": "🤔", "humeur": 3, "confiance": 1,
+   "reponses": ["*penche la tête sur le côté. Il réfléchit à la question.*",
+                "*te fixe intensément. Il aimerait pouvoir répondre.*",
+                "*émet un son interrogateur. On dirait vraiment une réponse.*",
+                "*cligne lentement des yeux. C'est peut-être un oui.*"]},
+ "jeu": {
+   "mots": ["on joue","tu veux jouer","la balle","au jeu","joue avec moi","attrape","va chercher"],
+   "emoji": "🎾", "humeur": 12, "confiance": 2,
+   "reponses": ["*se met en position de jeu immédiatement, l'arrière-train en l'air.*",
+                "*court chercher {objet} et le lâche à tes pieds.*",
+                "*fait trois bonds sur place. La réponse est oui.*"]},
+ "repas": {
+   "mots": ["manger","a table","la gamelle","tu as faim","miam","c'est l'heure de manger"],
+   "emoji": "🍖", "humeur": 8, "confiance": 1,
+   "reponses": ["*court jusqu'à sa gamelle et s'assoit devant, très droit.*",
+                "*se lève d'un bond. Ce mot-là, il le connaît parfaitement.*",
+                "*te suit jusqu'à la cuisine sans même que tu aies bougé.*"]},
+ "sortie": {
+   "mots": ["promenade","on sort","balade","dehors","tu veux sortir","laisse"],
+   "emoji": "🚶", "humeur": 12, "confiance": 2,
+   "reponses": ["*se poste devant la porte, la queue en mouvement continu.*",
+                "*fait le tour de la pièce en courant avant de revenir à la porte.*",
+                "*t'attend déjà, immobile, prêt à partir.*"]},
+ "dodo": {
+   "mots": ["bonne nuit","dodo","au lit","il est tard","dors bien","fais de beaux reves"],
+   "emoji": "🌙", "humeur": 6, "confiance": 3,
+   "reponses": ["*se dirige lentement vers son panier.*",
+                "*bâille très fort, puis va se coucher sans discuter.*",
+                "*te regarde une dernière fois, puis ferme les yeux.*"]},
+ "salut": {
+   "mots": ["bonjour","salut","coucou","hello","re","bonsoir","me revoila","je suis rentre"],
+   "emoji": "👋", "humeur": 9, "confiance": 2,
+   "reponses": ["*accourt immédiatement en faisant beaucoup trop de bruit.*",
+                "*se lève d'un coup et vient te saluer à sa manière.*",
+                "*t'attendait derrière la porte. Depuis combien de temps ?*"]},
+ "excuse": {
+   "mots": ["pardon","desole","je m'excuse","c'est ma faute"],
+   "emoji": "🥺", "humeur": 8, "confiance": 4,
+   "reponses": ["*revient vers toi doucement. C'est oublié.*",
+                "*pose une patte sur ton genou. Il te pardonne.*",
+                "*se colle contre toi. Il n'était pas vraiment fâché.*"]},
+}
+
+def detecter_intention(texte):
+    """Retourne (cle, config) ou None — priorité aux expressions longues"""
+    if not texte:
+        return None
+    t = normalize_str(texte)
+    trouve, longueur = None, 0
+    for cle, conf in INTENTIONS.items():
+        for mot in conf["mots"]:
+            m = normalize_str(mot)
+            if m in t and len(m) > longueur:
+                trouve, longueur = (cle, conf), len(m)
+    return trouve
+
 # ============================================================
 #  💬 DIALOGUE · 🕐 ROUTINE · ❤️ PRÉFÉRENCES
 # ============================================================
@@ -13078,21 +13297,34 @@ async def petparler_cmd(ctx, *, message: str = None):
     nom_pet = pst.get("surnom") or pdb["nom"]
     cle_r, emo_r, nom_r = routine_actuelle()
 
-    # Choix de la réplique selon l'état, la personnalité et l'heure
-    pool = []
-    if st["faim"] > 65: pool += PET_REPLIQUES["faim"] * 3
-    if st["energie"] < 35: pool += PET_REPLIQUES["fatigue"] * 3
-    if st["proprete"] < 35: pool += PET_REPLIQUES["sale"] * 2
-    if st["humeur"] < 40: pool += PET_REPLIQUES["triste"] * 3
-    elif st["humeur"] > 75: pool += PET_REPLIQUES["heureux"] * 2
-    for t in pst.get("traits", []):
-        if t in PET_REPLIQUES:
-            pool += PET_REPLIQUES[t] * 2
-    if cle_r == "nuit": pool += PET_REPLIQUES["nuit"]
-    pool += PET_REPLIQUES["neutre"]
-    replique = _sans_repet(uid, "replique", pool, memoire=8)
+    # ── 1. Une intention reconnue prime sur tout ──
+    intention = detecter_intention(message)
+    if intention:
+        cle_i, conf_i = intention
+        objet = pst.get("objet_prefere") or "son jouet"
+        replique = _sans_repet(uid, "int_" + cle_i, conf_i["reponses"], memoire=3).replace(
+            "{objet}", f"**{objet}**")
+        st["humeur"] = max(0, min(100, st["humeur"] + conf_i["humeur"]))
+        pst["confiance"] = min(100, pst.get("confiance", 0) + conf_i["confiance"])
+        pst.setdefault("intentions", {})
+        pst["intentions"][cle_i] = pst["intentions"].get(cle_i, 0) + 1
+    else:
+        # ── 2. Sinon : selon l'état, la personnalité et l'heure ──
+        pool = []
+        if st["faim"] > 65: pool += PET_REPLIQUES["faim"] * 3
+        if st["energie"] < 35: pool += PET_REPLIQUES["fatigue"] * 3
+        if st["proprete"] < 35: pool += PET_REPLIQUES["sale"] * 2
+        if st["humeur"] < 40: pool += PET_REPLIQUES["triste"] * 3
+        elif st["humeur"] > 75: pool += PET_REPLIQUES["heureux"] * 2
+        for t in pst.get("traits", []):
+            if t in PET_REPLIQUES:
+                pool += PET_REPLIQUES[t] * 2
+        if cle_r == "nuit": pool += PET_REPLIQUES["nuit"]
+        pool += PET_REPLIQUES["neutre"]
+        replique = _sans_repet(uid, "replique", pool, memoire=8)
 
-    st["humeur"] = min(100, st["humeur"] + 3)
+    if not intention:
+        st["humeur"] = min(100, st["humeur"] + 3)
     pet_stat(uid, "discussions")
     appris = analyser_mot(uid, message)
     save_all_data()
@@ -13121,8 +13353,18 @@ async def petparler_cmd(ctx, *, message: str = None):
                             value="*Il penche la tête. Il ne comprend pas encore.*", inline=False)
     embed.add_field(name=f"{emo_r} {nom_r}", value=f"*Il {activite}.*", inline=False)
     nb_mots = sum(1 for v in pst.get("mots", {}).values() if v >= SEUIL_COMPRIS)
-    embed.set_footer(text=f"{pet_humeur_texte(st)} · ❤️ +3 humeur · "
-                          f"{nb_mots}/{len(MOTS_APPRIS)} expressions comprises")
+    if intention:
+        cle_i, conf_i = intention
+        n_fois = pst.get("intentions", {}).get(cle_i, 1)
+        signe = "+" if conf_i["humeur"] >= 0 else ""
+        embed.add_field(name=f"{conf_i['emoji']} Il a compris",
+                        value=(f"*Intention reconnue : **{cle_i}***\n"
+                               f"❤️ Humeur **{signe}{conf_i['humeur']}**"
+                               + (f"  ·  💞 Confiance **+{conf_i['confiance']}**" if conf_i['confiance'] else "")
+                               + f"\n*Tu lui as dit ça **{n_fois} fois**.*"), inline=False)
+    embed.set_footer(text=f"{pet_humeur_texte(st)} · "
+                          f"{nb_mots}/{len(MOTS_APPRIS)} expressions comprises · "
+                          f"{len(INTENTIONS)} intentions reconnues")
     await ctx.send(embed=embed)
 
 @bot.command(name="petgouts", aliases=["gouts", "petpreferences"])
@@ -13740,6 +13982,96 @@ class PetShopView(ui.View):
         self.i = len(self.pages) - 1
         await self.maj(interaction)
 
+
+@bot.command(name="petinventaire", aliases=["petinv", "petsac"])
+async def petinventaire_cmd(ctx):
+    """Tout ce que tu possèdes pour ton compagnon — .petinventaire"""
+    uid = str(ctx.author.id)
+    pid, pdb, pst = get_active_pet(uid)
+    migrer_inventaire_pet(uid)
+    rattrapes = migrer_objets_perdus(uid)
+    if rattrapes:
+        save_all_data()
+    par = inventaire_par_cat(uid)
+
+    e = discord.Embed(
+        title=f"🎒 Ton inventaire" + (f" — {pst.get('surnom') or pdb['nom']}" if pid else ""),
+        color=0xf1c40f)
+    total = 0
+    for cat, (c_emo, c_nom, cmd) in CAT_INVENTAIRE.items():
+        lot = par.get(cat, [])
+        if not lot:
+            continue
+        total += sum(x[2] for x in lot)
+        lignes = []
+        for oid, f, n in sorted(lot, key=lambda x: x[1]["nom"])[:14]:
+            q = f" ×{n}" if f["stack"] and n > 1 else ""
+            lignes.append(f"{f['emoji']} **{f['nom']}**{q}")
+        val = "  ·  ".join(lignes)
+        if len(lot) > 14:
+            val += f"\n*…et {len(lot)-14} autre(s)*"
+        if cmd:
+            val += f"\n➡️ `.{cmd}`"
+        e.add_field(name=f"{c_emo} {c_nom}  ·  {len(lot)}", value=val[:1024], inline=False)
+
+    if not total:
+        e.description = ("*Ton inventaire est vide.*\n\n"
+                         "`.petshop` pour acheter de la nourriture, des jouets ou des accessoires.")
+    else:
+        e.description = f"**{total}** objet(s) au total"
+    if rattrapes:
+        e.set_footer(text=f"🔧 {rattrapes} objet(s) manquant(s) ont été récupérés automatiquement")
+    else:
+        e.set_footer(text="`.petreparer` si un objet acheté n'apparaît pas")
+    await ctx.send(embed=e)
+
+@bot.command(name="petreparer", aliases=["reparerinventaire", "fixpet"])
+async def petreparer_cmd(ctx):
+    """Récupère les objets achetés qui n'apparaissent pas — .petreparer"""
+    uid = str(ctx.author.id)
+    pid, pdb, pst = get_active_pet(uid)
+    if not pid:
+        return await ctx.send("🐾 Tu n'as pas de compagnon actif !")
+    migrer_inventaire_pet(uid)
+    n = migrer_objets_perdus(uid)
+    # Les objets de série connus mais absents des deux côtés
+    orphelins = []
+    reg = registre_objets()
+    for oid in list(inventaire.get(uid, {})):
+        if oid not in reg:
+            orphelins.append(oid)
+    save_all_data()
+    e = discord.Embed(title="🔧 Vérification de l'inventaire", color=0x2ecc71 if n else 0x95a5a6)
+    if n:
+        e.description = (f"✅ **{n} objet(s)** récupéré(s) et remis dans ton inventaire.\n\n"
+                         f"*Tape `.petinventaire` pour les voir.*")
+    else:
+        e.description = ("✅ Tout est en ordre — aucun objet manquant.\n\n"
+                         "*Si un objet acheté n'apparaît toujours pas, préviens le staff.*")
+    if orphelins:
+        e.add_field(name="⚠️ Entrées inconnues",
+                    value=f"{len(orphelins)} entrée(s) non reconnue(s) — elles n'ont pas été touchées.",
+                    inline=False)
+    await ctx.send(embed=e)
+
+@bot.command(name="reparerpets", aliases=["fixallpets"])
+@commands.has_permissions(administrator=True)
+async def reparerpets_cmd(ctx):
+    """Répare l'inventaire de TOUS les membres — .reparerpets (admin)"""
+    total, touches = 0, 0
+    for uid in list(pets_data):
+        migrer_inventaire_pet(uid)
+        n = migrer_objets_perdus(uid)
+        if n:
+            total += n
+            touches += 1
+    save_all_data()
+    await ctx.send(embed=discord.Embed(
+        title="🔧 Réparation terminée",
+        description=(f"**{total} objet(s)** récupéré(s) chez **{touches} membre(s)**."
+                     if total else "✅ Aucun objet manquant sur le serveur."),
+        color=0x2ecc71))
+
 @bot.command(name="petshop", aliases=["boutiquepet", "shoppet"])
 async def petshop_cmd(ctx, categorie: str = None):
     """La boutique des compagnons — .petshop"""
@@ -14177,6 +14509,7 @@ async def marchand_cmd(ctx, achat: str = None):
         vendus.append(cible["obj"])
         stock_cache["vendus"] = vendus
         await ajouter_objet_serie(uid, cible["obj"], ctx.channel)
+        donner_objet(uid, "col_" + cible["obj"])
         s_emo, s_nom = COLLECTIONS_SERIES[cible["serie"]][0], COLLECTIONS_SERIES[cible["serie"]][1]
         pet_carnet_note(uid, f"{s_emo} A acquis **{cible['obj']}** chez {nom}.",
                         important=(cible is secret))
@@ -14299,6 +14632,113 @@ async def tenter_combo(ctx, uid):
     await ctx.send(embed=e)
     return True
 
+
+
+# ============================================================
+#  🎒 REGISTRE UNIFIÉ DES OBJETS — anti-objet fantôme
+# ============================================================
+# Tout objet obtenable passe par ici. Un objet absent du registre
+# ne peut pas être vendu : c'est la garantie anti-fantôme.
+CAT_INVENTAIRE = {
+    "food":      ("🍖", "Nourriture",  "nourrir"),
+    "toy":       ("🧸", "Jouets",      "jouer"),
+    "accessory": ("🎀", "Accessoires", "garderobe"),
+    "gift":      ("🎁", "Cadeaux",     "petcadeau"),
+    "collect":   ("💎", "Collection",  None),
+    "tool":      ("🧰", "Utilitaires", "utiliser"),
+    "misc":      ("📦", "Divers",      None),
+}
+
+def registre_objets():
+    """{id: {nom, emoji, cat, type, prix, desc, stack, usable}} — construit une fois"""
+    global _REGISTRE
+    if _REGISTRE:
+        return _REGISTRE
+    reg = {}
+    for nom, (emo, cat, faim, prix, sais) in PET_NOURRITURE.items():
+        reg["food_" + nom] = {"nom": nom, "emoji": emo, "cat": "food", "prix": prix,
+                              "desc": f"Rend {faim} de faim", "stack": True, "usable": True}
+    for nom, (emo, prix, typ) in PET_JOUETS.items():
+        reg["toy_" + nom] = {"nom": nom, "emoji": emo, "cat": "toy", "prix": prix,
+                             "desc": f"Jouet — {typ}", "stack": False, "usable": True}
+    for cle, (emo, nom, prix, typ, val, desc) in PET_ACCESSOIRES.items():
+        reg["acc_" + cle] = {"nom": nom, "emoji": emo, "cat": "accessory", "prix": prix,
+                             "desc": desc, "stack": False, "usable": True}
+    for cle, (emo, nom, desc, lot) in COLLECTIONS_SERIES.items():
+        for o in lot:
+            reg["col_" + o] = {"nom": o, "emoji": emo, "cat": "collect", "prix": 0,
+                               "desc": f"Série {nom}", "stack": False, "usable": False}
+    for nom, (emo, desc, eff, bonus, rar) in PET_OBJETS_TROUVES.items():
+        reg["obj_" + nom] = {"nom": nom, "emoji": emo, "cat": "collect", "prix": 0,
+                             "desc": desc, "stack": False, "usable": False}
+    for it in SHOP_ITEMS:
+        reg[it["id"]] = {"nom": it["nom"], "emoji": "📦", "cat": "tool", "prix": it["prix"],
+                         "desc": it.get("description", ""), "stack": True, "usable": True}
+    _REGISTRE = reg
+    return reg
+_REGISTRE = None
+
+def donner_objet(uid, oid, n=1):
+    """Ajoute un objet à l'inventaire du JOUEUR. Retourne la fiche, ou None si inconnu."""
+    reg = registre_objets()
+    fiche = reg.get(oid)
+    if not fiche:
+        return None
+    if fiche["stack"]:
+        inventaire[uid][oid] = inventaire[uid].get(oid, 0) + n
+    else:
+        inventaire[uid][oid] = max(1, inventaire[uid].get(oid, 0))
+    return fiche
+
+def possede(uid, oid):
+    return inventaire.get(uid, {}).get(oid, 0) > 0
+
+def retirer_objet(uid, oid, n=1):
+    if inventaire.get(uid, {}).get(oid, 0) < n:
+        return False
+    inventaire[uid][oid] -= n
+    if inventaire[uid][oid] <= 0:
+        inventaire[uid].pop(oid, None)
+    return True
+
+def inventaire_par_cat(uid):
+    """{cat: [(oid, fiche, n)]} — pour l'affichage"""
+    reg = registre_objets()
+    par = {}
+    for oid, n in inventaire.get(uid, {}).items():
+        if n <= 0:
+            continue
+        f = reg.get(oid)
+        if not f:
+            continue
+        par.setdefault(f["cat"], []).append((oid, f, n))
+    return par
+
+def migrer_objets_perdus(uid):
+    """Rattrape les achats passés qui n'ont pas atterri dans l'inventaire.
+    Notamment les objets de série achetés chez le marchand."""
+    pid, pdb, pst = get_active_pet(uid)
+    if not pst:
+        return 0
+    n = 0
+    # Les objets de collection possédés doivent aussi exister dans l'inventaire
+    for o in pst.get("series", []):
+        oid = "col_" + o
+        if oid in registre_objets() and not possede(uid, oid):
+            inventaire[uid][oid] = 1
+            n += 1
+    for o in pst.get("objets", []):
+        oid = "obj_" + o
+        if oid in registre_objets() and not possede(uid, oid):
+            inventaire[uid][oid] = 1
+            n += 1
+    # Les accessoires achetés
+    for a in pst.get("garderobe", []):
+        oid = "acc_" + a
+        if oid in registre_objets() and not possede(uid, oid):
+            inventaire[uid][oid] = 1
+            n += 1
+    return n
 
 # ============================================================
 #  🏠 PROPRETÉ DU REFUGE — barre, meubles, migration
@@ -14566,6 +15006,7 @@ async def ajouter_objet_serie(uid, objet, channel=None):
     if objet in pst["series"]:
         return False
     pst["series"].append(objet)
+    donner_objet(uid, "col_" + objet)
     cle, emo, nom = _serie_de(objet)
     if not cle:
         return True
@@ -14642,7 +15083,7 @@ PET_JOUETS = {
  "Balle":            ("🎾", 300, "lance"),   "Petit ballon":     ("⚽", 400, "lance"),
  "Frisbee":          ("🥏", 500, "lance"),   "Yo-yo":            ("🪀", 350, "lance"),
  "Pelote":           ("🧶", 250, "roule"),   "Souris mécanique": ("🐭", 450, "roule"),
- "Petite voiture":   ("🚗", 400, "roule"),   "Canard":           ("🦆", 300, "roule"),
+ "Petite voiture":   ("🚗", 400, "roule"),   "Canard en plastique": ("🦆", 300, "roule"),
  "Plume":            ("🪶", 200, "chasse"),  "Baguette jouet":   ("🪄", 350, "chasse"),
  "Machine à bulles": ("🫧", 900, "chasse"),  "Cerf-volant":      ("🪁", 700, "chasse"),
  "Peluche":          ("🧸", 500, "calin"),   "Doudou lapin":     ("🐰", 550, "calin"),
@@ -14770,7 +15211,7 @@ async def petjouets_cmd(ctx, action: str = None, *, nom: str = None):
         if economy_data[uid]["coins"] < prix:
             return await ctx.send(f"❌ Il te faut **{prix:,} pièces**.")
         economy_data[uid]["coins"] -= prix
-        inventaire[uid]["toy_" + cle] = 1
+        donner_objet(uid, "toy_" + cle)
         coffre.append(cle)
         premier = len(coffre) == 1
         if premier:
@@ -14783,6 +15224,11 @@ async def petjouets_cmd(ctx, action: str = None, *, nom: str = None):
             color=0x2ecc71))
 
     if act in ("jouer", "utiliser"):
+        if nom:
+            j = next((k for k in coffre if normalize_str(nom) == normalize_str(k)), None) or \
+                next((k for k in coffre if normalize_str(nom) in normalize_str(k)), None)
+            if j:
+                return await jouer_avec(ctx, uid, j)
         if not nom:
             return await ctx.send("❌ `.petjouets jouer balle`")
         cle = next((k for k in coffre if normalize_str(nom) == normalize_str(k)), None) or \
