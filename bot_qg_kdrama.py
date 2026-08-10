@@ -10643,10 +10643,51 @@ JOUER_SANS = [
  "{p} court après ta main. Il ne l'attrapera jamais. Il essaiera quand même.",
  "{p} et toi improvisez une partie de cache-cache. Il se cache toujours au même endroit.",
  "{p} bondit sur une ombre au mur. L'ombre gagne.",
- "{p} tourne autour de toi de plus en plus vite. Puis s'arrête net.",
- "{p} vous entraîne dans une course dans le couloir. Tu perds.",
+ "{p} tourne autour de toi de plus en plus vite. Puis s'arrête net, essoufflé.",
+ "{p} vous entraîne dans une course dans le couloir. Tu perds. Largement.",
  "{p} fait semblant de t'attaquer, puis se roule sur le dos pour un ventre-gratouille.",
+ "{p} attrape ton lacet et refuse de le lâcher pendant six minutes.",
+ "{p} joue à ne-pas-toucher-le-sol sur les meubles. Il triche.",
+ "{p} te fixe, s'accroupit, et bondit sans prévenir. Trois fois de suite.",
+ "{p} pousse un coussin dans {piece} et l'attaque comme un ennemi juré.",
+ "{p} chasse un reflet sur le mur. Le reflet est plus rapide.",
+ "{p} fait le tour de la pièce en zigzag, sans raison identifiable.",
+ "{p} s'enroule dans une couverture et attend que tu le libères. Puis recommence.",
+ "{p} te propose de jouer, puis change d'avis et va boire.",
+ "{p} joue avec un bout de poussière pendant dix minutes. Le bonheur.",
+ "{p} vous invente une règle. Tu ne la comprends pas. Il gagne quand même.",
+ "{p} se cache derrière une chaise. Ses pattes dépassent. Il pense être invisible.",
+ "{p} fait semblant de dormir, puis bondit dès que tu détournes le regard.",
+ "{p} court en cercles de plus en plus petits, jusqu'à tourner sur lui-même.",
+ "{p} attrape sa propre queue et semble sincèrement surpris.",
 ]
+JOUER_SANS_CTX = {
+ "energie_haute": ["⚡ {p} a une énergie inexplicable. Il traverse {piece} cinq fois d'affilée.",
+                   "⚡ {p} enchaîne les bonds sans jamais fatiguer. Toi si."],
+ "energie_basse": ["😴 {p} joue allongé. Une patte bouge. C'est déjà bien.",
+                   "😴 {p} joue trente secondes, puis s'écroule sur le côté."],
+ "humeur_haute":  ["🥳 {p} est déchaîné. Il court partout en faisant des bruits inédits.",
+                   "🥳 {p} rapporte trois objets d'affilée. Il déborde."],
+ "humeur_basse":  ["🥺 {p} joue mollement, mais il joue. C'est un début.",
+                   "🥺 {p} accepte de jouer, puis vient juste se coller à toi."],
+ "farceur":       ["😈 {p} te fait courir dans la mauvaise direction. Volontairement.",
+                   "😈 {p} cache un objet pendant la partie. Tu ne le retrouveras pas."],
+ "paresseux":     ["😴 {p} joue sans se lever. Technique imparable.",
+                   "😴 {p} regarde ta main bouger. Il ne bouge pas. C'est sa version du jeu."],
+ "sportif":       ["💪 {p} fait des bonds que tu ne le croyais pas capable de faire.",
+                   "💪 {p} enchaîne pendant vingt minutes. Il pourrait continuer."],
+ "curieux":       ["👀 {p} arrête de jouer pour inspecter un truc sous le meuble."],
+ "peureux":       ["🥺 {p} joue, puis sursaute à un bruit, puis rejoue prudemment."],
+ "calin":         ["🤗 La partie se termine en câlin. Comme toujours."],
+ "malin":         ["🦊 {p} anticipe tous tes gestes. Il a compris le pattern."],
+ "nuit":          ["🌙 {p} joue à 3 h du matin avec une énergie inquiétante.",
+                   "🌙 Une partie silencieuse, dans le noir. Vous ne réveillez personne."],
+ "matin":         ["🌅 {p} joue à peine réveillé. Ses gestes sont approximatifs."],
+ "hiver":         ["❄️ {p} joue près du radiateur. Il refuse de s'en éloigner."],
+ "ete":           ["☀️ {p} joue cinq minutes, puis s'étale sur le carrelage frais."],
+ "refuge_sale":   ["🧹 La partie soulève un nuage de poussière. Il faudrait nettoyer."],
+ "a_ami":         ["🐾 {p} regarde vers la porte entre deux lancers. {ami} lui manque."],
+}
 
 async def jouer_avec(source, uid, jouet):
     """Séance de jeu — avec ou sans jouet"""
@@ -10657,7 +10698,8 @@ async def jouer_avec(source, uid, jouet):
     nom_pet = f"**{pet_nom_decore(uid, pdb)}**"
 
     if jouet == "__rien__":
-        texte = _sans_repet(uid, "jouer_rien", JOUER_SANS).replace("{p}", nom_pet)
+        texte = _remplir(uid, _sans_repet(uid, "jouer_rien",
+                          _pool_contextuel(uid, JOUER_SANS, JOUER_SANS_CTX)))
         titre, emo_j = "🐾 Une partie improvisée", "🐾"
         gain_h, gain_x = 12, 20
         extra = ""
@@ -12109,21 +12151,23 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "3.7.0"
+BOT_VERSION = "3.8.0"
 CHANGELOG = {
-    "titre": "Inventaire unifié et compagnon qui comprend 💬",
+    "titre": "Beaucoup, beaucoup plus de contenu 🎭",
     "ajouts": [
-        "💬 **`.petparler` comprend ce que tu dis** — 10 intentions, 79 expressions reconnues",
-        "🎾 **`.jouer` utilise tes vrais jouets** — choisis-le dans un menu, ou pars sur une partie improvisée",
-        "🎒 `.petinventaire` — **tout ce que tu possèdes**, rangé par catégorie",
-        "🔧 `.petreparer` — récupère les objets achetés qui n'apparaissaient pas",
-        "⏱️ **Plus aucun temps d'attente sur les besoins** — c'est l'état du compagnon qui décide",
+        "🎭 **+390 nouveaux textes** répartis sur toutes les commandes du compagnon",
+        "🧠 **Variantes contextuelles** — chaque scène change selon son caractère, l'heure, la saison, son état et son refuge",
+        "🔁 **Anti-répétition renforcé** — mémoire de 25 scènes avec pénalité progressive au lieu d'un simple filtre",
+        "😈 **32 bêtises** *(avant 16)* avec 23 réactions différentes selon son caractère",
+        "🧹 **47 scènes de ménage** *(avant 16)* · 🎾 **62 réactions de jeu** *(avant 15)*",
+        "💬 **70 répliques** pour `.petparler` *(avant 29)* · 🍖 **71 réactions de repas** *(avant 34)*",
+        "🗺️ **Récits d'expédition** — il raconte enfin ce qu'il a vécu pendant son absence",
+        "📦 **20 répliques de marchand** *(avant 7)* · 🛡️ **38 scènes de protection** *(avant 15)*",
+        "🎬 **45 scènes de vie** *(avant 30)* — propreté, faim, énergie, météo, objets, social",
     ],
     "correctifs": [
-        "🚨 **Objets fantômes corrigés** — les achats chez le marchand arrivent enfin dans l'inventaire",
-        "Deux objets portaient le même nom *(Canard)* — ils sont maintenant distincts",
-        "**Registre unifié de 334 objets** : plus rien ne peut être vendu sans exister vraiment",
-        "Le refuge se salit beaucoup plus lentement",
+        "Les scènes ne se répètent quasiment plus, même sur des dizaines de tirages",
+        "Les objets achetés chez le marchand arrivent bien dans l'inventaire",
     ],
 }
 
@@ -13037,6 +13081,49 @@ PETVISITE_SCENES = {
  ],
 }
 
+
+PETVISITE_CTX = {
+ "matin":   ["🌅 Ils se réveillent ensemble et s'étirent en même temps, sans se concerter.",
+             "🌅 {a} bâille. {b} bâille aussi. C'est contagieux."],
+ "aprem":   ["☀️ Ils se disputent le carré de soleil, puis s'y installent tous les deux, à l'étroit.",
+             "☀️ Sieste commune. Ils ne bougeront pas avant deux heures."],
+ "soir":    ["🌆 Ils regardent la nuit tomber côte à côte, sans un bruit.",
+             "🌆 {a} pose sa tête sur {b}. Personne ne proteste."],
+ "nuit":    ["🌙 Ils sont réveillés tous les deux à 3 h. Ils se regardent. Ils comprennent.",
+             "🌙 Une course silencieuse dans le couloir. Personne ne sera réveillé."],
+ "hiver":   ["❄️ Ils se collent l'un contre l'autre pour avoir chaud. Fierté mise de côté.",
+             "❄️ {a} et {b} se partagent la meilleure place près du chauffage."],
+ "printemps":["🌸 Ils poursuivent le même papillon. Aucun ne l'attrape.",
+              "🌸 {a} rapporte une fleur. {b} la mange. Ambiance."],
+ "ete":     ["☀️ Trop chaud pour jouer. Ils s'étalent côte à côte sur le carrelage."],
+ "automne": ["🍂 Ils plongent tous les deux dans le même tas de feuilles. Chaos."],
+ "cheminee":["🔥 Ils dorment devant la cheminée, tête contre tête."],
+ "jardin":  ["🌳 Ils explorent le jardin ensemble, chacun de son côté, puis se retrouvent."],
+ "panier":  ["🧺 Ils tiennent à deux dans le panier. Difficilement. Mais ils tiennent."],
+ "jouet":   ["🧸 Ils se disputent le même jouet pendant dix minutes. Puis l'abandonnent."],
+ "farceur": ["😈 {a} cache le jouet de {b}. {b} n'a rien vu venir.",
+             "😈 L'un des deux prépare quelque chose. On ne sait pas lequel."],
+ "calin":   ["🤗 Ils s'endorment collés l'un à l'autre. Personne n'ose bouger."],
+ "peureux": ["🥺 {a} se cache derrière {b} au moindre bruit. {b} assume le rôle."],
+ "sportif": ["💪 Course improvisée dans tout le refuge. Match nul, épuisement total."],
+ "gourmand":["🍖 Ils partagent une gamelle. Enfin, l'un mange, l'autre regarde."],
+ "curieux": ["👀 Ils inspectent ensemble le même placard. Découverte commune."],
+ "solitaire":["🌙 Ils restent à deux mètres l'un de l'autre. C'est déjà beaucoup."],
+ "bavard":  ["🗣️ Ils émettent des sons alternés. On dirait une vraie conversation."],
+ "protecteur":["🛡️ {a} se place systématiquement entre {b} et la porte."],
+ "paresseux":["😴 Ils ne font rien. Ensemble. Pendant deux heures."],
+ "maniaque":["🧼 {a} lave {b}. {b} n'a rien demandé. {b} accepte."],
+ "aventurier":["🗺️ Ils partent explorer et reviennent couverts de terre, très fiers."],
+ "possessif":["🧸 {a} rassemble ses affaires quand {b} arrive. Par précaution."],
+ "malin":   ["🦊 Ils s'entendent pour ouvrir un placard. Ça fonctionne."],
+ "geek":    ["🎮 Ils fixent le même écran, immobiles, côte à côte."],
+ "reveur":  ["💭 Ils regardent par la fenêtre en même temps. Longtemps."],
+ "sale":    ["🛁 L'un des deux est très sale. L'autre s'en approche quand même."],
+ "humeur_basse":["🥺 L'un des deux ne va pas bien. L'autre reste à côté sans rien faire. Ça aide."],
+ "ancien":  ["👑 Le plus âgé montre au plus jeune où sont les meilleures places."],
+ "jeune":   ["🐣 L'un des deux découvre tout. L'autre observe, amusé."],
+}
+
 PETVISITE_BONUS = [
  ("pieces",  "💰", "Ils ont trouvé une pièce sous le canapé en jouant."),
  ("pieces",  "🪙", "Un voisin attendri leur a glissé une petite récompense."),
@@ -13255,33 +13342,74 @@ def init_preferences(uid):
 PET_REPLIQUES = {
     "faim":       ["*te fixe, puis fixe sa gamelle, puis te refixe.*",
                    "*fait le tour de tes jambes en émettant un son de négociation.*",
-                   "*pousse doucement sa gamelle vide vers toi. Message reçu.*"],
+                   "*pousse doucement sa gamelle vide vers toi. Message reçu.*",
+                   "*s'assoit devant le placard et attend. Il a tout son temps.*",
+                   "*émet un son qu'il ne fait que dans ces moments-là.*",
+                   "*te guide vers la cuisine. Il n'y a pas d'ambiguïté.*"],
     "fatigue":    ["*bâille si fort qu'il en perd l'équilibre.*",
                    "*s'écroule là où il était debout. Bonne nuit.*",
-                   "*te regarde avec des yeux mi-clos. Il tient à peine.*"],
+                   "*te regarde avec des yeux mi-clos. Il tient à peine.*",
+                   "*pose sa tête sur ton pied et ne bouge plus.*",
+                   "*cligne très lentement. Chaque clignement dure plus longtemps.*"],
     "sale":       ["*se lèche une patte, abandonne, te regarde d'un air désolé.*",
-                   "*laisse une trace de terre partout où il passe.*"],
+                   "*laisse une trace de terre partout où il passe.*",
+                   "*se secoue. Le problème est maintenant partagé.*",
+                   "*évite soigneusement le canapé clair. Il a des principes.*"],
     "triste":     ["*soupire. Un vrai soupir, très théâtral.*",
                    "*se pose loin de toi, dos tourné. C'est un message.*",
-                   "*ne réagit pas quand tu l'appelles. Ça va mal.*"],
+                   "*ne réagit pas quand tu l'appelles. Ça va mal.*",
+                   "*regarde par la fenêtre sans rien voir.*",
+                   "*se roule en boule, plus petit que d'habitude.*"],
     "heureux":    ["*se roule sur le dos et attend un ventre-gratouille.*",
                    "*te suit partout depuis dix minutes, l'air ravi.*",
                    "*fait ce bruit qu'il ne fait que quand tout va bien.*",
-                   "*t'apporte son jouet préféré et le lâche à tes pieds.*"],
+                   "*t'apporte son jouet préféré et le lâche à tes pieds.*",
+                   "*fait trois bonds sur place sans raison particulière.*",
+                   "*se frotte contre absolument tout, y compris les murs.*"],
     "calin":      ["*se blottit contre toi sans prévenir et ferme les yeux.*",
-                   "*pose sa tête sur ta main. Il ne bougera plus.*"],
+                   "*pose sa tête sur ta main. Il ne bougera plus.*",
+                   "*grimpe sur toi comme si c'était un meuble prévu pour.*",
+                   "*s'endort contre toi en trois secondes chrono.*"],
     "farceur":    ["*a manifestement caché quelque chose. Il ne dira pas quoi.*",
-                   "*te regarde faire une bêtise, en pleine conscience.*"],
+                   "*te regarde faire une bêtise, en pleine conscience.*",
+                   "*attend que tu détournes le regard. Tu le sais. Il le sait.*",
+                   "*a un objet qui ne lui appartient pas dans la gueule.*"],
     "solitaire":  ["*t'accorde exactement trois secondes d'attention.*",
-                   "*change de pièce. Rien de personnel.*"],
+                   "*change de pièce. Rien de personnel.*",
+                   "*s'installe à deux mètres. C'est sa version de la proximité.*"],
     "bavard":     ["*émet une longue série de sons. Tu ne comprends rien mais tu hoches la tête.*",
-                   "*te répond. Vraiment. À sa manière.*"],
+                   "*te répond. Vraiment. À sa manière.*",
+                   "*commente. Il commente toujours. Sur tout.*",
+                   "*a visiblement beaucoup de choses à dire aujourd'hui.*"],
     "nuit":       ["*est parfaitement réveillé. Il est 3 h du matin.*",
-                   "*te regarde depuis le bout du couloir, immobile. Tu n'aimes pas ça.*"],
+                   "*te regarde depuis le bout du couloir, immobile. Tu n'aimes pas ça.*",
+                   "*a des projets nocturnes. Tu n'es pas invité.*",
+                   "*traverse la pièce sans le moindre bruit. Impressionnant.*"],
+    "gourmand":   ["*a un radar. Tu as ouvert un placard à l'autre bout du refuge.*",
+                   "*te suit uniquement parce que tu es passé près de la cuisine.*"],
+    "curieux":    ["*a la tête dans un endroit où elle ne devrait pas être.*",
+                   "*inspecte quelque chose de nouveau. Rapport détaillé à suivre.*"],
+    "peureux":    ["*sursaute. Tu n'as rien fait. Il n'y a rien eu.*",
+                   "*surveille les issues. Par précaution.*"],
+    "sportif":    ["*a besoin de bouger. Maintenant. Ça se voit.*",
+                   "*tourne en rond avec une énergie contenue.*"],
+    "paresseux":  ["*n'a pas bougé depuis deux heures. Il respire, c'est vérifié.*",
+                   "*ouvre un œil, évalue la situation, referme l'œil.*"],
+    "protecteur": ["*se place entre toi et la porte sans y penser.*",
+                   "*surveille. Il surveille toujours quelque chose.*"],
+    "matin":      ["*n'est pas encore vraiment réveillé. Ses gestes sont approximatifs.*",
+                   "*s'étire pendant une durée déraisonnable.*"],
+    "hiver":      ["*a trouvé le point le plus chaud du refuge. Il ne le quittera pas.*",
+                   "*refuse catégoriquement d'approcher de la porte.*"],
+    "ete":        ["*est étalé sur le carrelage, aussi plat que possible.*"],
     "neutre":     ["*penche la tête sur le côté.*",
                    "*cligne lentement des yeux. C'est un compliment, paraît-il.*",
                    "*s'assoit devant toi et attend la suite.*",
-                   "*renifle ta main, puis se désintéresse totalement de toi.*"],
+                   "*renifle ta main, puis se désintéresse totalement de toi.*",
+                   "*te regarde. Vraiment. Comme s'il attendait quelque chose.*",
+                   "*fait un petit bruit. Impossible de savoir ce que ça veut dire.*",
+                   "*s'installe à côté de toi sans un mot. C'est déjà bien.*",
+                   "*remue une oreille. C'est peut-être une réponse.*"],
 }
 
 @bot.command(name="petparler", aliases=["parler", "petdiscuter"])
@@ -13319,7 +13447,10 @@ async def petparler_cmd(ctx, *, message: str = None):
         for t in pst.get("traits", []):
             if t in PET_REPLIQUES:
                 pool += PET_REPLIQUES[t] * 2
-        if cle_r == "nuit": pool += PET_REPLIQUES["nuit"]
+        if cle_r in PET_REPLIQUES: pool += PET_REPLIQUES[cle_r] * 2
+        _mois = datetime.datetime.now().month
+        _sais = ("hiver" if _mois in (12,1,2) else "ete" if _mois in (6,7,8) else None)
+        if _sais and _sais in PET_REPLIQUES: pool += PET_REPLIQUES[_sais]
         pool += PET_REPLIQUES["neutre"]
         replique = _sans_repet(uid, "replique", pool, memoire=8)
 
@@ -13411,15 +13542,56 @@ PET_BETISES = [
     ("🛋️", "a fait ses griffes sur le canapé", "Le canapé n'avait rien demandé.", 600, "commune"),
     ("🗑️", "a fouillé la poubelle", "Il en est très fier. Toi beaucoup moins.", 250, "commune"),
     ("🥛", "a renversé un verre sur la table", "Il l'a poussé. Volontairement. En te regardant.", 200, "commune"),
+    ("🧹", "a fait tomber le balai", "Le bruit l'a terrifié. Il accuse le balai.", 0, "commune"),
+    ("🪟", "a laissé des traces de museau sur toute la vitre", "Une fresque. Une vraie.", 0, "commune"),
+    ("🧺", "a vidé le panier à linge", "Le linge propre est maintenant au sol. Et sur lui.", 150, "commune"),
+    ("🌿", "a mâchouillé une plante d'intérieur", "Il en a laissé la moitié. Par politesse.", 250, "commune"),
+    ("🔌", "a débranché quelque chose", "On ne sait pas quoi. On le découvrira plus tard.", 100, "commune"),
+    ("🧴", "a fait tomber une bouteille dans la salle de bain", "Elle a roulé jusqu'au couloir.", 180, "commune"),
+    ("🪑", "a poussé une chaise pour atteindre le plan de travail", "L'ambition ne lui manque pas.", 200, "commune"),
+    ("🧸", "a éventré un vieux jouet", "Il y avait du rembourrage. Maintenant partout.", 150, "commune"),
     ("👟", "a mâchouillé une chaussure", "Pas la vieille. La neuve, évidemment.", 900, "rare"),
     ("📚", "a fait tomber toute une étagère", "Il dormait dessus. Tout s'est écroulé.", 700, "rare"),
     ("🧶", "a emmêlé toute la pelote", "Il est dedans. Il ne peut plus sortir.", 300, "rare"),
     ("🍰", "a mangé le gâteau qui refroidissait", "Tout le gâteau. Il n'en reste rien.", 1200, "rare"),
     ("🍦", "a mangé une glace et en a mis partout", "Il a du sucre jusque sur le front.", 400, "rare"),
     ("💻", "s'est assis sur le clavier", "Il a envoyé un message. À quelqu'un. On ne sait pas qui.", 500, "rare"),
+    ("📱", "a marché sur ton téléphone", "Il a lancé un appel. À un contact au hasard.", 400, "rare"),
+    ("🧊", "a ouvert le congélateur", "Comment ? Personne ne sait. Tout dégèle.", 800, "rare"),
+    ("🪣", "a renversé le seau de ménage", "Le sol est propre. Le reste beaucoup moins.", 350, "rare"),
+    ("🎒", "a vidé ton sac entièrement", "Tout est au sol, trié selon une logique mystérieuse.", 450, "rare"),
+    ("🕯️", "a fait tomber une bougie", "Éteinte, heureusement. La cire, elle, est partout.", 600, "rare"),
+    ("🖼️", "a décroché un cadre du mur", "Il a sauté dessus. Le mur a perdu.", 900, "rare"),
     ("🎨", "a marché dans la peinture", "Il y a des empreintes sur trois pièces.", 800, "tresrare"),
     ("🐟", "a volé le poisson du dîner", "Le dîner est annulé. Lui a très bien mangé.", 1500, "tresrare"),
+    ("🚪", "a réussi à ouvrir la porte d'entrée", "Il est revenu tout seul. Il ne dira pas d'où.", 0, "tresrare"),
+    ("💍", "a fait disparaître quelque chose de précieux", "Tu le retrouveras. Un jour. Peut-être.", 2000, "tresrare"),
 ]
+BETISE_REACTIONS = {
+ "farceur":  ["😈 Il te regarde. Puis regarde le désastre. Puis te regarde. Il est fier.",
+              "😈 Aucun remords. Pas l'ombre d'un."],
+ "peureux":  ["😰 Il s'est déjà caché sous le canapé. Il sait ce qu'il a fait.",
+              "😰 Il tremble un peu. Tu n'as même pas encore réagi."],
+ "affectueux":["🥺 Il vient immédiatement te voir avec {o}. On dirait qu'il essaie de se faire pardonner.",
+               "🥺 Il pose sa tête sur ton genou. La stratégie fonctionne. Encore."],
+ "tetu":     ["😐 Il refuse catégoriquement d'admettre quoi que ce soit.",
+              "😐 Selon lui, ce n'était pas lui. Il n'y a pourtant que lui ici."],
+ "paresseux":["😴 Il n'a même pas remarqué. Il dormait déjà avant la fin.",
+              "😴 Il s'est rendormi à côté du désastre."],
+ "malin":    ["🦊 Il a rangé approximativement. Ça ne trompe personne, mais l'effort est noté."],
+ "maniaque": ["🧼 Il essaie de nettoyer. Il empire la situation."],
+ "gourmand": ["🍖 Il finit ce qu'il a commencé pendant que tu constates les dégâts."],
+ "bavard":   ["🗣️ Il t'explique longuement. Sa version est très différente."],
+ "a_rival":  ["👀 Il regarde discrètement vers {rival}. Il essaie vraiment de lui mettre ça sur le dos ? 💀"],
+ "curieux":  ["👀 Il inspecte le résultat de sa bêtise avec un intérêt scientifique."],
+ "protecteur":["🛡️ Il monte la garde devant le désastre. Comme si c'était un trésor."],
+ "nuit":     ["🌙 À 3 h du matin. Bien sûr."],
+ "refuge_sale":["🧹 Le refuge n'avait vraiment pas besoin de ça."],
+ "defaut":   ["Il te regarde avec une innocence parfaitement feinte.",
+              "Il s'assoit à côté, l'air de rien. Absolument l'air de rien.",
+              "Il quitte la pièce dignement, comme si de rien n'était.",
+              "Il bâille. La journée a été rude, visiblement."],
+}
 
 async def tenter_betise(ctx, uid):
     """Le pet fait parfois une bêtise — plus souvent s'il est farceur ou s'ennuie"""
@@ -13460,9 +13632,11 @@ async def tenter_betise(ctx, uid):
     save_all_data()
 
     RAR_LABEL = {"commune": "", "rare": "  ·  🔵 *rare*", "tresrare": "  ·  🟣 *très rare*"}
+    _reac = _remplir(uid, _sans_repet(uid, "betise_reac",
+                     _pool_contextuel(uid, BETISE_REACTIONS["defaut"], BETISE_REACTIONS)))
     await ctx.send(embed=discord.Embed(
         title=f"{emo} Une bêtise !",
-        description=(f"**{nom_pet}** {action}.\n*{detail}*\n\n"
+        description=(f"**{nom_pet}** {action}.\n*{detail}*\n\n{_reac}\n\n"
                      + (f"💸 **−{degats:,} pièces** de dégâts\n" if degats else "")
                      + f"❤️ Lui, il est **ravi** (+8 humeur)\n"
                      + f"🧹 Le refuge se salit un peu…{RAR_LABEL[rar]}"),
@@ -14410,6 +14584,96 @@ def generer_reve(uid):
 # ============================================================
 #  📦 MARCHAND ITINÉRANT
 # ============================================================
+
+EXPE_RECITS_PLUS = {
+ "foret": [
+  "{p} revient couvert de mousse et d'aiguilles de pin. Il refuse d'expliquer.",
+  "{p} a suivi une piste pendant deux heures. La piste menait à un écureuil. L'écureuil a gagné.",
+  "{p} s'est perdu, puis retrouvé, puis reperdu. Il est rentré quand même.",
+  "{p} a trouvé une clairière. Il y est resté longtemps, sans bouger.",
+  "{p} a fait fuir un renard. Ou le renard l'a ignoré. Les versions divergent.",
+  "{p} rentre en marchant très lentement. La forêt était grande.",
+  "{p} a dormi dans un tronc creux. Il sent le bois humide.",
+  "{p} a rencontré quelque chose. Il ne dira pas quoi.",
+ ],
+ "marche": [
+  "{p} a fait le tour de tous les étals. Trois fois.",
+  "{p} a été nourri par au moins quatre marchands différents. Stratégie assumée.",
+  "{p} rentre avec une odeur d'épices que personne n'identifie.",
+  "{p} a suivi un vendeur de poisson sur trois cents mètres.",
+  "{p} s'est assis devant un étal et a refusé de bouger jusqu'à obtenir quelque chose.",
+  "{p} a fait tomber une pile de fruits. Il est parti dignement.",
+  "{p} a lié amitié avec un chat de rue. Ils se sont quittés sans un mot.",
+ ],
+ "montagne": [
+  "{p} est monté beaucoup plus haut que prévu. Il en est très fier.",
+  "{p} rentre avec de la neige sur le dos. En plein été.",
+  "{p} a vu la vallée entière depuis un rocher. Il a regardé longtemps.",
+  "{p} s'est abrité sous une avancée pendant une averse. Il a attendu.",
+  "{p} a croisé un aigle. Ils se sont regardés. Personne n'a bougé.",
+  "{p} rentre épuisé mais avec quelque chose dans la gueule.",
+  "{p} a dérapé sur un éboulis. Il fait comme si c'était prévu.",
+ ],
+ "ruines": [
+  "{p} est entré dans un endroit où personne n'était allé depuis longtemps.",
+  "{p} a gratté sous une dalle descellée. Il y avait quelque chose dessous.",
+  "{p} rentre couvert de poussière ancienne. Elle a un goût étrange, paraît-il.",
+  "{p} a refusé d'entrer dans une des salles. Il est resté devant la porte.",
+  "{p} a suivi un couloir qui n'était pas sur le plan. Il n'y a pas de plan.",
+  "{p} a fait tomber quelque chose. L'écho a duré très longtemps.",
+  "{p} rentre plus silencieux que d'habitude. Ça passera.",
+ ],
+}
+EXPE_AMBIANCE = {
+ "matin":   ["🌅 Il est parti avant le lever du soleil.", "🌅 La rosée du matin lui a mouillé les pattes."],
+ "aprem":   ["☀️ Le soleil tapait fort. Il a cherché l'ombre plusieurs fois."],
+ "soir":    ["🌆 Il est rentré à la tombée du jour, pile à l'heure."],
+ "nuit":    ["🌙 Une expédition nocturne. Il voit mieux que toi dans le noir."],
+ "hiver":   ["❄️ Il a laissé des traces dans la neige. Elles vont loin."],
+ "printemps":["🌸 Il rentre avec du pollen partout. Il éternue."],
+ "ete":     ["☀️ Il a bu à trois sources différentes."],
+ "automne": ["🍂 Il a plongé dans un tas de feuilles. Deux fois."],
+ "aventurier":["🗺️ Il voulait continuer. Tu as dû insister pour qu'il rentre."],
+ "peureux": ["🥺 Il a fait demi-tour deux fois avant de continuer."],
+ "curieux": ["👀 Il a inspecté absolument tout ce qui bougeait."],
+ "gourmand":["🍖 Il a mangé des choses. On préfère ne pas savoir lesquelles."],
+ "solitaire":["🌙 Il est parti seul, comme il aime."],
+ "malin":   ["🦊 Il a pris un raccourci. Il refuse de dire lequel."],
+}
+
+MARCHAND_REPLIQUES_PLUS = [
+ "« Regarde. Prends ton temps. Je ne suis pas pressé. »",
+ "« Ces objets ont voyagé plus que toi et moi réunis. »",
+ "« Ce que tu ne prends pas aujourd'hui, un autre le prendra. »",
+ "« Je ne vends pas. Je place. Ce n'est pas pareil. »",
+ "« Ton compagnon a l'air de savoir ce qu'il veut. »",
+ "« Ne demande pas d'où ça vient. Tu ne veux pas savoir. »",
+ "« J'ai fait un long chemin. Fais-moi plaisir, regarde au moins. »",
+ "« Tout a un prix. Certains le paient plus tard. »",
+ "« J'étais là avant le QG. Je serai là après. »",
+ "« Cet objet t'attendait. Ou attendait quelqu'un qui te ressemble. »",
+ "« Je n'accepte pas les retours. Jamais. »",
+ "« Chaque chose ici a appartenu à quelqu'un. Réfléchis-y. »",
+ "« Tu reviendras. Ils reviennent toujours. »",
+ "« Le prix est le prix. Il n'y a pas de négociation. »",
+ "« Ton compagnon me regarde bizarrement. Il sait quelque chose ? »",
+ "« Certains objets choisissent leur propriétaire. Pas l'inverse. »",
+ "« Je n'ai pas beaucoup de temps. La route m'attend. »",
+ "« Prends celui-là. Non, je ne dirai pas pourquoi. »",
+ "« On m'a déjà volé une fois. Une seule. »",
+ "« Il y a des choses que je ne montre à personne. Pas encore. »",
+]
+MARCHAND_SECRET_PLUS = [
+ "👀 Le marchand regarde ton compagnon longuement.\n« Celui-là a l'œil. »",
+ "👀 Il s'arrête net, observe ton compagnon, puis fouille sous sa charrette.\n« Pour lui, alors. »",
+ "👀 « Tiens donc. » Il écarte une bâche.\n« Je ne montre pas ça à tout le monde. »",
+ "👀 Il hésite. Regarde autour. Puis sort quelque chose d'une poche intérieure.\n« Discrètement. »",
+ "👀 « Ton compagnon me rappelle quelqu'un. »\nIl sort un objet enveloppé dans du tissu.",
+ "👀 Il te fixe un long moment.\n« Tu as l'air de savoir ce que tu cherches. Tiens. »",
+ "👀 « Normalement je garde ça pour moi. »\nIl pose l'objet sur le comptoir sans le lâcher tout de suite.",
+ "👀 Le marchand siffle doucement.\n« Il l'a repéré avant toi. Impressionnant. »",
+]
+
 MARCHANDS = {
  "mysterieux": ("🧙","Le Marchand Mystérieux","Il n'était pas là hier. Il ne sera plus là demain.",
    0x9b59b6, ["mysterieux","celestes","cristaux"], None),
@@ -14428,20 +14692,8 @@ MARCHANDS = {
  "printemps":  ("🌸","Le Marchand de Printemps","Il apporte des choses qui poussent.",
    0x2ecc71, ["fleurs","plumes"], "nourriture"),
 }
-MARCHAND_REPLIQUES = [
- "« Regarde. Prends ton temps. Je ne suis pas pressé. »",
- "« Ces objets ont voyagé plus que toi et moi réunis. »",
- "« Ce que tu ne prends pas aujourd'hui, un autre le prendra. »",
- "« Je ne vends pas. Je place. Ce n'est pas pareil. »",
- "« Ton compagnon a l'air de savoir ce qu'il veut. »",
- "« Ne demande pas d'où ça vient. Tu ne veux pas savoir. »",
- "« J'ai fait un long chemin. Fais-moi plaisir, regarde au moins. »",
-]
-MARCHAND_SECRET = [
- "👀 Le marchand regarde ton compagnon longuement.\n« Celui-là a l'œil. »",
- "👀 Il s'arrête net, observe ton compagnon, puis fouille sous sa charrette.\n« Pour lui, alors. »",
- "👀 « Tiens donc. » Il écarte une bâche.\n« Je ne montre pas ça à tout le monde. »",
-]
+MARCHAND_REPLIQUES = MARCHAND_REPLIQUES_PLUS
+MARCHAND_SECRET = MARCHAND_SECRET_PLUS
 
 def marchand_du_jour():
     """Le marchand présent aujourd'hui — dépend de la date et de l'heure"""
@@ -14523,7 +14775,7 @@ async def marchand_cmd(ctx, achat: str = None):
 
     # ── Vitrine ──
     e = discord.Embed(title=f"{emo}  {nom}",
-        description=f"*{desc}*\n\n> {random.choice(MARCHAND_REPLIQUES)}", color=coul)
+        description=f"*{desc}*\n\n> {_sans_repet(uid, "marchand_dit", MARCHAND_REPLIQUES)}", color=coul)
     if dispo:
         e.add_field(name="🛒 Sa marchandise du jour", value="\n".join(
             f"{COLLECTIONS_SERIES[x['serie']][0]} **{x['obj']}** — **{x['prix']:,} p**\n"
@@ -14533,7 +14785,7 @@ async def marchand_cmd(ctx, achat: str = None):
                     value="*Il a tout vendu. Reviens demain.*", inline=False)
     if secret and secret["obj"] not in vendus:
         e.add_field(name="✨ Il sort quelque chose de sous la bâche",
-                    value=(f"{random.choice(MARCHAND_SECRET)}\n\n"
+                    value=(f"{_sans_repet(uid, 'marchand_secret', MARCHAND_SECRET)}\n\n"
                            f"{COLLECTIONS_SERIES[secret['serie']][0]} **{secret['obj']}** — "
                            f"**{secret['prix']:,} p**"), inline=False)
     e.add_field(name="\u200b",
@@ -14801,21 +15053,52 @@ def salir_refuge(uid, n):
 
 MENAGE_SCENES = {
  "farceur":  ["😈 {p} remet un jouet par terre juste après que tu l'aies rangé.",
-              "😈 {p} attend que tu finisses une pièce pour y retourner. Stratégie."],
+              "😈 {p} attend que tu finisses une pièce pour y retourner. Stratégie.",
+              "😈 {p} vole l'éponge et court avec dans tout le refuge.",
+              "😈 Tu ranges. Il déballe. Le cycle est parfait."],
  "affectueux":["🥰 {p} te suit pendant tout le ménage, pièce par pièce.",
-               "🥰 {p} se frotte contre tes jambes à chaque passage. Tu avances lentement."],
- "calin":    ["🤗 {p} se couche sur ce que tu essaies de ranger."],
+               "🥰 {p} se frotte contre tes jambes à chaque passage. Tu avances lentement.",
+               "🥰 {p} vient chercher un câlin toutes les cinq minutes."],
+ "calin":    ["🤗 {p} se couche sur ce que tu essaies de ranger.",
+              "🤗 {p} s'installe dans le panier à linge propre. Évidemment."],
  "paresseux":["😴 {p} dort pendant absolument toute l'opération.",
-              "😴 Il change de place une fois. Pour se remettre en travers."],
+              "😴 Il change de place une fois. Pour se remettre en travers.",
+              "😴 {p} ouvre un œil, évalue la situation, se rendort."],
  "maniaque": ["🧼 {p} semble presque superviser ton travail. Il vérifie les coins.",
-              "🧼 Il inspecte chaque zone finie d'un air approbateur."],
- "curieux":  ["👀 {p} inspecte tout ce que tu sors des placards."],
- "peureux":  ["🥺 {p} disparaît dès que tu sors le balai. Il reviendra après."],
+              "🧼 Il inspecte chaque zone finie d'un air approbateur.",
+              "🧼 {p} pousse un objet mal aligné de deux centimètres. Voilà."],
+ "curieux":  ["👀 {p} inspecte tout ce que tu sors des placards.",
+              "👀 {p} trouve un objet oublié depuis des mois. Il le garde."],
+ "peureux":  ["🥺 {p} disparaît dès que tu sors le balai. Il reviendra après.",
+              "🥺 {p} observe l'opération depuis le haut d'un meuble."],
+ "sportif":  ["💪 {p} court d'une pièce à l'autre pendant que tu travailles."],
+ "protecteur":["🛡️ {p} surveille la porte pendant que tu as le dos tourné."],
+ "bavard":   ["🗣️ {p} commente chaque geste. Il a beaucoup d'avis."],
+ "solitaire":["🌙 {p} change de pièce à chaque fois que tu arrives."],
+ "gourmand": ["🍖 {p} trouve une miette sous le meuble. Journée réussie."],
+ "malin":    ["🦊 {p} a compris que le ménage précède souvent le repas. Il attend."],
+ "reveur":   ["💭 {p} regarde la poussière danser dans la lumière. Fasciné."],
+ "cupide":   ["🤑 {p} récupère trois objets dans la poubelle. Ils sont à lui maintenant."],
+ "geek":     ["🎮 {p} s'installe sur le seul endroit que tu n'as pas encore nettoyé."],
+ "nuit":     ["🌙 Ménage à 2 h du matin. {p} te regarde comme si tu étais fou.",
+              "🌙 Le refuge brille dans le noir. {p} n'ose plus marcher."],
+ "matin":    ["🌅 Ménage matinal. {p} n'est pas encore vraiment réveillé."],
+ "hiver":    ["❄️ {p} refuse de quitter son coin chaud. Tu contournes."],
+ "ete":      ["☀️ Il fait chaud. {p} s'installe sur le carrelage frais que tu viens de laver."],
+ "refuge_sale":["🧹 Il y a du travail. Beaucoup de travail. {p} ne semble pas concerné."],
+ "a_objets": ["🧸 {p} rassemble tous ses objets en un tas pour les protéger."],
  "defaut":   ["{p} t'observe faire depuis son panier. Il ne semble pas concerné.",
               "{p} se roule dans la zone que tu viens de finir. Merci.",
               "{p} essaie d'aider. Il n'aide pas.",
               "{p} suit la serpillière comme si c'était un jeu.",
-              "{p} s'installe pile au milieu du passage. Contourne."],
+              "{p} s'installe pile au milieu du passage. Contourne.",
+              "{p} disparaît, puis réapparaît une fois tout terminé. Timing parfait.",
+              "{p} renifle chaque produit ménager avec méfiance.",
+              "{p} déplace un objet pendant que tu ranges l'autre bout.",
+              "{p} s'assoit dans le seau. Personne ne sait pourquoi.",
+              "{p} fait tomber quelque chose. Il regarde ailleurs.",
+              "{p} teste la solidité du sac poubelle. Concluant.",
+              "{p} te regarde travailler avec une sérénité déconcertante."],
 }
 
 
@@ -14908,10 +15191,8 @@ async def nettoyer_cmd(ctx):
     gain = 100 + (100 - avant) * 5
     economy_data[uid]["coins"] += gain
 
-    pool = list(MENAGE_SCENES["defaut"])
-    for t in pst.get("traits", []):
-        pool += MENAGE_SCENES.get(t, []) * 3
-    scene = _sans_repet(uid, "menage", pool).replace("{p}", f"**{pet_nom_decore(uid, pdb)}**")
+    scene = _remplir(uid, _sans_repet(uid, "menage",
+                     _pool_contextuel(uid, MENAGE_SCENES["defaut"], MENAGE_SCENES)))
 
     f_a = max(0, min(10, avant // 10))
     f_p = max(0, min(10, apres // 10))
@@ -15176,14 +15457,47 @@ JOUET_REACTIONS = {
 }
 JOUET_TRAITS = {
  "farceur":   ["😈 {p} cache {j} pendant que tu regardes ailleurs.",
-               "😈 {p} fait semblant de rapporter {j}, puis part en courant."],
- "paresseux": ["😴 {p} joue avec {j} sans se lever.Technique imparable.",
-               "😴 {p} regarde {j} rouler. C'est déjà de l'effort."],
- "possessif": ["🧸 {p} ne laisse personne toucher {j}. Personne."],
- "sportif":   ["💪 {p} enchaîne les allers-retours sans jamais s'arrêter."],
- "curieux":   ["👀 {p} démonte {j} pour comprendre comment ça marche."],
- "calin":     ["🤗 {p} finit par abandonner {j} pour venir se coller à toi."],
- "peureux":   ["🥺 {p} met dix minutes à s'approcher de {j}."],
+               "😈 {p} fait semblant de rapporter {j}, puis part en courant.",
+               "😈 {p} te donne {j}… puis le reprend au dernier moment.",
+               "😈 {p} laisse tomber {j} sur ton pied. Volontairement."],
+ "paresseux": ["😴 {p} joue avec {j} sans se lever. Technique imparable.",
+               "😴 {p} regarde {j} rouler. C'est déjà de l'effort.",
+               "😴 {p} pousse {j} d'une patte, puis s'endort dessus.",
+               "😴 {p} attend que {j} revienne tout seul. Il attend longtemps."],
+ "possessif": ["🧸 {p} ne laisse personne toucher {j}. Personne.",
+               "🧸 {p} emporte {j} dans sa cachette et monte la garde."],
+ "sportif":   ["💪 {p} enchaîne les allers-retours sans jamais s'arrêter.",
+               "💪 {p} rapporte {j} en trois secondes. Record battu.",
+               "💪 {p} fait des bonds impressionnants avec {j}."],
+ "curieux":   ["👀 {p} démonte {j} pour comprendre comment ça marche.",
+               "👀 {p} renifle {j} sous tous les angles avant de jouer.",
+               "👀 {p} teste trois façons différentes d'utiliser {j}."],
+ "calin":     ["🤗 {p} finit par abandonner {j} pour venir se coller à toi.",
+               "🤗 {p} s'endort en serrant {j} contre lui."],
+ "peureux":   ["🥺 {p} met dix minutes à s'approcher de {j}.",
+               "🥺 {p} sursaute quand {j} fait un bruit. Il revient quand même."],
+ "gourmand":  ["🍖 {p} essaie de manger {j}. Deux fois.",
+               "🍖 {p} abandonne {j} dès qu'il entend la gamelle."],
+ "malin":     ["🦊 {p} a compris comment {j} fonctionne. Trop bien.",
+               "🦊 {p} utilise {j} d'une manière que le fabricant n'avait pas prévue."],
+ "tetu":      ["😤 {p} refuse de lâcher {j}. La négociation dure.",
+               "😤 {p} veut jouer avec {j}. Pas un autre. Celui-là."],
+ "bavard":    ["🗣️ {p} commente chaque lancer de {j}. Longuement.",
+               "🗣️ {p} émet des sons inédits en jouant avec {j}."],
+ "solitaire": ["🌙 {p} emporte {j} à l'écart et joue seul.",
+               "🌙 {p} joue avec {j} dans son coin. Ne pas déranger."],
+ "protecteur":["🛡️ {p} pose {j} devant toi. C'est un cadeau, ou une garde."],
+ "reveur":    ["💭 {p} fixe {j} sans bouger pendant une minute entière."],
+ "maniaque":  ["🧼 {p} nettoie {j} avant et après la partie."],
+ "fetard":    ["🎉 {p} veut que tout le monde participe à la partie."],
+ "glouton":   ["🍽️ {p} lâche {j} au premier bruit de gamelle."],
+ "aventurier":["🗺️ {p} emporte {j} dehors. Il ne reviendra peut-être pas avec."],
+ "geek":      ["🎮 {p} joue avec {j} devant l'écran. Multitâche."],
+ "affectueux":["❤️ {p} apporte {j} et le pose sur tes genoux, très sérieusement."],
+ "cupide":    ["🤑 {p} ajoute {j} à son tas d'objets précieux."],
+ "courageux": ["🦁 {p} affronte {j} comme un adversaire redoutable."],
+ "sociable":  ["🤝 {p} propose {j} à quelqu'un d'autre. Puis change d'avis."],
+ "intello":   ["📚 {p} observe {j}, réfléchit, et trouve une technique optimale."],
 }
 
 @bot.command(name="petjouets", aliases=["jouets", "coffrejouets"])
@@ -15366,26 +15680,64 @@ async def petacheter_cmd(ctx, *, arg: str = None):
 #  🛡️ PROTECTION DU PROPRIÉTAIRE
 # ============================================================
 PROTECTION_TOTALE = [
-    "🐶 {p} s'est interposé ! Il s'est mis devant son propriétaire en grognant.\n💨 Le voleur a pris la fuite.",
-    "🐱 {p} surgit de nulle part et attaque les lacets du voleur. 💀 Il n'a pas insisté.",
-    "🛡️ {p} se place devant son propriétaire. Le regard suffit.",
-    "🦁 {p} pousse un cri que personne ne lui connaissait. Le voleur court encore.",
-    "⚡ {p} sort de sous le canapé à pleine vitesse. Chaos total. Vol annulé.",
-    "😴 {p} ouvre un œil… puis décide exceptionnellement d'intervenir. Ça a suffi.",
-    "🐾 {p} s'assoit sur le butin. Personne ne le déplacera.",
-    "👀 {p} fixe le voleur sans cligner. Ça devient très gênant. Il abandonne.",
+ "🐶 {p} s'est interposé ! Il s'est mis devant son propriétaire en grognant.\n💨 Le voleur a pris la fuite.",
+ "🐱 {p} surgit de nulle part et attaque les lacets du voleur. 💀 Il n'a pas insisté.",
+ "🛡️ {p} se place devant son propriétaire. Le regard suffit.",
+ "🦁 {p} pousse un cri que personne ne lui connaissait. Le voleur court encore.",
+ "⚡ {p} sort de sous le canapé à pleine vitesse. Chaos total. Vol annulé.",
+ "😴 {p} ouvre un œil… puis décide exceptionnellement d'intervenir. Ça a suffi.",
+ "🐾 {p} s'assoit sur le butin. Personne ne le déplacera.",
+ "👀 {p} fixe le voleur sans cligner. Ça devient très gênant. Il abandonne.",
+ "🚪 {p} bloque la sortie. Physiquement. Le voleur négocie. {p} refuse.",
+ "💨 {p} déclenche une avalanche d'objets en bondissant. Panique générale.",
+ "🎾 {p} lance {j} dans les jambes du voleur. Chute spectaculaire.",
+ "🔔 {p} fait un vacarme réveillant tout le quartier. Le vol est annulé.",
+ "🐕 {p} attrape le sac et refuse de lâcher. Le voleur abandonne le sac.",
+ "🧸 {p} rapporte {o} au voleur. Le voleur ne comprend pas. Il part, troublé.",
+ "🌙 Dans le noir, seuls deux yeux brillent. Le voleur préfère renoncer.",
+ "🏠 {p} connaît chaque recoin du refuge. Le voleur non. Il se perd. Il abandonne.",
+ "😾 {p} adopte une posture que personne ne lui connaissait. Le message est clair.",
+ "🍖 {p} lâche sa gamelle pour intervenir. C'est dire.",
+ "👑 {p} ne bouge même pas. Il regarde. Le voleur repose tout et s'excuse presque.",
+ "🐾 {p} le suit. Silencieusement. Sur trois cents mètres. Le voleur craque.",
 ]
-PROTECTION_PARTIELLE = [
-    "🐾 {p} a tenté quelque chose. Le voleur a lâché une partie du butin en fuyant.",
-    "🐕 {p} aboie une seule fois. Le voleur sursaute et fait tomber la moitié.",
-    "🐈 {p} s'accroche à la jambe du voleur. Il s'échappe, mais moins riche.",
-    "💨 {p} arrive trop tard, mais assez vite pour récupérer une partie.",
+PROTECTION_TOTALE_CTX = {
+ "protecteur": ["🛡️ {p} n'a même pas hésité une seconde. C'est ce qu'il fait.",
+                "🛡️ Il s'est placé devant toi avant même que tu comprennes."],
+ "courageux":  ["🦁 {p} avance vers le danger. Il n'a jamais reculé de sa vie."],
+ "sportif":    ["💪 {p} traverse la pièce en une seconde. Le voleur n'a rien vu venir."],
+ "farceur":    ["😈 {p} vole une chaussure au voleur. Il repart en boitant."],
+ "malin":      ["🦊 {p} ferme la porte derrière le voleur. De l'intérieur. Bien joué."],
+ "bavard":     ["🗣️ {p} fait un bruit continu et insupportable jusqu'au départ du voleur."],
+ "gourmand":   ["🍖 {p} s'intéresse au sac. Il y avait de la nourriture dedans. Le voleur fuit."],
+ "ancien":     ["👑 {p} a vu bien pire. Il se contente de se lever. Ça suffit."],
+ "nuit":       ["🌙 Le voleur ne l'avait pas vu dans le noir. Grosse erreur."],
+ "a_ami":      ["🐾 {p} et {ami} arrivent ensemble. Le voleur est en infériorité numérique."],
+}
+PROTECTION_PARTIELLE_PLUS = [
+ "🐾 {p} a tenté quelque chose. Le voleur a lâché une partie du butin en fuyant.",
+ "🐕 {p} aboie une seule fois. Le voleur sursaute et fait tomber la moitié.",
+ "🐈 {p} s'accroche à la jambe du voleur. Il s'échappe, mais moins riche.",
+ "💨 {p} arrive trop tard, mais assez vite pour récupérer une partie.",
+ "🎾 {p} récupère un objet tombé et le rapporte fièrement.",
+ "🧸 {p} s'interpose une seconde trop tard. Il sauve ce qu'il peut.",
+ "🚪 {p} coince le sac dans la porte. Une partie reste.",
+ "😤 {p} fait fuir le voleur, mais pas assez vite. Dégâts limités.",
+ "🌙 {p} dormait. Il se réveille juste à temps pour sauver une partie.",
+ "🔔 Un bruit alerte {p}. Il arrive, le voleur détale, lâchant la moitié.",
 ]
-PROTECTION_RATEE = [
-    "😴 {p} dormait. Il n'a rien vu, rien entendu, rien empêché.",
-    "🥺 {p} a regardé la scène depuis son panier. Sans bouger.",
-    "🙈 {p} s'est caché. On ne peut pas lui en vouloir.",
+PROTECTION_RATEE_PLUS = [
+ "😴 {p} dormait. Il n'a rien vu, rien entendu, rien empêché.",
+ "🥺 {p} a regardé la scène depuis son panier. Sans bouger.",
+ "🙈 {p} s'est caché. On ne peut pas lui en vouloir.",
+ "🍖 {p} était occupé avec sa gamelle. Priorités.",
+ "🎾 {p} jouait avec {j}. Il n'a rien remarqué.",
+ "😐 {p} a regardé le voleur passer. Il a même semblé le saluer.",
+ "🪟 {p} était à la fenêtre. Il regardait dehors. Vraiment pas de chance.",
+ "💤 {p} rêvait. Le rêve était bien, au moins.",
 ]
+PROTECTION_PARTIELLE = PROTECTION_PARTIELLE_PLUS
+PROTECTION_RATEE = PROTECTION_RATEE_PLUS
 
 def chance_protection(uid):
     """Probabilité que le compagnon intervienne — volontairement modérée"""
@@ -15425,13 +15777,14 @@ async def tenter_protection(uid, channel, montant=0):
 
     # 65 % blocage total, 35 % dégâts réduits
     if random.random() < 0.65:
-        txt = random.choice(PROTECTION_TOTALE).replace("{p}", nom)
+        txt = _remplir(uid, _sans_repet(uid, "protect_ok",
+                       _pool_contextuel(uid, PROTECTION_TOTALE, PROTECTION_TOTALE_CTX)))
         pet_carnet_note(uid, "🛡️ A protégé son propriétaire" + (" pour la première fois." if premiere else "."),
                         important=premiere)
         save_all_data()
         return True, montant, txt
     sauve = int(montant * random.uniform(0.4, 0.7))
-    txt = random.choice(PROTECTION_PARTIELLE).replace("{p}", nom)
+    txt = _remplir(uid, _sans_repet(uid, "protect_part", PROTECTION_PARTIELLE))
     pet_carnet_note(uid, "🛡️ A limité les dégâts d'un vol.", important=premiere)
     save_all_data()
     return False, sauve, txt
@@ -16380,6 +16733,11 @@ async def petexpedition_cmd(ctx, lieu: str = None):
         st["proprete"] = max(0, st["proprete"] - 25)
         st["humeur"] = min(100, st["humeur"] + 15)
         pet_stat(uid, "expeditions")
+        _rec = EXPE_RECITS_PLUS.get(lieu, [])
+        if _rec:
+            _amb = _sans_repet(uid, "expe_amb", _pool_contextuel(uid, [""], EXPE_AMBIANCE))
+            butin.insert(0, _remplir(uid, _sans_repet(uid, "expe_" + lieu, _rec))
+                         + (f"\n{_amb}" if _amb else ""))
         pst.setdefault("vecu", {})
         pst["vecu"]["expeditions"] = pst["vecu"].get("expeditions", 0) + 1
         pet_carnet_note(uid, f"A exploré **{nom_l}** — " + ("mission réussie." if reussi else "revenu bredouille."))
@@ -16482,6 +16840,11 @@ REACTIONS_REPAS = {
    "✨ {p} tourne autour de toi. Il en redemande. Ouvertement.",
    "😋 {p} ferme les yeux en mangeant. Il savoure.",
    "🎉 {p} fait le tour de la pièce en courant avant de manger. L'excitation.",
+   "🤤 {p} n'a pas relevé la tête une seule fois. Concentration totale.",
+   "💕 {p} vient te remercier à sa manière. Ça vaut tous les mots.",
+   "🥳 {p} garde le dernier morceau, le regarde, puis le mange lentement.",
+   "😻 {p} refuse de quitter la gamelle. Au cas où il en resterait.",
+   "🙌 {p} pousse sa gamelle vers toi. Encore. S'il te plaît. Encore.",
  ],
  "aime": [
    "😊 {p} mange de bon cœur, sans se presser.",
@@ -16489,6 +16852,9 @@ REACTIONS_REPAS = {
    "😌 {p} mange proprement. Rare, mais ça arrive.",
    "👍 {p} apprécie visiblement. Il reviendra.",
    "😄 {p} remue en mangeant. Bon signe.",
+   "🍽️ {p} prend son temps. C'est bon, il n'y a pas d'urgence.",
+   "😇 {p} finit, s'assoit, et te regarde avec satisfaction.",
+   "🤗 {p} vient se frotter contre toi après le repas.",
  ],
  "neutre": [
    "😐 {p} mange. Sans plus. C'est mangé, c'est l'essentiel.",
@@ -16496,6 +16862,9 @@ REACTIONS_REPAS = {
    "😶 {p} mange, puis te regarde comme s'il attendait autre chose.",
    "🍽️ {p} finit tout, mais ne remercie personne.",
    "😑 {p} mange en te fixant. Ambiance.",
+   "🫥 {p} mange par obligation plus que par plaisir.",
+   "😬 {p} hésite, renifle, puis mange sans conviction.",
+   "🥱 {p} baille au milieu du repas. Tout est dit.",
  ],
  "deteste": [
    "😖 {p} mâche lentement… On va dire qu'il fait un effort.",
@@ -16504,40 +16873,148 @@ REACTIONS_REPAS = {
    "🙄 {p} mange trois bouchées et abandonne le projet.",
    "😾 {p} te regarde longuement. Tu as trahi sa confiance.",
    "💀 {p} enterre symboliquement la nourriture sous une couverture.",
+   "🚫 {p} s'assoit dos à l'assiette. La discussion est close.",
+   "😒 {p} regarde l'assiette, puis toi, puis part sans un mot.",
+   "🤨 {p} touche du bout de la patte, comme si c'était dangereux.",
  ],
 }
 REACTIONS_TRAIT_REPAS = {
  "gourmand":  ["🍖 {p} avait déjà tout mangé avant que tu poses l'assiette.",
-               "🍖 {p} a mangé si vite qu'il semble lui-même surpris."],
+               "🍖 {p} a mangé si vite qu'il semble lui-même surpris.",
+               "🍖 {p} regarde l'assiette vide, puis toi, puis l'assiette. Encore ?",
+               "🍖 {p} lèche la gamelle bien après qu'elle soit vide."],
  "glouton":   ["🍽️ {p} finit son assiette et regarde celle des autres.",
-               "🍽️ Il n'a pas mâché. Pas une seule fois."],
+               "🍽️ Il n'a pas mâché. Pas une seule fois.",
+               "🍽️ {p} a mangé debout, sans respirer. Impressionnant et inquiétant."],
  "maniaque":  ["🧼 {p} trie sa nourriture avant de commencer. Il a des critères.",
-               "🧼 Il mange proprement, puis nettoie autour. Impeccable."],
+               "🧼 Il mange proprement, puis nettoie autour. Impeccable.",
+               "🧼 {p} refuse de manger si un morceau touche le bord."],
  "tetu":      ["😤 {p} refuse de manger tant que tu le regardes.",
-               "😤 Il attend que tu partes. Puis il mange. Bien sûr."],
- "peureux":   ["🥺 {p} mange en surveillant les alentours entre chaque bouchée."],
- "farceur":   ["😈 {p} renverse la moitié avant de manger l'autre. Par principe."],
- "affame":    ["😭 {p} n'a pas attendu. L'assiette est déjà vide."],
+               "😤 Il attend que tu partes. Puis il mange. Bien sûr.",
+               "😤 {p} pousse l'assiette de trois centimètres. Puis mange."],
+ "peureux":   ["🥺 {p} mange en surveillant les alentours entre chaque bouchée.",
+               "🥺 {p} sursaute au milieu du repas. Rien ne s'est passé."],
+ "farceur":   ["😈 {p} renverse la moitié avant de manger l'autre. Par principe.",
+               "😈 {p} cache un morceau pour plus tard. Tu le retrouveras dans un mois."],
+ "affame":    ["😭 {p} n'a pas attendu. L'assiette est déjà vide.",
+               "😭 {p} mange comme s'il n'avait rien vu depuis des jours."],
+ "calin":     ["🤗 {p} mange, puis vient se coller à toi pour digérer."],
+ "paresseux": ["😴 {p} mange allongé. Il n'a pas jugé utile de se lever."],
+ "solitaire": ["🌙 {p} emporte sa nourriture à l'écart et mange seul."],
+ "bavard":    ["🗣️ {p} commente son repas. Bruyamment."],
+ "curieux":   ["👀 {p} renifle longuement avant chaque bouchée. Analyse complète."],
+ "sportif":   ["💪 {p} mange vite : il a des choses à faire."],
+ "protecteur":["🛡️ {p} monte la garde devant sa gamelle. Personne n'approche."],
+ "reveur":    ["💭 {p} s'arrête au milieu du repas et fixe le vide. Puis reprend."],
+ "malin":     ["🦊 {p} a poussé sa gamelle jusqu'à un meilleur endroit. Plus confortable."],
+ "cupide":    ["🤑 {p} met de côté les meilleurs morceaux. Pour après."],
+ "fetard":    ["🎉 {p} mange avec un enthousiasme démesuré."],
+ "aventurier":["🗺️ {p} emporte un morceau dehors. Il reviendra sans."],
+ "geek":      ["🎮 {p} mange devant l'écran. Il ne rate rien."],
+ "intello":   ["📚 {p} mange méthodiquement, dans un ordre précis."],
+ "courageux": ["🦁 {p} attaque son repas sans la moindre hésitation."],
 }
 
-def _sans_repet(uid, cle, pool, memoire=6):
-    """Choisit dans `pool` en évitant ce qui vient d'être vu.
-    La rareté est préservée : on filtre, on ne repondère pas."""
+def _sans_repet(uid, cle, pool, memoire=25):
+    """Choisit dans `pool` en évitant fortement ce qui a été vu récemment.
+    Pénalité progressive : le plus ancien redevient éligible en douceur.
+    La rareté relative du pool est préservée."""
     if not pool:
         return ""
+    pool = list(pool)
     pid, pdb, st = get_active_pet(uid)
     if not st:
         return random.choice(pool)
     vus = st.setdefault("vus", {}).setdefault(cle, [])
-    frais = [x for x in pool if x not in vus]
-    choix = random.choice(frais or pool)
+    if len(pool) <= 2:
+        choix = random.choice(pool)
+    else:
+        # Poids : 1 pour du jamais vu, très faible pour du récent
+        poids = []
+        for x in pool:
+            if x not in vus:
+                poids.append(100.0)
+            else:
+                rang = len(vus) - 1 - vus[::-1].index(x)   # 0 = le plus ancien
+                poids.append(max(1.0, 4.0 * (rang + 1) / max(1, len(vus))))
+        choix = random.choices(pool, weights=poids)[0]
     vus.append(choix)
-    st["vus"][cle] = vus[-memoire:]
-    # On plafonne la mémoire globale pour ne pas gonfler la sauvegarde
-    if len(st["vus"]) > 20:
-        for k in list(st["vus"])[:-20]:
+    st["vus"][cle] = vus[-min(memoire, max(4, len(pool) - 1)):]
+    if len(st["vus"]) > 40:
+        for k in list(st["vus"])[:-40]:
             st["vus"].pop(k, None)
     return choix
+
+def _pool_contextuel(uid, base, variantes):
+    """Assemble un pool : base + variantes qui collent au contexte du pet.
+    `variantes` = {condition: [textes]} où condition est un trait, un moment,
+    une saison, ou un état (faim/energie/humeur/proprete + _bas/_haut)."""
+    pid, pdb, pst = get_active_pet(uid)
+    if not pst:
+        return list(base)
+    st = pet_etat(uid)
+    pool = list(base)
+    traits = set(pst.get("traits", []))
+    moment = routine_actuelle()[0]
+    mois = datetime.datetime.now().month
+    saison = ("hiver" if mois in (12,1,2) else "printemps" if mois in (3,4,5)
+              else "ete" if mois in (6,7,8) else "automne")
+    d = pets_data.get(uid, {})
+    ref = set(d.get("refuge", []))
+    actifs = set(traits) | {moment, saison}
+    if st["faim"] > 65: actifs.add("faim_haute")
+    if st["faim"] < 20: actifs.add("faim_basse")
+    if st["energie"] < 35: actifs.add("energie_basse")
+    if st["energie"] > 80: actifs.add("energie_haute")
+    if st["humeur"] < 40: actifs.add("humeur_basse")
+    if st["humeur"] > 80: actifs.add("humeur_haute")
+    if st["proprete"] < 40: actifs.add("sale")
+    if proprete_refuge(uid) < 50: actifs.add("refuge_sale")
+    if pst.get("level", 1) >= 30: actifs.add("ancien")
+    if pst.get("level", 1) <= 5: actifs.add("jeune")
+    if pst.get("objets"): actifs.add("a_objets")
+    if pst.get("jouets_cpt"): actifs.add("a_jouets")
+    if any(v > 0 for k, v in petamitie.items() if uid in k.split("|")): actifs.add("a_ami")
+    if any(v < 0 for k, v in petamitie.items() if uid in k.split("|")): actifs.add("a_rival")
+    actifs |= {m for m in ref}
+    for cond, lot in variantes.items():
+        if cond in actifs:
+            pool += lot * 2          # les variantes contextuelles sont favorisées
+    return pool
+
+def _remplir(uid, texte):
+    """Remplace les balises par les vraies données du compagnon"""
+    pid, pdb, pst = get_active_pet(uid)
+    if not pst:
+        return texte
+    K = _ctx_pet(uid)
+    objet = pst.get("objet_prefere") or (random.choice(pst["objets"]) if pst.get("objets") else "son jouet")
+    jouet = pst.get("jouet_prefere") or (random.choice(list(pst.get("jouets_cpt", {}))) if pst.get("jouets_cpt") else "sa balle")
+    repas = pst.get("repas_prefere") or "sa gamelle"
+    endroit = (pst.get("prefs", {}) or {}).get("endroit", "son coin préféré")
+    piece = "le salon"
+    d = pets_data.get(uid, {})
+    if d.get("refuge"):
+        piece = piece_de(random.choice(d["refuge"]))[2].lower()
+    ami = rival = None
+    for cle, dest in (("meilleur", "ami"), ("rival", "rival")):
+        if K.get(cle):
+            autre = next((x for x in K[cle].split("|") if x != uid), None)
+            if autre:
+                _, a_pdb, a_pst = get_active_pet(autre)
+                if a_pdb:
+                    v = a_pst.get("surnom") or a_pdb["nom"]
+                    if dest == "ami": ami = v
+                    else: rival = v
+    remp = {"p": f"**{pet_nom_decore(uid, pdb)}**", "o": f"**{objet}**",
+            "j": f"**{jouet}**", "r": f"**{repas}**", "e": endroit,
+            "piece": piece, "ami": f"**{ami or 'son ami'}**",
+            "rival": f"**{rival or 'son rival'}**",
+            "n": pst.get("surnom") or pdb["nom"]}
+    for k, v in remp.items():
+        texte = texte.replace("{" + k + "}", str(v))
+    return texte
+
 
 def gouts_repas(uid):
     """Découvre progressivement ce que le pet aime. Structure : {"Poulet": "adore"}"""
@@ -16622,6 +17099,10 @@ def _scene_possible(sc, K):
     if "jours_min" in req and K["jours"] < req["jours_min"]:
         return False
     if "confiance_min" in req and K["confiance"] < req["confiance_min"]:
+        return False
+    if "a_jouets" in req and not K["pst"].get("jouets_cpt"):
+        return False
+    if "a_objets" in req and not K["objets"]:
         return False
     for jauge in ("humeur", "faim", "energie", "proprete", "saletes"):
         if f"{jauge}_min" in req and K[jauge] < req[f"{jauge}_min"]:
@@ -16892,6 +17373,122 @@ SCENES_PETS = [
    "protecteur":"🛡️ Il garde {o} plus jalousement que d'habitude.",
    "defaut":["Il grogne dans le vide. On devine à qui il pense.",
              "Il a caché ses affaires. Par précaution."]}},
+ # ═══ 🧼 PROPRETÉ & BAIN ═══
+ {"id":"sale_traces","cat":"quotidien","decor":"Il y a des traces de pattes dans {piece}.",
+  "si":{"proprete_max":45},
+  "reactions":{"maniaque":"🧼 {p} est visiblement gêné. Il essaie de nettoyer. Ça empire.",
+   "farceur":"😈 {p} en rajoute une série vers la chambre. Signature.",
+   "aventurier":"🗺️ Elles viennent du jardin. Elles y retournent.",
+   "defaut":["Elles mènent au canapé. {p} dort dessus.",
+             "{p} regarde les traces comme si elles n'étaient pas les siennes."]}},
+ {"id":"toilette","cat":"quotidien","decor":"{p} fait sa toilette avec une application remarquable.",
+  "reactions":{"maniaque":"🧼 Vingt minutes. Chaque patte. Deux fois.",
+   "paresseux":"😴 Il s'arrête à mi-parcours et s'endort dans la position.",
+   "nuit":"🌙 À 4 h du matin. Bruyamment.",
+   "defaut":["Il s'arrête net quand il remarque que tu regardes.",
+             "Il recommence trois fois le même endroit. Perfectionnisme."]}},
+ # ═══ 🍖 FAIM ═══
+ {"id":"gamelle_vide","cat":"quotidien","decor":"{p} fixe sa gamelle vide depuis un moment.",
+  "si":{"faim_min":60},
+  "reactions":{"gourmand":"🍖 Il la pousse vers toi centimètre par centimètre. Subtil.",
+   "bavard":"🗣️ Il t'explique la situation. Longuement. Avec insistance.",
+   "tetu":"😤 Il ne bougera pas de là. Le message finira par passer.",
+   "defaut":["Il alterne entre regarder la gamelle et te regarder. En boucle.",
+             "Il soupire. Un vrai soupir de désespoir alimentaire."]}},
+ {"id":"repas_prefere","cat":"quotidien","decor":"{p} a reniflé quelque chose qui ressemble à {r}.",
+  "reactions":{"gourmand":"🍖 Il est déjà dans la cuisine. Il n'y a rien. Il attend quand même.",
+   "malin":"🦊 Il se poste stratégiquement entre toi et le placard.",
+   "defaut":["Il te suit partout depuis. On sait pourquoi.",
+             "Il fixe le placard. Puis toi. Le message est limpide."]}},
+ # ═══ ⚡ ÉNERGIE ═══
+ {"id":"bailler","cat":"quotidien","decor":"{p} bâille tellement fort qu'il en perd l'équilibre.",
+  "si":{"energie_max":40},
+  "reactions":{"paresseux":"😴 Il s'écroule sur place. Bonne nuit.",
+   "sportif":"💪 Il lutte contre le sommeil. Il perd.",
+   "defaut":["Il se frotte les yeux d'une patte. Adorable et pathétique.",
+             "Il tient à peine debout. Il refuse pourtant d'aller dormir."]}},
+ {"id":"hyperactif","cat":"quotidien","decor":"{p} a une énergie inexplicable en ce moment.",
+  "si":{"energie_min":85},
+  "reactions":{"sportif":"💪 Il traverse {piece} pour la douzième fois.",
+   "farceur":"😈 Il utilise cette énergie pour faire exactement ce qu'il ne faut pas.",
+   "nuit":"🌙 Il est 2 h. Il court. Personne ne dort.",
+   "defaut":["Il court en cercles de plus en plus rapides.",
+             "Il bondit sur tout ce qui bouge. Et sur ce qui ne bouge pas."]}},
+ # ═══ 🧸 OBJETS & JOUETS ═══
+ {"id":"jouet_perdu","cat":"quotidien","decor":"{p} cherche {j} partout dans {piece}.",
+  "si":{"a_jouets":True},
+  "reactions":{"tetu":"😤 Il ne s'arrêtera pas avant de l'avoir retrouvé.",
+   "peureux":"🥺 Il commence à s'inquiéter sérieusement.",
+   "malin":"🦊 Il regarde directement sous le meuble. Il savait.",
+   "defaut":["Il te regarde. Tu es visiblement responsable.",
+             "Il abandonne au bout de dix minutes, puis recommence."]}},
+ {"id":"objet_montre","cat":"lien","decor":"{p} vient te présenter {o} très solennellement.",
+  "si":{"a_objets":True},
+  "reactions":{"cupide":"🤑 Il te le montre, mais ne te le donne pas. Nuance importante.",
+   "calin":"🤗 Il le pose sur tes genoux et attend ta réaction.",
+   "possessif":"🧸 Il le reprend au bout de trois secondes. Démonstration terminée.",
+   "defaut":["Il attend. Visiblement, tu dois dire quelque chose.",
+             "Il te le met dans la main. Puis le reprend. Puis recommence."]}},
+ # ═══ 🌦️ MÉTÉO ═══
+ {"id":"pluie","cat":"quotidien","decor":"Il pleut. Fort.",
+  "reactions":{"peureux":"😱 {p} s'est réfugié sous le lit dès la première goutte.",
+   "aventurier":"🗺️ {p} veut sortir. Sous cette pluie. Il insiste.",
+   "reveur":"💭 {p} regarde les gouttes glisser sur la vitre, hypnotisé.",
+   "calin":"🤗 {p} se colle à toi. La pluie est une bonne excuse.",
+   "defaut":["{p} met une patte dehors, la retire, referme le débat.",
+             "{p} observe le déluge depuis la fenêtre, très concerné."]}},
+ {"id":"chaleur","cat":"quotidien","decor":"Il fait une chaleur inhabituelle aujourd'hui.",
+  "si":{"moment":["aprem"]},
+  "reactions":{"paresseux":"😴 {p} a trouvé le carrelage le plus frais du refuge. Il y restera.",
+   "sportif":"💪 {p} essaie de jouer, puis abandonne au bout de trois minutes.",
+   "defaut":["{p} s'étale de tout son long, aussi plat que possible.",
+             "{p} boit trois fois plus que d'habitude."]}},
+ # ═══ 🏠 REFUGE ═══
+ {"id":"nouveau_meuble","cat":"refuge","decor":"{p} a remarqué quelque chose de nouveau dans {piece}.",
+  "reactions":{"curieux":"👀 Il l'inspecte sous tous les angles. Enquête complète.",
+   "peureux":"🥺 Il tourne autour à distance respectable. Ça prendra du temps.",
+   "possessif":"🧸 Il s'installe dessus. C'est à lui maintenant.",
+   "defaut":["Il le renifle longuement, puis s'en désintéresse totalement.",
+             "Il s'assoit devant et le regarde. Longtemps."]}},
+ {"id":"place_prise","cat":"refuge","decor":"Quelqu'un a pris la place de {p}.",
+  "reactions":{"tetu":"😤 Il s'assoit juste à côté et fixe l'intrus. Sans cligner.",
+   "solitaire":"🌙 Il change de pièce sans un mot. Mais il n'a pas oublié.",
+   "farceur":"😈 Il attend que la place se libère, puis la reprend en courant.",
+   "defaut":["Il tourne autour trois fois, l'air profondément offensé.",
+             "Il s'installe dessus quand même. Il y a de la place pour deux. Non."]}},
+ # ═══ 👥 SOCIAL ═══
+ {"id":"visite_attendue","cat":"social","decor":"{p} est posté devant la porte depuis vingt minutes.",
+  "si":{"ami":True},
+  "reactions":{"calin":"🤗 Il attend {ami}. Il le sait avant tout le monde.",
+   "bavard":"🗣️ Il émet des sons vers la porte à intervalles réguliers.",
+   "defaut":["Il attend quelqu'un. On ne sait pas qui. Lui si.",
+             "Il n'a pas bougé d'un centimètre. La patience incarnée."]}},
+ {"id":"jaloux","cat":"social","decor":"{p} n'aime pas que tu regardes ailleurs.",
+  "reactions":{"calin":"🤗 Il se met exactement entre toi et ce que tu regardes.",
+   "bavard":"🗣️ Il proteste. Bruyamment. Longuement.",
+   "possessif":"🧸 Il rassemble ses affaires autour de toi. Périmètre sécurisé.",
+   "defaut":["Il pousse ta main du museau. Message reçu.",
+             "Il s'assoit sur ce que tu regardais. Problème résolu."]}},
+ # ═══ 😂 ABSURDE (2e lot) ═══
+ {"id":"absurde2","cat":"drole","decor":"Il se passe quelque chose d'inexplicable.",
+  "reactions":{"defaut":[
+   "{p} a peur d'un concombre. Personne ne sait pourquoi. Lui non plus.",
+   "{p} essaie de boire l'eau du verre alors que sa gamelle est pleine juste à côté.",
+   "{p} s'est assis dans une boîte deux fois trop petite. Il déborde de partout.",
+   "{p} fixe le plafond depuis six minutes. Tu as regardé aussi. Il n'y a rien.",
+   "{p} court vers toi, s'arrête à trente centimètres, repart. Trois fois.",
+   "{p} lèche le mur. Une seule fois. Puis il fait comme si de rien n'était.",
+   "{p} a apporté un caillou. Il attend une réaction proportionnée.",
+   "{p} dort la tête en bas, à moitié dans le vide. Ça a l'air confortable.",
+   "{p} pousse un objet du bord de la table, très lentement, en te regardant.",
+   "{p} s'est endormi assis. Il oscille dangereusement.",
+   "{p} attaque son propre reflet. Match nul depuis trois ans.",
+   "{p} a décidé que ce coin du couloir était dangereux. Il fait le tour.",
+   "{p} éternue et se fait peur à lui-même. Encore.",
+   "{p} refuse de passer par une porte ouverte. Il attend qu'on l'ouvre plus.",
+   "{p} a trouvé un rayon de soleil de trois centimètres. Il s'y est glissé entièrement.",
+   "{p} regarde un mur pendant que tout le monde regarde autre chose. Inquiétant.",
+  ]}},
 ]
 
 # ── 🌌 Moments uniques : très rares, gardés à vie dans le carnet ──
@@ -18232,7 +18829,8 @@ async def petvisite_cmd(ctx, ami: discord.Member = None):
 
     # ── Scène adaptée au niveau d'amitié ──
     niveau = "debut" if apres < 5 else ("moyen" if apres < 15 else "haut")
-    scene = random.choice(PETVISITE_SCENES[niveau]).format(
+    _pool_v = _pool_contextuel(uid, PETVISITE_SCENES[niveau], PETVISITE_CTX)
+    scene = _sans_repet(uid, "visite_" + niveau, _pool_v, memoire=20).format(
         a=f"**{pet_nom_decore(uid, db1)}**", b=f"**{pet_nom_decore(aid, db2)}**")
 
     # ── Effets de base ──
@@ -18891,7 +19489,15 @@ ACC_REACTIONS = {
  "defaut":   ["{p} s'observe longuement. Il ne sait pas quoi en penser.",
               "{p} tourne trois fois sur lui-même pour tout voir.",
               "{p} vient te montrer le résultat. Fièrement.",
-              "{p} fait semblant de ne rien remarquer. Il regarde quand même."],
+              "{p} fait semblant de ne rien remarquer. Il regarde quand même.",
+              "{p} secoue tout son corps pour tester la solidité. Ça tient.",
+              "{p} essaie de l'atteindre avec une patte arrière. Échec.",
+              "{p} marche différemment maintenant. Plus lentement.",
+              "{p} s'assoit et attend un compliment. Il l'a mérité.",
+              "{p} se fige complètement. Il ne sait pas comment bouger avec ça.",
+              "{p} l'accepte sans broncher. Étonnamment coopératif.",
+              "{p} va se regarder dans la première surface réfléchissante venue.",
+              "{p} refuse de bouger tant que tu ne l'as pas photographié."],
 }
 
 def gouts_accessoires(uid):
@@ -25255,4 +25861,4 @@ while True:
         print(f"❌ CRASH BOT: {e}")
         traceback.print_exc()
         print("🔄 Redémarrage dans 5 secondes...")
-        time.sleep(5)
+        time.sleep(5) 
