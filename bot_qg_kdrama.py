@@ -1571,7 +1571,8 @@ def build_help_pages(guild, is_admin=False):
         "`.recalcamelioration [@membre]` — Recalculer les points selon le niveau\n"
         "`.resetniveaupets confirmer` — Remettre **tous les pets au niveau 1**\n"
         "`.reparerpets` — Récupérer les objets manquants de tous les membres\n"
-        "`.checkimages` — 🖼️ Tester l'accessibilité des images des cartes"
+        "`.checkimages` — 🖼️ Tester l'accessibilité des images des cartes\n"
+        "`.checkduplicateimages` — 👯 Voir les images dupliquées"
     ), inline=False)
     e.add_field(name="🔄 Réinitialisation", value=(
         "`.reset` — Voir les cibles disponibles\n"
@@ -9126,6 +9127,69 @@ async def _tester_image(session, key, url, sem):
                 if methode == "GET":
                     return key, "reseau", None, type(e).__name__
         return key, "reseau", None, "échec HEAD et GET"
+
+
+# ============================================================
+#  👯 VÉRIFICATION VISUELLE DES DOUBLONS — temporaire (étape 5B-2)
+#  LECTURE SEULE : aucune image, aucune carte n'est modifiée.
+# ============================================================
+# Les paires à inspecter visuellement. Les URLs sont lues en direct
+# depuis ANIME_CARDS_DB : ce qui s'affiche est ce qui tourne réellement.
+CHECKDUP_PAIRES = [
+    ("thomas", "thomasandre"),
+    ("mrpopo", "mr5"),
+    ("arthurf", "arthur_tb"),
+]
+
+@bot.command(name="checkduplicateimages", aliases=["checkdup", "voirdoublons"])
+@commands.has_permissions(administrator=True)
+async def checkduplicateimages_cmd(ctx):
+    """Affiche les images dupliquées pour inspection visuelle — .checkduplicateimages (admin)"""
+    envoyes = 0
+    for a, b in CHECKDUP_PAIRES:
+        if a not in ANIME_CARDS_DB or b not in ANIME_CARDS_DB:
+            await ctx.send(f"⚠️ Paire `{a}` / `{b}` introuvable dans le catalogue.")
+            continue
+        ca, cb = ANIME_CARDS_DB[a], ANIME_CARDS_DB[b]
+        url_a = (ca.get("image") or "").strip()
+        url_b = (cb.get("image") or "").strip()
+
+        e = discord.Embed(
+            title=f"{ca['nom']} / {cb['nom']} — image dupliquée",
+            color=0xe67e22)
+        e.add_field(
+            name=f"{ca['emoji']} {ca['nom']}",
+            value=f"**{ca['serie']}**\n`{a}` · {ca['rarete']}",
+            inline=True)
+        e.add_field(
+            name=f"{cb['emoji']} {cb['nom']}",
+            value=f"**{cb['serie']}**\n`{b}` · {cb['rarete']}",
+            inline=True)
+
+        if url_a == url_b:
+            e.add_field(name="🔗 URL commune", value=f"{url_a}", inline=False)
+            if url_a:
+                e.set_image(url=url_a)
+            e.set_footer(text="Regarde l'image : à quel personnage correspond-elle ?")
+        else:
+            # Sécurité : si les URLs ont changé depuis, on le dit au lieu d'afficher n'importe quoi
+            e.color = 0x2ecc71
+            e.add_field(name="✅ Plus de doublon",
+                        value=(f"Les URLs sont **différentes** dans le catalogue actuel :\n"
+                               f"`{a}` → {url_a or '*(vide)*'}\n"
+                               f"`{b}` → {url_b or '*(vide)*'}"),
+                        inline=False)
+            if url_a:
+                e.set_image(url=url_a)
+            e.set_footer(text="Aucune action nécessaire sur cette paire.")
+        await ctx.send(embed=e)
+        envoyes += 1
+
+    await ctx.send(embed=discord.Embed(
+        description=(f"👯 **{envoyes} paire(s) affichée(s).**\n"
+                     f"*Aucune image n'a été modifiée. Dis-moi à quel personnage "
+                     f"correspond chaque visuel.*"),
+        color=0x95a5a6))
 
 @bot.command(name="checkimages", aliases=["checkimg", "verifimages"])
 @commands.has_permissions(administrator=True)
@@ -22448,7 +22512,7 @@ ANIME_CARDS_DB = {
     # ── SAO (Kirito) ─────────────────────────────────────────
     "kirito":    {"nom":"Kirito",          "serie":"SAO",             "rarete":"Légendaire", "emoji":"⚔️", "pv":210,"attaque":95,"defense":80,"image":"https://i.imgur.com/I2OwE8u.jpg","attaques":[{"nom":"Double Lame","emoji":"⚔️","degats":65,"desc": "Deux épées"},{"nom":"Star Burst","emoji":"⭐","degats":80,"desc": "Frappe stellaire"},{"nom":"Underworld","emoji":"🌑","degats":90,"desc": "Chevalier intégral"}],"faiblesse":"💧","resistance":"⚔️"},
     # ── TOKYO GHOUL ──────────────────────────────────────────
-    "kaneki":    {"nom":"Ken Kaneki",      "serie":"Tokyo Ghoul",     "rarete":"Légendaire",   "emoji":"🕷️", "pv":235,"attaque":104,"defense":88,"image":"https://i.imgur.com/PSZyDlw.jpg","attaques":[{"nom":"Kagune","emoji":"🕷️","degats":75,"desc": "Lames de kagune"},{"nom":"Roi Noir","emoji":"🖤","degats":90,"desc": "Transformation"},{"nom":"Dragon","emoji":"🐉","degats":105,"desc": "Forme dragon"}],"faiblesse":"☠️","resistance":"🕷️"},
+    "kaneki":    {"nom":"Ken Kaneki",      "serie":"Tokyo Ghoul",     "rarete":"Légendaire",   "emoji":"🕷️", "pv":235,"attaque":104,"defense":88,"image":"https://i.imgur.com/Wv5nhVY.jpg","attaques":[{"nom":"Kagune","emoji":"🕷️","degats":75,"desc": "Lames de kagune"},{"nom":"Roi Noir","emoji":"🖤","degats":90,"desc": "Transformation"},{"nom":"Dragon","emoji":"🐉","degats":105,"desc": "Forme dragon"}],"faiblesse":"☠️","resistance":"🕷️"},
     "rize":      {"nom":"Rize Kamishiro",  "serie":"Tokyo Ghoul",     "rarete":"Rare",     "emoji":"🌸", "pv":205,"attaque":96,"defense":80,"image":"https://i.imgur.com/qAhrKOO.jpg","attaques":[{"nom":"Kagune","emoji":"🌸","degats":70,"desc": "Multiples tentacules"},{"nom":"Ghoul","emoji":"👹","degats":80,"desc": "Puissance gourmet"},{"nom":"Prédateur","emoji":"🩸","degats":85,"desc": "Appétit sans fin"}],"faiblesse":"☠️","resistance":"🌸"},
     "arima":     {"nom":"Kishou Arima",    "serie":"Tokyo Ghoul",     "rarete":"Épique",   "emoji":"⚔️", "pv":228,"attaque":111,"defense":93,"image":"https://i.imgur.com/GEsZ3uD.jpg","attaques":[{"nom":"IXA","emoji":"⚔️","degats":85,"desc": "Quinque lame"},{"nom":"Yukimura","emoji":"🌸","degats":75,"desc": "Mille coups"},{"nom":"Owl","emoji":"🦉","degats":100,"desc": "Arima le Faucheur"}],"faiblesse":"💔","resistance":"⚔️"},
     # ── MAGIC EMPEROR (manhwa) ───────────────────────────────
