@@ -3761,6 +3761,7 @@ RETIRED_CARD_MAP = {
     # ── The Eminence in Shadow : Cid Kagenou EST Shadow ──
     "shadowfull":     "cid",
     # ── Cartes retirées du roster (étape 5B-4) : plus obtenables ──
+    "lindwurm":       "lindwurm",
     "laplace":         "laplace",
     "jiroep":          "jiroep",
     "tadashi":         "tadashi",
@@ -3784,7 +3785,7 @@ RETIRED_CARD_MAP = {
 }
 
 # ── Migration du catalogue : idempotente, rejouable sans risque ──
-GACHA_CATALOG_MIGRATION_VERSION = 3
+GACHA_CATALOG_MIGRATION_VERSION = 4
 migration_state = {}     # {"catalogue": version_appliquée}
 
 def migrer_catalogue_gacha():
