@@ -9,7 +9,6 @@ import re
 from collections import defaultdict
 from discord import ui
 import io
-import urllib.parse
 
 # ============================================================
 #  PERSISTANCE — Volume Railway (survit aux redéploiements)
@@ -4205,37 +4204,6 @@ async def rolls_cmd(ctx):
         color=0x9b59b6
     ))
 
-
-# ============================================================
-#  🖼️ CADRAGE DES IMAGES — .gachastock uniquement
-# ============================================================
-# Discord impose le ratio d'origine à embed.set_image() : une image
-# paysage s'affiche large et basse, une image portrait s'affiche haute.
-# Pour homogénéiser la collection, on passe l'URL par un proxy de
-# redimensionnement qui pose l'image sur un canevas 2:3 sans la rogner.
-#
-# Les URLs de ANIME_CARDS_DB ne sont JAMAIS modifiées : le cadrage est
-# calculé à l'affichage. Les drops ne sont pas concernés.
-#
-# ⚠️ Si le proxy pose problème : passer CADRAGE_ACTIF à False.
-#    Le rendu redevient instantanément celui d'avant.
-CADRAGE_ACTIF   = True
-CADRAGE_LARGEUR = 600          # 2:3 — format poster vertical
-CADRAGE_HAUTEUR = 900
-CADRAGE_FOND    = "1a1a1e"     # gris très sombre, proche du thème Discord
-
-def image_cadree(url):
-    """Renvoie une URL d'affichage au format poster 2:3, fond sombre.
-    L'image n'est jamais rognée : elle est centrée dans le cadre.
-    Retourne l'URL telle quelle si le cadrage est désactivé ou l'URL vide."""
-    if not CADRAGE_ACTIF:
-        return url
-    if not url or not isinstance(url, str) or not url.startswith("http"):
-        return url
-    return (f"https://wsrv.nl/?url={urllib.parse.quote(url, safe='')}"
-            f"&w={CADRAGE_LARGEUR}&h={CADRAGE_HAUTEUR}"
-            f"&fit=contain&cbg={CADRAGE_FOND}&output=jpg")
-
 class CollectionView(ui.View):
     """Collection carte par carte, avec image et tri"""
     ORDRES = {
@@ -4303,7 +4271,7 @@ class CollectionView(ui.View):
             description=f"*{cc['serie']}*  {RARETE_EMOJI.get(cc['rarete'],'')} **{cc['rarete']}**",
             color=RARETE_COULEURS.get(cc["rarete"], 0x9b59b6))
         if cc.get("image"):
-            embed.set_image(url=image_cadree(cc["image"]))
+            embed.set_image(url=cc["image"])
         embed.add_field(name="📊 Stats", value=(
             f"❤️ **{cc.get('pv',100)+b_pv}** PV\n"
             f"⚔️ **{cc.get('attaque',50)+b_atk}** ATK\n"
