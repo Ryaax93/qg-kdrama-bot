@@ -4066,16 +4066,40 @@ class DoublonView(ui.View):
 # ============================================================
 #  D. NIVEAU DE CARTE — Helpers
 # ============================================================
+# ── Progression proportionnelle ──
+# Chaque étoile de fusion : +7 %  ·  chaque niveau au-dessus de 1 : +1,7 %
+# Maximum 3⭐ + niveau 10 = ×1,363
+# Le multiplicateur s'applique à PV, ATK, DEF **et** aux dégâts des attaques.
+PROG_FUSION = 0.07
+PROG_NIVEAU = 0.017
+
+def card_multiplier(uid, key):
+    """Multiplicateur de puissance d'une carte selon sa fusion et son niveau."""
+    fus = fusion_levels[uid].get(key, 0)      # 0 à 3
+    lvl = card_level[uid].get(key, 1)         # 1 à 10
+    return 1 + fus * PROG_FUSION + (lvl - 1) * PROG_NIVEAU
+
+def carte_stats_finales(uid, key, carte=None):
+    """Stats réellement utilisées en combat, multiplicateur appliqué.
+    Retourne (pv, attaque, defense, multiplicateur)."""
+    cc = carte or ANIME_CARDS_DB.get(key)
+    if not cc:
+        return 0, 0, 0, 1.0
+    m = card_multiplier(uid, key)
+    return round(cc["pv"]*m), round(cc["attaque"]*m), round(cc["defense"]*m), m
+
 def card_total_bonus(uid, key):
-    """Retourne les bonus totaux d'une carte (fusion + niveau de combat)"""
-    fus = fusion_levels[uid].get(key, 0)
-    lvl = card_level[uid].get(key, 1)
-    # Fusion : +20 PV, +15 ATK, +10 DEF par étoile
-    # Niveau combat : +5 PV, +3 ATK, +2 DEF par niveau au-dessus de 1
-    bonus_pv  = fus * 20 + (lvl - 1) * 5
-    bonus_atk = fus * 15 + (lvl - 1) * 3
-    bonus_def = fus * 10 + (lvl - 1) * 2
-    return bonus_pv, bonus_atk, bonus_def
+    """Bonus apportés par la fusion et le niveau, en valeur absolue.
+    Calculés depuis le multiplicateur pour rester cohérents avec le combat."""
+    cc = ANIME_CARDS_DB.get(key)
+    if not cc:
+        return 0, 0, 0
+    pv, atk, dfs, _ = carte_stats_finales(uid, key, cc)
+    return pv - cc["pv"], atk - cc["attaque"], dfs - cc["defense"]
+
+def degats_attaque(uid, key, base):
+    """Dégâts d'une attaque, multiplicateur de progression appliqué."""
+    return round(base * card_multiplier(uid, key))
 
 def give_card_xp(uid, key, won=True):
     """Donne de l'XP à une carte et gère la montée de niveau. Retourne (level_up, new_level)"""
@@ -4266,7 +4290,7 @@ class CollectionView(ui.View):
         fus = fusion_levels[self.uid].get(key, 0)
         lvl = card_level[self.uid].get(key, 1)
         db = doublons[self.uid].get(key, 0)
-        b_pv, b_atk, b_def = fus * 20 + (lvl-1)*5, fus * 15 + (lvl-1)*3, fus * 10 + (lvl-1)*2
+        b_pv, b_atk, b_def = card_total_bonus(self.uid, key)
         embed = discord.Embed(
             title=f"{cc.get('emoji','🎴')} {cc['nom']}" + ("  " + "⭐"*fus if fus else ""),
             description=f"*{cc['serie']}*  {RARETE_EMOJI.get(cc['rarete'],'')} **{cc['rarete']}**",
@@ -4560,7 +4584,7 @@ async def fusionner_cmd(ctx, *, perso: str = None):
     if new_lv >= 3:
         unlock_achievement(uid, "fusion_max", ctx.channel)
 
-    b_pv, b_atk, b_def = new_lv * 20, new_lv * 15, new_lv * 10
+    b_pv, b_atk, b_def = card_total_bonus(uid, key)
     embed = discord.Embed(
         title=f"✨ FUSION RÉUSSIE — {'⭐' * new_lv}",
         description=(f"{RARETE_EMOJI.get(cc['rarete'],'')} **{cc['nom']}** passe à **{new_lv} étoile(s)** !\n"
@@ -22013,12 +22037,13 @@ async def gachabattle_cmd(ctx, adversaire: discord.Member = None):
                 async def cb(interaction, k=key, card=c):
                     if interaction.user.id != joueur.id:
                         return await interaction.response.send_message("❌ Pas ton tour !", ephemeral=True)
-                    b_pv, b_atk, b_def = card_total_bonus(uid, k)
+                    _pv, _atk, _def, _mult = carte_stats_finales(uid, k, card)
                     new_card = card.copy()
                     new_card["key"] = k
-                    new_card["pv"]       = new_card["pv"]      + b_pv
-                    new_card["attaque"]  = new_card["attaque"] + b_atk
-                    new_card["defense"]  = new_card["defense"] + b_def
+                    new_card["mult"]     = _mult      # sert aux dégâts des attaques
+                    new_card["pv"]       = _pv
+                    new_card["attaque"]  = _atk
+                    new_card["defense"]  = _def
                     new_card["hp_actuel"] = new_card["pv"]
                     new_card["ko"] = False
                     chosen.append(new_card)
@@ -22193,9 +22218,9 @@ async def gachabattle_cmd(ctx, adversaire: discord.Member = None):
             def __init__(self):
                 super().__init__(timeout=45)
                 for i2, a in enumerate(atk_dispo[:3]):
-                    d = a.get("degats", 30)
-                    ratio = carte_cur_pre["attaque"] / max(carte_adv_pre["defense"], 1)
-                    est = max(5, int(d * min(ratio, 2.0)))
+                    d = round(a.get("degats", 30) * carte_cur_pre.get("mult", 1.0))
+                    _brut = d * 0.40 + carte_cur_pre["attaque"] * 0.30
+                    est = max(6, int(_brut * (130 / (130 + carte_adv_pre["defense"]))))
                     btn = ui.Button(
                         label=f"{a['nom'][:20]}  ({est})",
                         emoji=a.get("emoji", "⚔️"),
@@ -22256,12 +22281,15 @@ async def gachabattle_cmd(ctx, adversaire: discord.Member = None):
             if base == 0: base = random.randint(20, 35)
         else:
             base = random.randint(25, 40)
+        # La progression (fusion + niveau) renforce aussi les attaques
+        base = round(base * carte_cur.get("mult", 1.0))
 
         critique = random.random() < 0.12
         if critique: base = int(base * 1.5)
-        ratio = carte_cur["attaque"] / max(carte_adv["defense"], 1)
-        degats = int(base * min(ratio, 2.0))
-        degats = max(5, degats)
+        brut = base * 0.40 + carte_cur["attaque"] * 0.30
+        degats = max(6, int(brut
+                            * (130 / (130 + carte_adv["defense"]))
+                            * random.uniform(0.85, 1.15)))
         carte_adv["hp_actuel"] = max(0, carte_adv["hp_actuel"] - degats)
         nom_atk = attaques[choix]["nom"] if (isinstance(choix, int) and choix < len(attaques)) else "Attaque"
         game.setdefault("journal", []).append(
