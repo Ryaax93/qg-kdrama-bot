@@ -3466,21 +3466,76 @@ async def unmute(ctx, member: discord.Member):
         await ctx.send(embed=discord.Embed(description=f"🔊 **{member}** unmuté.", color=0x2ecc71))
 
 @bot.command(name="clear", aliases=["purge"])
-@commands.has_permissions(manage_messages=True)
+@commands.has_permissions(administrator=True)
 async def clear_cmd(ctx, nombre: str = "10"):
-    """Supprime des messages — .clear <nombre> ou .clear all"""
-    if nombre.lower() == "all":
-        deleted = await ctx.channel.purge(limit=None)
-        msg = await ctx.send(f"🗑️ {len(deleted)} messages supprimés !", delete_after=3)
-    else:
+    """Supprime des messages — .clear <nombre> ou .clear all (admin)"""
+    perms = ctx.channel.permissions_for(ctx.guild.me)
+    if not (perms.manage_messages and perms.read_message_history):
+        return await ctx.send("❌ Il me manque **Gérer les messages** "
+                              "ou **Voir l'historique** dans ce salon.")
+
+    async def _purger(limite):
+        """Supprime en masse puis un par un pour les messages de plus de 14 jours."""
+        total = 0
         try:
-            n = int(nombre)
-            if n < 1 or n > 1000:
-                return await ctx.send("❌ Entre 1 et 1000 messages !")
-            deleted = await ctx.channel.purge(limit=n + 1)
-            msg = await ctx.send(f"🗑️ {len(deleted)-1} messages supprimés !", delete_after=3)
-        except ValueError:
-            await ctx.send("❌ Utilise `.clear <nombre>` ou `.clear all`")
+            total += len(await ctx.channel.purge(limit=limite, check=lambda m: not m.pinned))
+        except discord.Forbidden:
+            await ctx.send("❌ Permission refusée par Discord.")
+            return None
+        except discord.HTTPException as e:
+            await ctx.send(f"⚠️ Interrompu par Discord après **{total}** message(s) : `{e.text or e}`")
+            return total
+        except Exception as e:
+            await ctx.send(f"⚠️ Erreur inattendue après **{total}** message(s) : `{type(e).__name__}`")
+            return total
+        return total
+
+    if nombre.lower() == "all":
+        class ConfirmClear(ui.View):
+            def __init__(self):
+                super().__init__(timeout=20)
+                self.ok = None
+            async def interaction_check(self, itx):
+                if itx.user.id != ctx.author.id:
+                    await itx.response.send_message("❌ Ce n'est pas ta commande.", ephemeral=True)
+                    return False
+                return True
+            @ui.button(label="Confirmer", emoji="✅", style=discord.ButtonStyle.danger)
+            async def oui(self, itx, b):
+                self.ok = True; self.stop(); await itx.response.defer()
+            @ui.button(label="Annuler", emoji="❌", style=discord.ButtonStyle.secondary)
+            async def non(self, itx, b):
+                self.ok = False; self.stop(); await itx.response.defer()
+
+        v = ConfirmClear()
+        avert = await ctx.send(embed=discord.Embed(
+            title="⚠️ Nettoyage complet",
+            description=(f"Vider entièrement {ctx.channel.mention} ?\n\n"
+                         f"*Les messages épinglés sont conservés.*\n"
+                         f"*Tu as 20 secondes pour confirmer.*"),
+            color=0xe74c3c), view=v)
+        await v.wait()
+        try:
+            await avert.delete()
+        except Exception:
+            pass
+        if not v.ok:
+            return await ctx.send("❌ Nettoyage annulé.", delete_after=6)
+        n = await _purger(None)
+        if n is not None:
+            await ctx.send(f"🗑️ **{n}** message(s) supprimé(s).", delete_after=8)
+        return
+
+    try:
+        n = int(nombre)
+    except ValueError:
+        return await ctx.send("❌ Utilise `.clear <nombre>` ou `.clear all`")
+    if not 1 <= n <= 1000:
+        return await ctx.send("❌ Entre 1 et 1000 messages.")
+    sup = await _purger(n + 1)
+    if sup is not None:
+        await ctx.send(f"🗑️ **{max(0, sup - 1)}** message(s) supprimé(s).", delete_after=6)
+
 
 # ============================================================
 #  FUN
@@ -5994,6 +6049,34 @@ async def givepieces_cmd(ctx, membre: discord.Member = None, montant: int = None
     economy_data[str(membre.id)]["coins"] += montant
     await ctx.send(embed=discord.Embed(description=f"💰 **+{montant} pièces** données à {membre.mention} !", color=0x2ecc71))
 
+
+@bot.command(name="removecoins", aliases=["retirerpieces", "removepieces"])
+@commands.has_permissions(administrator=True)
+async def removecoins_cmd(ctx, membre: discord.Member = None, montant: int = None):
+    """Retire des pièces à un membre — .removecoins @membre <montant> (admin)"""
+    if not membre or montant is None:
+        return await ctx.send("❌ `.removecoins @joueur <montant>`")
+    if montant <= 0:
+        return await ctx.send("❌ Le montant doit être positif.")
+    uid = str(membre.id)
+    avant = economy_data[uid]["coins"]
+    retire = min(montant, avant)                  # jamais en dessous de zéro
+    economy_data[uid]["coins"] = avant - retire
+    save_all_data()
+    e = discord.Embed(
+        description=(f"💸 **{retire:,} pièces** retirées à {membre.mention}"
+                     .replace(",", " ") +
+                     (f"\n*Son solde était insuffisant : {montant:,} demandées.*".replace(",", " ")
+                      if retire < montant else "")),
+        color=0xe67e22)
+    e.add_field(name="Solde",
+                value=f"{avant:,} → **{economy_data[uid]['coins']:,}**".replace(",", " "),
+                inline=False)
+    await ctx.send(embed=e)
+    gazette_fait("divers", f"<@{ctx.author.id}> a retiré {retire} pièces à {membre.mention}.", 1)
+
+
+
 @bot.command(name="givexp")
 @commands.has_permissions(administrator=True)
 async def givexp_cmd(ctx, membre: discord.Member = None, montant: int = None):
@@ -6250,16 +6333,26 @@ async def run_heure_maudite(channel, guild):
 # ============================================================
 EVENT_CATEGORY_NAME = "🎪 Events du QG"
 
-async def create_event_channel(guild, nom):
-    """Crée un salon temporaire pour un event. Retourne le salon ou None."""
+async def create_event_channel(guild, nom, sans_reactions=False):
+    """Crée un salon temporaire pour un event. Retourne le salon ou None.
+    sans_reactions=True empêche les membres d'ajouter des réactions
+    (les boutons et les interactions restent parfaitement fonctionnels)."""
     cat = discord.utils.get(guild.categories, name=EVENT_CATEGORY_NAME)
     if not cat:
         try:
             cat = await guild.create_category(EVENT_CATEGORY_NAME)
         except Exception:
             cat = None
+    surcharges = None
+    if sans_reactions:
+        surcharges = {
+            guild.default_role: discord.PermissionOverwrite(add_reactions=False),
+            guild.me: discord.PermissionOverwrite(add_reactions=True,
+                                                  manage_messages=True),
+        }
     try:
         ch = await guild.create_text_channel(nom, category=cat,
+                                             overwrites=surcharges,
                                              topic="Salon temporaire — supprimé à la fin de l'event")
         marquer_salon_temporaire(ch)
         return ch
@@ -7369,19 +7462,30 @@ class TapRaceInscription(ui.View):
 
     @ui.button(label="Rejoindre la course", emoji="🏁", style=discord.ButtonStyle.success)
     async def rejoindre(self, interaction, button):
-        if interaction.user in self.joueurs:
-            return await interaction.response.send_message("✅ Tu es déjà inscrit !", ephemeral=True)
-        if len(self.joueurs) >= self.places:
-            return await interaction.response.send_message(
-                "❌ Course complète ! Tu pourras tenter ta chance à la prochaine.", ephemeral=True)
-        self.joueurs.append(interaction.user)
+        try:
+            if interaction.response.is_done():
+                return
+            if interaction.user in self.joueurs:
+                return await interaction.response.send_message("✅ Tu es déjà inscrit !", ephemeral=True)
+            if len(self.joueurs) >= self.places:
+                return await interaction.response.send_message(
+                    "❌ Course complète ! Tu pourras tenter ta chance à la prochaine.", ephemeral=True)
+            self.joueurs.append(interaction.user)
+        except (discord.NotFound, discord.HTTPException, discord.InteractionResponded):
+            return
+        except Exception as e:
+            print(f"[TapRace] inscription ignorée : {type(e).__name__}")
+            return
         noms = "\n".join(f"{'🥇🥈🥉🏅'[i] if i < 4 else '▪️'} {j.display_name}"
                           for i, j in enumerate(self.joueurs))
-        await interaction.response.edit_message(embed=discord.Embed(
-            title="🏁 TAP RACE — Inscriptions",
-            description=(f"**{len(self.joueurs)}/{self.places} places prises**\n\n{noms}\n\n"
-                         f"*Départ dès que la course est complète.*"),
-            color=0xe67e22))
+        try:
+                await interaction.response.edit_message(embed=discord.Embed(
+                title="🏁 TAP RACE — Inscriptions",
+                description=(f"**{len(self.joueurs)}/{self.places} places prises**\n\n{noms}\n\n"
+                             f"*Départ dès que la course est complète.*"),
+                color=0xe67e22))
+        except (discord.NotFound, discord.HTTPException, discord.InteractionResponded):
+            pass
         if len(self.joueurs) >= self.places:
             self.stop()
 
@@ -7403,17 +7507,30 @@ class TapRaceView(ui.View):
                                    discord.ButtonStyle.success, discord.ButtonStyle.secondary][i % 4],
                             row=i)
             async def cb(interaction, jid=j.id):
-                if interaction.user.id != jid:
-                    return await interaction.response.send_message(
-                        "❌ Ce bouton n'est pas le tien ! Trouve celui à ton nom.", ephemeral=True)
-                if self.gagnant:
-                    return await interaction.response.defer()
-                self.clics[jid] += 1
-                self.dirty = True
-                if self.clics[jid] >= self.LIGNE and not self.gagnant:
-                    self.gagnant = self.joueurs[jid]
-                    self.stop()
-                await interaction.response.defer()   # aucun edit ici : c'est le rafraîchisseur qui s'en charge
+                # Tout est enveloppé : un spam de clics ne doit jamais lever d'erreur visible.
+                try:
+                    if interaction.user.id != jid:
+                        if not interaction.response.is_done():
+                            await interaction.response.send_message(
+                                "❌ Ce bouton n'est pas le tien ! Trouve celui à ton nom.",
+                                ephemeral=True)
+                        return
+                    if jid not in self.clics:            # joueur retiré entre-temps
+                        if not interaction.response.is_done():
+                            await interaction.response.defer()
+                        return
+                    if self.gagnant is None:
+                        self.clics[jid] += 1
+                        self.dirty = True
+                        if self.clics[jid] >= self.LIGNE:
+                            self.gagnant = self.joueurs[jid]
+                            self.stop()
+                    if not interaction.response.is_done():
+                        await interaction.response.defer()   # le rafraîchisseur gère l'affichage
+                except (discord.NotFound, discord.HTTPException, discord.InteractionResponded):
+                    pass          # interaction expirée, déjà répondue ou salon supprimé
+                except Exception as e:
+                    print(f"[TapRace] clic ignoré : {type(e).__name__}")
             btn.callback = cb
             self.add_item(btn)
 
@@ -7434,7 +7551,7 @@ async def run_tap_race(channel, guild):
     """🏁 Tap Race — course de clics, 4 places"""
     places = 4
     gain = random.randint(1500, 3500)
-    salon = await create_event_channel(guild, "🏁・tap-race")
+    salon = await create_event_channel(guild, "🏁・tap-race", sans_reactions=True)
     cible = salon or channel
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
@@ -13419,26 +13536,6 @@ async def confession_cmd(ctx, *, texte: str = None):
         try: await msg.add_reaction(e)
         except Exception: pass
 
-@tasks.loop(minutes=30)
-async def ambiance_nuit():
-    """Pose une question introspective au cœur de la nuit"""
-    if not est_nuit():
-        return
-    h = datetime.datetime.now()
-    # une seule fois par heure, à la demie
-    if h.minute >= 30 or random.random() > 0.5:
-        return
-    for guild in bot.guilds:
-        salon = (guild.get_channel(SALON_EVENT_ID) if SALON_EVENT_ID else None) or guild.system_channel
-        if not salon:
-            continue
-        try:
-            await salon.send(embed=discord.Embed(
-                title=random.choice(NUIT_QUESTIONS),
-                description=f"*{random.choice(NUIT_ACCUEIL)}*\n\nRéponds si tu es encore debout.",
-                color=0x2c2f4a))
-        except Exception:
-            pass
 
 # ============================================================
 #  🎨 PERSONNALISATION DU PROFIL
@@ -13498,6 +13595,7 @@ PINS = {
     "collectionneur":    ("🎴", "Collectionneur",      "Posséder 250 cartes"),
 }
 pins_data = defaultdict(set)   # {uid: {pin_id}}
+welcome_announced = set()      # {uid} — annonces de bienvenue déjà faites
 
 async def donner_pin(uid, pin_id, channel=None):
     """Attribue un pin et l'annonce"""
@@ -21994,6 +22092,146 @@ def _reset_bloc(cible):
         watchlist_data.clear(); reviews_data.clear(); invite_counts.clear()
     return n
 
+
+# ============================================================
+#  ☢️ RESET TOTAL D'UN JOUEUR
+# ============================================================
+# Liste exhaustive issue de l'audit : toutes les structures indexées par uid.
+# Séparée par famille pour l'affichage de confirmation.
+RESETPLAYER_FAMILLES = {
+    "🪙 Économie":    ("economy_data", "bank_data", "inventaire", "daily_item_usage"),
+    "📈 Niveaux":     ("xp_data", "points_amelio", "arena_stats", "message_count",
+                       "user_stats", "achievements_data", "voice_time", "missions_progress",
+                       "gazette_stats", "pins_data", "profil_custom"),
+    "🎴 Gacha":       ("gacha_collections", "doublons", "fusion_levels", "card_level",
+                       "card_xp", "roll_data", "gacha_wishlist", "serie_badges",
+                       "fav_slots", "claim_cooldown", "claim_reduction",
+                       "oracle_actif", "oeil_destin", "rarity_boost", "aimant_actif"),
+    "🎁 Events":      ("avent_data",),
+    "💖 Social":      ("liens_data", "liens_detail", "watchlist_data", "invite_counts"),
+}
+
+def _resetplayer_effacer(uid):
+    """Efface toutes les données d'un joueur. Retourne {famille: nb de structures vidées}."""
+    bilan = {}
+    for famille, noms in RESETPLAYER_FAMILLES.items():
+        n = 0
+        for nom in noms:
+            d = globals().get(nom)
+            if isinstance(d, dict) and uid in d:
+                d.pop(uid, None); n += 1
+        bilan[famille] = n
+
+    # ── Cartes réclamées : indexées par carte, pas par joueur ──
+    n_cartes = 0
+    for k in [k for k, v in claimed_cards.items() if v == uid]:
+        claimed_cards.pop(k, None); n_cartes += 1
+    bilan["🎴 Gacha"] += n_cartes
+
+    # ── Compagnons : dictionnaire à part ──
+    n_pets = 0
+    if uid in pets_data:
+        pets_data.pop(uid, None); n_pets += 1
+    for k in [k for k in petamitie if uid in k.split("|")]:
+        petamitie.pop(k, None); n_pets += 1
+    bilan["🐾 Compagnons"] = n_pets
+
+    # ── Structures sociales à clé composite ou à valeur ──
+    n_soc = 0
+    for d in (mariages, demandes_mariage, anniversaire_data):
+        if isinstance(d, dict):
+            for k in [k for k, v in d.items() if k == uid or v == uid]:
+                d.pop(k, None); n_soc += 1
+    bilan["💖 Social"] += n_soc
+    return bilan
+
+@bot.command(name="resetplayer", aliases=["resetjoueur"])
+@commands.has_permissions(administrator=True)
+async def resetplayer_cmd(ctx, membre: discord.Member = None):
+    """Remet à zéro TOUTE la progression d'un joueur — .resetplayer @membre (admin)"""
+    if not membre:
+        return await ctx.send("❌ `.resetplayer @membre`")
+    if membre.bot:
+        return await ctx.send("❌ Les bots n'ont pas de progression.")
+    uid = str(membre.id)
+
+    # ── Aperçu de ce qui sera perdu ──
+    apercu = []
+    if uid in economy_data: apercu.append(f"🪙 **{economy_data[uid].get('coins', 0):,} pièces**".replace(",", " "))
+    if uid in xp_data:      apercu.append(f"📈 **niveau {xp_data[uid].get('level', 1)}**")
+    _nc = len(gacha_collections.get(uid, {}))
+    if _nc:                 apercu.append(f"🎴 **{_nc} cartes**")
+    if uid in pets_data:    apercu.append(f"🐾 **{len(pets_data[uid])} compagnon(s)**")
+    _ni = sum(inventaire.get(uid, {}).values())
+    if _ni:                 apercu.append(f"🎒 **{_ni} objet(s)**")
+    if not apercu:
+        return await ctx.send(f"ℹ️ {membre.mention} n'a aucune donnée enregistrée.")
+
+    class ConfirmReset(ui.View):
+        def __init__(self):
+            super().__init__(timeout=30)
+            self.ok = None
+        async def interaction_check(self, itx):
+            if itx.user.id != ctx.author.id:
+                await itx.response.send_message("❌ Ce n'est pas ta commande.", ephemeral=True)
+                return False
+            return True
+        @ui.button(label="CONFIRMER LE RESET", emoji="☢️", style=discord.ButtonStyle.danger)
+        async def oui(self, itx, b):
+            self.ok = True; self.stop(); await itx.response.defer()
+        @ui.button(label="Annuler", emoji="❌", style=discord.ButtonStyle.secondary)
+        async def non(self, itx, b):
+            self.ok = False; self.stop(); await itx.response.defer()
+
+    v = ConfirmReset()
+    e = discord.Embed(
+        title="☢️ RESET TOTAL",
+        description=(f"Effacer **définitivement** toute la progression de {membre.mention} ?\n\n"
+                     + "\n".join(f"└ {x}" for x in apercu)
+                     + "\n\n*Familles concernées :* "
+                     + " · ".join(RESETPLAYER_FAMILLES) + " · 🐾 Compagnons"
+                     + "\n\n**Cette action est irréversible.**"),
+        color=0xe74c3c)
+    e.set_thumbnail(url=membre.display_avatar.url)
+    e.set_footer(text="30 secondes pour confirmer · une seconde validation sera demandée")
+    msg = await ctx.send(embed=e, view=v)
+    await v.wait()
+    try:
+        await msg.edit(view=None)
+    except Exception:
+        pass
+    if not v.ok:
+        return await ctx.send("❌ Reset annulé.", delete_after=8)
+
+    # ── Deuxième sécurité : confirmation écrite ──
+    phrase = f"RESET {membre.id}"
+    await ctx.send(embed=discord.Embed(
+        description=(f"🔐 Dernière étape — écris exactement :\n```\n{phrase}\n```\n"
+                     f"*Tu as 45 secondes. N'importe quoi d'autre annule.*"),
+        color=0xe67e22))
+    try:
+        rep = await bot.wait_for(
+            "message", timeout=45,
+            check=lambda m: m.author.id == ctx.author.id and m.channel.id == ctx.channel.id)
+    except asyncio.TimeoutError:
+        return await ctx.send("⏳ Temps écoulé — reset annulé.")
+    if rep.content.strip() != phrase:
+        return await ctx.send("❌ Confirmation incorrecte — reset annulé.")
+
+    bilan = _resetplayer_effacer(uid)
+    save_all_data()
+    fin = discord.Embed(
+        title="☢️ Reset effectué",
+        description=f"Toute la progression de {membre.mention} a été effacée.",
+        color=0x2c2f33)
+    fin.add_field(
+        name="Détail",
+        value="\n".join(f"{fam} — **{n}** entrée(s)" for fam, n in bilan.items() if n) or "*rien à effacer*",
+        inline=False)
+    fin.set_footer(text=f"Action réalisée par {ctx.author.display_name}")
+    await ctx.send(embed=fin)
+    gazette_fait("divers", f"<@{ctx.author.id}> a réinitialisé la progression de {membre.mention}.", 3)
+
 @bot.command(name="reset", aliases=["resetall", "gacharesetall"])
 @commands.has_permissions(administrator=True)
 async def reset_cmd(ctx, cible: str = None, membre: discord.Member = None):
@@ -24208,6 +24446,36 @@ async def utiliser_item_solo(ctx, uid, iid):
         return False
     return True
 
+
+@bot.command(name="souvenirs", aliases=["collectionobjets", "mesobjets"])
+async def souvenirs_cmd(ctx, membre: discord.Member = None):
+    """Tes objets de collection — .souvenirs"""
+    cible = membre or ctx.author
+    uid = str(cible.id)
+    objets = {k: v for k, v in inventaire.get(uid, {}).items()
+              if v > 0 and k not in ITEMS_SOLO and k not in ITEMS_CIBLE}
+    embed = discord.Embed(
+        title=f"🖼️ Souvenirs de {cible.display_name}",
+        color=0x9b59b6)
+    embed.set_thumbnail(url=cible.display_avatar.url)
+    if not objets:
+        embed.description = ("*Aucun souvenir pour l'instant.*\n\n"
+                             "On en récupère lors des events, des expéditions "
+                             "et des ouvertures de coffres.")
+    else:
+        total = sum(objets.values())
+        embed.description = f"**{len(objets)}** objet(s) différent(s)  ·  **{total}** au total"
+        lignes = []
+        for iid, n in sorted(objets.items(), key=lambda x: (-x[1], x[0])):
+            nom, desc = _info_item(iid)
+            lignes.append(f"**{nom}** ×{n}" + (f"\n└ *{desc[:70]}*" if desc else ""))
+        for i in range(0, min(len(lignes), 24), 8):
+            embed.add_field(name="\u200b" if i else "Collection",
+                            value="\n".join(lignes[i:i+8]), inline=False)
+        if len(lignes) > 24:
+            embed.set_footer(text=f"…et {len(lignes)-24} autre(s)")
+    await ctx.send(embed=embed)
+
 @bot.command(name="inventaire", aliases=["sac", "objets", "moninventaire"])
 async def inventaire_cmd(ctx, membre: discord.Member = None):
     """Ton sac — .inventaire"""
@@ -24239,7 +24507,11 @@ async def inventaire_cmd(ctx, membre: discord.Member = None):
             embed.add_field(name="⚔️ À lancer sur quelqu'un",
                             value="\n".join(cible_l[:8]) + "\n\n*`.utiliser <id> @joueur`*", inline=False)
         if autres:
-            embed.add_field(name="📦 Divers", value="\n".join(autres[:6]), inline=False)
+            embed.add_field(
+                name="🖼️ Souvenirs",
+                value=f"Tu possèdes **{sum(1 for i in objets if i not in ITEMS_SOLO and i not in ITEMS_CIBLE)}** "
+                      f"objet(s) de collection.\n*Ils sont dans `.souvenirs`.*",
+                inline=False)
     else:
         embed.description = ("*Ton sac est vide.*\n\n"
                              "Tu remplis ton inventaire en achetant dans `.shop`, "
@@ -26670,6 +26942,7 @@ def save_all_data():
             "petamitie": dict(petamitie),
             "pets_custom": {k: v for k, v in PETS_DB.items() if k.startswith("bebe_")},
             "pins": {k: list(v) for k, v in pins_data.items() if v},
+            "welcome_announced": list(welcome_announced),
             "liens": {k: dict(v) for k, v in liens_data.items() if v},
             "gazette_stats": {k: dict(v) for k, v in gazette_stats.items() if v},
             "gazette_faits": gazette_faits[-200:],
@@ -26769,6 +27042,8 @@ def load_all_data():
             PETS_DB.update(data.get("pets_custom", {}))
             for k, v in data.get("pins", {}).items():
                 pins_data[k] = set(v)
+            welcome_announced.clear()
+            welcome_announced.update(str(x) for x in data.get("welcome_announced", []))
             for k, v in data.get("liens", {}).items():
                 liens_data[k].update(v)
             for k, v in data.get("gazette_stats", {}).items():
@@ -27061,6 +27336,31 @@ async def on_command_error(ctx, error):
 #  🎭 RÉACTIONS — Autorole, rôles par réaction, règlement, Hall of Fame
 # ============================================================
 @bot.event
+async def annoncer_arrivee(member):
+    """Souhaite la bienvenue — une seule fois par membre, après le règlement."""
+    uid = str(member.id)
+    if uid in welcome_announced or member.bot:
+        return
+    welcome_announced.add(uid)
+    save_all_data()
+    salon = ((member.guild.get_channel(SALON_BIENVENUE_ID) if SALON_BIENVENUE_ID else None)
+             or member.guild.system_channel)
+    if not salon:
+        return
+    try:
+        e = discord.Embed(
+            title="👋  SOUHAITEZ LA BIENVENUE !",
+            description=(f"### ✨ {member.mention} vient officiellement de rejoindre le QG !\n\n"
+                         f"Soyez gentils… au moins pendant les cinq premières minutes. 😭\n\n"
+                         f"-# Passe par `.guide` pour découvrir ce qu'on fait ici."),
+            color=0xff9ec7)
+        e.set_thumbnail(url=member.display_avatar.url)
+        e.set_footer(text=f"{member.guild.member_count}e membre du QG Kdrama")
+        await salon.send(content=member.mention, embed=e)
+    except Exception as ex:
+        print(f"[Bienvenue] Envoi impossible : {type(ex).__name__}")
+
+@bot.event
 async def on_raw_reaction_add(payload):
     if payload.user_id == bot.user.id:
         return
@@ -27081,6 +27381,7 @@ async def on_raw_reaction_add(payload):
         if role and role not in member.roles:
             try:
                 await member.add_roles(role, reason="Règlement accepté")
+                await annoncer_arrivee(member)
             except discord.Forbidden:
                 print("[Règlement] Permission refusée pour attribuer le rôle")
         elif not role:
@@ -27222,7 +27523,6 @@ async def on_ready():
     scheduler_task.start()
     girls_auto_tasks.start()
     autosave.start()
-    ambiance_nuit.start()
     anniversaires_pets.start()
     gazette_task.start()
     nettoyer_salons_inactifs.start()
