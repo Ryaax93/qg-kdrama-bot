@@ -4066,6 +4066,179 @@ class DoublonView(ui.View):
 # ============================================================
 #  D. NIVEAU DE CARTE — Helpers
 # ============================================================
+# ============================================================
+#  🎭 RÔLES DE COMBAT — attribution verrouillée (790 cartes)
+# ============================================================
+# Le rôle définit la FORME du profil de stats et la capacité tactique.
+# La rareté définit le BUDGET global. Les Legacy n'ont pas de rôle.
+CARTE_ROLES = {}
+for _r, _ids in {
+  "Tank": (
+    "albedo", "allmight", "alphonse", "alucard", "android16", "ban", "bigmom", "boros",
+    "burns", "chad", "charon", "choji", "daichi", "darkness", "diane", "draken",
+    "elfman", "erwin", "franky", "gaara", "gajeel", "gojo", "greed", "hakari",
+    "hanami", "hanayama", "heracles", "hidan", "jinbe", "jinho", "jiren", "kakuzu",
+    "kirishima", "makarov", "marco", "mirio", "murasakibara", "naofumil", "nishinoya", "nnoitra",
+    "obi", "panda", "recoome", "reiner", "rem_rz", "saber", "sakamotoe", "spade",
+    "spopovitch", "sylvia_tb", "taiju", "takemichi_l", "thomasandre", "thorkell", "todoroki", "tsunade",
+    "umemiya", "uvogin", "volcanica", "wapol", "youpi",
+  ),
+  "Assassin": (
+    "admiralkizaru", "alexia", "anko", "aomine", "arima", "ashborn", "asuna", "aura",
+    "bang", "bellion", "beru", "blackstar", "bradley", "brook", "burter", "byakuya",
+    "cabaji", "celljr", "chahae", "chigiri", "connie", "corkus", "deathkid", "diavolo",
+    "dio", "endorsi", "eto", "eugeo", "falco", "faye", "ferid", "filo",
+    "fiona", "floch", "gabi", "gabimaru", "gennarumi", "gin", "gyutaro", "hagakure",
+    "hanabi", "hawks", "hinata", "hinata_hq", "hinata_sl", "hinawa", "hit", "hoshina",
+    "igris", "iharu", "iida", "illumi", "inosuke", "itachi", "itsuki", "izana",
+    "jack_ror", "jean", "jeice", "jet", "jinwoo", "joker_ff", "judeau", "juuzou",
+    "kakashi", "kanaep", "kanaguri", "karma", "kayano", "kazuho", "kenny", "kenshin",
+    "killua", "kira", "kirito", "kishibe", "kobeni", "kohaku", "leafa", "levi",
+    "loid", "luck", "lushaotang", "mikaela", "mikasa", "minato", "mira", "motoko",
+    "muichiro", "nacht", "nagisa", "narumisho", "neferpitou", "neji", "nobunaga", "obanai",
+    "obito", "okarun", "osaragi", "petra", "pokkle", "polnareff", "pucci", "quanxi",
+    "raphtalia", "ren", "riza", "roblucci", "roseoriana", "sagiri", "sanji", "sasha",
+    "sasuke", "serpico", "shidou", "shinpachi", "shokusakabe", "silva", "sinon", "spike",
+    "stain", "suowb", "suzaku", "suzuha", "tashigi", "tengen", "tobirama", "toga",
+    "toji", "touka", "trunksfutur", "tsukiyama", "tsuyu", "turbogranny", "ubel", "uryu",
+    "violet", "yor", "yoruichi", "yuri", "yuuki", "yuzuriha", "zenitsu", "zeta",
+  ),
+  "Bruiser": (
+    "ace", "akaza", "akkun", "alice_sao", "alvida", "amon", "android18", "annie",
+    "antares", "asuma", "baekyoonho", "baji", "bakugo", "bardock", "barou", "beam",
+    "bellamy", "benimaru_sl", "biscuit", "blackbeard", "bokuto", "broly", "chichi", "chifuyu",
+    "chobei", "cid", "coby", "cocytus", "daewi", "delta", "denji", "dodoria",
+    "einar", "endeavor", "eren", "eris", "erza", "fuegoleon", "gachiaka", "gamma",
+    "garou", "garp", "genyaep", "ghislaine", "glass", "gohanssj2", "goku", "gokublack",
+    "goten", "grimmjow", "guren", "guts", "gyomei", "hanma", "helmeppo", "ichigo",
+    "ikkaku", "ilhwan", "itona", "jackhanma", "jiji", "jinmori", "jonathan", "jotaro",
+    "kafka", "kagami", "kagura", "kaido", "kallen", "kaneki", "karasuma", "kazutora",
+    "kenpachi", "kenshiro", "kiba", "kikoru", "kisame", "klein", "konohamaru", "kunigami",
+    "larcberg", "liuzhigang", "loke", "lubu", "luffy", "magna", "maki", "mash",
+    "mereoleona", "metalbat", "mightguy", "mikeye", "mirajane", "missvalentine", "mitsuri", "mitsuya",
+    "motoyasu", "mrSatan", "mucho", "muscular", "nanami", "nappa", "naruto", "natsu",
+    "nelliel", "netero", "ojiro", "phinks", "pickle", "porco", "power", "raditz",
+    "ragnaep", "rak", "renji", "richie", "rikiep", "rize", "rocklee", "ruijerd",
+    "ryou_com", "sabo", "sakurawb", "sanemi", "sebas", "shalltear", "shinra", "shion",
+    "shiva_ror", "smoker", "stark_fr", "sugishita", "tanaka", "teruki", "thor_ror", "thorfinn",
+    "todo", "togame", "tokoyami", "trunksenfant", "tsukasa", "ulquiorra", "vamola", "vanica",
+    "vegeta", "videl", "whitebeard", "will", "yamcha", "yami", "yamu", "yelin",
+    "ymir", "yuichiro", "yujiro", "zanka", "zarbon", "zerotwo", "zodd", "zoro",
+  ),
+  "Perceur": (
+    "acnologia", "admiralakainu", "android21", "aoyama", "armin", "arthurf", "asta", "avdol",
+    "beerus", "bertholdt", "buumaigre", "choijongin", "cooler", "crimson", "dabi", "deidara",
+    "dotmashle", "enel", "escanor", "fatherfma", "feitan", "fern", "frieza", "gauche",
+    "genos", "gildarts", "gilgamesh", "gogeta", "gotoryuji", "gyro", "imsama", "isao",
+    "isshiki", "jellal", "jogo", "johnny", "kaguya", "kaminari", "kashimo", "kidbuu",
+    "kokushibo", "lanceep", "laxus", "lichtbc", "liebe", "lust", "madara", "megumin",
+    "meruem", "midorima", "mihawk", "milim", "mina", "mina_mha", "mob", "momoshiki",
+    "mr5", "muzan", "nagumo_r", "nejire", "nobara", "okuyasu", "overhaul", "pain",
+    "piccolo", "poseidon", "reg", "reginald", "reze", "rin_bl", "roger", "roswaal",
+    "roy", "saitama", "scar", "shigaraki", "slur", "stark", "sukuna", "tatsumaki",
+    "temari", "tenshinhan", "toichiro", "toppohakai", "ushijima", "veldora", "white", "yama",
+    "yamamoto", "yoriichi", "yuno", "yuri_tog", "zeno_z", "zenon", "zenousama", "zeref",
+    "zeus_ror",
+  ),
+  "Équilibré": (
+    "adam_ror", "alpha", "android17", "anos", "arthur_tb", "baki", "bam", "benimaru",
+    "buddha", "casca", "cellparfait", "daz", "deku", "denken", "edward", "ging",
+    "gintoki", "giyu", "gon", "gotenks", "grandpretre", "gray", "guycrimson", "halibel",
+    "himmel", "hisoka", "isagi", "izumo", "jolyne", "katakuri", "killerbee", "kite",
+    "kojiro", "korosensei", "kotetsu", "kouichi", "krillin", "maka", "masterroshi", "meliodas",
+    "mizuiro", "nozel", "orsted", "paulgreyrat", "reinhard", "rengoku", "rukia", "samuel",
+    "shanks", "shinichi_p", "soma_r", "soul_ev", "tamaki_mha", "tanjiro", "thomas", "thors",
+    "vegito", "yoshimura", "yuji", "yuta",
+  ),
+  "Support": (
+    "administrator", "admiralaokiji", "afo", "ainz", "aizawa", "aizen", "akashi", "aki",
+    "akkum", "alice_r", "angel", "angeldevil", "anya", "aqua", "archer", "ariel",
+    "arthur_ks", "askeladd", "asura_se", "aura_fr", "aurora_es", "babidi", "bachira", "barragan",
+    "beatrice", "beta", "bonclay", "bond", "bucciarati", "buggy", "bulma", "caesar",
+    "canute", "captainginyu", "carla", "cc", "charlotte", "charmy", "chiaotzu", "chopper",
+    "choso", "chrollo", "chrome", "conan", "crocobase", "daki", "damian", "demiurge",
+    "diablo_sl", "dimple", "doflamingo", "doma", "donkanonji", "droy", "ebisu", "elizabeth",
+    "emilia", "enjin", "envy", "epsilon", "eri", "eta", "euphemia", "finn",
+    "finral", "fitoria", "floki", "foxy", "frieren", "fubuki", "fumiya", "gen",
+    "gideon", "giorno", "gowther", "griffith", "guldo", "gunhee", "hanataro", "hancock",
+    "hange", "happy", "hashirama", "haumea", "hawk", "higuruma", "himeno", "hina_tr",
+    "hinami", "historia", "hitogami", "hitsugaya", "hohenheim", "ichikawa", "ino", "inumaki",
+    "irina", "iris", "iruka", "izuru", "jango", "jinchul", "jiraiya", "jiro",
+    "joseph", "joske", "julius", "juvia", "kabuto", "kageyama", "kaiju9", "kaito",
+    "kakyoin", "kankuro", "kayaba", "kazuma", "keigo", "kenjaku", "kenma", "khun",
+    "king_sds", "kingopm", "kisaki", "kise", "knuckle", "koichi", "kokonoi", "komugi",
+    "konan", "krul", "kurapika", "kurenai", "kurisu", "kuroko", "l", "law",
+    "lelouch", "leorio", "levy", "light", "luciusfull", "lucy", "luminous", "machi",
+    "mahito", "maki_ff", "makima", "malty", "mare", "mavis", "mayuri", "mayuri_sg",
+    "medusa", "megumi", "meimei", "mello", "melty", "merlin", "mimasaka", "mineta",
+    "misa", "moegi", "mohji", "morel", "mrpopo", "mujin", "nagi_bl", "nagumo_sd",
+    "nami", "near", "nezuko", "nirei", "noelle", "oikawa", "okabe", "okamome",
+    "oolong", "orihime", "orochimaru", "otto", "pieck", "pilaf", "pochita", "pouf",
+    "presentmic", "puar", "puck", "puck_bk", "ram", "ramiris", "rangiku", "reigen",
+    "rem", "reo", "rimuru", "rin_fate", "rion", "rishia", "ritsu", "robin",
+    "roji", "roxy", "rudeus", "ryuk", "ryusui", "sae", "sai", "sakura",
+    "sasori", "schierke", "schneizel", "secre", "seiko", "sekke", "sen_r", "senku",
+    "serie_fr", "sero", "shalnark", "shikamaru", "shinae", "shinoa", "shinobu", "shirou",
+    "shizuku", "shuna", "shunsui", "silky", "soichiro", "speedwagon", "stein", "subaru",
+    "suika", "sylphiette", "tamaki", "tenten", "tessia", "tonpa", "tsubaki", "tsukishima",
+    "twice", "unohana", "urahara", "uraraka", "usopp", "utahime", "valentine", "vanessa",
+    "vanir", "viktor", "vlad", "weather", "wendy", "whis", "william", "winry",
+    "wiz", "yamagishi", "yamato", "yaoyorozu", "yhwach", "yoshida", "yui_sao", "yunyun",
+    "yuzuriha_ds", "zeke", "zhuofan", "zora",
+  ),
+}.items():
+    for _i in _ids:
+        CARTE_ROLES[_i] = _r
+del _r, _ids, _i
+
+def role_carte(key):
+    """Rôle de combat d'une carte. Équilibré par défaut si inconnue."""
+    return CARTE_ROLES.get(key, "Équilibré")
+
+# ── Forme du profil par rôle (part de PV / ATK / DEF) ──
+ROLE_FORME = {
+    "Tank":      (0.55, 0.20, 0.25),
+    "Assassin":  (0.30, 0.56, 0.14),
+    "Bruiser":   (0.42, 0.38, 0.20),
+    "Perceur":   (0.34, 0.52, 0.14),
+    "Équilibré": (0.38, 0.34, 0.28),
+    "Support":   (0.34, 0.32, 0.34),
+}
+ROLE_NEUTRE = (0.38, 0.34, 0.28)
+ROLE_INTENSITE = 0.40      # 0 = tous identiques, 1 = formes extrêmes
+
+# ── Budget de puissance par rareté ──
+RARETE_BUDGET = {
+    "Commun": 180, "Rare": 240, "Épique": 300, "Légendaire": 360, "Mythique": 420,
+}
+ROLE_ECHELLE = {"pv": 1.35, "atk": 0.60, "dfs": 0.55}
+
+# ── Capacités de rôle ──
+ROLE_CAPACITE = {
+    "Tank":      dict(nom="Fortification",   emoji="🛡️", cd=3, reduc=0.20, duree=1),
+    "Assassin":  dict(nom="Esquive",         emoji="🌫️", cd=3, esquive=0.65, duree=1),
+    "Bruiser":   dict(nom="Rage",            emoji="🔥", cd=3, boost=0.50, duree=3),
+    "Perceur":   dict(nom="Faille",          emoji="💢", cd=3, perce=0.75, duree=3),
+    "Équilibré": dict(nom="Second souffle",  emoji="⚖️", cd=3, reduc=0.24, soin=0.06, duree=1),
+    "Support":   dict(nom="Entrave",         emoji="✨", cd=3, entrave=0.16, duree=3),
+}
+ROLE_EMOJI = {"Tank":"🛡️", "Assassin":"🗡️", "Bruiser":"⚔️", "Perceur":"💥",
+              "Équilibré":"⚖️", "Support":"✨"}
+CAPACITE_FRAPPE = 0.55     # la capacité inflige 55 % d'une Attaque
+TECHNIQUE_CD    = 2
+
+def stats_role(key, carte=None):
+    """Stats de base issues du rôle et de la rareté (avant progression)."""
+    cc = carte or ANIME_CARDS_DB.get(key)
+    if not cc:
+        return 0, 0, 0
+    budget = RARETE_BUDGET.get(cc["rarete"], 240)
+    f = ROLE_FORME.get(role_carte(key), ROLE_NEUTRE)
+    f = tuple(ROLE_NEUTRE[i] + (f[i] - ROLE_NEUTRE[i]) * ROLE_INTENSITE for i in range(3))
+    return (round(budget * f[0] * ROLE_ECHELLE["pv"]),
+            round(budget * f[1] * ROLE_ECHELLE["atk"]),
+            round(budget * f[2] * ROLE_ECHELLE["dfs"]))
+
 # ── Progression proportionnelle ──
 # Chaque étoile de fusion : +7 %  ·  chaque niveau au-dessus de 1 : +1,7 %
 # Maximum 3⭐ + niveau 10 = ×1,363
@@ -4080,22 +4253,25 @@ def card_multiplier(uid, key):
     return 1 + fus * PROG_FUSION + (lvl - 1) * PROG_NIVEAU
 
 def carte_stats_finales(uid, key, carte=None):
-    """Stats réellement utilisées en combat, multiplicateur appliqué.
+    """SOURCE DE VÉRITÉ des stats : rôle + rareté, puis progression.
+    Alimente le combat, .gachastock, .cardinfo et .fusionner.
     Retourne (pv, attaque, defense, multiplicateur)."""
     cc = carte or ANIME_CARDS_DB.get(key)
     if not cc:
         return 0, 0, 0, 1.0
+    pv, atk, dfs = stats_role(key, cc)
     m = card_multiplier(uid, key)
-    return round(cc["pv"]*m), round(cc["attaque"]*m), round(cc["defense"]*m), m
+    return round(pv*m), round(atk*m), round(dfs*m), m
 
 def card_total_bonus(uid, key):
-    """Bonus apportés par la fusion et le niveau, en valeur absolue.
-    Calculés depuis le multiplicateur pour rester cohérents avec le combat."""
+    """Bonus apportés par la fusion et le niveau, en valeur absolue,
+    calculés depuis les stats de rôle pour rester cohérents avec le combat."""
     cc = ANIME_CARDS_DB.get(key)
     if not cc:
         return 0, 0, 0
+    b_pv, b_atk, b_dfs = stats_role(key, cc)
     pv, atk, dfs, _ = carte_stats_finales(uid, key, cc)
-    return pv - cc["pv"], atk - cc["attaque"], dfs - cc["defense"]
+    return pv - b_pv, atk - b_atk, dfs - b_dfs
 
 def degats_attaque(uid, key, base):
     """Dégâts d'une attaque, multiplicateur de progression appliqué."""
@@ -22044,6 +22220,19 @@ async def gachabattle_cmd(ctx, adversaire: discord.Member = None):
                     new_card["pv"]       = _pv
                     new_card["attaque"]  = _atk
                     new_card["defense"]  = _def
+                    # ── Gameplay tactique ──
+                    new_card["role"]     = role_carte(k)
+                    _atqs = sorted(card.get("attaques", []),
+                                   key=lambda a: a.get("degats", 30))
+                    new_card["atq_base"] = _atqs[0] if _atqs else {"nom": "Attaque", "emoji": "⚔️", "degats": 30}
+                    new_card["atq_tech"] = _atqs[-1] if _atqs else {"nom": "Technique", "emoji": "🔥", "degats": 45}
+                    new_card["cd_tech"]  = 0
+                    new_card["cd_cap"]   = 0
+                    new_card["ef_reduc"] = 0   # tours restants de réduction de dégâts
+                    new_card["ef_esq"]   = 0   # esquive armée
+                    new_card["ef_boost"] = 0   # rage
+                    new_card["ef_perce"] = 0   # faille
+                    new_card["ef_entrave"] = 0 # entrave subie
                     new_card["hp_actuel"] = new_card["pv"]
                     new_card["ko"] = False
                     chosen.append(new_card)
@@ -22144,6 +22333,20 @@ async def gachabattle_cmd(ctx, adversaire: discord.Member = None):
             return " ".join("💀" if x["ko"] else ("🔷" if i == j["actif"] else "🔹")
                             for i, x in enumerate(j["equipe"]))
 
+        def etat(cc):
+            """Rôle, effets actifs et cooldowns, en une ligne."""
+            bouts = [f"{ROLE_EMOJI.get(cc.get('role',''),'')} {cc.get('role','')}"]
+            if cc.get("ef_boost", 0) > 0:   bouts.append("🔥 Rage")
+            if cc.get("ef_perce", 0) > 0:   bouts.append("💢 Faille")
+            if cc.get("ef_reduc", 0) > 0:   bouts.append("🛡️ Protégé")
+            if cc.get("ef_esq", 0) > 0:     bouts.append("🌫️ Esquive")
+            if cc.get("ef_entrave", 0) > 0: bouts.append("✨ Entravé")
+            cds = []
+            if cc.get("cd_tech", 0) > 0: cds.append(f"🔥⏳{cc['cd_tech']}")
+            if cc.get("cd_cap", 0) > 0:  cds.append(f"🎭⏳{cc['cd_cap']}")
+            if cds: bouts.append(" ".join(cds))
+            return "  ·  ".join(bouts)
+
         tour_de = game.get("tour")
         actif = j1_g if tour_de == j1_g["membre"].id else j2_g
 
@@ -22152,10 +22355,12 @@ async def gachabattle_cmd(ctx, adversaire: discord.Member = None):
             description=(
                 f"### {c1['emoji']} {c1['nom']}\n"
                 f"{barre(c1)}  **{c1['hp_actuel']}**/{c1['pv']}\n"
+                f"-# {etat(c1)}\n"
                 f"{equipe(j1_g)}  ·  *{j1_g['membre'].display_name}*\n\n"
                 f"⚔️ **VS** ⚔️\n\n"
                 f"### {c2['emoji']} {c2['nom']}\n"
                 f"{barre(c2)}  **{c2['hp_actuel']}**/{c2['pv']}\n"
+                f"-# {etat(c2)}\n"
                 f"{equipe(j2_g)}  ·  *{j2_g['membre'].display_name}*"),
             color=0x9b59b6)
 
@@ -22212,42 +22417,82 @@ async def gachabattle_cmd(ctx, adversaire: discord.Member = None):
         action_result = {"choix": None}
         carte_cur_pre = carte_active(current)
         carte_adv_pre = carte_active(other)
+        # ── Décompte des cooldowns et effets : au début du tour de leur porteur ──
+        for _k in ("cd_tech", "cd_cap", "ef_reduc", "ef_esq",
+                   "ef_boost", "ef_perce", "ef_entrave"):
+            carte_cur_pre[_k] = max(0, carte_cur_pre.get(_k, 0) - 1)
 
-        atk_dispo = carte_cur_pre.get("attaques", [])
+        _cap_cur = ROLE_CAPACITE.get(carte_cur_pre.get("role", "Équilibré"), {})
+        def _estim(base_deg, cap_frappe=1.0):
+            """Estimation affichée sur le bouton — même formule que le combat."""
+            d = round(base_deg * cap_frappe * carte_cur_pre.get("mult", 1.0))
+            _b = d * 0.40 + carte_cur_pre["attaque"] * 0.30
+            return max(6, int(_b * (130 / (130 + carte_adv_pre["defense"]))))
+
         class CombatButtons(ui.View):
             def __init__(self):
                 super().__init__(timeout=45)
-                for i2, a in enumerate(atk_dispo[:3]):
-                    d = round(a.get("degats", 30) * carte_cur_pre.get("mult", 1.0))
-                    _brut = d * 0.40 + carte_cur_pre["attaque"] * 0.30
-                    est = max(6, int(_brut * (130 / (130 + carte_adv_pre["defense"]))))
-                    btn = ui.Button(
-                        label=f"{a['nom'][:20]}  ({est})",
-                        emoji=a.get("emoji", "⚔️"),
-                        style=discord.ButtonStyle.danger if i2 == 0 else discord.ButtonStyle.primary,
-                        row=0 if i2 < 2 else 1)
-                    async def cb(interaction, idx=i2):
+                _verrou = {"pris": False}
+
+                def _garde(fn):
+                    async def inner(interaction, _fn=fn):
                         if interaction.user.id != current["membre"].id:
-                            return await interaction.response.send_message("❌ Ce n'est pas ton tour !", ephemeral=True)
-                        action_result["choix"] = idx
-                        chosen_action.set(); self.stop(); await interaction.response.defer()
-                    btn.callback = cb
-                    self.add_item(btn)
+                            return await interaction.response.send_message(
+                                "❌ Ce n'est pas ton tour !", ephemeral=True)
+                        if _verrou["pris"]:      # anti double-clic
+                            return await interaction.response.defer()
+                        _verrou["pris"] = True
+                        await _fn(interaction)
+                    return inner
+
+                # ⚔️ Attaque — toujours disponible
+                _ab = carte_cur_pre.get("atq_base") or {"nom": "Attaque", "emoji": "⚔️", "degats": 30}
+                b1 = ui.Button(label=f"{_ab['nom'][:18]}  ({_estim(_ab.get('degats', 30))})",
+                               emoji=_ab.get("emoji", "⚔️"),
+                               style=discord.ButtonStyle.primary, row=0)
+                async def _cb1(interaction):
+                    action_result["choix"] = "base"
+                    chosen_action.set(); self.stop(); await interaction.response.defer()
+                b1.callback = _garde(_cb1); self.add_item(b1)
+
+                # 🔥 Technique — cooldown 2
+                _at = carte_cur_pre.get("atq_tech") or {"nom": "Technique", "emoji": "🔥", "degats": 45}
+                _cdt = carte_cur_pre.get("cd_tech", 0)
+                b2 = ui.Button(
+                    label=(f"{_at['nom'][:18]}  ⏳{_cdt}" if _cdt > 0
+                           else f"{_at['nom'][:18]}  ({_estim(_at.get('degats', 45))})"),
+                    emoji=_at.get("emoji", "🔥"),
+                    style=discord.ButtonStyle.danger, disabled=_cdt > 0, row=0)
+                async def _cb2(interaction):
+                    action_result["choix"] = "tech"
+                    chosen_action.set(); self.stop(); await interaction.response.defer()
+                b2.callback = _garde(_cb2); self.add_item(b2)
+
+                # 🎭 Capacité de rôle — cooldown 3
+                _cdc = carte_cur_pre.get("cd_cap", 0)
+                b3 = ui.Button(
+                    label=(f"{_cap_cur.get('nom', 'Capacité')}  ⏳{_cdc}" if _cdc > 0
+                           else f"{_cap_cur.get('nom', 'Capacité')}  "
+                                f"({_estim((carte_cur_pre.get('atq_base') or {}).get('degats', 30), CAPACITE_FRAPPE)})"),
+                    emoji=_cap_cur.get("emoji", "🎭"),
+                    style=discord.ButtonStyle.success, disabled=_cdc > 0, row=1)
+                async def _cb3(interaction):
+                    action_result["choix"] = "cap"
+                    chosen_action.set(); self.stop(); await interaction.response.defer()
+                b3.callback = _garde(_cb3); self.add_item(b3)
                 dispo_swap = [x for i3, x in enumerate(current["equipe"]) if not x["ko"] and i3 != current["actif"]]
                 swap = ui.Button(
                     label=(f"Changer → {dispo_swap[0]['nom'][:16]}" if dispo_swap else "Aucun remplaçant"),
                     emoji="🔄", style=discord.ButtonStyle.secondary,
                     disabled=not dispo_swap, row=2)
                 async def cb_swap(interaction):
-                    if interaction.user.id != current["membre"].id:
-                        return await interaction.response.send_message("❌ Ce n'est pas ton tour !", ephemeral=True)
                     action_result["choix"] = "swap"
                     chosen_action.set(); self.stop(); await interaction.response.defer()
-                swap.callback = cb_swap
+                swap.callback = _garde(cb_swap)
                 self.add_item(swap)
 
             async def on_timeout(self):
-                action_result["choix"] = 0
+                action_result["choix"] = "base"
                 chosen_action.set()
 
         view = CombatButtons()
@@ -22258,7 +22503,7 @@ async def gachabattle_cmd(ctx, adversaire: discord.Member = None):
         try:
             await asyncio.wait_for(chosen_action.wait(), timeout=46)
         except asyncio.TimeoutError:
-            action_result["choix"] = 0
+            action_result["choix"] = "base"
 
         choix = action_result["choix"]
         carte_cur = carte_active(current)
@@ -22275,25 +22520,70 @@ async def gachabattle_cmd(ctx, adversaire: discord.Member = None):
             await combat_msg.edit(content=None, embed=build_embed_pb(), view=None)
             continue
 
-        attaques = carte_cur.get("attaques", [])
-        if isinstance(choix, int) and choix < len(attaques):
-            base = attaques[choix].get("degats", 30)
-            if base == 0: base = random.randint(20, 35)
+        # ── Action choisie : "base", "tech" ou "cap" ──
+        action = choix if isinstance(choix, str) else "base"
+        cap = ROLE_CAPACITE.get(carte_cur.get("role", "Équilibré"), {})
+        esquive = False
+        soin = 0
+
+        if action == "tech":
+            atq = carte_cur.get("atq_tech") or {"nom": "Technique", "emoji": "🔥", "degats": 45}
+            base = atq.get("degats", 45)
+            carte_cur["cd_tech"] = TECHNIQUE_CD + 1
+        elif action == "cap":
+            atq = {"nom": cap.get("nom", "Capacité"), "emoji": cap.get("emoji", "🎭"), "degats": 0}
+            base = (carte_cur.get("atq_base") or {}).get("degats", 30) * CAPACITE_FRAPPE
+            carte_cur["cd_cap"] = cap.get("cd", 3) + 1
+            d = cap.get("duree", 1)
+            if "reduc" in cap:   carte_cur["ef_reduc"] = d + 1
+            if "esquive" in cap: carte_cur["ef_esq"]   = d + 1
+            if "boost" in cap:   carte_cur["ef_boost"] = d + 1
+            if "perce" in cap:   carte_cur["ef_perce"] = d + 1
+            if "entrave" in cap: carte_adv["ef_entrave"] = d + 1
+            if "soin" in cap:
+                soin = round(carte_cur["pv"] * cap["soin"])
+                carte_cur["hp_actuel"] = min(carte_cur["pv"], carte_cur["hp_actuel"] + soin)
         else:
-            base = random.randint(25, 40)
-        # La progression (fusion + niveau) renforce aussi les attaques
+            atq = carte_cur.get("atq_base") or {"nom": "Attaque", "emoji": "⚔️", "degats": 30}
+            base = atq.get("degats", 30)
+
+        if base == 0: base = random.randint(20, 35)
         base = round(base * carte_cur.get("mult", 1.0))
 
-        critique = random.random() < 0.12
-        if critique: base = int(base * 1.5)
-        brut = base * 0.40 + carte_cur["attaque"] * 0.30
-        degats = max(6, int(brut
-                            * (130 / (130 + carte_adv["defense"]))
-                            * random.uniform(0.85, 1.15)))
+        # L'adversaire peut esquiver
+        cap_adv = ROLE_CAPACITE.get(carte_adv.get("role", "Équilibré"), {})
+        if carte_adv.get("ef_esq", 0) > 0 and random.random() < cap_adv.get("esquive", 0):
+            carte_adv["ef_esq"] = 0
+            esquive = True
+            degats = 0
+            critique = False
+        else:
+            critique = random.random() < 0.12
+            if critique: base = int(base * 1.5)
+            _boost = cap.get("boost", 0) if carte_cur.get("ef_boost", 0) > 0 else 0.0
+            _entrave = cap_adv.get("entrave", 0) if carte_cur.get("ef_entrave", 0) > 0 else 0.0
+            brut = (base * 0.40 + carte_cur["attaque"] * (1 + _boost) * 0.30) * (1 - _entrave)
+            _perce = cap.get("perce", 0) if carte_cur.get("ef_perce", 0) > 0 else 0.0
+            _def_adv = carte_adv["defense"] * (1 - _perce)
+            _reduc = cap_adv.get("reduc", 0) if carte_adv.get("ef_reduc", 0) > 0 else 0.0
+            degats = max(6, int(brut
+                                * (130 / (130 + _def_adv))
+                                * random.uniform(0.85, 1.15)
+                                * (1 - _reduc)))
         carte_adv["hp_actuel"] = max(0, carte_adv["hp_actuel"] - degats)
-        nom_atk = attaques[choix]["nom"] if (isinstance(choix, int) and choix < len(attaques)) else "Attaque"
-        game.setdefault("journal", []).append(
-            f"{carte_cur['emoji']} *{nom_atk}* → **−{degats}**" + (" ✦ CRITIQUE" if critique else ""))
+        _j = game.setdefault("journal", [])
+        if esquive:
+            _j.append(f"🌫️ **{carte_adv['nom']}** esquive *{atq['nom']}* !")
+        else:
+            _txt = f"{atq.get('emoji','⚔️')} *{atq['nom']}* → **−{degats}**"
+            if critique: _txt += " ✦ CRITIQUE"
+            _j.append(_txt)
+        if action == "cap":
+            _eff = {"Tank": "−20 % dégâts subis", "Assassin": "esquive armée",
+                    "Bruiser": "+50 % dégâts (3 tours)", "Perceur": "−75 % DEF adverse (3 tours)",
+                    "Équilibré": f"−24 % dégâts · +{soin} PV",
+                    "Support": "−16 % dégâts adverses (3 tours)"}.get(carte_cur.get("role", ""), "")
+            if _eff: _j.append(f"{cap.get('emoji','🎭')} **{cap.get('nom','')}** — {_eff}")
 
         if carte_adv["hp_actuel"] <= 0:
             carte_adv["ko"] = True
