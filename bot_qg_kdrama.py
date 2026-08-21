@@ -1571,7 +1571,8 @@ def build_help_pages(guild, is_admin=False):
         "`.recalcamelioration [@membre]` — Recalculer les points selon le niveau\n"
         "`.resetniveaupets confirmer` — Remettre **tous les pets au niveau 1**\n"
         "`.reparerpets` — Récupérer les objets manquants de tous les membres\n"
-        "`.checkimages` — 🖼️ Tester l'accessibilité des images des cartes"
+        "`.checkimages` — 🖼️ Tester l'accessibilité des images des cartes\n"
+        "`.imgratios` — 📐 Mesurer le ratio des images (cadrage)"
     ), inline=False)
     e.add_field(name="🔄 Réinitialisation", value=(
         "`.reset` — Voir les cibles disponibles\n"
@@ -9342,6 +9343,209 @@ async def _tester_image(session, key, url, sem):
                     return key, "reseau", None, type(e).__name__
         return key, "reseau", None, "échec HEAD et GET"
 
+
+
+# ============================================================
+#  📐 DIAGNOSTIC DES RATIOS D'IMAGE — temporaire
+#  LECTURE SEULE : ne modifie ni les cartes, ni les URLs, ni les données.
+# ============================================================
+IMGRATIO_CONCURRENCE = 6
+IMGRATIO_TIMEOUT     = 8
+IMGRATIO_SEUILS = [(0.90, "✅", "Portrait correct"),
+                   (1.10, "🟡", "Carré / limite"),
+                   (1.50, "🟠", "Paysage"),
+                   (99.0, "🔴", "Très paysage")]
+
+def _classe_ratio(r):
+    """✅ r < 0.90  ·  🟡 0.90 ≤ r ≤ 1.10  ·  🟠 1.10 < r ≤ 1.50  ·  🔴 r > 1.50"""
+    if r < 0.90:  return "✅", "Portrait correct"
+    if r <= 1.10: return "🟡", "Carré / limite"
+    if r <= 1.50: return "🟠", "Paysage"
+    return "🔴", "Très paysage"
+
+def _dims_depuis_entete(data):
+    """Lit largeur × hauteur dans l'en-tête d'un JPEG, PNG, GIF ou WEBP.
+    Retourne (w, h) ou None si le format n'est pas reconnu."""
+    import struct
+    if len(data) < 24:
+        return None
+    # PNG
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        try:
+            w, h = struct.unpack(">II", data[16:24])
+            return w, h
+        except Exception:
+            return None
+    # GIF
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        try:
+            w, h = struct.unpack("<HH", data[6:10])
+            return w, h
+        except Exception:
+            return None
+    # WEBP
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        try:
+            if data[12:16] == b"VP8X":
+                w = int.from_bytes(data[24:27], "little") + 1
+                h = int.from_bytes(data[27:30], "little") + 1
+                return w, h
+            if data[12:16] == b"VP8 ":
+                w = int.from_bytes(data[26:28], "little") & 0x3FFF
+                h = int.from_bytes(data[28:30], "little") & 0x3FFF
+                return w, h
+            if data[12:16] == b"VP8L":
+                b1 = int.from_bytes(data[21:25], "little")
+                return (b1 & 0x3FFF) + 1, ((b1 >> 14) & 0x3FFF) + 1
+        except Exception:
+            return None
+        return None
+    # JPEG : parcourt les marqueurs jusqu'au SOF
+    if data[:2] == b"\xff\xd8":
+        i = 2
+        n = len(data)
+        while i + 9 < n:
+            if data[i] != 0xFF:
+                i += 1
+                continue
+            marq = data[i + 1]
+            if marq in (0xD8, 0xD9) or 0xD0 <= marq <= 0xD7:
+                i += 2
+                continue
+            taille = int.from_bytes(data[i + 2:i + 4], "big")
+            if marq in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7,
+                        0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                h = int.from_bytes(data[i + 5:i + 7], "big")
+                w = int.from_bytes(data[i + 7:i + 9], "big")
+                return w, h
+            if taille <= 0:
+                return None
+            i += 2 + taille
+    return None
+
+async def _mesurer_image(session, key, url, sem):
+    """Télécharge le strict minimum et lit les dimensions. Aucune écriture."""
+    import aiohttp
+    async with sem:
+        await asyncio.sleep(0.05)
+        try:
+            kw = {"timeout": aiohttp.ClientTimeout(total=IMGRATIO_TIMEOUT),
+                  "allow_redirects": True}
+            async with session.get(url, **kw) as r:
+                if r.status != 200:
+                    return key, None, f"HTTP {r.status}"
+                data = b""
+                async for bloc_ in r.content.iter_chunked(4096):
+                    data += bloc_
+                    d = _dims_depuis_entete(data)
+                    if d:
+                        return key, d, None
+                    if len(data) > 262144:      # 256 Ko suffisent largement
+                        break
+                d = _dims_depuis_entete(data)
+                return (key, d, None) if d else (key, None, "format non lu")
+        except asyncio.TimeoutError:
+            return key, None, "timeout"
+        except Exception as e:
+            return key, None, type(e).__name__
+
+@bot.command(name="imgratios", aliases=["ratios", "checkratios"])
+@commands.has_permissions(administrator=True)
+async def imgratios_cmd(ctx):
+    """Mesure le ratio des images des cartes obtenables — .imgratios (admin)"""
+    import aiohttp, time as _t
+    cibles = {k: ANIME_CARDS_DB[k]["image"].strip()
+              for k in ANIME_CARDS_DB
+              if k not in RETIRED_CARD_MAP
+              and isinstance(ANIME_CARDS_DB[k].get("image"), str)
+              and ANIME_CARDS_DB[k]["image"].strip().startswith("http")}
+    if not cibles:
+        return await ctx.send("❌ Aucune carte obtenable n'a d'URL à mesurer.")
+
+    depart = _t.time()
+    msg = await ctx.send(embed=discord.Embed(
+        title="📐 Mesure des ratios en cours…",
+        description=(f"**{len(cibles)}** images à analyser\n"
+                     f"*{IMGRATIO_CONCURRENCE} en parallèle · lecture d'en-tête seulement*\n\n"
+                     f"⏳ Environ une minute."),
+        color=0x3498db))
+
+    sem = asyncio.Semaphore(IMGRATIO_CONCURRENCE)
+    res, erreurs = {}, {}
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; QGKdramaBot/1.0)"}
+    async with aiohttp.ClientSession(headers=headers) as session:
+        taches = [_mesurer_image(session, k, u, sem) for k, u in cibles.items()]
+        faits = 0
+        for fut in asyncio.as_completed(taches):
+            key, dims, err = await fut
+            if dims: res[key] = dims
+            else:    erreurs[key] = err
+            faits += 1
+            if faits % 120 == 0:
+                try:
+                    await msg.edit(embed=discord.Embed(
+                        title="📐 Mesure des ratios en cours…",
+                        description=f"**{faits} / {len(cibles)}** analysées…",
+                        color=0x3498db))
+                except Exception:
+                    pass
+
+    duree = int(_t.time() - depart)
+    par = {"✅": [], "🟡": [], "🟠": [], "🔴": []}
+    for k, (w, h) in res.items():
+        r = w / max(h, 1)
+        par[_classe_ratio(r)[0]].append((k, w, h, r))
+
+    # ── Fichier : uniquement 🟠 et 🔴, du plus large au moins large ──
+    a_remplacer = sorted(par["🟠"] + par["🔴"], key=lambda x: -x[3])
+    lignes = [f"IMAGES AU RATIO PROBLÉMATIQUE — {datetime.datetime.now():%d/%m/%Y %H:%M}",
+              f"{len(cibles)} cartes obtenables analysées en {duree} s",
+              f"{len(a_remplacer)} image(s) à remplacer manuellement (ratio > 1.10)",
+              "=" * 110, ""]
+    for k, w, h, r in a_remplacer:
+        cc = ANIME_CARDS_DB[k]
+        emo = _classe_ratio(r)[0]
+        lignes.append(f"{emo} {k:16s} | {cc['nom'][:26]:26s} | {cc['serie'][:22]:22s} | "
+                      f"{w:5d} x {h:<5d} | {r:5.2f} | {cc['image']}")
+    if not a_remplacer:
+        lignes.append("(aucune — toutes les images sont au format portrait ou carré)")
+    if erreurs:
+        lignes += ["", "=" * 110, "", f"DIMENSIONS INTROUVABLES — {len(erreurs)}", "-" * 110]
+        for k, e in sorted(erreurs.items()):
+            cc = ANIME_CARDS_DB[k]
+            lignes.append(f"  {k:16s} | {cc['nom'][:26]:26s} | {e:16s} | {cc['image']}")
+    fichier = discord.File(io.BytesIO("\n".join(lignes).encode("utf-8")),
+                           filename="image_ratios_problematiques.txt")
+
+    # ── Résumé ──
+    tot = len(res)
+    e = discord.Embed(
+        title="📐 Analyse des ratios terminée",
+        description=f"**{len(cibles)}** cartes obtenables analysées en **{duree} s**",
+        color=0x2ecc71 if not a_remplacer else 0xe67e22)
+    e.add_field(
+        name="Répartition",
+        value="\n".join(
+            f"{emo} **{lab}** — **{len(par[emo])}**"
+            + (f"  ·  {len(par[emo])/tot*100:.1f} %" if tot else "")
+            for _s, emo, lab in IMGRATIO_SEUILS),
+        inline=False)
+    e.add_field(name="🔧 À remplacer", value=f"**{len(a_remplacer)}** image(s)  ·  ratio > 1.10", inline=True)
+    e.add_field(name="⚠️ Erreurs", value=f"**{len(erreurs)}**", inline=True)
+    e.add_field(name="❓ Dimensions introuvables",
+                value=f"**{sum(1 for v in erreurs.values() if v == 'format non lu')}**", inline=True)
+    if a_remplacer:
+        apercu = "\n".join(
+            f"{_classe_ratio(r)[0]} `{k}` {ANIME_CARDS_DB[k]['nom'][:22]} — "
+            f"{w}×{h} · **{r:.2f}**" for k, w, h, r in a_remplacer[:10])
+        if len(a_remplacer) > 10:
+            apercu += f"\n*…et {len(a_remplacer)-10} autres dans le fichier*"
+        e.add_field(name="Les plus problématiques", value=apercu[:1024], inline=False)
+    e.set_footer(text="Diagnostic en lecture seule · aucune carte, URL ou donnée modifiée")
+    try:
+        await msg.edit(embed=e, attachments=[fichier])
+    except Exception:
+        await ctx.send(embed=e, file=fichier)
 
 @bot.command(name="checkimages", aliases=["checkimg", "verifimages"])
 @commands.has_permissions(administrator=True)
