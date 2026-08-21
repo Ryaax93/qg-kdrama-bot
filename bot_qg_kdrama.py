@@ -12728,17 +12728,21 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "5.0.0"
+BOT_VERSION = "5.2.0"
 CHANGELOG = {
-    "titre": "Le catalogue est illustré 🖼️",
+    "titre": "Les combats deviennent tactiques ⚔️",
     "ajouts": [
-        "🖼️ **407 nouvelles illustrations** — le catalogue passe de 48 % à **99,9 % illustré**",
-        "🎴 **790 cartes sur 791** ont désormais une image",
-        "🌌 Les 26 Mythiques restent illustrées à 100 %",
+        "🎭 **Chaque carte a désormais un rôle** — Tank, Assassin, Bruiser, Perceur, Équilibré ou Support",
+        "⚔️ **Trois actions en combat** — Attaque toujours dispo, 🔥 Technique en recharge 2 tours, 🎭 Capacité de rôle en recharge 3 tours",
+        "🛡️ **Chaque rôle a sa capacité** — Fortification, Esquive, Rage, Faille, Second souffle, Entrave",
+        "📊 **Les stats viennent du rôle et de la rareté** — un Tank Épique encaisse plus qu'un Assassin Mythique",
+        "🎯 **Spammer la plus grosse attaque ne suffit plus** — bien jouer sa capacité change l'issue du combat",
     ],
     "correctifs": [
-        "5 cartes ont été retirées du pool — elles restent chez leurs propriétaires",
-        "Une carte retirée affiche désormais un encart clair dans les collections",
+        "⚙️ **Nouveau moteur de dégâts** — l'attaque et la défense comptent enfin vraiment",
+        "📈 **Fusion et niveaux en pourcentage** — +7 % par étoile, +1,7 % par niveau, sur toutes les stats",
+        "Les valeurs affichées correspondent exactement à celles utilisées en combat",
+        "Les combats durent environ 4 rounds au lieu de 2",
     ],
 }
 
@@ -12785,8 +12789,14 @@ async def changelog_cmd(ctx):
 @commands.has_permissions(administrator=True)
 async def forcemaj_cmd(ctx):
     """Republie l'annonce de mise à jour — .forcemaj (admin)"""
+    salon = ((ctx.guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None)
+             or ctx.guild.system_channel)
+    if not salon:
+        return await ctx.send(
+            "❌ Aucun salon d'annonces configuré.\n"
+            "Utilise `.setsalon annonces` dans le salon voulu.")
     await annoncer_maj(ctx.guild)
-    await ctx.send("✅ Annonce publiée.", delete_after=8)
+    await ctx.send(f"✅ Annonce **v{BOT_VERSION}** publiée dans {salon.mention}.", delete_after=10)
 
 # ============================================================
 #  📰 LA GAZETTE DU QG — le journal hebdomadaire
@@ -26978,12 +26988,21 @@ async def on_ready():
         print(f"[Gacha] Migration échouée : {e}")
     # Annonce de mise à jour si la version a changé
     try:
-        if str(derniere_version.get("v", "")) != BOT_VERSION:
+        _ancienne = str(derniere_version.get("v", ""))
+        if _ancienne != BOT_VERSION:
             derniere_version["v"] = BOT_VERSION
             save_all_data()
+            n_ok = 0
             for g in bot.guilds:
-                await annoncer_maj(g)
-            print(f"[MAJ] Annonce publiée pour la version {BOT_VERSION}")
+                try:
+                    await annoncer_maj(g)
+                    n_ok += 1
+                except Exception as e:
+                    print(f"[MAJ] Échec sur {g.name} : {e}")
+            print(f"[MAJ] v{_ancienne or '—'} → v{BOT_VERSION} · annonce publiée sur "
+                  f"{n_ok}/{len(bot.guilds)} serveur(s)")
+        else:
+            print(f"[MAJ] v{BOT_VERSION} déjà annoncée — rien à publier")
     except Exception as e:
         print(f"[MAJ] {e}")
     if drama_saison.get("en_cours") and drama_saison.get("dernier_choix"):
