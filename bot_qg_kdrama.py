@@ -271,7 +271,7 @@ def charger_salons():
         REGLEMENT_ROLE_ID  = int(data["REGLEMENT_ROLE_ID"]) if data.get("REGLEMENT_ROLE_ID") else None
         REGLEMENT_MSG_ID   = int(data["REGLEMENT_MSG_ID"]) if data.get("REGLEMENT_MSG_ID") else None
         CONQUETE_ZONE_IDS[:] = data.get("CONQUETE_ZONE_IDS", [])
-        global SALON_GIRLS_ID, SALON_ANNONCES_ID
+        global SALON_GIRLS_ID, SALON_ANNONCES_ID, SALON_INVITATION_ID
         SALON_GIRLS_ID   = data.get("SALON_GIRLS_ID")
         SALON_ANNONCES_ID = data.get("SALON_ANNONCES_ID")
         SALON_INVITATION_ID = data.get("SALON_INVITATION_ID")
@@ -13049,47 +13049,82 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "5.2.0"
+BOT_VERSION = "5.3.0"
+# ── Notes de version : à remplir À LA MAIN à chaque mise à jour ──
+#    Changer BOT_VERSION déclenche l'annonce automatique au démarrage.
 CHANGELOG = {
-    "titre": "Les combats deviennent tactiques ⚔️",
+    "titre": "Quality Update 🧹",
     "ajouts": [
-        "🎭 **Chaque carte a désormais un rôle** — Tank, Assassin, Bruiser, Perceur, Équilibré ou Support",
-        "⚔️ **Trois actions en combat** — Attaque toujours dispo, 🔥 Technique en recharge 2 tours, 🎭 Capacité de rôle en recharge 3 tours",
-        "🛡️ **Chaque rôle a sa capacité** — Fortification, Esquive, Rage, Faille, Second souffle, Entrave",
-        "📊 **Les stats viennent du rôle et de la rareté** — un Tank Épique encaisse plus qu'un Assassin Mythique",
-        "🎯 **Spammer la plus grosse attaque ne suffit plus** — bien jouer sa capacité change l'issue du combat",
+        "🖼️ **`.souvenirs`** — tes objets de collection ont enfin leur propre vitrine",
+        "☢️ **`.resetplayer`** — remise à zéro complète d'un joueur, avec double confirmation *(admin)*",
+        "💸 **`.removecoins`** — retirer des pièces à un membre *(admin)*",
+        "👋 **Message de bienvenue** — désormais envoyé après l'acceptation du règlement, plus au simple join",
     ],
     "correctifs": [
-        "⚙️ **Nouveau moteur de dégâts** — l'attaque et la défense comptent enfin vraiment",
-        "📈 **Fusion et niveaux en pourcentage** — +7 % par étoile, +1,7 % par niveau, sur toutes les stats",
-        "Les valeurs affichées correspondent exactement à celles utilisées en combat",
-        "Les combats durent environ 4 rounds au lieu de 2",
+        "🎒 **`.inventaire`** ne montre plus que les objets réellement utilisables",
+        "🏁 **Tap Race** — les clics rapides ne provoquent plus d'erreur, et les réactions sont bloquées pendant la course",
+        "🌙 Le bot ne parle plus tout seul la nuit dans le salon event",
+        "🧹 **`.clear`** conserve les messages épinglés et demande confirmation avant de tout vider",
+    ],
+    "ameliorations": [
+        "📢 Les annonces de mise à jour partent maintenant correctement, une seule fois par version",
+        "🔐 Les commandes de suppression demandent une confirmation avant d'agir",
     ],
 }
 
+def _salon_annonces(guild):
+    """Trouve le salon d'annonces : configuré, sinon système, sinon par son nom."""
+    s = guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None
+    if s:
+        return s, "configuré"
+    if guild.system_channel:
+        return guild.system_channel, "salon système"
+    for nom in ("annonce", "annonces", "general", "général", "chat"):
+        s = discord.utils.find(lambda ch: nom in ch.name.lower(), guild.text_channels)
+        if s:
+            return s, f"trouvé par son nom (#{s.name})"
+    return None, "aucun"
+
 async def annoncer_maj(guild):
-    """Publie le changelog dans le salon annonces après un déploiement"""
-    salon = ((guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None)
-             or guild.system_channel)
+    """Publie le changelog dans le salon d'annonces.
+    Retourne (True, détail) si envoyé, (False, raison) sinon."""
+    salon, origine = _salon_annonces(guild)
     if not salon:
-        return
+        return False, "aucun salon d'annonces trouvé — utilise `.setsalon annonces`"
+    perms = salon.permissions_for(guild.me)
+    if not (perms.send_messages and perms.embed_links):
+        return False, f"permissions manquantes dans #{salon.name}"
+
     embed = discord.Embed(
-        title=f"🚀  Mise à jour — {CHANGELOG['titre']}",
-        description=f"*Version {BOT_VERSION} · le bot vient d'être mis à jour.*",
+        title=f"📢  NOUVELLE MISE À JOUR — v{BOT_VERSION}",
+        description=f"### {CHANGELOG['titre']}",
         color=0x2ecc71)
-    if CHANGELOG.get("ajouts"):
-        txt = "\n".join(f"• {x}" for x in CHANGELOG["ajouts"])
-        for i in range(0, len(txt), 1000):
-            embed.add_field(name="✨ Nouveautés" if i == 0 else "\u200b",
-                            value=txt[i:i+1000], inline=False)
-    if CHANGELOG.get("correctifs"):
-        embed.add_field(name="🔧 Correctifs",
-                        value="\n".join(f"• {x}" for x in CHANGELOG["correctifs"])[:1024], inline=False)
-    embed.set_footer(text="Tape .help pour retrouver toutes les commandes 🌸")
+    for cle, titre in (("ajouts", "✨ Nouveautés"),
+                       ("correctifs", "🔧 Corrections"),
+                       ("ameliorations", "💡 Améliorations")):
+        items = CHANGELOG.get(cle)
+        if not items:
+            continue
+        txt = "\n".join(f"• {x}" for x in items)
+        premier = True
+        while txt:
+            coupe = txt[:1000]
+            if len(txt) > 1000:
+                p = coupe.rfind("\n")
+                if p > 0:
+                    coupe = txt[:p]
+            embed.add_field(name=titre if premier else "\u200b", value=coupe, inline=False)
+            txt = txt[len(coupe):].lstrip("\n")
+            premier = False
+    embed.set_footer(text="Merci d'utiliser Akari ❤️  ·  .help pour toutes les commandes")
     try:
         await salon.send(embed=embed)
+        return True, f"#{salon.name} ({origine})"
+    except discord.Forbidden:
+        return False, f"envoi refusé dans #{salon.name}"
     except Exception as e:
-        print(f"[MAJ] {e}")
+        return False, f"{type(e).__name__}: {e}"
+
 
 @bot.command(name="changelog", aliases=["maj", "nouveautes", "version"])
 async def changelog_cmd(ctx):
@@ -13106,18 +13141,23 @@ async def changelog_cmd(ctx):
                         value="\n".join(f"• {x}" for x in CHANGELOG["correctifs"])[:1024], inline=False)
     await ctx.send(embed=embed)
 
-@bot.command(name="forcemaj", aliases=["annoncermaj"])
+@bot.command(name="forcemaj", aliases=["announceupdate", "annoncemaj"])
 @commands.has_permissions(administrator=True)
 async def forcemaj_cmd(ctx):
-    """Republie l'annonce de mise à jour — .forcemaj (admin)"""
-    salon = ((ctx.guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None)
-             or ctx.guild.system_channel)
+    """Republie l'annonce de la version courante — .forcemaj (admin)"""
+    salon, origine = _salon_annonces(ctx.guild)
     if not salon:
-        return await ctx.send(
-            "❌ Aucun salon d'annonces configuré.\n"
-            "Utilise `.setsalon annonces` dans le salon voulu.")
-    await annoncer_maj(ctx.guild)
-    await ctx.send(f"✅ Annonce **v{BOT_VERSION}** publiée dans {salon.mention}.", delete_after=10)
+        return await ctx.send(embed=discord.Embed(
+            description=("❌ Aucun salon d'annonces trouvé.\n"
+                         "Place-toi dans le bon salon et fais `.setsalon annonces`."),
+            color=0xe74c3c))
+    ok, detail = await annoncer_maj(ctx.guild)
+    if ok:
+        # La persistance n'est pas touchée : cette commande est un renvoi manuel.
+        await ctx.send(f"✅ Annonce **v{BOT_VERSION}** publiée dans {detail}.", delete_after=12)
+    else:
+        await ctx.send(f"❌ Publication impossible — {detail}")
+
 
 # ============================================================
 #  📰 LA GAZETTE DU QG — le journal hebdomadaire
@@ -22059,7 +22099,7 @@ RESET_CIBLES = {
     "gacha":   ("🎰 Gacha",          "cartes, collections, fusions, rolls, wishlists"),
     "pets":    ("🐾 Compagnons",     "tous les compagnons adoptés"),
     "social":  ("💖 Social",         "mariages, anniversaires, watchlists, notes, invitations"),
-    "tout":    ("💥 TOUT",           "absolument toutes les données de jeu"),
+    "tout":    ("💥 TOUT",           "absolument toutes les données du serveur — pour un seul joueur, voir `.resetplayer`"),
 }
 
 def _reset_bloc(cible):
@@ -22244,6 +22284,7 @@ async def reset_cmd(ctx, cible: str = None, membre: discord.Member = None):
                 f"**Usage :** `.reset <cible>` — remet à zéro pour tout le serveur\n"
                 f"**Ou :** `.reset <cible> @membre` — pour une seule personne\n\n"
                 f"{lignes}\n\n"
+                f"☢️ Pour effacer **toute** la progression d'un joueur : `.resetplayer @membre`\n\n"
                 f"*Les salons configurés, rôles et events programmés ne sont jamais touchés.*"),
             color=0x3498db))
 
@@ -22252,6 +22293,17 @@ async def reset_cmd(ctx, cible: str = None, membre: discord.Member = None):
 
     # ── Reset d'un seul membre ──
     if membre:
+        if cible == "tout":
+            return await ctx.send(embed=discord.Embed(
+                title="↪️ Utilise `.resetplayer`",
+                description=(f"Pour effacer **toute** la progression d'un joueur :\n"
+                             f"```\n.resetplayer @{membre.display_name}\n```\n"
+                             f"*`.reset tout @membre` a été retiré : il oubliait 11 structures de "
+                             f"données. `.resetplayer` les couvre toutes et demande une double "
+                             f"confirmation.*\n\n"
+                             f"`.reset tout` sans mentionner personne reste disponible "
+                             f"pour réinitialiser le serveur entier."),
+                color=0xe67e22))
         uid = str(membre.id)
         efface = []
         if cible in ("xp", "tout"):
@@ -27491,25 +27543,36 @@ async def on_ready():
             print(f"[Gacha] Migration v{GACHA_CATALOG_MIGRATION_VERSION} déjà appliquée")
     except Exception as e:
         print(f"[Gacha] Migration échouée : {e}")
-    # Annonce de mise à jour si la version a changé
+    # Annonce de mise à jour — uniquement si la version a réellement changé
     try:
         _ancienne = str(derniere_version.get("v", ""))
-        if _ancienne != BOT_VERSION:
-            derniere_version["v"] = BOT_VERSION
-            save_all_data()
-            n_ok = 0
+        if _ancienne == BOT_VERSION:
+            print(f"[MAJ] v{BOT_VERSION} déjà annoncée — rien à publier")
+        else:
+            _envois, _echecs = 0, []
             for g in bot.guilds:
                 try:
-                    await annoncer_maj(g)
-                    n_ok += 1
+                    _ok, _detail = await annoncer_maj(g)
                 except Exception as e:
-                    print(f"[MAJ] Échec sur {g.name} : {e}")
-            print(f"[MAJ] v{_ancienne or '—'} → v{BOT_VERSION} · annonce publiée sur "
-                  f"{n_ok}/{len(bot.guilds)} serveur(s)")
-        else:
-            print(f"[MAJ] v{BOT_VERSION} déjà annoncée — rien à publier")
+                    _ok, _detail = False, f"{type(e).__name__}: {e}"
+                if _ok:
+                    _envois += 1
+                    print(f"[MAJ] ✅ {g.name} → {_detail}")
+                else:
+                    _echecs.append(f"{g.name} : {_detail}")
+            # On ne mémorise la version que si au moins une annonce est passée,
+            # sinon elle sera retentée au prochain démarrage.
+            if _envois:
+                derniere_version["v"] = BOT_VERSION
+                save_all_data()
+                print(f"[MAJ] v{_ancienne or '—'} → v{BOT_VERSION} · "
+                      f"publiée sur {_envois}/{len(bot.guilds)} serveur(s)")
+            else:
+                print(f"[MAJ] ⚠️ v{BOT_VERSION} NON annoncée — nouvelle tentative au prochain démarrage")
+            for _e in _echecs:
+                print(f"[MAJ] ❌ {_e}")
     except Exception as e:
-        print(f"[MAJ] {e}")
+        print(f"[MAJ] Erreur inattendue : {type(e).__name__}: {e}")
     if drama_saison.get("en_cours") and drama_saison.get("dernier_choix"):
         try:
             bot.add_view(DramaVoteView(drama_saison["dernier_choix"]))
