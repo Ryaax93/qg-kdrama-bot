@@ -15604,6 +15604,217 @@ def marchand_du_jour():
     ordinaires = ["mysterieux", "jouets", "antiquaire", "deco"]
     return ordinaires[graine % len(ordinaires)]
 
+# ============================================================
+#  ❤️ FAMILLE 2.0 — complicité, duo, frictions, éducation
+# ============================================================
+FOYER_PALIERS = [(0,"🌱","Premiers liens"),(25,"💛","Proches"),
+                 (50,"💕","Complices"),(75,"💞","Inséparables"),(95,"👑","Âmes sœurs")]
+
+def foyer_palier(c_):
+    emo, nom = "🌱", "Premiers liens"
+    for seuil, e, n in FOYER_PALIERS:
+        if c_ >= seuil: emo, nom = e, n
+    return emo, nom
+
+# ── 5 activités de duo : deux pets ensemble, pas le maître ──
+DUO_ACTIVITES = {
+ "diner": {"emoji":"🍝","nom":"Dîner à deux","cd":21600,
+  "intro":"{a} a mis la table. Enfin, il a poussé les affaires sur le côté.",
+  "q":"Comment ça se passe ?",
+  "choix":[("partage","🤝","Ils partagent"),("chacun","🍽️","Chacun son assiette"),
+           ("surprise","🎁","{a} lui laisse le meilleur morceau")],
+  "fins":[
+   {"t":"Ils mangent dans la même assiette sans se disputer une seule fois. Un miracle.","p":30,"c":8,"si":{"partage"},"souvenir":True},
+   {"t":"{a} finit son assiette en douze secondes, puis fixe celle de {b}.","p":28,"c":3,"si":{"partage"},"trait_a":"gourmand"},
+   {"t":"Chacun de son côté, dos à dos. Ils se retrouvent au dessert.","p":28,"c":5,"si":{"chacun"}},
+   {"t":"{b} n'en revient pas. Il regarde le morceau, puis {a}, puis le morceau.","p":26,"c":12,"si":{"surprise"},"souvenir":True},
+   {"t":"{a} le lui laisse… puis le reprend au dernier moment. C'était une blague.","p":22,"c":4,"si":{"surprise"},"trait_a":"farceur"},
+   {"t":"Ils s'endorment tous les deux sur la table. Le repas était trop copieux.","p":20,"c":9}]},
+
+ "promenade": {"emoji":"🌙","nom":"Promenade nocturne","cd":21600,
+  "intro":"La nuit est calme. {a} et {b} sortent ensemble sans faire de bruit.",
+  "q":"Où vont-ils ?",
+  "choix":[("parc","🌳","Le parc"),("toits","🏠","Les toits"),("ruelle","🌃","Les ruelles")],
+  "fins":[
+   {"t":"Ils s'assoient côte à côte et regardent les étoiles un long moment.","p":28,"c":11,"si":{"parc"},"souvenir":True},
+   {"t":"{b} prend peur à cause d'une ombre. {a} fait celui qui n'a rien vu.","p":26,"c":6,"si":{"parc"},"trait_b":"timide"},
+   {"t":"Sur les toits, ils dominent tout le quartier. {a} n'a jamais été aussi fier.","p":26,"c":12,"si":{"toits"},"souvenir":True},
+   {"t":"{a} glisse sur une tuile. Personne n'a rien vu. Sauf {b}.","p":24,"c":7,"si":{"toits"}},
+   {"t":"Dans la ruelle, ils trouvent un carton qui devient immédiatement un abri.","p":26,"c":8,"si":{"ruelle"},"obj":"Carton fétiche"},
+   {"t":"Un chat inconnu les observe de loin. Personne ne bouge. Puis il s'en va.","p":20,"c":9},
+   {"t":"Ils rentrent trempés. Il s'est mis à pleuvoir exactement à mi-chemin.","p":22,"c":6}]},
+
+ "soiree": {"emoji":"🎮","nom":"Soirée à deux","cd":21600,
+  "intro":"{a} a traîné un coussin devant l'écran. {b} s'est installé dessus.",
+  "q":"Le programme de la soirée ?",
+  "choix":[("jeu","🎮","Un jeu à deux"),("film","📺","Un film"),("rien","😴","Ne rien faire")],
+  "fins":[
+   {"t":"{a} gagne trois fois de suite. {b} demande une revanche. Puis une autre.","p":28,"c":9,"si":{"jeu"}},
+   {"t":"La manette finit par terre au bout de dix minutes. Match nul officiel.","p":26,"c":6,"si":{"jeu"}},
+   {"t":"{b} s'endort au bout de dix minutes. {a} regarde la fin tout seul.","p":28,"c":7,"si":{"film"},"trait_b":"paresseux"},
+   {"t":"Ils regardent tout le film blottis l'un contre l'autre sans bouger.","p":26,"c":13,"si":{"film"},"souvenir":True},
+   {"t":"Ils ne font rien du tout pendant deux heures. C'était parfait.","p":28,"c":10,"si":{"rien"}},
+   {"t":"{a} monopolise le coussin. {b} s'installe carrément dessus.","p":22,"c":5,"trait_a":"tetu"}]},
+
+ "escapade": {"emoji":"🏕️","nom":"Escapade","cd":86400,
+  "intro":"Un sac, deux compagnons, et aucun plan précis.",
+  "q":"Direction ?",
+  "choix":[("colline","⛰️","La colline"),("riviere","🌊","La rivière"),("hasard","🎲","Au hasard")],
+  "fins":[
+   {"t":"Du haut de la colline, ils restent assis sans rien dire jusqu'au coucher du soleil.","p":26,"c":15,"si":{"colline"},"souvenir":True},
+   {"t":"{a} arrive en haut le premier et fait semblant d'attendre depuis longtemps.","p":26,"c":8,"si":{"colline"},"trait_a":"energique"},
+   {"t":"{b} tombe à l'eau. {a} le regarde. Puis saute aussi, par solidarité.","p":26,"c":14,"si":{"riviere"},"souvenir":True},
+   {"t":"Ils passent l'après-midi à retourner des cailloux. Découverte : rien.","p":26,"c":7,"si":{"riviere"}},
+   {"t":"Ils se perdent complètement et rentrent trois heures plus tard, ravis.","p":26,"c":12,"si":{"hasard"},"souvenir":True},
+   {"t":"Ils tombent sur un endroit que personne ne connaît. Ce sera leur endroit.","p":8,"c":20,"obj":"Carte griffonnée","souvenir":True}]},
+
+ "surprise": {"emoji":"🎁","nom":"Une surprise","cd":43200,
+  "intro":"{a} veut faire une surprise à {b}. L'intention est là.",
+  "q":"Quelle surprise ?",
+  "choix":[("objet","🎀","Lui offrir quelque chose"),("cachette","🙈","Se cacher pour l'attendre"),
+           ("repas","🍪","Lui garder une friandise")],
+  "fins":[
+   {"t":"{a} lui apporte un caillou. {b} est sincèrement ému. C'est un beau caillou.","p":30,"c":11,"si":{"objet"},"obj":"Caillou offert","souvenir":True},
+   {"t":"La surprise tombe à l'eau : {b} l'avait vu tout préparer depuis le début.","p":26,"c":5,"si":{"objet"}},
+   {"t":"{a} se cache tellement bien que {b} ne le trouve pas. Il finit par s'endormir là.","p":26,"c":8,"si":{"cachette"},"trait_a":"farceur"},
+   {"t":"{b} sursaute violemment et renverse tout. La surprise est réussie, techniquement.","p":26,"c":9,"si":{"cachette"}},
+   {"t":"{a} garde la friandise… puis la mange en attendant. C'était trop long.","p":26,"c":3,"si":{"repas"},"trait_a":"gourmand"},
+   {"t":"{b} découvre la friandise et la partage immédiatement en deux.","p":26,"c":13,"si":{"repas"},"souvenir":True}]},
+}
+
+# ── Petites frictions : léger, drôle, jamais punitif ──
+FRICTIONS = [
+ {"t":"{a} vient de finir discrètement la friandise de {b}.","trait_a":"gourmand",
+  "choix":[("avouer","😭","Avouer",8),("offrir","🍪","Lui en offrir une autre",12),
+           ("rien","👀","Faire comme si de rien n'était",-4)]},
+ {"t":"{b} boude : {a} a passé toute la journée avec toi et pas avec lui.","trait_b":"jaloux",
+  "choix":[("cajoler","🤗","Les réunir tous les deux",11),("expliquer","💬","Expliquer à {b}",7),
+           ("ignorer","🙈","Laisser passer",-3)]},
+ {"t":"Ils veulent tous les deux le même jouet. Personne ne lâche.",
+  "choix":[("partager","🤝","Leur apprendre à partager",10),("deuxieme","🎾","Sortir un deuxième jouet",8),
+           ("confisquer","🚫","Confisquer le jouet",-5)]},
+ {"t":"{a} veut jouer. {b} veut dormir. Le débat est animé.","trait_a":"energique",
+  "choix":[("compromis","⏳","Proposer un compromis",9),("jouer","🎾","Laisser {a} gagner",5),
+           ("dormir","😴","Laisser {b} gagner",5)]},
+ {"t":"{a} s'est installé pile à la place préférée de {b}. Volontairement.","trait_a":"tetu",
+  "choix":[("deplacer","👉","Le déplacer",4),("second","🛋️","Installer un second coussin",10),
+           ("rire","😂","En rire",7)]},
+ {"t":"{b} a caché le jouet préféré de {a}. Il fait l'innocent, très mal.","trait_b":"farceur",
+  "choix":[("chercher","🔎","Chercher ensemble",10),("gronder","😠","Le gronder",-2),
+           ("attendre","⏳","Attendre qu'il craque",8)]},
+ {"t":"Un cadeau de {a} pour {b}. C'est une chaussette. {b} ne sait pas quoi en penser.",
+  "choix":[("accepter","🧦","La faire accepter",9),("remplacer","🎁","Trouver mieux",7),
+           ("garder","😅","La garder pour {a}",5)]},
+ {"t":"Ils se sont disputés pour savoir qui dort le plus près de toi.",
+  "choix":[("milieu","🛏️","Dormir au milieu",12),("alterner","🔄","Alterner chaque nuit",9),
+           ("sol","😭","Leur laisser le lit",6)]},
+]
+
+def duo_maj_complicite(a, b, delta, souvenir=None):
+    f = foyer_gagner(a, b, complicite=delta, souvenir=souvenir)
+    return f
+
+def famille_note(uid_a, uid_b, texte):
+    """Ajoute un moment à l'album — réutilise le carnet et les souvenirs du foyer."""
+    f = get_foyer(uid_a, uid_b, creer=True)
+    import time as _t
+    f.setdefault("souvenirs", []).insert(0, {"t": _t.time(), "texte": texte})
+    del f["souvenirs"][40:]
+
+# ── Croissance du bébé : variété obligatoire ──
+BEBE_ACTIONS = {"nourrir":("🍖","Nourrir"), "laver":("🧼","Laver"), "jouer":("🧸","Jouer"),
+                "coucher":("😴","Coucher"), "sortir":("🗺️","Petite sortie"),
+                "famille":("💕","Moment famille")}
+BEBE_POINTS_PHASE = 12          # points de croissance par phase
+BEBE_TYPES_REQUIS = 4           # types d'actions différents exigés
+BEBE_LASSITUDE = 3              # même action 3 fois d'affilée → plus de croissance
+
+def bebe_soin(st, action):
+    """Applique un soin. Retourne (points_gagnes, message|None)."""
+    st.setdefault("soins", 0)
+    st.setdefault("types", {})
+    st.setdefault("suite", [])
+    st["suite"].append(action)
+    del st["suite"][:-BEBE_LASSITUDE]
+    if len(st["suite"]) == BEBE_LASSITUDE and len(set(st["suite"])) == 1:
+        return 0, "Il commence à se lasser. Essaie autre chose."
+    st["types"][action] = st["types"].get(action, 0) + 1
+    st["soins"] += 1
+    return 1, None
+
+def bebe_manque(st):
+    """Ce qu'il reste à faire avant la phase suivante — texte lisible."""
+    idx = bebe_phase(st)[0]
+    if idx >= len(BEBE_PHASES) - 1:
+        return None
+    suiv = BEBE_PHASES[idx + 1]
+    manques = []
+    if st.get("soins", 0) < suiv[2]:
+        manques.append(f"**{suiv[2] - st.get('soins', 0)}** soin(s)")
+    n_types = len(st.get("types", {}))
+    if n_types < BEBE_TYPES_REQUIS:
+        manques.append(f"**{BEBE_TYPES_REQUIS - n_types}** type(s) d'activité en plus")
+    if len(st.get("appris", [])) < suiv[3]:
+        manques.append(f"**{suiv[3] - len(st.get('appris', []))}** apprentissage(s)")
+    return manques
+
+# ── Éducation : un choix par phase, verrouillé une fois pris ──
+BEBE_EDUCATION = {
+ 1: {"titre":"🎓 Premiers apprentissages",
+     "texte":"{n} commence à grimper partout dans le refuge.",
+     "choix":[("curiosite","🧭","Encourager sa curiosité","curieux"),
+              ("prudence","🛡️","Lui apprendre la prudence","calme"),
+              ("libre","😂","Le laisser expérimenter","farceur")]},
+ 2: {"titre":"🍽️ Les bonnes manières",
+     "texte":"{n} vient de renverser sa gamelle. Pour la troisième fois.",
+     "choix":[("patience","⏳","Lui montrer patiemment","calme"),
+              ("jeu","🎾","En faire un jeu","joueur"),
+              ("laisser","🤷","Il apprendra tout seul","tetu")]},
+ 3: {"titre":"🌍 Le grand monde",
+     "texte":"{n} veut sortir du refuge pour la première fois.",
+     "choix":[("accompagner","🤝","L'accompagner partout","affectueux"),
+              ("liberte","🕊️","Le laisser explorer seul","curieux"),
+              ("attendre","🏠","Attendre qu'il grandisse","timide")]},
+}
+
+def bebe_appliquer_education(uid, pid, phase, cle):
+    """Applique un choix d'éducation. Idempotent : un choix déjà pris n'est jamais réappliqué."""
+    st = pets_data.get(uid, {}).get("owned", {}).get(pid)
+    if not st:
+        return None
+    st.setdefault("choix", {})
+    if str(phase) in st["choix"]:
+        return None                       # déjà décidé
+    conf = BEBE_EDUCATION.get(phase)
+    if not conf:
+        return None
+    opt = next((o for o in conf["choix"] if o[0] == cle), None)
+    if not opt:
+        return None
+    st["choix"][str(phase)] = cle
+    trait = opt[3]
+    st.setdefault("traits", [])
+    if trait and trait not in st["traits"] and len(st["traits"]) < 4:
+        st["traits"].append(trait)
+    st.setdefault("appris", []).append(cle)
+    st.setdefault("carnet", []).insert(0, {
+        "t": __import__("time").time(),
+        "texte": f"🎓 {conf['titre'][2:]} — {opt[2]}", "important": True})
+    return trait
+
+def bebe_devenir_adulte(uid, pid):
+    """Le bébé devient un compagnon à part entière. Aucune donnée perdue, aucun ID changé."""
+    st = pets_data.get(uid, {}).get("owned", {}).get(pid)
+    if not st or st.get("adulte"):
+        return False
+    st["adulte"] = True
+    st["est_bebe"] = False                # il n'est plus un bébé, mais garde son espece_base
+    st.setdefault("carnet", []).insert(0, {
+        "t": __import__("time").time(),
+        "texte": f"👑 Devenu adulte. Fils de {st.get('parents', {}).get('a', '?')} "
+                 f"et {st.get('parents', {}).get('b', '?')}.", "important": True})
+    return True
+
 class SortieView(ui.View):
     """Déroule n'importe quelle activité de ACTIVITES_V2 : scènes → choix → fin."""
 
@@ -15755,6 +15966,388 @@ class SortieView(ui.View):
         desc += f"**{sc['q'].format(nom=nom)}**"
         e = discord.Embed(title=f"{a['emoji']}  {a['nom']}", description=desc, color=0x1abc9c)
         e.set_footer(text=f"Étape {self.etape + 1} sur {len(a['scenes'])}")
+        return e
+
+class DuoView(ui.View):
+    """Une activité de duo : deux pets partenaires, scène → choix → issue."""
+
+    def __init__(self, ctx, uid, partenaire, cle):
+        super().__init__(timeout=180)
+        self.ctx, self.uid, self.pid_b, self.cle = ctx, uid, partenaire, cle
+        self.act = DUO_ACTIVITES[cle]
+        self.fin = None
+        self.verrou = False
+        self.construire()
+
+    async def interaction_check(self, itx):
+        # Les deux propriétaires du foyer peuvent participer
+        if str(itx.user.id) not in (self.uid, self.pid_b):
+            await itx.response.send_message("❤️ Ce foyer n'est pas le tien !", ephemeral=True)
+            return False
+        return True
+
+    def noms(self):
+        _, pdb_a, pst_a = get_active_pet(self.uid)
+        _, pdb_b, pst_b = get_active_pet(self.pid_b)
+        a = (pst_a or {}).get("surnom") or (pdb_a or {}).get("nom", "Son compagnon")
+        b = (pst_b or {}).get("surnom") or (pdb_b or {}).get("nom", "L'autre")
+        return a, b, pst_a or {}, pst_b or {}
+
+    def construire(self):
+        self.clear_items()
+        if self.fin is not None:
+            return
+        a, b, _, _ = self.noms()
+        for i, (cle, emo, lab) in enumerate(self.act["choix"]):
+            btn = ui.Button(label=lab.format(a=a, b=b)[:78], emoji=emo,
+                            style=discord.ButtonStyle.secondary, row=i // 3)
+            async def cb(itx, _c=cle):
+                await self.choisir(itx, _c)
+            btn.callback = cb
+            self.add_item(btn)
+
+    async def choisir(self, itx, cle):
+        if self.fin is not None or self.verrou:
+            try:
+                if not itx.response.is_done():
+                    await itx.response.defer()
+            except Exception:
+                pass
+            return
+        self.verrou = True
+        try:
+            self.resoudre(cle)
+            self.stop()
+            self.construire()
+            if not itx.response.is_done():
+                await itx.response.edit_message(embed=self.embed(), view=self)
+        except (discord.NotFound, discord.HTTPException, discord.InteractionResponded):
+            pass
+        except Exception as e:
+            print(f"[Duo] {type(e).__name__}: {e}")
+        finally:
+            self.verrou = False
+
+    def resoudre(self, choix):
+        a, b, pst_a, pst_b = self.noms()
+        elig = []
+        for f in self.act["fins"]:
+            if (f.get("si") or set()) - {choix}:
+                continue
+            p = f.get("p", 20)
+            if f.get("trait_a"):
+                p = p * 3 if f["trait_a"] in (pst_a.get("traits") or []) else max(1, p // 3)
+            if f.get("trait_b"):
+                p = p * 3 if f["trait_b"] in (pst_b.get("traits") or []) else max(1, p // 3)
+            elig.append((f, p))
+        if not elig:
+            elig = [(f, f.get("p", 20)) for f in self.act["fins"] if not f.get("si")] or \
+                   [(self.act["fins"][0], 1)]
+        vus = set(get_foyer(self.uid, self.pid_b, creer=True).get("vus", []))
+        pond = [(f, max(1, p // 8) if f["t"] in vus else p * 6) for f, p in elig]
+        tot = sum(p for _, p in pond)
+        x, cum = random.randint(1, max(1, tot)), 0
+        self.fin = pond[-1][0]
+        for f, p in pond:
+            cum += p
+            if x <= cum:
+                self.fin = f
+                break
+        fo = get_foyer(self.uid, self.pid_b, creer=True)
+        fo.setdefault("vus", []).insert(0, self.fin["t"])
+        del fo["vus"][4:]
+        # Effets — complicité, souvenir, objet. Aucune pièce.
+        gain = self.fin.get("c", 5)
+        texte = self.fin["t"].format(a=a, b=b)
+        duo_maj_complicite(self.uid, self.pid_b, gain,
+                           souvenir=texte if self.fin.get("souvenir") else None)
+        for u in (self.uid, self.pid_b):
+            st = pet_etat(u)
+            if st:
+                st["humeur"] = max(0, min(100, st["humeur"] + max(2, gain // 2)))
+        if self.fin.get("obj"):
+            activite_donner_objet(self.uid, self.fin["obj"])
+        fo["activites"] = fo.get("activites", {})
+        fo["activites"][self.cle] = fo["activites"].get(self.cle, 0) + 1
+        import time as _t
+        fo.setdefault("cd", {})[self.cle] = _t.time()
+        save_all_data()
+        self.gain = gain
+        self.texte = texte
+
+    def embed(self):
+        a, b, _, _ = self.noms()
+        act = self.act
+        if self.fin is None:
+            e = discord.Embed(
+                title=f"{act['emoji']}  {act['nom']}",
+                description=f"*{act['intro'].format(a=a, b=b)}*\n\n**{act['q']}**",
+                color=0xff9ec7)
+            return e
+        f = get_foyer(self.uid, self.pid_b) or {}
+        emo_p, nom_p = foyer_palier(f.get("complicite", 50))
+        e = discord.Embed(title=f"{act['emoji']}  {act['nom']}",
+                          description=f"*« {self.texte} »*", color=0xff9ec7)
+        lignes = [f"💕 Complicité **+{self.gain}**   ·   {emo_p} {nom_p}"]
+        if self.fin.get("obj"):
+            lignes.append(f"🎁 **{self.fin['obj']}**")
+        if self.fin.get("souvenir"):
+            lignes.append("📖 Souvenir ajouté à l'album")
+        e.add_field(name="\u200b", value="\n".join(lignes), inline=False)
+        return e
+
+
+class FrictionView(ui.View):
+    """Une petite friction de couple — ton léger, jamais punitif."""
+
+    def __init__(self, ctx, uid, partenaire, friction):
+        super().__init__(timeout=180)
+        self.ctx, self.uid, self.pid_b, self.fr = ctx, uid, partenaire, friction
+        self.fait = None
+        self.verrou = False
+        a, b = self.noms()
+        for i, (cle, emo, lab, gain) in enumerate(friction["choix"]):
+            btn = ui.Button(label=lab.format(a=a, b=b)[:78], emoji=emo,
+                            style=discord.ButtonStyle.secondary, row=i // 3)
+            async def cb(itx, _c=cle, _g=gain, _l=lab):
+                await self.choisir(itx, _c, _g, _l)
+            btn.callback = cb
+            self.add_item(btn)
+
+    def noms(self):
+        _, pdb_a, pst_a = get_active_pet(self.uid)
+        _, pdb_b, pst_b = get_active_pet(self.pid_b)
+        return ((pst_a or {}).get("surnom") or (pdb_a or {}).get("nom", "L'un"),
+                (pst_b or {}).get("surnom") or (pdb_b or {}).get("nom", "L'autre"))
+
+    async def interaction_check(self, itx):
+        if str(itx.user.id) not in (self.uid, self.pid_b):
+            await itx.response.send_message("❤️ Ce foyer n'est pas le tien !", ephemeral=True)
+            return False
+        return True
+
+    async def choisir(self, itx, cle, gain, lab):
+        if self.fait is not None or self.verrou:
+            try:
+                if not itx.response.is_done():
+                    await itx.response.defer()
+            except Exception:
+                pass
+            return
+        self.verrou = True
+        try:
+            self.fait = (cle, gain, lab)
+            duo_maj_complicite(self.uid, self.pid_b, gain)
+            save_all_data()
+            self.clear_items()
+            self.stop()
+            if not itx.response.is_done():
+                await itx.response.edit_message(embed=self.embed(), view=self)
+        except (discord.NotFound, discord.HTTPException, discord.InteractionResponded):
+            pass
+        finally:
+            self.verrou = False
+
+    def embed(self):
+        a, b = self.noms()
+        if self.fait is None:
+            return discord.Embed(title="😅  Petite tension",
+                                 description=f"*{self.fr['t'].format(a=a, b=b)}*",
+                                 color=0xffc4d6)
+        cle, gain, lab = self.fait
+        f = get_foyer(self.uid, self.pid_b) or {}
+        emo_p, nom_p = foyer_palier(f.get("complicite", 50))
+        e = discord.Embed(title="😅  Petite tension",
+                          description=f"*{self.fr['t'].format(a=a, b=b)}*\n\n"
+                                      f"→ **{lab.format(a=a, b=b)}**", color=0xffc4d6)
+        e.add_field(name="\u200b",
+                    value=f"💕 Complicité **{gain:+d}**   ·   {emo_p} {nom_p}", inline=False)
+        return e
+
+
+class BebeView(ui.View):
+    """S'occuper du bébé : soins variés, éducation, passage à l'âge adulte."""
+
+    def __init__(self, ctx, uid, pid):
+        super().__init__(timeout=300)
+        self.ctx, self.uid, self.pid = ctx, uid, pid
+        self.msg = None
+        self.education = None
+        self.verrou = False
+        self.construire()
+
+    def st(self):
+        return pets_data.get(self.uid, {}).get("owned", {}).get(self.pid, {})
+
+    def nom(self):
+        return self.st().get("nom_bebe") or "Le petit"
+
+    async def interaction_check(self, itx):
+        st = self.st()
+        proprios = {self.uid, str(st.get("parent_a", "")), str(st.get("parent_b", ""))}
+        if str(itx.user.id) not in proprios:
+            await itx.response.send_message("👶 Ce n'est pas ton petit !", ephemeral=True)
+            return False
+        return True
+
+    def construire(self):
+        self.clear_items()
+        st = self.st()
+        if self.education is not None:
+            conf = BEBE_EDUCATION[self.education]
+            for i, (cle, emo, lab, _tr) in enumerate(conf["choix"]):
+                b = ui.Button(label=lab[:78], emoji=emo,
+                              style=discord.ButtonStyle.success, row=i)
+                async def cb(itx, _c=cle):
+                    await self.decider(itx, _c)
+                b.callback = cb
+                self.add_item(b)
+            return
+        if bebe_phase(st)[0] >= len(BEBE_PHASES) - 1 and not st.get("adulte"):
+            b = ui.Button(label="Il est prêt à grandir", emoji="👑",
+                          style=discord.ButtonStyle.success, row=0)
+            async def cbg(itx):
+                await self.grandir(itx)
+            b.callback = cbg
+            self.add_item(b)
+            return
+        for i, (cle, (emo, lab)) in enumerate(BEBE_ACTIONS.items()):
+            b = ui.Button(label=lab, emoji=emo, style=discord.ButtonStyle.secondary, row=i // 3)
+            async def cb(itx, _c=cle):
+                await self.soigner(itx, _c)
+            b.callback = cb
+            self.add_item(b)
+
+    async def _editer(self, itx):
+        try:
+            if not itx.response.is_done():
+                await itx.response.edit_message(embed=self.embed(), view=self)
+        except (discord.NotFound, discord.HTTPException, discord.InteractionResponded):
+            pass
+
+    async def soigner(self, itx, action):
+        if self.verrou:
+            try:
+                if not itx.response.is_done():
+                    await itx.response.defer()
+            except Exception:
+                pass
+            return
+        self.verrou = True
+        try:
+            st = self.st()
+            avant = bebe_phase(st)[0]
+            pts, msg = bebe_soin(st, action)
+            self.dernier_msg = msg or random.choice([
+                f"{self.nom()} apprécie beaucoup ce moment.",
+                f"{self.nom()} te regarde avec de grands yeux.",
+                f"{self.nom()} se blottit contre toi juste après.",
+                f"{self.nom()} pousse un petit bruit satisfait.",
+                f"{self.nom()} en redemande immédiatement."])
+            # L'éducation se débloque dès que les SOINS d'un palier sont atteints
+            # et que la VARIÉTÉ est suffisante. C'est elle qui fournit l'apprentissage
+            # exigé par la phase correspondante.
+            if pts and len(st.get("types", {})) >= BEBE_TYPES_REQUIS:
+                deja = st.get("choix") or {}
+                for _ph in sorted(BEBE_EDUCATION):
+                    if str(_ph) in deja:
+                        continue
+                    if st.get("soins", 0) >= BEBE_PHASES[_ph][2]:
+                        self.education = _ph
+                    break
+            save_all_data()
+            self.construire()
+            await self._editer(itx)
+        finally:
+            self.verrou = False
+
+    async def decider(self, itx, cle):
+        """Un seul parent décide — la décision n'est jamais appliquée deux fois."""
+        if self.verrou:
+            try:
+                if not itx.response.is_done():
+                    await itx.response.defer()
+            except Exception:
+                pass
+            return
+        self.verrou = True
+        try:
+            phase = self.education
+            trait = bebe_appliquer_education(self.uid, self.pid, phase, cle)
+            st = self.st()
+            st["phase_maj"] = __import__("time").time()
+            self.education = None
+            self.dernier_msg = (f"Ce choix a marqué {self.nom()}." if trait is None
+                                else f"{self.nom()} devient un peu plus **{trait}**.")
+            save_all_data()
+            self.construire()
+            await self._editer(itx)
+        finally:
+            self.verrou = False
+
+    async def grandir(self, itx):
+        if self.verrou:
+            try:
+                if not itx.response.is_done():
+                    await itx.response.defer()
+            except Exception:
+                pass
+            return
+        self.verrou = True
+        try:
+            ok = bebe_devenir_adulte(self.uid, self.pid)
+            self.dernier_msg = (f"🎉 **{self.nom()}** est devenu adulte !" if ok
+                                else f"{self.nom()} est déjà adulte.")
+            save_all_data()
+            self.construire()
+            await self._editer(itx)
+        finally:
+            self.verrou = False
+
+    def embed(self):
+        st = self.st()
+        idx, emo, nom_ph, desc = bebe_phase(st)
+        fiche = pet_espece(self.uid, self.pid) or {}
+        e = discord.Embed(title=f"{fiche.get('emoji', '🐾')}  {self.nom()}",
+                          color=0xffd479)
+        if self.education is not None:
+            conf = BEBE_EDUCATION[self.education]
+            e.title = conf["titre"]
+            e.description = f"*{conf['texte'].format(n=self.nom())}*\n\n**Comment réagis-tu ?**"
+            return e
+        if st.get("adulte"):
+            e.description = f"### 👑 Adulte\n*{desc}*"
+        else:
+            cur, req, suiv = bebe_progression(st)
+            barre = jauge5(int(cur / max(1, req) * 100))
+            e.description = f"{emo} **{nom_ph}** · étape {idx + 1} sur 4\n\n🌱 {barre}  **{cur} / {req}**"
+        # Héritage
+        par = st.get("parents") or {}
+        if par:
+            e.add_field(name="🧬 Héritage",
+                        value=f"{par.get('a', '?')}  ·  {par.get('b', '?')}", inline=False)
+        tr = st.get("traits") or []
+        if tr:
+            e.add_field(name="🎭 Caractère",
+                        value=" · ".join(PET_TRAITS[t][1] if t in PET_TRAITS else t for t in tr),
+                        inline=False)
+        gouts = st.get("gouts") or {}
+        if gouts:
+            aime = [k for k, v in gouts.items() if v > 0][:2]
+            deteste = [k for k, v in gouts.items() if v < 0][:1]
+            txt = []
+            if aime: txt.append("🍓 Aime : " + ", ".join(aime))
+            if deteste: txt.append("🥦 Déteste : " + ", ".join(deteste))
+            if txt: e.add_field(name="\u200b", value="\n".join(txt), inline=False)
+        if st.get("particularite") and st.get("part_decouverte"):
+            p = PET_PARTICULARITES.get(st["particularite"])
+            if p: e.add_field(name="✨ Particularité", value=f"{p[0]} **{p[1]}**", inline=False)
+        if not st.get("adulte"):
+            manque = bebe_manque(st)
+            if manque:
+                e.add_field(name="Il lui faut encore", value=" · ".join(manque), inline=False)
+        if getattr(self, "dernier_msg", None):
+            e.set_footer(text=self.dernier_msg[:200])
         return e
 
 @bot.command(name="petensemble", aliases=["ensemble", "petsortie"])
@@ -19470,8 +20063,8 @@ def meubles_piece(uid, pid):
 BEBE_PHASES = [
     ("👶", "Bébé",  0,   0, "Il tient à peine debout."),
     ("🧸", "Petit", 20,  0, "Il commence à explorer le refuge."),
-    ("🐾", "Jeune", 50,  3, "Il fonce partout et écoute à moitié."),
-    ("👑", "Adulte", 100, 5, "Il est devenu un compagnon à part entière."),
+    ("🐾", "Jeune", 50,  2, "Il fonce partout et écoute à moitié."),
+    ("👑", "Adulte", 100, 3, "Il est devenu un compagnon à part entière."),
 ]
 BEBE_DELAI_PHASE = 86400        # 24 h minimum entre deux phases
 
@@ -21818,6 +22411,66 @@ class PetHubView(ui.View):
                 self.add_item(b)
             self.bouton("Refuge", "🏠", "refuge", 1)
 
+        elif e == "famille":
+            uid = self.uid
+            pid, pdb, pst = get_active_pet(uid)
+            part = (pst or {}).get("bebe_avec")
+            if part and not (pets_data.get(str(part), {}) or {}).get("active"):
+                part = None                       # partenaire inaccessible
+            bebes = [(k, v) for k, v in (pets_data.get(uid, {}).get("owned") or {}).items()
+                     if v.get("est_bebe") or v.get("adulte")]
+            if part:
+                b = ui.Button(label="Activité duo", emoji="💕",
+                              style=discord.ButtonStyle.success, row=0)
+                async def cbd(itx):
+                    await self.ouvrir_duo(itx)
+                b.callback = cbd
+                self.add_item(b)
+            if bebes:
+                b2 = ui.Button(label=f"S'occuper de {bebes[0][1].get('nom_bebe', 'lui')}"[:78],
+                               emoji="👶", style=discord.ButtonStyle.success, row=0)
+                async def cbb(itx, _p=bebes[0][0]):
+                    await self.ouvrir_bebe(itx, _p)
+                b2.callback = cbb
+                self.add_item(b2)
+            if part:
+                b3 = ui.Button(label="Album familial", emoji="📖", row=1)
+                async def cba(itx):
+                    await self.aller(itx, "album")
+                b3.callback = cba
+                self.add_item(b3)
+            adultes = [(k, v) for k, v in bebes if v.get("adulte")]
+            if adultes:
+                b4 = ui.Button(label="Changer de compagnon", emoji="🔄", row=1)
+                async def cbc(itx):
+                    await self.aller(itx, "choisir")
+                b4.callback = cbc
+                self.add_item(b4)
+
+        elif e == "choisir":
+            d = pets_data.get(self.uid, {})
+            opts = []
+            for k, st_ in list((d.get("owned") or {}).items())[:24]:
+                if st_.get("est_bebe") and not st_.get("adulte"):
+                    continue
+                f_ = pet_espece(self.uid, k) or {}
+                opts.append(discord.SelectOption(
+                    label=(st_.get("surnom") or st_.get("nom_bebe") or f_.get("nom", k))[:90],
+                    value=k, emoji=f_.get("emoji", "🐾"),
+                    description="Actif" if d.get("active") == k else f"Niveau {st_.get('level', 1)}"))
+            if opts:
+                s = ui.Select(placeholder="Choisir le compagnon actif…", options=opts, row=0)
+                async def cbs(itx):
+                    pets_data[self.uid]["active"] = s.values[0]
+                    save_all_data()
+                    await self.aller(itx, "famille")
+                s.callback = cbs
+                self.add_item(s)
+            self.bouton("Famille", "◀️", "famille", 1)
+
+        elif e == "album":
+            self.bouton("Famille", "◀️", "famille", 1)
+
         elif e == "affaires":
             opts = [discord.SelectOption(label="Nourriture", value="nourriture", emoji="🍖"),
                     discord.SelectOption(label="Jouets",     value="jouets",     emoji="🎾"),
@@ -21833,7 +22486,7 @@ class PetHubView(ui.View):
             self.bouton("Affaires", "🎒", "affaires", 1)
 
         # Retour commun
-        if e not in ("accueil", "piece", "categorie"):
+        if e not in ("accueil", "piece", "categorie", "choisir", "album"):
             self.bouton("Retour", "◀️", "accueil", 2)
         elif e in ("piece", "categorie"):
             self.bouton("Accueil", "◀️", "accueil", 2)
@@ -21917,6 +22570,92 @@ class PetHubView(ui.View):
             await itx.response.edit_message(embed=self.embed(), view=self)
         except (discord.NotFound, discord.HTTPException, discord.InteractionResponded):
             pass
+
+    async def ouvrir_duo(self, itx):
+        """Une friction une fois sur quatre, sinon une activité de duo."""
+        uid = self.uid
+        pid, pdb, pst = get_active_pet(uid)
+        part = (pst or {}).get("bebe_avec")
+        if not part:
+            return await self.aller(itx, "famille")
+        import time as _t
+        f = get_foyer(uid, part, creer=True)
+        if random.random() < 0.25:
+            fr = random.choice(FRICTIONS)
+            vue = FrictionView(self.ctx, uid, part, fr)
+            try:
+                if not itx.response.is_done():
+                    await itx.response.edit_message(embed=vue.embed(), view=vue)
+            except (discord.NotFound, discord.HTTPException, discord.InteractionResponded):
+                pass
+            return
+        libres = [k for k, a in DUO_ACTIVITES.items()
+                  if _t.time() - f.get("cd", {}).get(k, 0) >= a["cd"]]
+        if not libres:
+            try:
+                if not itx.response.is_done():
+                    await itx.response.send_message(
+                        "⏳ Ils ont déjà tout fait aujourd'hui — reviens plus tard.",
+                        ephemeral=True)
+            except Exception:
+                pass
+            return
+        vue = DuoView(self.ctx, uid, part, random.choice(libres))
+        try:
+            if not itx.response.is_done():
+                await itx.response.edit_message(embed=vue.embed(), view=vue)
+        except (discord.NotFound, discord.HTTPException, discord.InteractionResponded):
+            pass
+
+    async def ouvrir_bebe(self, itx, pid_bebe):
+        vue = BebeView(self.ctx, self.uid, pid_bebe)
+        try:
+            if not itx.response.is_done():
+                await itx.response.edit_message(embed=vue.embed(), view=vue)
+        except (discord.NotFound, discord.HTTPException, discord.InteractionResponded):
+            pass
+
+    def ec_album(self):
+        uid = self.uid
+        pid, pdb, pst = get_active_pet(uid)
+        part = (pst or {}).get("bebe_avec")
+        f = get_foyer(uid, part) if part else None
+        e = discord.Embed(title="📖  Album familial", color=0xff9ec7)
+        moments = []
+        if f:
+            import datetime as _dt
+            if f.get("cre"):
+                moments.append(("💕", "Le foyer a été fondé", f["cre"]))
+            for s in (f.get("souvenirs") or [])[:10]:
+                moments.append(("✨", s.get("texte", "")[:90], s.get("t", 0)))
+        for k, st_ in ((pets_data.get(uid, {}).get("owned") or {}).items()):
+            if st_.get("est_bebe") or st_.get("adulte"):
+                for x in (st_.get("carnet") or [])[:6]:
+                    if x.get("important"):
+                        moments.append(("👶", x.get("texte", "")[:90], x.get("t", 0)))
+        moments.sort(key=lambda m: -m[2])
+        if moments:
+            e.description = "\n".join(f"{m[0]} {m[1]}" for m in moments[:14])
+        else:
+            e.description = "*L'album est encore vide. Vos moments s'y ajouteront tout seuls.*"
+        e.set_footer(text=f"{len(moments)} moment(s)")
+        return e
+
+    def ec_choisir(self):
+        d = pets_data.get(self.uid, {})
+        e = discord.Embed(title="🔄  Choisir un compagnon", color=0xff9ec7)
+        lignes = []
+        for k, st_ in (d.get("owned") or {}).items():
+            if st_.get("est_bebe") and not st_.get("adulte"):
+                continue
+            f_ = pet_espece(self.uid, k) or {}
+            nom = st_.get("surnom") or st_.get("nom_bebe") or f_.get("nom", k)
+            marque = "  🌟 *actif*" if d.get("active") == k else ""
+            origine = "  ·  *né au foyer*" if st_.get("adulte") else ""
+            lignes.append(f"{f_.get('emoji', '🐾')} **{nom}** — niveau {st_.get('level', 1)}{marque}{origine}")
+        e.description = "\n".join(lignes) if lignes else "*Aucun compagnon disponible.*"
+        e.set_footer(text="Le compagnon actif ne change que si tu le choisis")
+        return e
 
     async def faire_piece(self, itx, act):
         """Activité liée à une pièce — s'appuie sur les besoins existants."""
@@ -22048,34 +22787,50 @@ class PetHubView(ui.View):
     def ec_famille(self):
         uid = self.uid
         pid, pdb, pstate = get_active_pet(uid)
-        nom = pstate.get("surnom") or (pdb or {}).get("nom", "?")
+        pstate = pstate or {}
+        pdb = pdb or {}
+        nom = pstate.get("surnom") or pdb.get("nom", "ton compagnon")
         e = discord.Embed(title=f"❤️  La famille de {nom}", color=HUB_COULEURS["famille"])
+        if not pid:
+            e.description = "*Tu n'as pas encore de compagnon actif.*"
+            return e
         partenaire = pstate.get("bebe_avec")
-        bebes = [(k, v) for k, v in (pets_data.get(uid, {}).get("owned") or {}).items()
-                 if v.get("est_bebe")]
+        owned = (pets_data.get(uid, {}).get("owned") or {})
+        bebes = [(k, v) for k, v in owned.items() if v.get("est_bebe") or v.get("adulte")]
+        emo_moi = pdb.get("emoji", "🐾")
         if partenaire:
-            f = get_foyer(uid, partenaire)
-            e.description = f"### {pdb['emoji']}  ·  💕  ·  🐾\n*Un foyer partagé*"
-            if f:
-                e.add_field(name="\u200b",
-                            value=(f"💕 Complicité   {jauge5(f['complicite'])}\n"
-                                   f"🏠 Foyer niveau **{f['niveau']}**   ·   "
-                                   f"📖 {len(f['souvenirs'])} souvenir(s) commun(s)"),
-                            inline=False)
+            f = get_foyer(uid, partenaire) or {}
+            _, pdb_p, pst_p = get_active_pet(str(partenaire))
+            emo_p = (pdb_p or {}).get("emoji", "🐾")
+            nom_p = (pst_p or {}).get("surnom") or (pdb_p or {}).get("nom")
+            e.description = (f"### {emo_moi}  ·  💕  ·  {emo_p}\n"
+                             + (f"*{nom}  et  {nom_p}*" if nom_p
+                                else "*Son partenaire est introuvable pour l'instant.*"))
+            comp = f.get("complicite", 50)
+            emo_pal, nom_pal = foyer_palier(comp)
+            e.add_field(name="\u200b",
+                        value=(f"💕 Complicité   {jauge5(comp)}   {emo_pal} **{nom_pal}**\n"
+                               f"🏠 Foyer niveau **{f.get('niveau', 1)}**   ·   "
+                               f"📖 {len(f.get('souvenirs') or [])} souvenir(s)"),
+                        inline=False)
         else:
-            e.description = f"### {pdb['emoji']}\n*{nom} est seul pour l'instant.*"
+            e.description = f"### {emo_moi}\n*{nom} est seul pour l'instant.*"
             e.add_field(name="\u200b",
                         value="*Fais-lui rencontrer d'autres compagnons avec `.petvisite @ami`.*",
                         inline=False)
         if bebes:
             lignes = []
             for k, st_b in bebes[:4]:
-                idx, emo_b, nom_b, _ = bebe_phase(st_b)
-                cur, req, suiv = bebe_progression(st_b)
                 fiche = pet_espece(uid, k) or {}
+                nom_b = st_b.get("nom_bebe", "Petit")
+                if st_b.get("adulte"):
+                    lignes.append(f"{fiche.get('emoji', '🐾')} **{nom_b}**\n└ 👑 Adulte")
+                    continue
+                idx, emo_b, ph_b, _ = bebe_phase(st_b)
+                cur, req, suiv = bebe_progression(st_b)
                 barre = jauge5(int(cur / max(1, req) * 100)) if suiv else "🟩🟩🟩🟩🟩"
-                lignes.append(f"{fiche.get('emoji', '🐾')} **{st_b.get('nom_bebe', 'Petit')}**\n"
-                              f"└ {emo_b} {nom_b}  ·  🌱 {barre}  {cur}/{req}")
+                lignes.append(f"{fiche.get('emoji', '🐾')} **{nom_b}**\n"
+                              f"└ {emo_b} {ph_b}  ·  🌱 {barre}  {min(cur, req)}/{req}")
             e.add_field(name=f"👶 Ses petits ({len(bebes)})", value="\n".join(lignes), inline=False)
         e.set_footer(text="`.petbebe` · `.petduo` · `.petamis` pour le détail")
         return e
