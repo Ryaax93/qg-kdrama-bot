@@ -13060,28 +13060,86 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "5.3.0"
-# ── Notes de version : à remplir À LA MAIN à chaque mise à jour ──
-#    Changer BOT_VERSION déclenche l'annonce automatique au démarrage.
-CHANGELOG = {
-    "titre": "Quality Update 🧹",
-    "ajouts": [
-        "🖼️ **`.souvenirs`** — tes objets de collection ont enfin leur propre vitrine",
-        "☢️ **`.resetplayer`** — remise à zéro complète d'un joueur, avec double confirmation *(admin)*",
-        "💸 **`.removecoins`** — retirer des pièces à un membre *(admin)*",
-        "👋 **Message de bienvenue** — désormais envoyé après l'acceptation du règlement, plus au simple join",
-    ],
-    "correctifs": [
-        "🎒 **`.inventaire`** ne montre plus que les objets réellement utilisables",
-        "🏁 **Tap Race** — les clics rapides ne provoquent plus d'erreur, et les réactions sont bloquées pendant la course",
-        "🌙 Le bot ne parle plus tout seul la nuit dans le salon event",
-        "🧹 **`.clear`** conserve les messages épinglés et demande confirmation avant de tout vider",
-    ],
-    "ameliorations": [
-        "📢 Les annonces de mise à jour partent maintenant correctement, une seule fois par version",
-        "🔐 Les commandes de suppression demandent une confirmation avant d'agir",
-    ],
+BOT_VERSION = "5.4.0"
+
+# ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
+# Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
+# L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
+UPDATES = {
+ "5.4.0": {
+   "titre": "Pets 2.0 — vos compagnons prennent vie 🐾",
+   "ajouts": [
+     "🐾 **`.pet` devient un vrai menu** — six boutons, un seul message, tout est là",
+     "🏠 **Refuge en 6 pièces** — chambre, cuisine, salle de bain, salle de jeux, jardin, salon",
+     "🗺️ **12 sorties** avec de vrais choix — pêche, arcade, plage, camping, concours…",
+     "🧭 **9 destinations d'expédition** au lieu de 4",
+     "❤️ **Foyer partagé** — 5 activités à deux, complicité, album familial",
+     "👶 **Les bébés grandissent enfin** — Bébé → Petit → Jeune → Adulte, puis compagnon à part entière",
+     "🧬 **Héritage** — le petit tient ses traits et ses goûts de ses deux parents",
+   ],
+   "correctifs": [
+     "💬 Il comprend **18 intentions** quand tu lui parles, et répond selon son caractère",
+     "🎭 Les traits changent réellement les scènes : un paresseux ne vit pas le camping comme un curieux",
+     "🧹 Un bouton **Nettoyer** directement dans le refuge",
+   ],
+   "ameliorations": [
+     "📖 L'écran **Vie** devient la fiche complète du compagnon",
+     "🔁 Les sorties ont plusieurs déroulements — rejouer ne donne pas le même texte",
+   ],
+ },
+ "5.3.0": {
+   "titre": "Quality Update 🧹",
+   "ajouts": ["🖼️ **`.souvenirs`** — tes objets de collection ont leur vitrine",
+              "☢️ **`.resetplayer`** — remise à zéro complète d'un joueur *(admin)*",
+              "💸 **`.removecoins`** — retirer des pièces à un membre *(admin)*"],
+   "correctifs": ["🎒 **`.inventaire`** ne montre plus que les objets utilisables",
+                  "🏁 **Tap Race** — les clics rapides ne provoquent plus d'erreur",
+                  "🌙 Le bot ne parle plus tout seul la nuit"],
+   "ameliorations": ["📢 Les annonces de mise à jour partent une seule fois par version"],
+ },
+ "5.2.0": {
+   "titre": "Les combats deviennent tactiques ⚔️",
+   "ajouts": ["🎭 Chaque carte a un rôle", "⚔️ Trois actions en combat"],
+   "correctifs": ["⚙️ Nouveau moteur de dégâts", "📈 Fusion et niveaux en pourcentage"],
+ },
 }
+
+def get_current_update():
+    """Les notes de la version en cours. None si aucune entrée n'existe."""
+    return UPDATES.get(BOT_VERSION)
+
+def build_update_embed():
+    """Construit l'embed d'annonce. Retourne None si la version n'a pas de notes.
+    C'est le SEUL générateur : annonce automatique et .forcemaj l'utilisent tous deux."""
+    notes = get_current_update()
+    if not notes:
+        return None
+    e = discord.Embed(
+        title=f"📢  NOUVELLE MISE À JOUR — v{BOT_VERSION}",
+        description=f"### {notes['titre']}",
+        color=0x2ecc71)
+    for cle, titre in (("ajouts", "✨ Nouveautés"),
+                       ("correctifs", "🔧 Corrections"),
+                       ("ameliorations", "💡 Améliorations")):
+        items = notes.get(cle)
+        if not items:
+            continue
+        txt = "\n".join(f"• {x}" for x in items)
+        premier = True
+        while txt:
+            coupe = txt[:1000]
+            if len(txt) > 1000:
+                p = coupe.rfind("\n")
+                if p > 0:
+                    coupe = txt[:p]
+            e.add_field(name=titre if premier else "\u200b", value=coupe, inline=False)
+            txt = txt[len(coupe):].lstrip("\n")
+            premier = False
+    e.set_footer(text="Merci d'utiliser Akari ❤️  ·  .help pour toutes les commandes")
+    return e
+
+# Compatibilité : d'anciens affichages lisent encore CHANGELOG
+CHANGELOG = UPDATES.get(BOT_VERSION) or {"titre": f"v{BOT_VERSION}", "ajouts": [], "correctifs": []}
 
 def _salon_annonces(guild):
     """Trouve le salon d'annonces : configuré, sinon système, sinon par son nom."""
@@ -13097,42 +13155,32 @@ def _salon_annonces(guild):
     return None, "aucun"
 
 async def annoncer_maj(guild):
-    """Publie le changelog dans le salon d'annonces.
-    Retourne (True, détail) si envoyé, (False, raison) sinon."""
-    salon, origine = _salon_annonces(guild)
-    if not salon:
-        return False, "aucun salon d'annonces trouvé — utilise `.setsalon annonces`"
+    """Publie les notes de la version courante. Retourne (succès, détail).
+    La version n'est JAMAIS marquée annoncée si l'envoi échoue."""
+    embed = build_update_embed()
+    if embed is None:
+        return False, f"aucune entrée CHANGELOG pour v{BOT_VERSION}"
+    if SALON_ANNONCES_ID:
+        salon = guild.get_channel(SALON_ANNONCES_ID)
+        if not salon:
+            return False, (f"le salon d'annonces configuré (id {SALON_ANNONCES_ID}) "
+                           f"est introuvable sur {guild.name}")
+        origine = "configuré"
+    else:
+        salon = guild.system_channel
+        if not salon:
+            return False, "aucun salon d'annonces configuré — fais `.setsalon annonces`"
+        origine = "salon système"
     perms = salon.permissions_for(guild.me)
-    if not (perms.send_messages and perms.embed_links):
-        return False, f"permissions manquantes dans #{salon.name}"
-
-    embed = discord.Embed(
-        title=f"📢  NOUVELLE MISE À JOUR — v{BOT_VERSION}",
-        description=f"### {CHANGELOG['titre']}",
-        color=0x2ecc71)
-    for cle, titre in (("ajouts", "✨ Nouveautés"),
-                       ("correctifs", "🔧 Corrections"),
-                       ("ameliorations", "💡 Améliorations")):
-        items = CHANGELOG.get(cle)
-        if not items:
-            continue
-        txt = "\n".join(f"• {x}" for x in items)
-        premier = True
-        while txt:
-            coupe = txt[:1000]
-            if len(txt) > 1000:
-                p = coupe.rfind("\n")
-                if p > 0:
-                    coupe = txt[:p]
-            embed.add_field(name=titre if premier else "\u200b", value=coupe, inline=False)
-            txt = txt[len(coupe):].lstrip("\n")
-            premier = False
-    embed.set_footer(text="Merci d'utiliser Akari ❤️  ·  .help pour toutes les commandes")
+    manque = [n for n, v in (("Envoyer des messages", perms.send_messages),
+                             ("Intégrer des liens", perms.embed_links)) if not v]
+    if manque:
+        return False, f"permissions manquantes dans #{salon.name} : {', '.join(manque)}"
     try:
-        await salon.send(embed=embed)
-        return True, f"#{salon.name} ({origine})"
+        msg = await salon.send(embed=embed)
+        return True, f"#{salon.name} ({origine}) · message_id={msg.id}"
     except discord.Forbidden:
-        return False, f"envoi refusé dans #{salon.name}"
+        return False, f"envoi refusé par Discord dans #{salon.name}"
     except Exception as e:
         return False, f"{type(e).__name__}: {e}"
 
@@ -13155,19 +13203,20 @@ async def changelog_cmd(ctx):
 @bot.command(name="forcemaj", aliases=["announceupdate", "annoncemaj"])
 @commands.has_permissions(administrator=True)
 async def forcemaj_cmd(ctx):
-    """Republie l'annonce de la version courante — .forcemaj (admin)"""
-    salon, origine = _salon_annonces(ctx.guild)
-    if not salon:
+    """Republie les notes de la version courante — .forcemaj (admin)"""
+    if get_current_update() is None:
         return await ctx.send(embed=discord.Embed(
-            description=("❌ Aucun salon d'annonces trouvé.\n"
-                         "Place-toi dans le bon salon et fais `.setsalon annonces`."),
+            title="⚠️ Aucune note de version",
+            description=(f"Il n'existe aucune entrée `UPDATES` pour **v{BOT_VERSION}**.\n"
+                         f"Ajoute-la dans le code avant de publier."),
             color=0xe74c3c))
     ok, detail = await annoncer_maj(ctx.guild)
     if ok:
-        # La persistance n'est pas touchée : cette commande est un renvoi manuel.
+        # Republication manuelle : la persistance n'est volontairement pas touchée.
         await ctx.send(f"✅ Annonce **v{BOT_VERSION}** publiée dans {detail}.", delete_after=12)
     else:
-        await ctx.send(f"❌ Publication impossible — {detail}")
+        await ctx.send(embed=discord.Embed(
+            description=f"❌ Publication impossible.\n```\n{detail}\n```", color=0xe74c3c))
 
 
 # ============================================================
@@ -22278,7 +22327,7 @@ async def verifier_bilan(uid, channel):
             pass
     return True
 
-class PetHubView(ui.View):
+class PetMenuLegacyView(ui.View):
     """Navigation depuis .pet — les commandes directes restent disponibles"""
     def __init__(self, uid, timeout=180):
         super().__init__(timeout=timeout)
@@ -22340,15 +22389,41 @@ class PetHubView(ui.View):
 
     # ────────────── navigation ──────────────
     async def aller(self, itx, ecran, **kw):
-        self.ecran = ecran
-        self.piece = kw.get("piece", self.piece)
-        self.categorie = kw.get("categorie", self.categorie)
-        self.construire()
+        """Change d'écran. L'interaction est acquittée quoi qu'il arrive :
+        aucun bouton ne doit pouvoir afficher « Akari n'a pas répondu à temps »."""
         try:
-            await itx.response.edit_message(embed=self.embed(), view=self)
-        except discord.InteractionResponded:
-            await itx.edit_original_response(embed=self.embed(), view=self)
-        except (discord.NotFound, discord.HTTPException):
+            self.ecran = ecran
+            self.piece = kw.get("piece", self.piece)
+            self.categorie = kw.get("categorie", self.categorie)
+            self.construire()
+            emb = self.embed()
+        except Exception as e:
+            print(f"[PetHub] écran {ecran} : {type(e).__name__}: {e}")
+            emb = discord.Embed(
+                description="😿 Cet écran n'a pas pu s'afficher. Refais `.pet`.",
+                color=0xe74c3c)
+            self.clear_items()
+            self.bouton("Accueil", "◀️", "accueil", 0)
+        try:
+            if not itx.response.is_done():
+                await itx.response.edit_message(embed=emb, view=self)
+            else:
+                await itx.edit_original_response(embed=emb, view=self)
+        except (discord.NotFound, discord.HTTPException, discord.InteractionResponded):
+            pass
+
+    async def on_timeout(self):
+        """Vue expirée : on grise les boutons plutôt que de laisser un clic échouer."""
+        for x in self.children:
+            x.disabled = True
+
+    async def on_error(self, itx, error, item):
+        print(f"[PetHub] {type(error).__name__}: {error}")
+        try:
+            if not itx.response.is_done():
+                await itx.response.send_message(
+                    "😿 Petit souci d'affichage — refais `.pet`.", ephemeral=True)
+        except Exception:
             pass
 
     def bouton(self, label, emoji, ecran, row, style=discord.ButtonStyle.secondary, **kw):
@@ -22397,6 +22472,14 @@ class PetHubView(ui.View):
                 await self.aller(itx, "piece", piece=s.values[0])
             s.callback = cbs
             self.add_item(s)
+            _sale = pets_data.get(self.uid, {}).get("saletes", 0)
+            bn = ui.Button(label="Nettoyer", emoji="🧹", row=1,
+                           style=discord.ButtonStyle.success if _sale >= 15
+                           else discord.ButtonStyle.secondary)
+            async def cbn(itx):
+                await self.nettoyer(itx)
+            bn.callback = cbn
+            self.add_item(bn)
 
         elif e == "piece":
             emo, nom, desc, meubles, act = REFUGE_PIECES[self.piece]
@@ -22484,6 +22567,23 @@ class PetHubView(ui.View):
 
         elif e == "categorie":
             self.bouton("Affaires", "🎒", "affaires", 1)
+
+        elif e == "vie":
+            page = getattr(self, "vie_page", "profil")
+            b1 = ui.Button(label="Profil", emoji="🧬", row=0,
+                           style=discord.ButtonStyle.success if page == "profil"
+                           else discord.ButtonStyle.secondary, disabled=page == "profil")
+            b2 = ui.Button(label="Parcours", emoji="🏅", row=0,
+                           style=discord.ButtonStyle.success if page == "parcours"
+                           else discord.ButtonStyle.secondary, disabled=page == "parcours")
+            async def cb1(itx):
+                self.vie_page = "profil"
+                await self.aller(itx, "vie")
+            async def cb2(itx):
+                self.vie_page = "parcours"
+                await self.aller(itx, "vie")
+            b1.callback, b2.callback = cb1, cb2
+            self.add_item(b1); self.add_item(b2)
 
         # Retour commun
         if e not in ("accueil", "piece", "categorie", "choisir", "album"):
@@ -22657,6 +22757,34 @@ class PetHubView(ui.View):
         e.set_footer(text="Le compagnon actif ne change que si tu le choisis")
         return e
 
+    async def nettoyer(self, itx):
+        """Nettoie le refuge — utilise la variable `saletes` existante. Aucune récompense."""
+        uid = self.uid
+        d = pets_data.setdefault(uid, {})
+        sale = d.get("saletes", 0)
+        if sale < 15:
+            self.msg_refuge = "✨ Le refuge est déjà propre."
+        else:
+            d["saletes"] = 0
+            pid, pdb, pst = get_active_pet(uid)
+            nom = (pst or {}).get("surnom") or (pdb or {}).get("nom", "Ton compagnon")
+            reactions = [f"{nom} inspecte chaque recoin derrière toi.",
+                         f"{nom} te regarde faire depuis le canapé.",
+                         f"{nom} s'installe pile à l'endroit que tu viens de nettoyer.",
+                         f"{nom} suit le balai des yeux sans bouger la tête."]
+            # Variantes selon les traits réellement présents dans PET_TRAITS
+            for tr, phrase in (("paresseux", f"{nom} te regarde nettoyer sans proposer son aide. Évidemment."),
+                               ("maniaque",  f"{nom} inspecte chaque recoin derrière toi, l'air sévère."),
+                               ("joueur",    f"{nom} pense visiblement que le balai est un nouveau jouet."),
+                               ("curieux",   f"{nom} veut absolument savoir ce qu'il y avait sous le meuble."),
+                               ("energique", f"{nom} court partout et refait la moitié du désordre.")):
+                if tr in PET_TRAITS and pet_a_trait(uid, tr):
+                    reactions = [phrase] * 3 + reactions
+            self.msg_refuge = ("🧹 Tu nettoies le refuge.  ✨ Tout est propre !\n"
+                               f"*« {_sans_repet(uid, 'nettoyage', reactions)} »*")
+            save_all_data()
+        await self.aller(itx, "refuge")
+
     async def faire_piece(self, itx, act):
         """Activité liée à une pièce — s'appuie sur les besoins existants."""
         equiv = {"dormir": "dormir", "laver": "laver", "jouer": "jouer",
@@ -22748,6 +22876,9 @@ class PetHubView(ui.View):
             lignes.append(f"{emo} **{n}**  ·  {len(poss)}/{len(meubles)} meubles"
                           + ("   ✨" if poss else ""))
         e.add_field(name="\u200b", value="\n".join(lignes), inline=False)
+        if getattr(self, "msg_refuge", None):
+            e.add_field(name="\u200b", value=self.msg_refuge, inline=False)
+            self.msg_refuge = None
         e.set_footer(text="✨ = une activité y est disponible")
         return e
 
@@ -22877,25 +23008,130 @@ class PetHubView(ui.View):
         return e
 
     def ec_vie(self):
+        """Fiche complète du compagnon — page Profil ou page Parcours."""
         uid = self.uid
-        pid, pdb, pstate = get_active_pet(uid)
-        nom = pstate.get("surnom") or (pdb or {}).get("nom", "?")
+        pid, pdb, pst = get_active_pet(uid)
+        pst, pdb = pst or {}, pdb or {}
+        nom = pst.get("surnom") or pst.get("nom_bebe") or pdb.get("nom", "?")
+        e = discord.Embed(title=f"📖  Vie de {nom}", color=HUB_COULEURS["vie"])
+        if not pid:
+            e.description = "*Tu n'as pas de compagnon actif.*"
+            return e
+
+        if getattr(self, "vie_page", "profil") == "profil":
+            # ── 🧬 Identité ──
+            jours = pet_jours(uid)
+            ph_emo, ph_nom, _ = pet_phase(jours)
+            niv = pst.get("level", 1)
+            num, rom, nom_ev, mn, mx, cout = pet_evolution(niv)
+            ident = [f"{pdb.get('nom', '?')} · **{pdb.get('rarete', '?')}**",
+                     f"{ph_emo} {ph_nom} · Évolution {rom} — *{nom_ev}*",
+                     f"⭐ Niveau **{niv}**"]
+            if pst.get("adulte"):
+                par = pst.get("parents") or {}
+                if par:
+                    ident.append(f"🧬 Né de {par.get('a', '?')} et {par.get('b', '?')}")
+            e.add_field(name="🧬 Identité", value="\n".join(ident), inline=False)
+
+            # ── 🎭 Personnalité ──
+            tr = pst.get("traits") or []
+            if tr:
+                e.add_field(name="🎭 Personnalité",
+                            value="\n".join(
+                                f"{PET_TRAITS[t][0]} {PET_TRAITS[t][1]}" if t in PET_TRAITS
+                                else f"• {t}" for t in tr),
+                            inline=True)
+
+            # ── ✨ Particularité (seulement si découverte) ──
+            part = pst.get("particularite")
+            if part and pst.get("part_decouverte") and part in PET_PARTICULARITES:
+                p = PET_PARTICULARITES[part]
+                e.add_field(name="✨ Particularité",
+                            value=f"{p[0]} **{p[1]}**\n*{p[2]}*", inline=True)
+            elif part:
+                e.add_field(name="✨ Particularité",
+                            value="*Encore inconnue…*", inline=True)
+
+            # ── 🎁 Bonus — via les helpers existants pet_bonus() ──
+            try:
+                lignes_b = []
+                for _t, _emo, _lab in (("coins", "💰", "Pièces"),
+                                       ("xp", "⭐", "XP"),
+                                       ("roll", "🎰", "Rolls")):
+                    _val = pet_bonus(uid, _t)
+                    if _val:
+                        lignes_b.append(f"{_emo} {_lab} **+{_val} %**")
+                if lignes_b:
+                    e.add_field(name="🎁 Bonus", value="\n".join(lignes_b), inline=False)
+            except Exception as _e:
+                print(f"[PetHub] bonus illisibles : {type(_e).__name__}")
+
+            # ── 👗 Équipement ──
+            portes = [a for a in (pst.get("portes") or []) if a in PET_ACCESSOIRES]
+            if portes:
+                e.add_field(name="👗 Équipement",
+                            value=" ".join(f"{PET_ACCESSOIRES[a][0]} {PET_ACCESSOIRES[a][1]}"
+                                           for a in portes[:4]),
+                            inline=False)
+            # ── 🏠 Refuge · ❤️ Préférence ──
+            bas = [f"🏠 **{len(pets_data.get(uid, {}).get('refuge', []))}** meuble(s)"]
+            fav = pst.get("objet_prefere")
+            if fav:
+                bas.append(f"❤️ Préfère **{fav}**")
+            e.add_field(name="\u200b", value="   ·   ".join(bas), inline=False)
+            e.set_footer(text="Page 1 sur 2 — Profil")
+            return e
+
+        # ── Page Parcours ──
         jours = pet_jours(uid)
-        e = discord.Embed(title=f"📖  La vie de {nom}",
-                          description=f"Adopté il y a **{jours} jour(s)**",
-                          color=HUB_COULEURS["vie"])
-        carnet = (pstate or {}).get("carnet", [])
+        import datetime as _dt
+        _ad = pst.get("adoption")
+        date = _dt.datetime.fromtimestamp(_ad).strftime("%d/%m/%Y") if _ad else "?"
+        e.description = f"📅 Adopté le **{date}** · il y a **{jours}** jour(s)"
+
+        # ── 🏅 Titres ──
+        titres = [t for t in (pst.get("titres") or []) if t in PET_TITRES]
+        e.add_field(name=f"🏅 Titres  ·  {len(titres)} / {len(PET_TITRES)}",
+                    value=("\n".join(f"{PET_TITRES[t][0]} {PET_TITRES[t][1]}"
+                                     for t in titres[-4:]) if titres
+                           else "*Aucun titre pour l'instant.*"),
+                    inline=False)
+
+        # ── 🎯 Compétences ──
+        comp = pst.get("stats") or {}
+        top = sorted(((k, v) for k, v in comp.items() if isinstance(v, int)),
+                     key=lambda x: -x[1])[:5]
+        if top:
+            e.add_field(name="🎯 Compétences",
+                        value="\n".join(f"• {k.capitalize()} — **{v}**" for k, v in top),
+                        inline=True)
+
+        # ── 🧬 Habitudes ──
+        hab = pst.get("habitudes") or {}
+        if hab:
+            e.add_field(name="🧬 Habitudes",
+                        value="\n".join(f"• {k} — {v}" for k, v in list(hab.items())[:4]),
+                        inline=True)
+
+        # ── 📖 Carnet ──
+        carnet = pst.get("carnet") or []
         epingles = [x for x in carnet if x.get("important")][:3]
         recents = [x for x in carnet if not x.get("important")][:3]
         if epingles:
-            e.add_field(name="📌 Épinglés",
-                        value="\n".join(f"└ {x['texte'][:70]}" for x in epingles), inline=False)
+            e.add_field(name="📌 Moments marquants",
+                        value="\n".join(f"└ {x['texte'][:72]}" for x in epingles), inline=False)
         if recents:
             e.add_field(name="🕐 Récemment",
-                        value="\n".join(f"└ {x['texte'][:70]}" for x in recents), inline=False)
+                        value="\n".join(f"└ {x['texte'][:72]}" for x in recents), inline=False)
         if not carnet:
             e.add_field(name="\u200b", value="*Son carnet est encore vide.*", inline=False)
-        e.set_footer(text=f"{len(carnet)} entrée(s)  ·  .petcarnet · .petcompetences · .petreve")
+
+        # ── 🎁 Souvenirs ──
+        obj = pst.get("objets") or []
+        if obj:
+            e.add_field(name=f"🎁 Souvenirs  ·  {len(obj)}",
+                        value=" · ".join(obj[-5:]), inline=False)
+        e.set_footer(text=f"Page 2 sur 2 — Parcours  ·  {len(carnet)} entrée(s) au carnet")
         return e
 
 @bot.command(name="pet", aliases=["compagnon"])
@@ -23060,7 +23296,7 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
         embed.set_footer(text=f"Adopté le {_date} · il y a {jours} jour(s) · "
                               f"`.petcompetences` `.petcarnet` `.garderobe` `.refuge`")
 
-        await ctx.send(embed=embed, view=PetHubView(uid))
+        await ctx.send(embed=embed, view=PetMenuLegacyView(uid))
         await verifier_bilan(uid, ctx.channel)
         for e_h, n_h in verifier_habitudes(uid):
             await ctx.send(embed=discord.Embed(
@@ -29875,32 +30111,36 @@ async def on_ready():
         print(f"[Pets] Migration bébés échouée : {type(e).__name__}: {e}")
     # Annonce de mise à jour — uniquement si la version a réellement changé
     try:
-        _ancienne = str(derniere_version.get("v", ""))
-        if _ancienne == BOT_VERSION:
+        _ancienne = str(derniere_version.get("v", "")) or "—"
+        print(f"[MAJ] Version actuelle       : {BOT_VERSION}")
+        print(f"[MAJ] Dernière version annoncée : {_ancienne}")
+        print(f"[MAJ] Salon configuré        : {SALON_ANNONCES_ID or 'aucun'}")
+        if get_current_update() is None:
+            print(f"[MAJ] ÉCHEC : aucune entrée UPDATES pour v{BOT_VERSION} — rien publié")
+        elif _ancienne == BOT_VERSION:
             print(f"[MAJ] v{BOT_VERSION} déjà annoncée — rien à publier")
         else:
             _envois, _echecs = 0, []
             for g in bot.guilds:
+                print(f"[MAJ] Tentative d'envoi sur {g.name}…")
                 try:
                     _ok, _detail = await annoncer_maj(g)
                 except Exception as e:
                     _ok, _detail = False, f"{type(e).__name__}: {e}"
                 if _ok:
                     _envois += 1
-                    print(f"[MAJ] ✅ {g.name} → {_detail}")
+                    print(f"[MAJ] Annonce envoyée : {_detail}")
                 else:
                     _echecs.append(f"{g.name} : {_detail}")
-            # On ne mémorise la version que si au moins une annonce est passée,
-            # sinon elle sera retentée au prochain démarrage.
+                    print(f"[MAJ] ÉCHEC : {_detail}")
+            # La version n'est mémorisée QUE si au moins un envoi a réussi
             if _envois:
                 derniere_version["v"] = BOT_VERSION
                 save_all_data()
-                print(f"[MAJ] v{_ancienne or '—'} → v{BOT_VERSION} · "
-                      f"publiée sur {_envois}/{len(bot.guilds)} serveur(s)")
+                print(f"[MAJ] Version sauvegardée : {BOT_VERSION} "
+                      f"({_envois}/{len(bot.guilds)} serveur(s))")
             else:
-                print(f"[MAJ] ⚠️ v{BOT_VERSION} NON annoncée — nouvelle tentative au prochain démarrage")
-            for _e in _echecs:
-                print(f"[MAJ] ❌ {_e}")
+                print(f"[MAJ] Version NON sauvegardée — nouvelle tentative au prochain démarrage")
     except Exception as e:
         print(f"[MAJ] Erreur inattendue : {type(e).__name__}: {e}")
     if drama_saison.get("en_cours") and drama_saison.get("dernier_choix"):
