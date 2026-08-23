@@ -9914,6 +9914,36 @@ async def trigger_scheduled_event(guild, event_name):
         print(f"[Scheduler] Erreur déclenchement {event_name}: {e}")
 
 @tasks.loop(minutes=1)
+async def ss_scheduler():
+    """Programmation Secret Story. Ne crée jamais de cooldown sur le lancement manuel."""
+    try:
+        mode = SS_CONFIG.get("mode", "off")
+        if mode == "off":
+            return
+        now = datetime.datetime.now()
+        if now.hour != int(SS_CONFIG.get("heure", 21)) or now.minute != int(SS_CONFIG.get("minute", 0)):
+            return
+        if mode == "hebdo" and now.weekday() != int(SS_CONFIG.get("jour", 4)):
+            return
+        if mode == "mensuel" and now.day != int(SS_CONFIG.get("jour", 1)):
+            return
+        cle = f"ss_{mode}_{now.date()}_{now.hour}_{now.minute}"
+        if SS_CONFIG.get("dernier_auto") == cle:
+            return
+        SS_CONFIG["dernier_auto"] = cle
+        save_all_data()
+        if ss_session_active():
+            print("[SS] programmation ignorée : une émission est déjà en cours")
+            return
+        for g in bot.guilds:
+            ok, res = await ss_lancer(g, auto=True)
+            print(f"[SS] lancement automatique sur {g.name} : "
+                  + ("OK" if ok else f"refusé — {res}"))
+    except Exception as e:
+        print(f"[SS] scheduler : {type(e).__name__}: {e}")
+
+
+@tasks.loop(minutes=1)
 async def scheduler_task():
     """Vérifie chaque minute si un event programmé doit se déclencher"""
     if not planning_actif:
@@ -13060,12 +13090,29 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "5.4.0"
+BOT_VERSION = "5.5.0"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "5.5.0": {
+   "titre": "Secret Story — La Voix vous écoute 👁️",
+   "ajouts": [
+     "👁️ **Secret Story arrive** — déposez vos secrets anonymement, enquêtez, votez, démasquez",
+     "🔒 **Confessionnal** — un bouton, un formulaire, et personne ne saura que c'est vous",
+     "🕵️ **Enquête puis vote secret** — le propriétaire joue avec vous et peut mentir",
+     "🎭 **Missions secrètes** — cinq objectifs cachés à réussir pendant l'émission",
+     "📮 **Réserve permanente** — les secrets non joués restent pour la prochaine fois",
+   ],
+   "correctifs": [
+     "📊 **`.secretstory`** affiche ton dossier personnel : découvertes, secrets protégés, missions",
+     "📅 Émissions programmables chaque semaine ou chaque mois — ou uniquement à la demande",
+   ],
+   "ameliorations": [
+     "🥇 Un résumé de fin d'émission désigne le meilleur enquêteur et le meilleur menteur",
+   ],
+ },
  "5.4.0": {
    "titre": "Pets 2.0 — vos compagnons prennent vie 🐾",
    "ajouts": [
@@ -15864,6 +15911,495 @@ def bebe_devenir_adulte(uid, pid):
                  f"et {st.get('parents', {}).get('b', '?')}.", "important": True})
     return True
 
+async def ss_lancer(guild, salon=None, auto=False):
+    """Ouvre une émission dans un salon temporaire dédié.
+    Si le salon ne peut pas être créé, aucune session n'est ouverte
+    et aucun secret n'est consommé."""
+    async with _SS_LOCK:
+        ok, res = ss_conditions_lancement(guild)
+        if not ok:
+            return False, res
+        # ── Salon temporaire : réutilise l'architecture des autres events ──
+        nom = "👁️・secret-story"
+        if discord.utils.get(guild.text_channels, name=nom.replace("👁️・", "👁️・")):
+            n = 2
+            while discord.utils.get(guild.text_channels, name=f"{nom}-{n}") and n < 10:
+                n += 1
+            nom = f"{nom}-{n}"
+        try:
+            salon_tmp = await create_event_channel(guild, nom)
+        except Exception as e:
+            return False, f"Création du salon impossible — {type(e).__name__}: {e}"
+        if not salon_tmp:
+            return False, ("Je n'ai pas pu créer le salon de l'émission.\n"
+                           "Vérifie que j'ai bien **Gérer les salons** "
+                           f"et l'accès à la catégorie **{EVENT_CATEGORY_NAME}**.")
+        p = salon_tmp.permissions_for(guild.me)
+        manque = [n_ for n_, v_ in (("Envoyer des messages", p.send_messages),
+                                    ("Intégrer des liens", p.embed_links)) if not v_]
+        if manque:
+            try:
+                await salon_tmp.delete(reason="Secret Story : permissions insuffisantes")
+            except Exception:
+                pass
+            return False, f"Permissions manquantes dans le salon créé : {', '.join(manque)}"
+        SS_SESSION.clear()
+        SS_SESSION.update({"etat": "IDLE", "salon": salon_tmp.id, "channel_id": salon_tmp.id,
+                           "guild": guild.id, "debut": time.time(), "manches": [],
+                           "secret": None, "auto": bool(auto), "recompenses_versees": False})
+        save_all_data()
+    salon = salon_tmp
+    try:
+        await salon.send(embed=discord.Embed(
+            title="👁️  LA VOIX PREND LA PAROLE",
+            description=("Un secret dort dans les archives d'Akari…\n\n"
+                         "Ce soir, il appartient à **quelqu'un parmi vous**.\n\n"
+                         "🎭 Mensonge autorisé.\n"
+                         "🕵️ Accusations autorisées.\n"
+                         "👁️ Faites confiance à personne."),
+            color=0x2c2f33))
+    except Exception as e:
+        print(f"[SS] ouverture : {type(e).__name__}: {e}")
+    ss_garder_salon_vivant()
+    await ss_jouer_manche(guild, salon)
+    return True, salon
+
+
+async def ss_jouer_manche(guild, salon):
+    """Une manche complète : sélection → enquête → vote → révélation."""
+    async with _SS_LOCK:
+        if SS_SESSION.get("etat") in ("INVESTIGATION", "VOTING", "REVEAL"):
+            return                                    # manche déjà en cours
+        secret = ss_choisir_secret()
+        _plus_rien = secret is None
+        if _plus_rien:
+            SS_SESSION["etat"] = "ATTENTE"
+            save_all_data()
+    # ── Hors du verrou : asyncio.Lock n'est pas réentrant ──
+    if _plus_rien:
+        try:
+            await salon.send(embed=discord.Embed(
+                description="👁️ *La Voix n'a plus aucun secret à révéler ce soir.*",
+                color=0x2c2f33))
+        except Exception:
+            pass
+        return await ss_terminer(salon)
+    async with _SS_LOCK:
+        secret["statut"] = "en_jeu"                   # sorti de la réserve le temps de la manche
+        manche = {"secret": secret["id"], "owner": secret["owner"], "votes": {},
+                  "etat": "INVESTIGATION", "debut": time.time(),
+                  "a_change": set(), "horodatage": {}, "missions": {}}
+        SS_SESSION["etat"] = "INVESTIGATION"
+        SS_SESSION["secret"] = secret["id"]
+        SS_SESSION.setdefault("manches", []).append(
+            {"secret": secret["id"], "owner": secret["owner"]})
+        save_all_data()
+
+    ss_garder_salon_vivant()
+    duree = int(SS_CONFIG.get("duree_enquete", 180))
+    mm, ss_ = divmod(max(30, duree), 60)
+    try:
+        await salon.send(embed=discord.Embed(
+            title=f"👁️  SECRET #{secret['id']}",
+            description=(f"> *« {secret['texte']} »*\n\n"
+                         f"### 🕵️ À QUI APPARTIENT CE SECRET ?\n\n"
+                         f"💬 Interrogez.\n🎭 Mentez.\n👀 Observez les réactions.\n\n"
+                         f"⏱️ **{mm:02d}:{ss_:02d}**"),
+            color=0x9b59b6))
+    except Exception as e:
+        print(f"[SS] annonce manche : {type(e).__name__}: {e}")
+
+    # ── Enquête : une seule relance, pas de spam ──
+    if duree > 90:
+        await asyncio.sleep(duree - 60)
+        if SS_SESSION.get("etat") != "INVESTIGATION":
+            return
+        try:
+            await salon.send(embed=discord.Embed(
+                description="👁️ *La Voix vous observe…*\nPlus que **60 secondes**.",
+                color=0x2c2f33))
+        except Exception:
+            pass
+        await asyncio.sleep(60)
+    else:
+        await asyncio.sleep(duree)
+    if SS_SESSION.get("etat") != "INVESTIGATION":
+        return
+
+    # ── Vote ──
+    ss_garder_salon_vivant()
+    manche["etat"] = "VOTING"
+    SS_SESSION["etat"] = "VOTING"
+    manche["ouverture_votes"] = time.time()
+    membres = [m for m in getattr(salon, "members", []) if not m.bot][:25]
+    if not membres and guild:
+        membres = [m for m in guild.members if not m.bot][:25]
+    if len(membres) < 2:
+        try:
+            await salon.send("👁️ *Pas assez de monde pour voter. La Voix se retire.*")
+        except Exception:
+            pass
+        secret["statut"] = "validated"                # rendu à la réserve
+        SS_SESSION["etat"] = "FINISHED"
+        save_all_data()
+        return await ss_terminer(salon)
+
+    vue = SSVoteView(manche, membres)
+    try:
+        msg_vote = await salon.send(embed=discord.Embed(
+            title="🔔  PLACE AUX VOTES",
+            description=("**Qui se cache derrière ce secret ?**\n\n"
+                         "*Ton vote reste secret et reste modifiable "
+                         "jusqu'à la fermeture.*"),
+            color=0xe67e22), view=vue)
+    except Exception as e:
+        print(f"[SS] vote : {type(e).__name__}: {e}")
+        msg_vote = None
+    await asyncio.sleep(max(5, int(SS_CONFIG.get("duree_vote", 60))))
+    manche["etat"] = "CLOS"
+    vue.stop()
+    if msg_vote:
+        try:
+            await msg_vote.edit(view=None)
+        except Exception:
+            pass
+    await ss_reveler(guild, salon, secret, manche)
+
+
+async def ss_reveler(guild, salon, secret, manche):
+    """Révélation + récompenses. Ne verse jamais deux fois."""
+    async with _SS_LOCK:
+        if manche.get("paye"):
+            return
+        manche["paye"] = True
+        SS_SESSION["etat"] = "REVEAL"
+        owner = str(secret["owner"])
+        votes = dict(manche.get("votes") or {})
+        votants = [u for u in votes if u != owner]     # le proprio ne compte pas comme enquêteur
+        trouveurs = [u for u in votants if votes[u] == owner]
+        n_vot = len(votants)
+        part = (len(trouveurs) / n_vot) if n_vot else 0.0
+
+        secret["statut"] = "played"
+        secret["revele"] = time.time()
+        ss_stats(owner)["reveles"] += 1
+        for u in set(list(votes) + [owner]):
+            ss_stats(u)["participations"] += 1
+
+        # ── Récompenses ──
+        gains = {}
+        for u in trouveurs:
+            ss_crediter(u, 750)
+            ss_stats(u)["trouves"] += 1
+            gains[u] = gains.get(u, 0) + 750
+        montant, _lib = ss_recompense_proprio(part)
+        ss_crediter(owner, montant)
+        gains[owner] = gains.get(owner, 0) + montant
+        if part <= 0:
+            ss_stats(owner)["proteges"] += 1
+
+        # ── Missions vérifiables automatiquement ──
+        reussies = ss_evaluer_missions(manche, owner, votes, trouveurs)
+        for u, (cle, gain) in reussies.items():
+            ss_crediter(u, gain)
+            ss_stats(u)["missions"] += 1
+            gains[u] = gains.get(u, 0) + gain
+
+        SS_SESSION["recompenses_versees"] = True
+        SS_SESSION.setdefault("bilan", []).append({
+            "secret": secret["id"], "owner": owner,
+            "trouveurs": trouveurs, "votants": n_vot,
+            "gains": gains, "missions": {u: c for u, (c, _g) in reussies.items()}})
+        save_all_data()
+
+    ss_garder_salon_vivant()
+    mention = f"<@{owner}>"
+    e = discord.Embed(
+        title="👁️  LA VOIX A UNE ANNONCE…",
+        description=(f"Le secret appartenait à…\n\n"
+                     f"### 🎭 {mention}\n\n"
+                     f"> *« {ss_texte_court(secret['texte'], 220)} »*"),
+        color=0xe74c3c)
+    e.add_field(name="\u200b",
+                value=(f"🔎 **{len(trouveurs)}** l'ont démasqué\n"
+                       f"🥷 **{max(0, n_vot - len(trouveurs))}** se sont trompés"),
+                inline=False)
+    lignes = []
+    if trouveurs:
+        lignes.append("🔎 " + " ".join(f"<@{u}>" for u in trouveurs[:10]) + "  **+750**")
+    lignes.append(f"🎭 {mention}  **+{montant}**")
+    if reussies:
+        lignes.append("🎯 " + " · ".join(
+            f"<@{u}> {SS_MISSIONS[cle][0]} **+{g}**" for u, (cle, g) in list(reussies.items())[:6]))
+    e.add_field(name="💰 Récompenses", value="\n".join(lignes)[:1024], inline=False)
+    try:
+        await salon.send(embed=e)
+    except Exception as ex:
+        print(f"[SS] révélation : {type(ex).__name__}: {ex}")
+
+    # ── Régie : suivant ou terminer ──
+    # La manche est close : on repasse en attente pour autoriser la suivante.
+    SS_SESSION["etat"] = "ATTENTE"
+    save_all_data()
+    reste = len(ss_disponibles())
+    vue = SSRegieMancheView(guild, salon)
+    try:
+        await salon.send(embed=discord.Embed(
+            title="👁️  MANCHE TERMINÉE",
+            description=f"📮 Secrets encore disponibles : **{reste}**",
+            color=0x2c2f33), view=vue)
+    except Exception:
+        pass
+
+
+def ss_evaluer_missions(manche, owner, votes, trouveurs):
+    """Missions strictement vérifiables avec les données de la manche.
+    Retourne {uid: (cle_mission, gain)} — une seule mission par joueur."""
+    res = {}
+    compte = {}
+    for u, cible in votes.items():
+        compte[cible] = compte.get(cible, 0) + 1
+    ouverture = manche.get("ouverture_votes", 0)
+    horod = manche.get("horodatage") or {}
+    for u, cible in votes.items():
+        if u in res:
+            continue
+        # 🔎 Le Limier — a trouvé le propriétaire (hors propriétaire lui-même)
+        if u != owner and u in trouveurs:
+            res[u] = ("limier", SS_MISSIONS["limier"][3]); continue
+        # 🔄 La Girouette — a changé son vote
+        if u in (manche.get("a_change") or set()):
+            res[u] = ("girouette", SS_MISSIONS["girouette"][3]); continue
+        # 🕯️ Le Solitaire — seul à accuser cette personne
+        if compte.get(cible, 0) == 1:
+            res[u] = ("solitaire", SS_MISSIONS["solitaire"][3]); continue
+        # 🎭 La Fausse Piste — a rejoint une accusation groupée qui s'est trompée
+        if compte.get(cible, 0) >= 3 and cible != owner:
+            res[u] = ("faux_piste", SS_MISSIONS["faux_piste"][3]); continue
+        # 👻 Le Fantôme — a voté dans la dernière minute
+        if ouverture and horod.get(u, 0) - ouverture >= int(SS_CONFIG.get("duree_vote", 60)) * 0.75:
+            res[u] = ("fantome", SS_MISSIONS["fantome"][3]); continue
+    return res
+
+
+async def ss_terminer(salon):
+    """Clôture propre. Les secrets non joués RESTENT en réserve."""
+    async with _SS_LOCK:
+        bilan = list(SS_SESSION.get("bilan") or [])
+        # Sécurité : tout secret encore marqué en_jeu revient à la réserve
+        for s in SS_SECRETS.values():
+            if s.get("statut") == "en_jeu":
+                s["statut"] = "validated"
+        SS_SESSION["etat"] = "FINISHED"
+        save_all_data()
+    reste = len(ss_disponibles())
+    e = discord.Embed(title="👁️  FIN DE L'ÉMISSION", color=0x2c2f33)
+    if bilan:
+        tot_gains = sum(sum(b["gains"].values()) for b in bilan)
+        cptr, ment, miss = {}, {}, 0
+        for b in bilan:
+            for u in b["trouveurs"]:
+                cptr[u] = cptr.get(u, 0) + 1
+            if not b["trouveurs"]:
+                ment[b["owner"]] = ment.get(b["owner"], 0) + 1
+            miss += len(b.get("missions") or {})
+        lignes = [f"🎬 **{len(bilan)}** secret(s) révélé(s) ce soir"]
+        if cptr:
+            top = max(cptr, key=cptr.get)
+            lignes.append(f"🥇 Meilleur enquêteur — <@{top}> ({cptr[top]})")
+        if ment:
+            topm = max(ment, key=ment.get)
+            lignes.append(f"🥷 Meilleur menteur — <@{topm}> ({ment[topm]})")
+        if miss:
+            lignes.append(f"🎭 **{miss}** mission(s) réussie(s)")
+        lignes.append(f"💰 **{tot_gains:,}** pièces distribuées".replace(",", " "))
+        e.description = "\n".join(lignes)
+    else:
+        e.description = "*Aucun secret n'a été révélé ce soir.*"
+    e.set_footer(text=f"📮 {reste} secret(s) restent en réserve pour la prochaine fois")
+    try:
+        await salon.send(embed=e)
+    except Exception:
+        pass
+    # ── Fermeture du salon temporaire ──
+    cid = SS_SESSION.get("channel_id")
+    ss_reset_session()
+    save_all_data()
+    if cid and salon is not None and getattr(salon, "id", None) == cid:
+        try:
+            await salon.send(embed=discord.Embed(
+                title="👁️  LA VOIX QUITTE LA MAISON…",
+                description=(f"**{len(bilan)}** secret(s) révélé(s) ce soir.\n"
+                             f"📮 **{reste}** secret(s) restent dans les archives.\n\n"
+                             f"*Ce salon disparaîtra dans "
+                             f"{SS_CHANNEL_DELETE_DELAY} secondes.*"),
+                color=0x2c2f33))
+        except Exception:
+            pass
+        salons_temporaires.pop(cid, None)
+        async def _fermer(ch):
+            try:
+                await asyncio.sleep(SS_CHANNEL_DELETE_DELAY)
+                await ch.delete(reason="Fin de l'émission Secret Story")
+            except Exception as ex:
+                print(f"[SS] suppression du salon : {type(ex).__name__}: {ex}")
+        asyncio.create_task(_fermer(salon))
+
+class SSDepotModal(ui.Modal, title="🔒 Ton secret"):
+    """Le texte n'est jamais affiché publiquement, la confirmation est éphémère."""
+    secret = ui.TextInput(label="Ton secret / ton anecdote",
+                          style=discord.TextStyle.paragraph,
+                          placeholder="Personne ne saura que c'est toi avant la révélation.",
+                          min_length=10, max_length=900, required=True)
+
+    async def on_submit(self, itx):
+        uid = str(itx.user.id)
+        try:
+            if ss_a_un_secret_actif(uid):
+                return await itx.response.send_message(
+                    "🔒 Tu as déjà un secret en réserve. Attends qu'il soit révélé "
+                    "pour en déposer un nouveau.", ephemeral=True)
+            sid = ss_deposer(uid, str(self.secret))
+            save_all_data()
+            await itx.response.send_message(
+                embed=discord.Embed(
+                    description=("🔒 **Secret enregistré.**\n\n"
+                                 "La Voix le gardera jusqu'au bon moment.\n"
+                                 "*Personne ne saura qu'il vient de toi avant la révélation.*"),
+                    color=0x2c2f33),
+                ephemeral=True)
+        except Exception as e:
+            print(f"[SS] dépôt : {type(e).__name__}: {e}")
+            try:
+                if not itx.response.is_done():
+                    await itx.response.send_message("😿 Le dépôt a échoué, réessaie.",
+                                                    ephemeral=True)
+            except Exception:
+                pass
+
+
+class SSCollecteView(ui.View):
+    """Bouton public permanent d'ouverture du confessionnal."""
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @ui.button(label="Déposer mon secret", emoji="🔒",
+               style=discord.ButtonStyle.secondary, custom_id="ss_depot")
+    async def depot(self, itx, button):
+        try:
+            if not SS_CONFIG.get("collecte_ouverte"):
+                return await itx.response.send_message(
+                    "🔒 Le confessionnal est fermé pour le moment.", ephemeral=True)
+            await itx.response.send_modal(SSDepotModal())
+        except (discord.NotFound, discord.HTTPException, discord.InteractionResponded):
+            pass
+
+
+class SSVoteView(ui.View):
+    """Vote par menu déroulant, éphémère, modifiable jusqu'à la fermeture."""
+
+    def __init__(self, manche, participants):
+        super().__init__(timeout=None)
+        self.manche = manche
+        opts = [discord.SelectOption(label=m.display_name[:90], value=str(m.id))
+                for m in participants[:25]]
+        s = ui.Select(placeholder="Qui se cache derrière ce secret ?", options=opts)
+        s.callback = self._voter
+        self.select = s
+        self.add_item(s)
+
+    async def _voter(self, itx):
+        try:
+            m = self.manche
+            if m.get("etat") != "VOTING":
+                return await itx.response.send_message(
+                    "🔔 Les votes sont fermés.", ephemeral=True)
+            uid = str(itx.user.id)
+            cible = self.select.values[0]
+            ancien = m["votes"].get(uid)
+            if ancien == cible:
+                return await itx.response.send_message(
+                    "🔔 C'est déjà ton vote.", ephemeral=True)
+            m["votes"][uid] = cible
+            if ancien is not None:
+                m.setdefault("a_change", set()).add(uid)
+            m.setdefault("horodatage", {})[uid] = time.time()
+            nom = (itx.guild.get_member(int(cible)).display_name
+                   if itx.guild and itx.guild.get_member(int(cible)) else "ce membre")
+            await itx.response.send_message(
+                f"🕵️ Ton vote est enregistré sur **{nom}**."
+                + ("\n*Tu peux encore en changer.*" if ancien is None else "\n*Vote modifié.*"),
+                ephemeral=True)
+        except (discord.NotFound, discord.HTTPException, discord.InteractionResponded):
+            pass
+        except Exception as e:
+            print(f"[SS] vote : {type(e).__name__}: {e}")
+
+
+class SSRegieMancheView(ui.View):
+    """Après une révélation : enchaîner ou terminer. Réservé aux admins."""
+
+    def __init__(self, ctx_guild, salon):
+        super().__init__(timeout=1800)
+        self.guild, self.salon = ctx_guild, salon
+        self.verrou = False
+        self.fait = None
+        if not ss_disponibles():
+            self.suivant.disabled = True
+
+    async def interaction_check(self, itx):
+        if not itx.user.guild_permissions.administrator:
+            await itx.response.send_message("👁️ Seule la régie décide.", ephemeral=True)
+            return False
+        return True
+
+    @ui.button(label="Secret suivant", emoji="▶️", style=discord.ButtonStyle.success)
+    async def suivant(self, itx, button):
+        if self.verrou or self.fait:
+            try:
+                if not itx.response.is_done():
+                    await itx.response.defer()
+            except Exception:
+                pass
+            return
+        self.verrou = True
+        self.fait = "suivant"
+        try:
+            for x in self.children:
+                x.disabled = True
+            if not itx.response.is_done():
+                await itx.response.edit_message(view=self)
+            self.stop()
+            await ss_jouer_manche(self.guild, self.salon)
+        except Exception as e:
+            print(f"[SS] manche suivante : {type(e).__name__}: {e}")
+        finally:
+            self.verrou = False
+
+    @ui.button(label="Terminer l'émission", emoji="⏹️", style=discord.ButtonStyle.danger)
+    async def terminer(self, itx, button):
+        if self.verrou or self.fait:
+            try:
+                if not itx.response.is_done():
+                    await itx.response.defer()
+            except Exception:
+                pass
+            return
+        self.verrou = True
+        self.fait = "fin"
+        try:
+            for x in self.children:
+                x.disabled = True
+            if not itx.response.is_done():
+                await itx.response.edit_message(view=self)
+            self.stop()
+            await ss_terminer(self.salon)
+        except Exception as e:
+            print(f"[SS] fin d'émission : {type(e).__name__}: {e}")
+        finally:
+            self.verrou = False
+
 class SortieView(ui.View):
     """Déroule n'importe quelle activité de ACTIVITES_V2 : scènes → choix → fin."""
 
@@ -16398,6 +16934,284 @@ class BebeView(ui.View):
         if getattr(self, "dernier_msg", None):
             e.set_footer(text=self.dernier_msg[:200])
         return e
+
+SS_JOURS = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
+
+class SSRegieView(ui.View):
+    """Panel admin unique : un message, plusieurs écrans."""
+
+    def __init__(self, ctx):
+        super().__init__(timeout=600)
+        self.ctx = ctx
+        self.ecran = "accueil"
+        self.page = 0
+        self.msg = None
+        self.construire()
+
+    async def interaction_check(self, itx):
+        if not itx.user.guild_permissions.administrator:
+            await itx.response.send_message("👁️ Régie réservée aux admins.", ephemeral=True)
+            return False
+        return True
+
+    async def aller(self, itx, ecran, **kw):
+        try:
+            self.ecran = ecran
+            self.page = kw.get("page", 0)
+            self.construire()
+            emb = self.embed()
+        except Exception as e:
+            print(f"[SS régie] {ecran} : {type(e).__name__}: {e}")
+            emb = discord.Embed(description="😿 Écran indisponible — refais `.secretstory`.",
+                                color=0xe74c3c)
+            self.clear_items()
+        try:
+            if not itx.response.is_done():
+                await itx.response.edit_message(embed=emb, view=self)
+            else:
+                await itx.edit_original_response(embed=emb, view=self)
+        except (discord.NotFound, discord.HTTPException, discord.InteractionResponded):
+            pass
+
+    async def on_timeout(self):
+        for x in self.children:
+            x.disabled = True
+
+    def _b(self, label, emoji, ecran, row, style=discord.ButtonStyle.secondary):
+        b = ui.Button(label=label, emoji=emoji, style=style, row=row)
+        async def cb(itx, _e=ecran):
+            await self.aller(itx, _e)
+        b.callback = cb
+        self.add_item(b)
+
+    def construire(self):
+        self.clear_items()
+        e = self.ecran
+        if e == "accueil":
+            actif = ss_session_active()
+            b = ui.Button(label="Émission en cours" if actif else "Lancer", emoji="▶️",
+                          style=discord.ButtonStyle.success, row=0, disabled=actif)
+            async def cbl(itx):
+                await self.lancer(itx)
+            b.callback = cbl
+            self.add_item(b)
+            bc = ui.Button(label="Fermer la collecte" if SS_CONFIG.get("collecte_ouverte")
+                           else "Ouvrir la collecte", emoji="📮", row=0,
+                           style=discord.ButtonStyle.primary)
+            async def cbc(itx):
+                await self.collecte(itx)
+            bc.callback = cbc
+            self.add_item(bc)
+            self._b("Secrets", "🗃️", "secrets", 0)
+            self._b("Programmation", "📅", "prog", 1)
+            self._b("Statistiques", "📊", "stats", 1)
+            return
+
+        if e == "secrets":
+            att = ss_en_attente()
+            if att:
+                opts = [discord.SelectOption(
+                    label=f"#{s['id']} · {ss_texte_court(s['texte'], 60)}"[:100],
+                    value=str(s["id"]),
+                    description=f"par un membre · en attente") for s in att[:25]]
+                sel = ui.Select(placeholder="Modérer un secret…", options=opts, row=0)
+                async def cbs(itx):
+                    self.cible = sel.values[0]
+                    await self.aller(itx, "moderer")
+                sel.callback = cbs
+                self.add_item(sel)
+            self._b("Régie", "◀️", "accueil", 1)
+            return
+
+        if e == "moderer":
+            for lab, emo, act, st in (("Valider", "✅", "validated", discord.ButtonStyle.success),
+                                      ("Refuser", "🚫", "rejected", discord.ButtonStyle.danger),
+                                      ("Supprimer", "🗑️", "delete", discord.ButtonStyle.danger)):
+                b = ui.Button(label=lab, emoji=emo, style=st, row=0)
+                async def cb(itx, _a=act):
+                    await self.moderer(itx, _a)
+                b.callback = cb
+                self.add_item(b)
+            self._b("Secrets", "◀️", "secrets", 1)
+            return
+
+        if e == "prog":
+            opts = [discord.SelectOption(label="Manuel uniquement", value="off", emoji="🔴",
+                                         description="Aucun lancement automatique"),
+                    discord.SelectOption(label="Hebdomadaire", value="hebdo", emoji="📅",
+                                         description="Chaque semaine, jour et heure au choix"),
+                    discord.SelectOption(label="Mensuelle", value="mensuel", emoji="🗓️",
+                                         description="Chaque mois, jour et heure au choix")]
+            sel = ui.Select(placeholder="Mode de programmation…", options=opts, row=0)
+            async def cbp(itx):
+                SS_CONFIG["mode"] = sel.values[0]
+                save_all_data()
+                await self.aller(itx, "prog")
+            sel.callback = cbp
+            self.add_item(sel)
+            if SS_CONFIG.get("mode") == "hebdo":
+                jopts = [discord.SelectOption(label=j.capitalize(), value=str(i))
+                         for i, j in enumerate(SS_JOURS)]
+                sj = ui.Select(placeholder="Jour de la semaine…", options=jopts, row=1)
+                async def cbj(itx):
+                    SS_CONFIG["jour"] = int(sj.values[0]); save_all_data()
+                    await self.aller(itx, "prog")
+                sj.callback = cbj
+                self.add_item(sj)
+            elif SS_CONFIG.get("mode") == "mensuel":
+                jopts = [discord.SelectOption(label=f"Le {d}", value=str(d))
+                         for d in (1, 5, 10, 15, 20, 25, 28)]
+                sj = ui.Select(placeholder="Jour du mois…", options=jopts, row=1)
+                async def cbj(itx):
+                    SS_CONFIG["jour"] = int(sj.values[0]); save_all_data()
+                    await self.aller(itx, "prog")
+                sj.callback = cbj
+                self.add_item(sj)
+            if SS_CONFIG.get("mode") in ("hebdo", "mensuel"):
+                hopts = [discord.SelectOption(label=f"{h:02d}h00", value=str(h))
+                         for h in (12, 14, 16, 18, 19, 20, 21, 22, 23)]
+                sh = ui.Select(placeholder="Heure…", options=hopts, row=2)
+                async def cbh(itx):
+                    SS_CONFIG["heure"] = int(sh.values[0]); save_all_data()
+                    await self.aller(itx, "prog")
+                sh.callback = cbh
+                self.add_item(sh)
+            self._b("Régie", "◀️", "accueil", 3)
+            return
+
+        if e in ("stats", "collecte_ok"):
+            self._b("Régie", "◀️", "accueil", 1)
+
+    # ── Actions ──
+    async def lancer(self, itx):
+        try:
+            if not itx.response.is_done():
+                await itx.response.defer()
+            ok, res = await ss_lancer(itx.guild)
+            if not ok:
+                await itx.followup.send(f"❌ {res}", ephemeral=True)
+        except Exception as e:
+            print(f"[SS] lancement : {type(e).__name__}: {e}")
+
+    async def collecte(self, itx):
+        try:
+            ouvrir = not SS_CONFIG.get("collecte_ouverte")
+            SS_CONFIG["collecte_ouverte"] = ouvrir
+            save_all_data()
+            if ouvrir:
+                salon = (itx.guild.get_channel(SS_CONFIG.get("salon")) if SS_CONFIG.get("salon")
+                         else None) or itx.channel
+                await salon.send(embed=discord.Embed(
+                    title="👁️  SECRET STORY OUVRE SES PORTES",
+                    description=("La Voix veut connaître vos secrets…\n\n"
+                                 "🔒 *Votre identité restera cachée pendant l'enquête.*"),
+                    color=0x2c2f33), view=SSCollecteView())
+            await self.aller(itx, "accueil")
+        except Exception as e:
+            print(f"[SS] collecte : {type(e).__name__}: {e}")
+
+    async def moderer(self, itx, action):
+        try:
+            sid = str(getattr(self, "cible", ""))
+            s = SS_SECRETS.get(sid)
+            if s:
+                if action == "delete":
+                    SS_SECRETS.pop(sid, None)
+                else:
+                    s["statut"] = action
+                save_all_data()
+            await self.aller(itx, "secrets")
+        except Exception as e:
+            print(f"[SS] modération : {type(e).__name__}: {e}")
+
+    # ── Écrans ──
+    def embed(self):
+        e = self.ecran
+        if e == "secrets":
+            att = ss_en_attente()
+            emb = discord.Embed(title="🗃️  Secrets en attente", color=0x9b59b6)
+            emb.description = ("\n".join(
+                f"**#{s['id']}** — <@{s['owner']}>\n> *{ss_texte_court(s['texte'], 90)}*"
+                for s in att[:8]) if att else "*Aucun secret à modérer.*")
+            emb.set_footer(text="L'auteur n'est visible que par la régie")
+            return emb
+        if e == "moderer":
+            s = SS_SECRETS.get(str(getattr(self, "cible", "")))
+            emb = discord.Embed(title=f"🗃️  Secret #{s['id'] if s else '?'}", color=0x9b59b6)
+            if s:
+                emb.description = f"> *« {s['texte']} »*"
+                emb.add_field(name="Auteur", value=f"<@{s['owner']}>", inline=True)
+                emb.add_field(name="Déposé",
+                              value=f"<t:{int(s['depot'])}:R>", inline=True)
+            return emb
+        if e == "prog":
+            mode = SS_CONFIG.get("mode", "off")
+            lib = {"off": "🔴 Manuel uniquement", "hebdo": "📅 Hebdomadaire",
+                   "mensuel": "🗓️ Mensuelle"}[mode]
+            emb = discord.Embed(title="📅  Programmation", color=0x3498db)
+            txt = [f"Mode actuel : **{lib}**"]
+            if mode == "hebdo":
+                txt.append(f"Chaque **{SS_JOURS[SS_CONFIG.get('jour', 4)]}** "
+                           f"à **{SS_CONFIG.get('heure', 21):02d}h00**")
+            elif mode == "mensuel":
+                txt.append(f"Le **{SS_CONFIG.get('jour', 1)}** de chaque mois "
+                           f"à **{SS_CONFIG.get('heure', 21):02d}h00**")
+            txt.append("\n-# Le lancement manuel reste toujours possible, sans cooldown.")
+            emb.description = "\n".join(txt)
+            return emb
+        if e == "stats":
+            emb = discord.Embed(title="📊  Statistiques Secret Story", color=0x3498db)
+            tot_dep = sum(v.get("deposes", 0) for v in SS_STATS.values())
+            tot_rev = sum(v.get("reveles", 0) for v in SS_STATS.values())
+            tot_g = sum(v.get("gains", 0) for v in SS_STATS.values())
+            emb.description = (f"📮 **{len(ss_disponibles())}** secret(s) en réserve\n"
+                               f"🔒 **{tot_dep}** déposé(s) au total\n"
+                               f"🎬 **{tot_rev}** révélé(s)\n"
+                               f"💰 **{tot_g:,}** pièces distribuées".replace(",", " "))
+            top = sorted(SS_STATS.items(), key=lambda x: -x[1].get("trouves", 0))[:5]
+            if top and top[0][1].get("trouves"):
+                emb.add_field(name="🔎 Meilleurs enquêteurs",
+                              value="\n".join(f"<@{u}> — **{v['trouves']}**"
+                                              for u, v in top if v.get("trouves")),
+                              inline=False)
+            return emb
+        # accueil
+        mode = SS_CONFIG.get("mode", "off")
+        lib = {"off": "🔴 Manuel uniquement", "hebdo": "📅 Hebdomadaire",
+               "mensuel": "🗓️ Mensuelle"}[mode]
+        if mode == "hebdo":
+            lib += f" — {SS_JOURS[SS_CONFIG.get('jour', 4)]} {SS_CONFIG.get('heure', 21):02d}h"
+        elif mode == "mensuel":
+            lib += f" — le {SS_CONFIG.get('jour', 1)} à {SS_CONFIG.get('heure', 21):02d}h"
+        emb = discord.Embed(title="👁️  SECRET STORY — RÉGIE", color=0x2c2f33)
+        emb.description = (
+            f"📮 Secrets disponibles : **{len(ss_disponibles())}**\n"
+            f"📝 À valider : **{len(ss_en_attente())}**\n"
+            f"🎬 Émission : **{'en cours' if ss_session_active() else 'aucune'}**"
+            + (f" — <#{SS_SESSION['channel_id']}>" if SS_SESSION.get("channel_id") else "") + "\n"
+            f"🔒 Confessionnal : **{'ouvert' if SS_CONFIG.get('collecte_ouverte') else 'fermé'}**\n"
+            f"📅 Programmation : {lib}")
+        emb.set_footer(text="Le lancement manuel est toujours possible")
+        return emb
+
+
+@bot.command(name="secretstory", aliases=["ss", "secret"])
+async def secretstory_cmd(ctx, membre: discord.Member = None):
+    """Secret Story — régie pour les admins, dossier pour les membres"""
+    if ctx.author.guild_permissions.administrator and membre is None:
+        vue = SSRegieView(ctx)
+        return await ctx.send(embed=vue.embed(), view=vue)
+    cible = membre or ctx.author
+    st = ss_stats(cible.id)
+    e = discord.Embed(title=f"👁️  DOSSIER SECRET — {cible.display_name}", color=0x9b59b6)
+    e.set_thumbnail(url=cible.display_avatar.url)
+    e.description = (f"🔎 Secrets découverts : **{st['trouves']}**\n"
+                     f"🥷 Secrets protégés : **{st['proteges']}**\n"
+                     f"🎭 Missions réussies : **{st['missions']}**\n"
+                     f"🎬 Participations : **{st['participations']}**")
+    if st.get("gains"):
+        e.set_footer(text=f"{st['gains']:,} pièces gagnées en émission".replace(",", " "))
+    await ctx.send(embed=e)
 
 @bot.command(name="petensemble", aliases=["ensemble", "petsortie"])
 async def petensemble_cmd(ctx, activite: str = None):
@@ -20075,6 +20889,140 @@ def pet_jours(uid):
         return 0
     st.setdefault("adoption", _t.time())
     return int((_t.time() - st["adoption"]) / 86400) + 1
+
+# ============================================================
+#  👁️ SECRET STORY
+# ============================================================
+# Réserve PERSISTANTE : un secret non joué reste disponible indéfiniment.
+# Une émission joue autant de manches que l'admin le décide, puis s'arrête.
+# Les secrets non joués ne sont JAMAIS consommés par la fin d'une émission.
+
+SS_SECRETS   = {}     # {sid: {id, owner, texte, depot, statut, revele, saison}}
+SS_STATS     = {}     # {uid: {participations, deposes, reveles, trouves, proteges, missions, gains}}
+SS_CONFIG    = {"salon": None, "mode": "off", "jour": 4, "heure": 21, "minute": 0,
+                "duree_enquete": 180, "duree_vote": 60, "collecte_ouverte": False}
+SS_SESSION   = {}     # session en cours, volatile mais son état est persisté pour le restart
+SS_SEQ       = {"n": 0}
+_SS_LOCK     = asyncio.Lock()          # protège lancement / manche suivante
+SS_ETATS     = ("IDLE", "INVESTIGATION", "VOTING", "REVEAL", "ATTENTE", "FINISHED")
+SS_CHANNEL_DELETE_DELAY = 60      # secondes avant suppression du salon en fin d'émission
+
+def ss_salon_session(guild):
+    """Le salon temporaire de l'émission en cours, ou None."""
+    cid = SS_SESSION.get("channel_id")
+    return guild.get_channel(cid) if (cid and guild) else None
+
+def ss_garder_salon_vivant():
+    """Repousse le nettoyeur d'inactivité (4 min) pendant toute l'émission."""
+    cid = SS_SESSION.get("channel_id")
+    if cid:
+        salons_temporaires[cid] = time.time()
+
+SS_MISSIONS = {
+ "girouette":  ("🔄", "La Girouette",   "Change ton vote au moins une fois avant la fermeture.", 1000),
+ "solitaire":  ("🕯️", "Le Solitaire",   "Sois le seul à voter pour la personne que tu accuses.",  1500),
+ "limier":     ("🔎", "Le Limier",      "Trouve le propriétaire du secret.",                      1200),
+ "faux_piste": ("🎭", "La Fausse Piste","Vote pour quelqu'un qu'au moins deux autres accusent.",  1000),
+ "fantome":    ("👻", "Le Fantôme",     "Vote dans la dernière minute de l'ouverture des votes.", 1200),
+}
+
+def ss_nouvel_id():
+    SS_SEQ["n"] = SS_SEQ.get("n", 0) + 1
+    return SS_SEQ["n"]
+
+def ss_stats(uid):
+    return SS_STATS.setdefault(str(uid), {
+        "participations": 0, "deposes": 0, "reveles": 0,
+        "trouves": 0, "proteges": 0, "missions": 0, "gains": 0})
+
+def ss_disponibles():
+    """Secrets jouables : validés et jamais joués."""
+    return [s for s in SS_SECRETS.values() if s.get("statut") == "validated"]
+
+def ss_en_attente():
+    return [s for s in SS_SECRETS.values() if s.get("statut") == "pending"]
+
+def ss_a_un_secret_actif(uid):
+    """Un membre ne peut avoir qu'un seul secret non joué à la fois."""
+    return any(s.get("owner") == str(uid) and s.get("statut") in ("pending", "validated")
+               for s in SS_SECRETS.values())
+
+def ss_deposer(uid, texte):
+    sid = ss_nouvel_id()
+    SS_SECRETS[str(sid)] = {"id": sid, "owner": str(uid), "texte": texte.strip()[:900],
+                            "depot": time.time(), "statut": "pending", "revele": None}
+    ss_stats(uid)["deposes"] += 1
+    return sid
+
+def ss_session_active():
+    """Une émission est active tant qu'elle n'est pas terminée — y compris
+    entre deux manches, quand la régie choisit de continuer ou d'arrêter."""
+    return bool(SS_SESSION) and SS_SESSION.get("etat") not in (None, "FINISHED")
+
+def ss_reset_session():
+    SS_SESSION.clear()
+
+def ss_conditions_lancement(guild):
+    """Retourne (ok, raison). L'émission se déroule dans un salon temporaire
+    créé au lancement — on vérifie donc la permission de le créer."""
+    if ss_session_active():
+        return False, "Une émission est déjà en cours."
+    if not ss_disponibles():
+        return False, "👁️ La Voix n'a actuellement aucun secret à révéler."
+    perms = getattr(guild.me, "guild_permissions", None)
+    if perms is not None and not perms.manage_channels:
+        return False, ("Il me manque la permission **Gérer les salons** "
+                       "pour créer le salon de l'émission.")
+    return True, None
+
+
+def ss_choisir_secret():
+    """Un secret validé au hasard, jamais un déjà joué."""
+    dispo = ss_disponibles()
+    return random.choice(dispo) if dispo else None
+
+def ss_recompense_proprio(part_trouve):
+    """part_trouve : proportion de votants ayant trouvé (0.0 à 1.0)."""
+    if part_trouve <= 0:      return 3000, "Personne ne t'a démasqué"
+    if part_trouve <= 0.25:   return 2000, "Presque personne ne t'a démasqué"
+    return 500, "Tu as été démasqué"
+
+def ss_crediter(uid, montant, motif=""):
+    """Passe par l'économie existante. Aucun double crédit possible."""
+    uid = str(uid)
+    economy_data[uid]["coins"] = economy_data[uid].get("coins", 0) + int(montant)
+    st = ss_stats(uid)
+    st["gains"] += int(montant)
+    return economy_data[uid]["coins"]
+
+def ss_texte_court(t, n=160):
+    t = (t or "").replace("\n", " ").strip()
+    return t if len(t) <= n else t[:n - 1] + "…"
+
+def ss_annuler_manche_interrompue():
+    """Au démarrage : une manche coupée est annulée, le secret revient en réserve.
+    Aucune récompense n'est distribuée. Idempotent.
+    Retourne aussi channel_id pour que le salon orphelin soit nettoyé."""
+    if not SS_SESSION:
+        return None
+    etat = SS_SESSION.get("etat")
+    sid = SS_SESSION.get("secret")
+    infos = {"etat": etat, "secret": sid, "restaure": False,
+             "channel_id": SS_SESSION.get("channel_id")}
+    # Si la révélation avait été validée, on ne rejoue rien et on ne restaure rien.
+    # ATTENTE = entre deux manches, la révélation précédente est déjà payée
+    if etat in ("REVEAL", "ATTENTE", "FINISHED") and SS_SESSION.get("recompenses_versees"):
+        ss_reset_session()
+        infos["deja_paye"] = True
+        return infos
+    if sid and str(sid) in SS_SECRETS:
+        s = SS_SECRETS[str(sid)]
+        if s.get("statut") == "en_jeu":
+            s["statut"] = "validated"
+            s["revele"] = None
+            infos["restaure"] = True
+    ss_reset_session()
+    return infos
 
 # ============================================================
 #  🐾 PETS 2.0 — socle
@@ -29547,6 +30495,11 @@ def save_all_data():
             "migration_state": dict(migration_state),
             "petamitie": dict(petamitie),
             "foyers": dict(foyers),
+            "ss_secrets": dict(SS_SECRETS),
+            "ss_stats": dict(SS_STATS),
+            "ss_config": dict(SS_CONFIG),
+            "ss_seq": dict(SS_SEQ),
+            "ss_session": dict(SS_SESSION),
             "pets_custom": {k: v for k, v in PETS_DB.items() if k.startswith("bebe_")},
             "pins": {k: list(v) for k, v in pins_data.items() if v},
             "welcome_announced": list(welcome_announced),
@@ -29648,6 +30601,11 @@ def load_all_data():
             petamitie.update(data.get("petamitie", {}))
             foyers.clear()
             foyers.update(data.get("foyers", {}))
+            SS_SECRETS.clear(); SS_SECRETS.update(data.get("ss_secrets", {}))
+            SS_STATS.clear();   SS_STATS.update(data.get("ss_stats", {}))
+            SS_CONFIG.update(data.get("ss_config", {}))
+            SS_SEQ.update(data.get("ss_seq", {}))
+            SS_SESSION.clear(); SS_SESSION.update(data.get("ss_session", {}))
             PETS_DB.update(data.get("pets_custom", {}))
             for k, v in data.get("pins", {}).items():
                 pins_data[k] = set(v)
@@ -30100,6 +31058,43 @@ async def on_ready():
             print(f"[Gacha] Migration v{GACHA_CATALOG_MIGRATION_VERSION} déjà appliquée")
     except Exception as e:
         print(f"[Gacha] Migration échouée : {e}")
+    # Secret Story : une manche coupée par un redémarrage est annulée proprement
+    try:
+        _ss = ss_annuler_manche_interrompue()
+        if _ss:
+            if _ss.get("deja_paye"):
+                print("[SS] Session interrompue APRÈS révélation — "
+                      "récompenses déjà versées, aucun rejeu")
+            else:
+                print(f"[SS] Manche interrompue annulée (état {_ss.get('etat')}) · "
+                      f"secret restauré : {_ss.get('restaure')} · aucune récompense versée")
+            save_all_data()
+            # Salon orphelin : on prévient puis on ferme. Aucun crash s'il n'existe plus.
+            _cid = _ss.get("channel_id")
+            if _cid:
+                salons_temporaires.pop(_cid, None)
+                for _g in bot.guilds:
+                    _ch = _g.get_channel(_cid)
+                    if not _ch:
+                        continue
+                    try:
+                        await _ch.send(embed=discord.Embed(
+                            description=("👁️ *L'émission a été interrompue.*\n"
+                                         "La Voix referme temporairement la Maison."),
+                            color=0x2c2f33))
+                    except Exception:
+                        pass
+                    async def _fermer_orphelin(ch=_ch):
+                        try:
+                            await asyncio.sleep(SS_CHANNEL_DELETE_DELAY)
+                            await ch.delete(reason="Secret Story interrompu")
+                        except Exception as ex:
+                            print(f"[SS] salon orphelin : {type(ex).__name__}")
+                    asyncio.create_task(_fermer_orphelin())
+                    break
+    except Exception as e:
+        print(f"[SS] reprise : {type(e).__name__}: {e}")
+
     # Migration des bébés hors de PETS_DB (idempotente)
     try:
         _mb = migrer_bebes_pets()
@@ -30154,6 +31149,8 @@ async def on_ready():
         await _refresh_invite_cache(g)
     check_anniversaires.start()
     scheduler_task.start()
+
+    ss_scheduler.start()
     girls_auto_tasks.start()
     autosave.start()
     anniversaires_pets.start()
