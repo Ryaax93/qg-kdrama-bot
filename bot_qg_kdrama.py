@@ -1432,9 +1432,9 @@ def build_help_pages(guild, is_admin=False):
         "`.giveaway <durée> <lot>` — Lancer un giveaway\n"
         "`.help` — Cette aide"
     ), inline=False)
-    e.add_field(name="🎬 Le Drama Collectif", value=(
-        "`.saison` — Où en est la série écrite par le serveur\n"
-        "`.drama-tropes` — Les 10 histoires possibles"
+    e.add_field(name="📖 La Chronique", value=(
+        "*Une histoire interactive où les choix du serveur changent réellement la suite.*\n"
+        "`.chronique` — Où en est la série, et voter quand un choix s'ouvre"
     ), inline=False)
     e.add_field(name="🌙 Ambiances & rendez-vous", value=(
         "`.nuit` — État du **Mode Nuit** 🌙 *(minuit → 6 h)*\n"
@@ -1474,14 +1474,13 @@ def build_help_pages(guild, is_admin=False):
         "`.announce <message>` — Annonce officielle\n"
         "`.diag` — 🔧 **Diagnostic** : volume, sauvegardes, dernière erreur\n"
         "`.forcegazette` — Publier la gazette immédiatement\n"
-        "`.forcemaj` — Republier l'annonce de mise à jour\n"
-        "`.drama-start` — Lancer une saison *(histoire et casting au hasard)*\n"
-        "`.drama-start <trope>` — Choisir l'histoire · `.drama-start liste` — Les voir toutes\n"
-        "`.drama-start <trope> @a @b` — Choisir aussi le casting\n"
-        "`.drama-cast @a @b` — Changer le casting en cours de saison\n"
-        "`.drama-next` — Dépouiller le vote et publier l'épisode suivant *(quand tu veux)*\n"
-        "`.drama-stop` — Clôturer la saison\n"
-        "`.drama-reset` — Tout remettre à zéro en cas de problème"
+        "`.forcemaj` — Republier l'annonce de mise à jour"
+    ), inline=False)
+    e.add_field(name="📖 Chronique — Régie", value=(
+        "`.chronique` — Ouvrir la régie *(lancer une saison, publier l'épisode "
+        "suivant, fermer les votes, arbitrer une égalité, arrêter)*\n"
+        "`.setsalon chronique #salon` — Définir le salon de publication\n"
+        "-# Tout se pilote depuis les boutons de la régie."
     ), inline=False)
     e.add_field(name="📖 Aide", value=(
         "`.helpadmin` — Cette aide staff  ·  `.help` — L'aide des joueurs"
@@ -1525,7 +1524,7 @@ def build_help_pages(guild, is_admin=False):
     ), inline=False)
     e.add_field(name="🌸 Girls Only", value=(
         "`.setgirlsrole @role` — Définir le rôle filles\n"
-        "`.setgenrerole <homme|femme> @role` — Rôles de genre *(pour le Drama)*\n"
+        "`.setgenrerole <homme|femme> @role` — Rôles de genre du serveur\n"
         "`.girlspanel` — Publier le **bouton d'auto-attribution**\n"
         "`.setsalon girlsonly` — Définir le salon *(publie aussi les commandes dedans)*\n"
         "`.setsalon annonces` — Salon des annonces\n"
@@ -11959,7 +11958,7 @@ async def setgenrerole_cmd(ctx, genre: str = None, role: discord.Role = None):
             description=(f"**Usage :** `.setgenrerole homme @Homme` · `.setgenrerole femme @Femme`\n\n"
                          f"👨 Homme : {rh.mention if rh else '*non configuré*'}\n"
                          f"👩 Femme : {rf.mention if rf else '*non configuré*'}\n\n"
-                         f"*Sert au **Drama Collectif** : le membre casté est associé à un "
+                         f"*Sert à l'ancien casting : le membre est associé à un "
                          f"personnage fictif du genre opposé.*"),
             color=0x3498db))
     if g in ("homme", "h"):
@@ -12305,7 +12304,7 @@ def _drama_valide():
 
 
 class DramaVoteView(ui.View):
-    """Vote du Drama Collectif — persistant, les votes survivent aux redémarrages"""
+    """Vote de l'ancien système — conservé pour compatibilité"""
     def __init__(self, options=None, timeout=None):
         super().__init__(timeout=timeout)
         self.options = options or drama_saison.get("dernier_choix") or ["A", "B", "C"]
@@ -12754,9 +12753,10 @@ async def saison_cmd(ctx):
         apercu = "\n".join(f"{v['trope']} **{v['titre']}**\n└ *« {v['accroche']} »*"
                            for v in list(DRAMA_TROPES.values())[:4])
         return await ctx.send(embed=discord.Embed(
-            title="🎬 Le Drama Collectif",
+            title="📖 La Chronique",
             description=(
-                "**Aucune saison en cours pour l'instant.**\n\n"
+                "**Aucune saison en cours pour l'instant.**\n"
+                "-# Le système actuel est `.chronique`.\n\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
                 "### Le principe\n"
                 "Une romance en **12 épisodes**, avec **deux membres du serveur** comme "
@@ -12828,7 +12828,7 @@ async def saison_cmd(ctx):
 @bot.command(name="drama-reset", aliases=["dramareset"])
 @commands.has_permissions(manage_guild=True)
 async def dramareset_cmd(ctx):
-    """Remet le Drama Collectif à zéro — .drama-reset (staff)"""
+    """Remet l'ancienne saison à zéro — .drama-reset (staff)"""
     drama_saison.update({"titre": None, "episode": 0, "en_cours": False,
                          "casting": {}, "historique": [], "trope_cle": None,
                          "vue": None, "dernier_choix": []})
@@ -12836,7 +12836,7 @@ async def dramareset_cmd(ctx):
     drama_saison.pop("vote_msg", None)
     save_all_data()
     await ctx.send(embed=discord.Embed(
-        description="🔄 Drama Collectif remis à zéro. Tu peux relancer avec `.drama-start`.",
+        description="🔄 Ancienne saison remise à zéro.\n-# Le système actuel est `.chronique`.",
         color=0x2ecc71))
 
 @bot.command(name="drama-tropes", aliases=["dramatropes", "histoires"])
@@ -12845,7 +12845,7 @@ async def dramatropes_cmd(ctx):
     items = list(DRAMA_TROPES.items())
     pages = []
     for i in range(0, len(items), 4):
-        e = discord.Embed(title="🎬 Les histoires du Drama Collectif",
+        e = discord.Embed(title="📖 Les histoires de la Chronique",
                           description="*Chaque trope donne une saison entièrement différente.*",
                           color=0xff6b9d)
         for k, v in items[i:i+4]:
@@ -13761,7 +13761,7 @@ PINS = {
     "pet_max":           ("🐾", "Maître Dresseur",     "Amener un compagnon au niveau 10"),
     "pet_amis":          ("💞", "Sociable",            "5 amitiés entre compagnons"),
     "top_saison":        ("🥇", "Champion de Saison",  "Finir top 3 d'une saison"),
-    "drama_votant":      ("🎬", "Scénariste",          "Voter 10 fois dans le Drama Collectif"),
+    "drama_votant":      ("📖", "Scénariste",          "Voter 10 fois dans la Chronique"),
     "course_win":        ("🏃", "Sprinteur",           "Gagner une Course de Compagnons"),
     "collectionneur":    ("🎴", "Collectionneur",      "Posséder 250 cartes"),
 }
@@ -32660,3 +32660,4 @@ while True:
         traceback.print_exc()
         print("🔄 Redémarrage dans 5 secondes...")
         time.sleep(5)
+e.set_footer(text="Système actuel : .chronique")
