@@ -13101,12 +13101,31 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "5.6.1"
+BOT_VERSION = "5.7.0"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "5.7.0": {
+   "titre": "Faux Couple, réécrit de zéro 📖",
+   "ajouts": [
+     "📖 **FAUX COUPLE entièrement réécrit** — 14 épisodes, 79 scènes, trois fois plus long",
+     "💬 **Des dialogues, pas des résumés** — chaque personnage a sa voix",
+     "📱 **Vrais échanges de messages** intégrés aux épisodes",
+     "🦋 **Vos choix reviennent plus tard** — parfois sept épisodes après",
+     "💌 **9 votes** sur les 14 épisodes, avec de vraies conséquences",
+   ],
+   "correctifs": [
+     "▶️ **La progression est réparée** — l'épisode 1 ne se republie plus en boucle",
+     "🔒 Un épisode déjà publié ne peut plus l'être une seconde fois",
+     "🎬 Les cinq fins sont désormais toutes réellement atteignables",
+   ],
+   "ameliorations": [
+     "🎭 Le casting ne révèle plus les secrets à l'avance — tout se découvre en lisant",
+     "🖱️ Deux clics simultanés ne publient plus deux épisodes",
+   ],
+ },
  "5.6.1": {
    "titre": "Correctifs Chronique 📖",
    "ajouts": [],
@@ -16364,12 +16383,20 @@ async def chro_publier_episode(guild, salon=None):
     salon = salon or chro_salon(guild)
     if not salon:
         return False, "Aucun salon Chronique configuré — `.setsalon chronique #salon`."
-    s, ep = chro_saison(), chro_episode()
-    if not s or not ep:
-        return False, "Aucun épisode à publier."
-    num = CHRONIQUE.get("episode", 1)
-    CHRONIQUE["etat"] = "EPISODE"
-    save_all_data()
+    # ── Verrou : deux clics simultanés ne publient jamais deux épisodes ──
+    async with _CHRO_LOCK:
+        if CHRONIQUE.get("etat") in ("EPISODE", "VOTE", "EGALITE"):
+            return False, "Un épisode est déjà en cours de publication ou en vote."
+        s, ep = chro_saison(), chro_episode()
+        if not s or not ep:
+            return False, "Aucun épisode à publier — la saison est terminée."
+        num = CHRONIQUE.get("episode", 1)
+        # Un épisode déjà publié ne peut jamais l'être une seconde fois
+        if num in (CHRONIQUE.get("publies") or []):
+            return False, f"L'épisode {num} a déjà été publié."
+        CHRONIQUE.setdefault("publies", []).append(num)
+        CHRONIQUE["etat"] = "EPISODE"
+        save_all_data()
 
     # ── Teaser ──
     tete = discord.Embed(
@@ -16398,6 +16425,8 @@ async def chro_publier_episode(guild, salon=None):
 
     # ── Finale ? ──
     if ep.get("finale"):
+        CHRONIQUE["episode"] = num + 1
+        save_all_data()
         return await chro_finale(guild, salon)
 
     # ── Interlude éventuel ──
@@ -16409,6 +16438,8 @@ async def chro_publier_episode(guild, salon=None):
     # ── Choix ──
     choix = ep.get("choix")
     if not choix:
+        # Pas de vote : on passe directement à l'épisode suivant.
+        CHRONIQUE["episode"] = num + 1
         CHRONIQUE["etat"] = "ATTENTE"
         save_all_data()
         try:
@@ -17635,7 +17666,8 @@ class ChroRegieView(ui.View):
                 chro_reset()
                 CHRONIQUE.update({"saison": cle, "episode": 1, "etat": "ATTENTE",
                                   "drapeaux": [], "routes_fermees": [], "historique": [],
-                                  "votes": {}, "debut": time.time(), "salon": salon.id})
+                                  "publies": [], "votes": {},
+                                  "debut": time.time(), "salon": salon.id})
                 save_all_data()
             s = CHRONIQUE_SAISONS[cle]
             await salon.send(embed=discord.Embed(
@@ -21480,524 +21512,986 @@ CHRONIQUE_SAISONS = {}
 CHRONIQUE_SAISONS["faux_couple"] = {
  "titre": "FAUX COUPLE",
  "genre": "💋 Fake Dating",
- "accroche": "Trois mois. Un contrat. Personne ne devait y croire — surtout pas eux.",
+ "accroche": "Trois mois. Un contrat. Personne ne devait y croire.",
  "casting": {
-   "elle":   ("👩", "Yuna", "Vingt-trois ans, deux jobs, aucune patience pour les mensonges. Sauf celui-là."),
-   "seojun": ("🖤", "Seo-jun", "Fils Kang. Poli avec tout le monde, sincère avec personne."),
-   "minjae": ("🤍", "Min-jae", "Ami d'enfance de Yuna. Il attend depuis six ans qu'elle remarque."),
-   "sora":   ("💫", "Sora", "Meilleure amie. Elle sait quelque chose qu'elle ne dit pas."),
-   "haerin": ("🌹", "Hae-rin", "L'ex de Seo-jun. Tout le monde la déteste. Personne ne l'a écoutée."),
-   "kang":   ("👠", "Mme Kang", "La mère. Elle a signé le contrat. Elle a aussi d'autres papiers."),
+   "elle":   ("👩", "Yuna", "Vingt-trois ans, deux boulots, zéro temps libre."),
+   "seojun": ("🖤", "Seo-jun", "Fils Kang. Poli avec tout le monde."),
+   "minjae": ("🤍", "Min-jae", "Ami d'enfance de Yuna. Toujours là, parfois un peu trop."),
+   "sora":   ("💫", "Sora", "Sa coloc. La seule autorisée à lui dire ses quatre vérités."),
+   "haerin": ("🌹", "Hae-rin", "L'ex de Seo-jun. Leur rupture fait encore parler."),
+   "kang":   ("👠", "Mme Kang", "La mère de Seo-jun. Une femme qui obtient ce qu'elle veut."),
  },
  "ending_defaut": "seule",
  "endings": {
   "seojun": {"nom": "💋 Pour de vrai", "route": "seojun",
     "exige": ["confiance_seojun", "verite_partagee", "nuit_hotel"], "poids": 0,
-    "texte": ("Il n'y a pas de grande déclaration. Juste Seo-jun, appuyé contre sa voiture, "
-      "à sept heures du matin, avec deux cafés et l'air de quelqu'un qui n'a pas dormi.\n\n"
-      "« Le contrat s'est terminé hier soir. »\n\n"
-      "« Je sais. »\n\n"
-      "Il lui tend un café. Elle le prend. Leurs doigts se touchent, et cette fois personne "
-      "ne regarde autour pour vérifier qui les voit.\n\n"
-      "« Donc à partir de maintenant, dit-il, tout ce que je fais, c'est parce que j'en ai envie. »\n\n"
-      "Elle boit une gorgée. C'est exactement sa commande. Il ne l'a jamais demandée.\n\n"
-      "« Alors commence par m'emmener quelque part, Kang Seo-jun. »")},
+    "texte": ("Sept heures du matin. Il est appuyé contre sa voiture, deux gobelets à la main, "
+      "avec la tête de quelqu'un qui n'a pas dormi.\n\n"
+      "« Le contrat s'est terminé hier soir à minuit. »\n\n"
+      "« Je sais compter. »\n\n"
+      "Il lui tend un gobelet. Elle le prend. Elle boit avant de regarder.\n\n"
+      "Cannelle.\n\n"
+      "Elle relève les yeux. Il regarde ailleurs, très concentré sur un immeuble "
+      "parfaitement banal.\n\n"
+      "« Clause 4 », dit-elle.\n\n"
+      "« Il n'y a plus de clause 4. »\n\n"
+      "« Alors tu fais quoi, là ? »\n\n"
+      "Il met beaucoup trop de temps à répondre.\n\n"
+      "« J'improvise. »\n\n"
+      "Elle sourit dans son gobelet pour qu'il ne le voie pas. Il le voit quand même.")},
   "minjae": {"nom": "🤍 Celui qui était déjà là", "route": "minjae",
     "exige": ["confiance_minjae", "verite_minjae"], "poids": 0,
-    "texte": ("Min-jae ne dit rien pendant tout le trajet. Il conduit, une main sur le volant, "
-      "l'autre posée entre eux comme il l'a toujours fait.\n\n"
-      "Au feu rouge, il finit par parler.\n\n"
-      "« Je ne t'ai jamais demandé de choisir. »\n\n"
+    "texte": ("Il conduit. Une main sur le volant, l'autre posée entre eux, "
+      "exactement là où elle est depuis six ans.\n\n"
+      "Au feu rouge, il dit :\n\n"
+      "« Je t'ai jamais demandé de choisir. »\n\n"
       "« Je sais. »\n\n"
-      "« C'est peut-être ça, mon problème. »\n\n"
-      "Elle regarde sa main. Six ans qu'elle est là, à cet endroit exact, et elle ne l'avait "
-      "jamais vraiment vue.\n\n"
+      "« C'est peut-être ça mon problème, en fait. »\n\n"
+      "Elle regarde sa main. Elle a toujours été là. Elle ne l'avait jamais *vue*.\n\n"
       "Elle pose la sienne dessus.\n\n"
-      "Le feu passe au vert. Personne ne démarre.")},
+      "Il ne bouge pas. Il ne respire même plus, on dirait.\n\n"
+      "« Min-jae. »\n\n"
+      "« Ouais. »\n\n"
+      "« Le feu est vert. »\n\n"
+      "« Je sais. »\n\n"
+      "Il ne démarre pas.")},
   "verite": {"nom": "🖤 La vérité, mais seule", "route": "verite",
     "exige": ["dossier_ouvert", "confrontation_kang"], "interdit": ["confiance_seojun"], "poids": 1,
-    "texte": ("Elle sort du bâtiment avec le dossier sous le bras. Il pleut. Elle n'a pas de parapluie.\n\n"
-      "Seo-jun est là, sur le trottoir d'en face. Il ne traverse pas.\n\n"
-      "Ils se regardent pendant ce qui ressemble à très longtemps.\n\n"
-      "Puis elle hoche la tête — une fois, doucement — et elle part dans l'autre direction.\n\n"
-      "Elle sait tout, maintenant. Sur son père, sur le contrat, sur ce que Mme Kang a payé "
-      "pour que personne ne pose de questions.\n\n"
-      "Ça a coûté exactement ce que ça devait coûter.")},
+    "texte": ("Elle sort du bâtiment avec quarante pages sous le bras. Il pleut. "
+      "Elle n'a pas de parapluie, évidemment.\n\n"
+      "Seo-jun est sur le trottoir d'en face.\n\n"
+      "Il ne traverse pas. Il attend. Il attendrait probablement longtemps.\n\n"
+      "Elle hoche la tête — une fois, doucement, comme on dit au revoir à quelqu'un "
+      "à qui on n'a plus rien à dire.\n\n"
+      "Puis elle part dans l'autre sens.\n\n"
+      "Dix-neuf ans de mensonge, refermés en une après-midi.\n\n"
+      "Elle a gagné. Elle sait exactement ce que ça lui a coûté.")},
   "secret": {"nom": "🤫 Personne ne saura", "route": "secret",
     "exige": ["relation_cachee", "confiance_seojun"], "interdit": ["verite_partagee"], "poids": 0,
     "texte": ("Officiellement, le contrat s'est terminé. Officiellement, ils ne se voient plus.\n\n"
-      "Officiellement.\n\n"
-      "Sora s'en est aperçue en février. Elle n'a rien dit — elle a juste commencé à laisser "
-      "traîner deux tasses au lieu d'une quand Yuna rentrait tard.\n\n"
-      "Ce n'est pas la vie que Yuna avait imaginée. C'est plus petit, plus silencieux, "
-      "et entièrement à eux.\n\n"
+      "Sora a compris en février. Elle n'a rien dit. Elle a juste commencé à sortir "
+      "deux tasses le matin, sans commentaire, en fixant Yuna avec une intensité insupportable.\n\n"
+      "« Quoi ? »\n\n"
+      "« Rien. »\n\n"
+      "« SORA. »\n\n"
+      "« J'ai rien dit. »\n\n"
       "Un soir, il lui demande si ça lui manque, de pouvoir le dire aux gens.\n\n"
-      "Elle réfléchit vraiment avant de répondre.\n\n"
+      "Elle réfléchit vraiment.\n\n"
       "« Non. »")},
   "seule": {"nom": "🌙 Elle est partie la première", "route": "seule",
     "exige": [], "poids": -1,
-    "texte": ("Le dernier virement arrive un mardi. Le montant exact prévu au contrat, "
-      "au won près.\n\n"
-      "Yuna le regarde longtemps, puis ferme l'application.\n\n"
-      "Elle rend les clés de l'appartement le vendredi. Sora l'aide à porter les cartons "
-      "et ne pose aucune question, ce qui est la chose la plus gentille qu'on ait faite "
-      "pour elle depuis des mois.\n\n"
-      "Seo-jun envoie un message à 23h47. Elle le lit. Elle ne répond pas.\n\n"
-      "Ce n'est pas triste, en fait. C'est juste fini.\n\n"
-      "Et pour la première fois depuis trois mois, personne n'attend rien d'elle.")},
+    "texte": ("Le dernier virement arrive un mardi. Au won près.\n\n"
+      "Elle le regarde longtemps. Puis elle ferme l'application.\n\n"
+      "Sora l'aide à porter les cartons le vendredi et ne pose aucune question, "
+      "ce qui est la chose la plus gentille qu'on ait faite pour elle depuis trois mois.\n\n"
+      "À 23h47, un message.\n\n"
+      "**Seo-jun** — *tu es partie ?*\n\n"
+      "Elle le lit. Elle ne répond pas.\n\n"
+      "Ce n'est pas triste. C'est juste fini.\n\n"
+      "Et pour la première fois depuis longtemps, personne n'attend rien d'elle.")},
  },
  "episodes": [
-  # ─── 1 ───────────────────────────────────────────────
-  {"titre": "Le contrat",
+
+  # ═══ ÉPISODE 1 ═══════════════════════════════════
+  {"titre": "Deux boulots et une mauvaise idée",
    "scenes": [
-    ("Le café ferme à vingt-trois heures. Il est vingt-trois heures dix, et Yuna essuie la même "
-     "table depuis quatre minutes parce que la femme assise en face refuse de partir.\n\n"
-     "« Trois mois », répète Mme Kang.\n\n"
-     "Elle a posé une enveloppe sur la table. Elle ne l'a pas ouverte. Elle n'en a pas besoin — "
-     "l'épaisseur parle toute seule."),
-    ("« Vous voulez que je fasse semblant de sortir avec votre fils. »\n\n"
-     "« Je veux que vous soyez convaincante. C'est différent. »\n\n"
-     "Yuna repose son chiffon. Elle pense au loyer. Elle pense à sa sœur. Elle pense qu'il y a "
-     "trois semaines, elle aurait ri au nez de cette femme.\n\n"
-     "« Pourquoi moi ? »\n\n"
-     "Mme Kang sourit, et c'est la première chose sincère de la soirée.\n\n"
-     "« Parce que personne ne vous croira intéressée par l'argent. »"),
-    ("Elle signe à minuit vingt.\n\n"
-     "Dans la voiture, en rentrant, elle relit la clause 4 : *aucun sentiment réel ne devra "
-     "interférer avec l'exécution du présent accord.*\n\n"
-     "Elle trouve ça ridicule.\n\n"
-     "Elle le trouvera moins ridicule dans onze semaines."),
-   ]},
-  # ─── 2 ───────────────────────────────────────────────
-  {"titre": "Première apparition",
-   "precedemment": "Yuna a signé. Trois mois, à partir de maintenant.",
-   "scenes": [
-    ("Seo-jun est en retard de douze minutes et ne s'excuse pas.\n\n"
-     "« Vous êtes la fille du café. »\n\n"
-     "« Yuna. »\n\n"
+    ("Le café ferme à vingt-trois heures.\n\n"
+     "Il est vingt-trois heures douze et Yuna essuie la même table depuis quatre minutes, "
+     "parce que la femme assise en face ne bouge pas.\n\n"
+     "Manteau clair. Sac posé sur la chaise d'à côté, pas par terre. Elle n'a pas touché "
+     "à son thé."),
+    ("« On ferme, madame. »\n\n"
      "« Je sais. »\n\n"
-     "Il ne la regarde pas en disant ça. Il regarde son téléphone, la porte, le serveur — "
-     "tout sauf elle."),
-    ("Le dîner dure une heure quarante. Ils parlent de la météo, d'un immeuble que son père "
-     "construit à Busan, et d'absolument rien d'autre.\n\n"
-     "Au dessert, une femme s'arrête à leur table pour saluer Mme Kang, qui n'est pas là.\n\n"
-     "La main de Seo-jun se pose sur celle de Yuna. Naturellement. Sans hésiter une seconde.\n\n"
-     "Il rit à quelque chose qu'elle n'a pas dit. La femme repart charmée.\n\n"
-     "Il retire sa main exactement au moment où la porte se referme."),
+     "Yuna attend. La femme ne développe pas.\n\n"
+     "« …Vous voulez autre chose ? »\n\n"
+     "« Je voudrais que vous vous asseyiez. »\n\n"
+     "« Je travaille. »\n\n"
+     "« Vous finissez dans » — elle regarde sa montre — « quatre minutes. Et vous "
+     "enchaînez à six heures au centre de tri. »\n\n"
+     "Yuna arrête d'essuyer."),
+    ("*Deux heures plus tôt.*\n\n"
+     "« Tu peux pas continuer comme ça. »\n\n"
+     "Sora est allongée sur le canapé, la tête en bas, les pieds contre le mur. "
+     "Elle mange des chips dans cette position, ce qui devrait être impossible.\n\n"
+     "« Je gère. »\n\n"
+     "« Tu as dormi quatre heures. »\n\n"
+     "« Cinq. »\n\n"
+     "« Tu t'es endormie dans la douche mardi. »\n\n"
+     "« Ça compte pas comme du sommeil ça. »\n\n"
+     "« JUSTEMENT. »"),
+    ("Sora se redresse d'un coup, ce qui fait tomber les chips.\n\n"
+     "« Yuna. »\n\n"
+     "« Quoi. »\n\n"
+     "« Combien il reste. »\n\n"
+     "Silence.\n\n"
+     "« Combien. »\n\n"
+     "« Quatre mois d'arriérés. Plus l'inscription de Ha-eun. »\n\n"
+     "Sora ne dit rien pendant trois secondes, ce qui chez elle est un record.\n\n"
+     "« Ok. »\n\n"
+     "Puis elle ramasse une chips par terre et la mange, parce que c'est Sora."),
+    ("*Retour au café.*\n\n"
+     "« Trois mois », dit Mme Kang.\n\n"
+     "Elle pose une enveloppe sur la table. Elle ne l'ouvre pas. L'épaisseur suffit.\n\n"
+     "« Vous voulez que je fasse quoi, exactement ? »\n\n"
+     "« Que vous fréquentiez mon fils. »\n\n"
+     "Yuna repose le chiffon.\n\n"
+     "« …Pardon ? »"),
+    ("« Publiquement. Correctement. Pendant douze semaines. »\n\n"
+     "« Vous êtes en train de me proposer de— »\n\n"
+     "« Je vous propose un travail. Le troisième, si je compte bien. Celui-ci paie mieux "
+     "et vous laisse dormir. »\n\n"
+     "« Pourquoi moi ? »\n\n"
+     "Mme Kang sourit. C'est la première chose sincère de la soirée.\n\n"
+     "« Parce que personne ne vous croira intéressée par l'argent. »\n\n"
+     "Yuna encaisse.\n\n"
+     "« C'est censé être un compliment ? »\n\n"
+     "« C'est un constat. »"),
+    ("Il arrive à vingt-trois heures quarante et il ne s'excuse pas.\n\n"
+     "Il retire son manteau, le pose sur le dossier, s'assoit. Il regarde le café, "
+     "les chaises retournées, la serpillière contre le mur.\n\n"
+     "Puis il regarde sa mère.\n\n"
+     "« C'est elle ? »\n\n"
+     "« Kang Seo-jun. »\n\n"
+     "« Je pose une question. »\n\n"
+     "« Et je te réponds : sois poli. »"),
+    ("Il se tourne enfin vers Yuna.\n\n"
+     "« Vous savez ce qu'elle vous demande ? »\n\n"
+     "« De faire semblant. »\n\n"
+     "« De mentir. À des gens qui vont vous prendre en photo. »\n\n"
+     "« C'est la même chose avec des flashs. »\n\n"
+     "Une seconde. Deux.\n\n"
+     "Quelque chose bouge très légèrement au coin de sa bouche, puis disparaît.\n\n"
+     "« Vous avez un travail. »\n\n"
+     "« J'en ai deux. »\n\n"
+     "« Et vous voulez le troisième. »\n\n"
+     "« Je veux dormir. »"),
+    ("Il sort son téléphone, tape quelque chose, le retourne vers elle.\n\n"
+     "Un document. Neuf pages.\n\n"
+     "« Lisez la clause 4. »\n\n"
+     "Elle fait défiler.\n\n"
+     "*4. Aucun sentiment réel ne devra interférer avec l'exécution du présent accord.*\n\n"
+     "Elle relève les yeux.\n\n"
+     "« Vous avez mis ça dans un contrat. »\n\n"
+     "« C'est ma mère qui l'a mise. »\n\n"
+     "« Et vous avez signé. »\n\n"
+     "« Évidemment que j'ai signé. »\n\n"
+     "Il dit ça exactement comme on dit *évidemment que je respire*, et pour la première "
+     "fois de la soirée, Yuna se demande à quoi ressemble sa vie."),
+    ("Mme Kang se lève, remet son manteau, prend son sac.\n\n"
+     "« Réfléchissez jusqu'à demain midi. »\n\n"
+     "Elle est déjà à la porte quand elle ajoute, sans se retourner :\n\n"
+     "« Votre père faisait la même tête quand il calculait. »\n\n"
+     "La porte se referme.\n\n"
+     "Yuna reste debout, le chiffon à la main.\n\n"
+     "Elle n'a jamais parlé de son père."),
+   ],
+   "choix": {"question": "Seo-jun est encore là. Il n'a pas bougé.",
+     "decisif": True,
+     "options": [("demander", "🅰️", "« Comment elle connaît mon père ? »"),
+                 ("signer", "🅱️", "« Où je signe. »"),
+                 ("partir", "🅲", "Prendre son manteau et sortir")],
+     "suites": {
+      "demander": {"pose": ["question_pere", "curiosite"],
+        "texte": ("« Comment elle connaît mon père ? »\n\n"
+          "Seo-jun ne répond pas tout de suite. Il regarde la porte par laquelle "
+          "sa mère vient de sortir.\n\n"
+          "« Ma mère connaît beaucoup de gens. »\n\n"
+          "« C'est pas une réponse. »\n\n"
+          "« Non. »\n\n"
+          "Il se lève, enfile son manteau.\n\n"
+          "« Si vous signez, posez-lui la question vous-même. Elle répond mieux "
+          "aux gens qui ont un contrat. »\n\n"
+          "Il sort.\n\n"
+          "Yuna signe à minuit vingt.")},
+      "signer": {"pose": ["pragmatique"],
+        "texte": ("« Où je signe. »\n\n"
+          "Il la regarde une seconde de trop.\n\n"
+          "« Vous ne demandez rien ? »\n\n"
+          "« Vous répondriez ? »\n\n"
+          "« …Non. »\n\n"
+          "« Voilà. »\n\n"
+          "Il fait défiler jusqu'à la dernière page et lui tend le téléphone.\n\n"
+          "Elle signe avec l'index. La signature est horrible.\n\n"
+          "« C'est censé ressembler à quoi, ça ? »\n\n"
+          "« À quelqu'un qui a fait douze heures debout. »")},
+      "partir": {"pose": ["fierte"], "ferme": ["secret"],
+        "texte": ("Elle attrape son manteau et sort sans un mot.\n\n"
+          "Elle marche quatre cents mètres avant de s'arrêter net au milieu du trottoir.\n\n"
+          "Puis elle fait demi-tour.\n\n"
+          "Il est encore là, assis à la même table, dans un café éteint.\n\n"
+          "Il ne dit pas *je savais que vous reviendriez*. Il ne dit rien du tout.\n\n"
+          "Il pousse simplement le téléphone vers elle.\n\n"
+          "C'est peut-être ce qu'elle déteste le plus.")}}}},
+
+  # ═══ ÉPISODE 2 ═══════════════════════════════════
+  {"titre": "Douze semaines",
+   "precedemment": "Yuna a signé. Le contrat court à partir de maintenant.",
+   "scenes": [
+    ("« TU AS FAIT QUOI ? »\n\n"
+     "« Chut. »\n\n"
+     "« NON JE CHUTE PAS. »\n\n"
+     "Sora fait trois fois le tour de la table basse. Elle s'arrête. Elle repart.\n\n"
+     "« Tu as signé un CONTRAT. Avec la mère de KANG SEO-JUN. À MINUIT. Dans un CAFÉ. »\n\n"
+     "« Dit comme ça— »\n\n"
+     "« Il y a pas d'autre façon de le dire ! »"),
+    ("Elle finit par s'asseoir sur l'accoudoir, ce qui est sa position de négociation.\n\n"
+     "« Combien. »\n\n"
+     "Yuna lui montre le montant.\n\n"
+     "Sora regarde l'écran. Elle regarde Yuna. Elle regarde l'écran.\n\n"
+     "« Bon. »\n\n"
+     "« Bon ? »\n\n"
+     "« J'ai des principes mais j'ai aussi des yeux. »"),
+    ("Le premier dîner est un lundi, dans un endroit où le pain coûte le prix "
+     "d'une heure de travail.\n\n"
+     "Il est en retard de neuf minutes.\n\n"
+     "« Vous êtes toujours en retard ? »\n\n"
+     "« Vous allez toujours compter ? »\n\n"
+     "« Oui. »\n\n"
+     "« Alors on va très bien s'entendre. »"),
+    ("Le repas dure une heure quarante.\n\n"
+     "Ils parlent de la météo. D'un chantier à Busan. D'une exposition qu'aucun des deux "
+     "n'a vue.\n\n"
+     "À un moment, Yuna se surprend à compter les secondes entre deux phrases.\n\n"
+     "Vingt-deux. Puis dix-neuf. Puis trente et une."),
+    ("Une femme s'arrête à leur table.\n\n"
+     "« Seo-jun ! Ta mère m'a dit— »\n\n"
+     "La main de Seo-jun se pose sur celle de Yuna.\n\n"
+     "Naturellement. Sans hésiter. Sans la regarder.\n\n"
+     "Il rit à quelque chose que Yuna n'a pas dit. Il l'appelle par son prénom deux fois "
+     "en trente secondes. Il incline la tête vers elle d'exactement quinze degrés.\n\n"
+     "La femme repart charmée.\n\n"
+     "Il retire sa main au moment précis où elle passe la porte."),
+    ("« C'était quoi, ça ? »\n\n"
+     "« Le travail. »\n\n"
+     "« Vous étiez— »\n\n"
+     "Elle cherche le mot.\n\n"
+     "« Convaincant ? »\n\n"
+     "« Flippant. »\n\n"
+     "Il boit une gorgée d'eau.\n\n"
+     "« On me le dit souvent. »"),
     ("Dans le hall, il lui tend une enveloppe.\n\n"
      "« Vos frais du mois. »\n\n"
-     "« Vous auriez pu virer ça. »\n\n"
+     "« Vous pouvez pas virer ça comme tout le monde ? »\n\n"
      "« Ma mère préfère le papier. »\n\n"
-     "Il part sans dire au revoir. Yuna reste avec l'enveloppe dans les mains, "
-     "au milieu d'un hall en marbre, à vingt-deux heures un mardi."),
+     "« Pourquoi ? »\n\n"
+     "« Parce que le papier, ça ne laisse pas de trace bancaire. »\n\n"
+     "Il dit ça très simplement, en enfilant ses gants, comme un détail météo.\n\n"
+     "Puis il part."),
+    ("Elle rentre à pied. Trente-cinq minutes, parce que le bus était passé.\n\n"
+     "Sora est réveillée.\n\n"
+     "« Alors ? »\n\n"
+     "« Il est— »\n\n"
+     "Yuna cherche encore.\n\n"
+     "« Poli. »\n\n"
+     "« C'est le pire truc que tu pouvais dire sur quelqu'un. »\n\n"
+     "« Je sais. »"),
    ],
-   "choix": {"question": "L'enveloppe. Qu'est-ce qu'elle en fait ?",
+   "choix": {"question": "L'enveloppe est encore dans son sac.",
      "decisif": True,
-     "options": [("garder", "🅰️", "L'ouvrir et compter"),
+     "options": [("compter", "🅰️", "L'ouvrir et compter"),
                  ("cacher", "🅱️", "La cacher dans le tiroir sans l'ouvrir"),
-                 ("rendre", "🅲", "La lui renvoyer")],
+                 ("rendre", "🅲", "La déposer à l'accueil des Kang demain")],
      "suites": {
-      "garder": {"pose": ["compte_argent"],
-        "texte": ("Elle compte deux fois. Le montant est plus élevé que prévu.\n\n"
-          "Elle range les billets, garde l'enveloppe vide, et ne se demande pas pourquoi.")},
+      "compter": {"pose": ["compte_argent"],
+        "texte": ("Elle compte deux fois.\n\n"
+          "C'est plus que prévu. Nettement plus.\n\n"
+          "Elle range les billets. Elle garde l'enveloppe vide et ne se demande pas "
+          "pourquoi.\n\n"
+          "Le lendemain, elle paie quatre mois d'arriérés en une fois. "
+          "La dame de l'agence la félicite.\n\n"
+          "Yuna sourit et a envie de vomir.")},
       "cacher": {"pose": ["enveloppe_tiroir"],
-        "texte": ("Elle ouvre le tiroir du bas, celui qui coince, et la glisse au fond "
-          "sous les vieux papiers.\n\n"
-          "Elle referme. Elle n'y repensera pas avant longtemps.")},
+        "texte": ("Le tiroir du bas coince. Il a toujours coincé.\n\n"
+          "Elle glisse l'enveloppe au fond, sous les vieux papiers, et pousse "
+          "jusqu'à ce que ça bloque à un centimètre de la fermeture.\n\n"
+          "Elle n'y repensera pas avant longtemps.")},
       "rendre": {"pose": ["fierte"], "ferme": ["secret"],
-        "texte": ("Elle la dépose à la réception de l'immeuble Kang le lendemain matin, "
-          "sans mot, sans explication.\n\n"
-          "Il l'appelle à quinze heures. C'est la première fois qu'elle entend sa voix "
-          "sans son masque poli.\n\n"
-          "« Vous êtes sérieuse ? »\n\n"
-          "« Très. »\n\n"
-          "Il raccroche. Elle sourit toute l'après-midi.")}}},
-   "interlude": {"type": "instagram", "compte": "@seojun.k",
-     "texte": "Photo d'un plafond de restaurant. Rien d'autre dans le cadre.\n\n« long. »",
-     "likes": 3402, "detail": "Hae-rin a aimé cette publication."}},
-  # ─── 3 ───────────────────────────────────────────────
-  {"titre": "Ce que Sora sait",
+        "texte": ("Elle la dépose à l'accueil de la tour Kang à huit heures du matin, "
+          "sans un mot, et repart avant qu'on lui pose une question.\n\n"
+          "Il appelle à quinze heures.\n\n"
+          "« C'est une blague ? »\n\n"
+          "« Non. »\n\n"
+          "« Tu réalises que ma mère va— »\n\n"
+          "« Je réalise très bien. »\n\n"
+          "Silence.\n\n"
+          "« …Ok. »\n\n"
+          "Il raccroche.\n\n"
+          "C'est la première fois qu'il dit *ok* comme quelqu'un de normal.")}}},
+   "interlude": {"type": "sms", "heure": "01:47",
+     "lignes": [("Min-jae", "t'étais où ce soir"),
+                ("Min-jae", "je suis passé au café t'y étais pas"),
+                ("Min-jae", "ok"),
+                ("_système_", "Yuna a lu à 01:52. Elle n'a pas répondu.")]}},
+
+  # ═══ ÉPISODE 3 ═══════════════════════════════════
+  {"titre": "La cannelle",
    "scenes": [
-    ("« Tu sors avec Kang Seo-jun. »\n\n"
-     "Sora n'a pas posé une question. Elle a posé son téléphone, écran vers le haut, "
-     "avec une photo d'eux deux au restaurant. Prise de loin. Par quelqu'un d'autre.\n\n"
-     "« C'est compliqué. »\n\n"
-     "« C'est toujours compliqué avec eux. »\n\n"
-     "*Eux.* Le pluriel reste en suspens."),
-    ("Plus tard, dans la cuisine, Sora dit une chose bizarre.\n\n"
-     "« Fais juste attention à sa mère. »\n\n"
-     "« Tu la connais ? »\n\n"
-     "Sora ouvre le frigo, regarde à l'intérieur pendant trop longtemps, et le referme "
-     "sans rien prendre.\n\n"
-     "« Ma cousine a travaillé pour eux. »\n\n"
-     "Elle ne dit pas ce qui est arrivé à sa cousine."),
-    {"si": "enveloppe_tiroir", "texte":
-     ("Cette nuit-là, Yuna rêve du tiroir du bas.\n\n"
-      "Elle se réveille à quatre heures, va vérifier qu'il est bien fermé, et se recouche "
-      "en se trouvant complètement ridicule.")},
-   ]},
-  # ─── 4 ───────────────────────────────────────────────
-  {"titre": "Min-jae",
-   "scenes": [
-    ("Il l'attend devant chez elle avec deux sachets de ramyeon et un air qu'elle connaît "
-     "depuis le lycée.\n\n"
-     "« Tu ne réponds plus. »\n\n"
-     "« J'ai été occupée. »\n\n"
-     "« Avec Kang Seo-jun. »\n\n"
-     "Il le dit sans reproche, ce qui est infiniment pire."),
-    ("Ils mangent assis sur les marches parce que l'ascenseur est en panne et qu'aucun des "
-     "deux n'a envie de monter six étages.\n\n"
-     "Il lui vole un morceau d'œuf. Elle lui donne un coup de coude. Il rit, et pendant "
-     "trente secondes tout est exactement comme avant.\n\n"
-     "Puis il dit :\n\n"
-     "« Tu es heureuse ? »\n\n"
-     "Et elle met une seconde de trop à répondre."),
+    ("Deuxième semaine. Sixième apparition publique.\n\n"
+     "Une inauguration. Trop de monde, trop de lumière, et des chaussures que Yuna "
+     "a empruntées à Sora et qui font exactement une demi-pointure de trop."),
+    ("« Vous boitez. »\n\n"
+     "« Non. »\n\n"
+     "« Vous boitez depuis le troisième couloir. »\n\n"
+     "« Je boite pas. »\n\n"
+     "Il s'arrête. Il regarde ses pieds. Il regarde son visage.\n\n"
+     "« Attendez ici. »\n\n"
+     "« Quoi— Seo-jun. Seo-jun. »\n\n"
+     "Il est déjà parti."),
+    ("Il revient six minutes plus tard avec deux pansements et un gobelet.\n\n"
+     "« Assis. »\n\n"
+     "« Je vais pas m'asseoir par terre dans une— »\n\n"
+     "« Assis. »\n\n"
+     "Elle s'assoit sur une marche, dans une robe empruntée, entre deux plantes vertes.\n\n"
+     "Il ne s'agenouille pas — il lui tend les pansements et détourne le regard.\n\n"
+     "C'est étrangement plus délicat que s'il l'avait fait lui-même."),
+    ("Elle boit une gorgée sans regarder.\n\n"
+     "Puis elle s'arrête.\n\n"
+     "« Vous avez demandé quoi, exactement ? »\n\n"
+     "« Un café. »\n\n"
+     "« Il y a de la cannelle dedans. »\n\n"
+     "« Il y avait un pot à côté de la machine. »\n\n"
+     "« …Et ? »\n\n"
+     "« Et vous en mettez. Au café. Le matin. J'ai vu le pot sur votre comptoir. »\n\n"
+     "Il regarde toujours ailleurs.\n\n"
+     "« C'est bizarre, d'ailleurs. »\n\n"
+     "« C'est PAS bizarre. »\n\n"
+     "« C'est un peu bizarre. »"),
+    ("Plus tard, dans la voiture, elle réalise deux choses.\n\n"
+     "La première, c'est qu'elle a parlé de son pot de cannelle une seule fois, "
+     "il y a onze jours, en passant, à quelqu'un d'autre.\n\n"
+     "La deuxième, c'est qu'il n'était même pas censé écouter."),
+    ("Le lendemain, Sora la fixe au-dessus de son bol.\n\n"
+     "« Quoi. »\n\n"
+     "« Rien. »\n\n"
+     "« Sora. »\n\n"
+     "« J'ai rien dit. »\n\n"
+     "« Tu me regardes depuis huit minutes. »\n\n"
+     "« Je peux pas regarder ma coloc ? »\n\n"
+     "« Pas comme ça. »\n\n"
+     "Sora repose son bol.\n\n"
+     "« Tu as souri en racontant l'histoire des pansements. »\n\n"
+     "« C'était une histoire drôle. »\n\n"
+     "« Mmh. »"),
    ],
-   "choix": {"question": "Min-jae attend la réponse.",
-     "options": [("verite_mj", "🅰️", "Lui dire la vérité sur le contrat"),
-                 ("mentir_mj", "🅱️", "Mentir : « Oui, je suis heureuse »"),
-                 ("esquiver", "🅲", "Changer de sujet")],
+   "choix": {"question": "Min-jae appelle. Troisième fois cette semaine.",
+     "options": [("repondre", "🅰️", "Répondre et tout lui dire"),
+                 ("mentir", "🅱️", "Répondre et inventer quelque chose"),
+                 ("ignorer", "🅲", "Laisser sonner")],
      "suites": {
-      "verite_mj": {"pose": ["verite_minjae", "confiance_minjae"], "ferme": ["secret"],
+      "repondre": {"pose": ["verite_minjae", "confiance_minjae"], "ferme": ["secret"],
         "texte": ("Elle lui raconte tout. Le café, l'enveloppe, la clause 4.\n\n"
-          "Min-jae écoute jusqu'au bout sans l'interrompre une seule fois.\n\n"
-          "Puis : « D'accord. Qu'est-ce que je peux faire ? »\n\n"
-          "Pas *pourquoi tu as fait ça*. Pas *tu es folle*.\n\n"
-          "Elle se met à pleurer sur les marches d'un immeuble, avec un sachet de ramyeon "
-          "froid sur les genoux, et elle ne sait pas exactement pourquoi.")},
-      "mentir_mj": {"pose": ["mensonge_minjae"],
-        "texte": ("« Oui. »\n\n"
-          "Il hoche la tête. Il finit son ramyeon. Il rentre chez lui.\n\n"
-          "Il ne la croit pas. Elle le sait. Il sait qu'elle le sait.\n\n"
-          "Aucun des deux ne dit rien.")},
-      "esquiver": {"pose": ["distance_minjae"],
-        "texte": ("« Tu as vu qu'ils rouvrent le marché de nuit ? »\n\n"
-          "Min-jae la regarde une seconde de trop.\n\n"
-          "« Ouais. J'ai vu. »\n\n"
-          "Il part vingt minutes plus tôt que d'habitude.")}}}},
-  # ─── 5 ───────────────────────────────────────────────
-  {"titre": "Le sweat",
-   "precedemment": None,
+          "Min-jae écoute sans l'interrompre. Pas une fois.\n\n"
+          "Puis :\n\n"
+          "« D'accord. Qu'est-ce que je peux faire ? »\n\n"
+          "Pas *pourquoi t'as fait ça*. Pas *t'es folle*.\n\n"
+          "Yuna s'assoit par terre dans le couloir, le téléphone contre l'oreille, "
+          "et met une seconde de trop à répondre.\n\n"
+          "« Rien. Juste… reste. »\n\n"
+          "« Ok. »")},
+      "mentir": {"pose": ["mensonge_minjae"],
+        "texte": ("« Je bosse. Nouveau boulot. Horaires bizarres. »\n\n"
+          "« Ah. »\n\n"
+          "« Ouais. »\n\n"
+          "« Cool. »\n\n"
+          "Silence.\n\n"
+          "« Yuna. »\n\n"
+          "« Mmh ? »\n\n"
+          "« T'es dans la merde ? »\n\n"
+          "« Non. »\n\n"
+          "« Ok. »\n\n"
+          "Il raccroche le premier. Il ne raccroche jamais le premier.")},
+      "ignorer": {"pose": ["distance_minjae"],
+        "texte": ("Elle regarde le téléphone vibrer jusqu'à ce qu'il s'arrête.\n\n"
+          "Trois minutes plus tard :\n\n"
+          "**Min-jae** — *ok*\n\n"
+          "Rien d'autre.\n\n"
+          "Elle fixe ces deux lettres beaucoup trop longtemps.")}}}},
+
+  # ═══ ÉPISODE 4 ═══════════════════════════════════
+  {"titre": "Ramyeon",
    "scenes": [
-    ("L'événement caritatif dure quatre heures. Yuna porte des chaussures qui la tuent "
-     "et un sourire qui la tue davantage.\n\n"
-     "Seo-jun la présente à quarante personnes. Il retient tous les prénoms. Il ne se trompe "
-     "jamais sur le sien.\n\n"
-     "À un moment, entre deux conversations, il lui glisse : « Encore vingt minutes. »\n\n"
-     "Ce n'est pas de la gentillesse. C'est de la logistique.\n\n"
-     "Ça lui fait quand même quelque chose."),
-    ("Sur le parking, il fait quatre degrés. Elle a oublié son manteau à l'intérieur "
-     "et refuse d'y retourner.\n\n"
-     "Il retire son sweat et le lui tend sans commentaire.\n\n"
-     "« Vous allez avoir froid. »\n\n"
-     "« Je conduis. »\n\n"
-     "Ce n'est pas une réponse. Elle le prend quand même."),
-    ("Dans la voiture, elle remarque qu'il a mémorisé son café.\n\n"
-     "Il y en a un dans le porte-gobelet. Chaud. Sa commande exacte, y compris "
-     "le détail ridicule qu'elle ajoute toujours et dont elle a honte.\n\n"
-     "Elle ne dit rien.\n\n"
-     "Il ne dit rien non plus.\n\n"
-     "La radio joue une chanson que personne n'éteint."),
-   ],
-   "interlude": {"type": "sms", "heure": "02:41",
-     "lignes": [("Min-jae", "t'es rentrée ?"), ("Min-jae", "ok laisse tomber"),
-                ("_système_", "Message supprimé.")]}},
-  # ─── 6 ───────────────────────────────────────────────
+    ("Il l'attend en bas de son immeuble à vingt-trois heures, assis sur le capot "
+     "de sa voiture avec deux sachets de ramyeon.\n\n"
+     "« L'ascenseur est encore en panne. »\n\n"
+     "« Je sais. Je suis monté. Puis je suis redescendu. »\n\n"
+     "« Pourquoi ? »\n\n"
+     "« Parce que t'étais pas là et que j'ai eu l'air d'un idiot devant ta porte. »"),
+    ("Ils mangent assis sur les marches du hall.\n\n"
+     "Min-jae lui vole un morceau d'œuf. Elle lui donne un coup de coude. Il fait "
+     "semblant d'être blessé et manque de renverser son bol.\n\n"
+     "Pendant quatre minutes, tout est exactement comme depuis toujours."),
+    ("« Tu te rappelles quand t'as vomi dans le bus scolaire. »\n\n"
+     "« On avait DIX ANS. »\n\n"
+     "« Sur les chaussures de Min-seo. »\n\n"
+     "« MIN-JAE. »\n\n"
+     "« Elle a changé d'école le mois d'après. Je dis ça, je dis rien. »\n\n"
+     "Elle lui met un coup de pied. Il rit tellement qu'il s'étouffe à moitié."),
+    ("Puis il pose son bol.\n\n"
+     "« Il y a une photo de toi. »\n\n"
+     "« …Quoi ? »\n\n"
+     "Il lui tend son téléphone.\n\n"
+     "Elle et Seo-jun, à l'inauguration. Elle est assise sur une marche. "
+     "Il est debout à côté, la tête tournée.\n\n"
+     "Le cliché est mauvais. L'angle ne l'est pas."),
+    ("« C'est pas ce que tu crois. »\n\n"
+     "« Je crois rien. »\n\n"
+     "« Min-jae. »\n\n"
+     "« Non, vraiment. Je te connais depuis qu'on a six ans. Si tu fais un truc, "
+     "y a une raison. »\n\n"
+     "Il ramasse les bols.\n\n"
+     "« Je préférerais juste l'apprendre par toi. »"),
+    ("Il remonte les marches deux par deux et s'arrête à mi-hauteur.\n\n"
+     "« Ah. La cannelle. »\n\n"
+     "« Quoi la cannelle ? »\n\n"
+     "« T'en avais plus. J'en ai mis un pot dans ton placard mardi. »\n\n"
+     "Il continue de monter sans attendre de réponse.\n\n"
+     "Yuna reste sur les marches un moment."),
+    ("*Plus tard cette nuit-là.*\n\n"
+     "**Seo-jun** — *tu dors ?*\n\n"
+     "**Yuna** — *oui*\n\n"
+     "**Seo-jun** — *…*\n\n"
+     "**Yuna** — *réfléchis deux secondes à ta question*\n\n"
+     "**Seo-jun** — *le gala est déplacé à jeudi*\n\n"
+     "**Yuna** — *tu pouvais dire ça demain*\n\n"
+     "**Seo-jun** — *oui*\n\n"
+     "*Seo-jun est en train d'écrire…*\n\n"
+     "*Seo-jun est en train d'écrire…*\n\n"
+     "**Seo-jun** — *bonne nuit yuna*"),
+   ]},
+
+  # ═══ ÉPISODE 5 ═══════════════════════════════════
   {"titre": "Hae-rin",
    "scenes": [
-    ("Elle l'attend à la sortie du café. Yuna la reconnaît avant même qu'elle parle — "
-     "on lui a montré assez de photos.\n\n"
-     "« Vous avez cinq minutes ? »\n\n"
-     "Hae-rin ne ressemble pas du tout à ce qu'on raconte. Elle a l'air fatiguée."),
-    ("« Je ne suis pas là pour faire une scène. »\n\n"
-     "Elle sort son téléphone, fait défiler, et le pose sur la table.\n\n"
-     "C'est un virement. De Mme Kang. Daté d'il y a deux ans.\n\n"
-     "« Elle m'a payée aussi. »\n\n"
-     "Yuna ne dit rien pendant un long moment.\n\n"
-     "« Pourquoi vous me racontez ça ? »\n\n"
-     "« Parce que moi, personne ne m'a prévenue. »"),
+    ("Elle l'attend à la sortie du café, appuyée contre un poteau, "
+     "avec un gobelet dans chaque main.\n\n"
+     "Yuna la reconnaît avant qu'elle parle. Tout le monde reconnaîtrait Hae-rin.\n\n"
+     "« J'en ai pris un pour vous. »\n\n"
+     "« Je vous connais pas. »\n\n"
+     "« Non. Mais moi je sais qui vous êtes, et ça vous met déjà en position de faiblesse, "
+     "alors autant que vous ayez un café. »"),
+    ("Elles s'assoient sur un banc parce que Yuna refuse d'entrer quelque part.\n\n"
+     "« Je vais pas faire une scène. »\n\n"
+     "« Bien. »\n\n"
+     "« Je vais pas non plus vous dire de le quitter. »\n\n"
+     "« …Bien ? »\n\n"
+     "« Je vais juste vous montrer un truc et repartir, et vous allez passer "
+     "une très mauvaise semaine. »\n\n"
+     "Elle sourit en le disant. Ce n'est pas méchant. C'est presque désolé."),
+    ("Elle fait défiler son téléphone et le pose sur le banc.\n\n"
+     "Un virement. Le nom de Mme Kang. Il y a deux ans.\n\n"
+     "Yuna regarde le montant.\n\n"
+     "C'est presque exactement le sien."),
+    ("« Elle vous a payée. »\n\n"
+     "« Elle m'a payée pour partir. Vous, c'est pour rester. Je trouve ça plus vicieux, "
+     "personnellement. »\n\n"
+     "« Pourquoi vous me montrez ça ? »\n\n"
+     "Hae-rin met du temps à répondre.\n\n"
+     "« Parce que moi, personne m'a prévenue. »\n\n"
+     "Elle se lève, récupère son gobelet vide.\n\n"
+     "« Et parce que j'aimais bien Seo-jun. Ça aussi, personne m'a crue. »"),
+    ("Elle fait trois pas puis se retourne.\n\n"
+     "« Demandez-lui pour février. »\n\n"
+     "« Février quoi ? »\n\n"
+     "« Demandez-lui, c'est tout. »\n\n"
+     "Puis elle part vraiment."),
+    ("Sora écoute toute l'histoire sans manger, ce qui n'arrive jamais.\n\n"
+     "« Elle a dit février ? »\n\n"
+     "« Ouais. »\n\n"
+     "« Février de cette année ? »\n\n"
+     "« Elle a pas précisé. Pourquoi ? »\n\n"
+     "Sora hausse les épaules un peu trop vite et se lève chercher de l'eau "
+     "qu'elle avait déjà sur la table."),
    ],
-   "choix": {"question": "Que fait Yuna de cette information ?",
+   "choix": {"question": "Qu'est-ce que Yuna fait de cette information ?",
      "decisif": True,
-     "options": [("confronter", "🅰️", "En parler directement à Seo-jun"),
-                 ("garder", "🅱️", "Ne rien dire et observer"),
-                 ("kang", "🅲", "Aller voir Mme Kang")],
+     "options": [("confronter", "🅰️", "Aller voir Seo-jun ce soir"),
+                 ("observer", "🅱️", "Ne rien dire et surveiller"),
+                 ("kang", "🅲", "Aller voir Mme Kang directement")],
      "suites": {
       "confronter": {"pose": ["verite_partagee", "confiance_seojun"],
-        "texte": ("Elle lui montre la capture le soir même.\n\n"
-          "Il la regarde longtemps. Puis il s'assoit, ce qu'il ne fait jamais en premier.\n\n"
-          "« Je ne savais pas pour Hae-rin. »\n\n"
-          "« Je te crois. »\n\n"
-          "Elle réalise en le disant que c'est vrai.")},
-      "garder": {"pose": ["soupcon", "relation_cachee"],
-        "texte": ("Elle range la capture d'écran dans un dossier sans nom.\n\n"
-          "Pendant les deux semaines qui suivent, elle observe. La façon dont il répond "
-          "au téléphone quand c'est sa mère. La seconde d'hésitation avant certaines phrases.\n\n"
+        "texte": ("Elle lui montre la capture à vingt-trois heures dans un parking.\n\n"
+          "Il la regarde longtemps. Puis il s'assoit sur le muret, ce qu'il ne fait jamais "
+          "en premier.\n\n"
+          "« Je savais pas pour Hae-rin. »\n\n"
+          "« Tu savais quoi, alors ? »\n\n"
+          "« Qu'elle était partie très vite. Et que ma mère avait l'air soulagée. »\n\n"
+          "Il passe une main sur son visage.\n\n"
+          "« J'ai jamais fait le lien. Ou j'ai pas voulu. »\n\n"
+          "Yuna s'assoit à côté de lui. Elle ne l'avait jamais vu comme ça — "
+          "sans posture, sans quinze degrés d'inclinaison.\n\n"
+          "« Elle a dit de te demander pour février. »\n\n"
+          "Il ne répond pas.")},
+      "observer": {"pose": ["soupcon", "relation_cachee"],
+        "texte": ("Elle ne dit rien.\n\n"
+          "Pendant deux semaines, elle regarde. La façon dont il répond au téléphone "
+          "quand c'est sa mère. La seconde d'arrêt avant certaines phrases. "
+          "Le fait qu'il ne parle jamais de février.\n\n"
           "Elle ne trouve rien.\n\n"
-          "Ce qui ne veut pas dire qu'il n'y a rien.")},
+          "Ce qui n'est pas du tout la même chose que : il n'y a rien.")},
       "kang": {"pose": ["confrontation_kang", "dossier_ouvert"], "ferme": ["secret"],
-        "texte": ("Mme Kang la reçoit sans rendez-vous, ce qui est en soi une réponse.\n\n"
+        "texte": ("Mme Kang la reçoit sans rendez-vous, ce qui est déjà une réponse.\n\n"
           "« Hae-rin est venue vous voir. »\n\n"
           "Ce n'est pas une question.\n\n"
-          "« Elle a été payée. Comme moi. »\n\n"
-          "« Elle a été payée pour partir. Vous, pour rester. Ce n'est pas le même contrat. »\n\n"
-          "Elle sert le thé. Sa main ne tremble pas du tout.\n\n"
-          "« Asseyez-vous, Yuna. Il y a des choses que vous devriez savoir sur votre père. »")}}}},
-  # ─── 7 ───────────────────────────────────────────────
-  {"titre": "La soirée où tout a dérapé",
+          "« Vous l'avez payée. »\n\n"
+          "« J'ai payé beaucoup de gens, Yuna. C'est mon métier. »\n\n"
+          "Elle sert le thé. Sa main est parfaitement stable.\n\n"
+          "« Asseyez-vous. Puisque vous êtes là, autant qu'on parle de votre père. »\n\n"
+          "Yuna ne s'assoit pas.\n\n"
+          "« Comment ça, mon père. »\n\n"
+          "« Asseyez-vous, je vous en prie. C'est une longue histoire et vous "
+          "travaillez à six heures. »")}}}},
+
+  # ═══ ÉPISODE 6 ═══════════════════════════════════
+  {"titre": "Le sweat",
    "scenes": [
-    ("Il pleut depuis quatre heures et l'hôtel est complet à cause du congrès.\n\n"
-     "Une chambre. Deux personnes. Un contrat qui ne prévoit absolument pas ce cas de figure.\n\n"
-     "« Je prends le canapé », dit-il avant qu'elle ait ouvert la bouche."),
-    ("À une heure du matin, ils sont toujours réveillés tous les deux et font semblant "
-     "de ne pas le savoir.\n\n"
-     "C'est lui qui craque en premier.\n\n"
-     "« Tu dors ? »\n\n"
+    ("Le gala dure quatre heures.\n\n"
+     "Yuna sourit à quarante-trois personnes. Elle en compte trente-huit avant "
+     "de perdre le fil."),
+    ("« Encore vingt minutes. »\n\n"
+     "Il dit ça sans la regarder, entre deux poignées de main, à peine plus fort "
+     "qu'un souffle.\n\n"
+     "Ce n'est pas de la gentillesse. C'est de la logistique.\n\n"
+     "Ça lui fait quelque chose quand même."),
+    ("Sur le parking, il fait quatre degrés. Elle a laissé son manteau au vestiaire "
+     "et refuse catégoriquement d'y retourner.\n\n"
+     "« Pourquoi ? »\n\n"
+     "« Parce que la dame du vestiaire m'a appelée *mademoiselle Kang* et que "
+     "j'ai pas eu le courage de corriger. »\n\n"
+     "Il s'arrête net au milieu du parking.\n\n"
+     "Puis il rit.\n\n"
+     "Vraiment. Une seconde entière, la tête un peu en arrière.\n\n"
+     "C'est la première fois."),
+    ("Il retire son sweat et le lui tend.\n\n"
+     "« Tu vas avoir froid. »\n\n"
+     "« Je conduis. »\n\n"
+     "« C'est pas une réponse. »\n\n"
      "« Non. »\n\n"
-     "« Ma mère t'a dit quoi, exactement, le premier soir ? »"),
-    ("Ils parlent jusqu'à quatre heures.\n\n"
-     "Il lui raconte l'internat, le divorce, la fois où il a raté un vol exprès pour rester "
-     "trois jours de plus quelque part où personne ne le connaissait.\n\n"
-     "Elle lui raconte sa sœur, les deux jobs, la honte du détail dans son café.\n\n"
-     "À un moment, elle s'endort au milieu d'une phrase.\n\n"
-     "Il ne la réveille pas. Il éteint la lampe et reste assis dans le noir encore un moment."),
+     "Elle le prend."),
+    ("Dans la voiture, il y a un gobelet dans le porte-gobelet.\n\n"
+     "Elle ne dit rien.\n\n"
+     "Il ne dit rien non plus.\n\n"
+     "Elle boit. Cannelle.\n\n"
+     "La radio joue quelque chose que personne n'éteint pendant vingt-deux minutes."),
+    ("Devant chez elle, il coupe le moteur alors qu'il n'était pas obligé.\n\n"
+     "« Yuna. »\n\n"
+     "« Mmh. »\n\n"
+     "« Février. »\n\n"
+     "Elle se redresse d'un coup.\n\n"
+     "« Mon père est mort en février. »\n\n"
+     "Silence.\n\n"
+     "« Je travaillais. Tous les jours. Personne l'a su à part Chef— à part deux personnes. »\n\n"
+     "Il regarde droit devant.\n\n"
+     "« Voilà. C'est tout. C'est ça, février. »"),
+    ("Elle ne sait pas quoi dire, alors elle ne dit rien pendant longtemps.\n\n"
+     "Puis :\n\n"
+     "« Tu veux monter ? Il y a du ramyeon. »\n\n"
+     "« …C'est une très mauvaise idée. »\n\n"
+     "« Oui. »\n\n"
+     "Il coupe les phares."),
    ],
-   "choix": {"question": "Au matin, il est déjà debout près de la porte.",
+   "interlude": {"type": "instagram", "compte": "@seojun.k",
+     "texte": "Photo d'un plafond. Rien d'autre dans le cadre.\n\n« longue soirée. »",
+     "likes": 4108, "detail": "Hae-rin a aimé cette publication. Min-jae aussi."}},
+
+  # ═══ ÉPISODE 7 ═══════════════════════════════════
+  {"titre": "Une seule chambre",
+   "scenes": [
+    ("Il pleut depuis quatre heures et le congrès a vidé tous les hôtels de la ville.\n\n"
+     "Une chambre. Deux personnes. Un contrat de neuf pages qui n'a absolument pas "
+     "prévu ce cas de figure."),
+    ("« Je prends le canapé. »\n\n"
+     "« Il fait un mètre quarante. »\n\n"
+     "« J'ai dormi dans pire. »\n\n"
+     "« Où ça ? »\n\n"
+     "Il ne répond pas, ce qui est en train de devenir une habitude "
+     "extrêmement agaçante."),
+    ("À une heure du matin, ils sont réveillés tous les deux et font semblant "
+     "de l'ignorer.\n\n"
+     "C'est lui qui craque.\n\n"
+     "« Tu dors ? »\n\n"
+     "« Tu vas vraiment recommencer avec ça. »\n\n"
+     "« …Oui. »\n\n"
+     "Elle se retourne vers le canapé dans le noir."),
+    ("Il parle d'abord de choses sans importance.\n\n"
+     "L'internat à onze ans. La première fois qu'il a raté un avion exprès pour rester "
+     "trois jours dans une ville où personne ne le connaissait. Le fait qu'il déteste "
+     "les huîtres et que sa mère en commande à chaque dîner depuis quinze ans "
+     "parce qu'elle a décidé un jour qu'il aimait ça."),
+    ("Elle parle de sa sœur. Des deux boulots. De la fois où elle s'est endormie "
+     "debout dans le métro et où une dame l'a réveillée à son arrêt "
+     "en lui disant *courage*.\n\n"
+     "« Et la cannelle ? »\n\n"
+     "« Quoi la cannelle. »\n\n"
+     "« Pourquoi. »\n\n"
+     "Long silence.\n\n"
+     "« C'est mon père qui faisait ça. »\n\n"
+     "Elle entend le canapé grincer. Il s'est redressé."),
+    ("Elle s'endort au milieu d'une phrase, vers quatre heures.\n\n"
+     "Il ne la réveille pas. Il éteint la lampe.\n\n"
+     "Il reste assis dans le noir encore un moment."),
+   ],
+   "choix": {"question": "Au matin, il est déjà debout près de la porte, manteau sur le bras.",
      "decisif": True,
-     "options": [("embrasser", "🅰️", "L'embrasser avant qu'il parte"),
-                 ("demander", "🅱️", "Lui demander qui est vraiment Hae-rin"),
-                 ("rien", "🅲", "Faire comme si la nuit n'avait pas existé")],
+     "options": [("embrasser", "🅰️", "Traverser la chambre et l'embrasser"),
+                 ("demander", "🅱️", "« Reste. Cinq minutes. »"),
+                 ("rien", "🅲", "Fermer les yeux et attendre qu'il parte")],
      "suites": {
       "embrasser": {"pose": ["nuit_hotel", "confiance_seojun"], "ferme": ["minjae"],
         "texte": ("Elle traverse la chambre pieds nus et l'embrasse avant d'avoir décidé "
           "qu'elle allait le faire.\n\n"
-          "Il ne recule pas.\n\n"
-          "Quand elle s'écarte, il a l'air de quelqu'un à qui on vient de casser quelque chose "
-          "d'important et qui n'arrive pas à en être en colère.\n\n"
+          "Il ne recule pas. Il ne bouge pas non plus, pendant une seconde entière.\n\n"
+          "Puis il lâche son manteau.\n\n"
+          "Quand elle s'écarte, il a la tête de quelqu'un à qui on vient de casser "
+          "quelque chose d'important et qui n'arrive pas à s'en plaindre.\n\n"
           "« Clause 4 », murmure-t-il.\n\n"
-          "« Attaque-moi en justice. »")},
+          "« Attaque-moi. »\n\n"
+          "« Je vais y réfléchir. »")},
       "demander": {"pose": ["nuit_hotel", "verite_partagee"],
-        "texte": ("« Qui est Hae-rin, vraiment ? »\n\n"
+        "texte": ("« Reste. Cinq minutes. »\n\n"
           "Il s'arrête, la main sur la poignée.\n\n"
-          "« Quelqu'un que ma mère a fait disparaître de ma vie en dix-sept jours. »\n\n"
-          "Il sort.\n\n"
-          "Il n'a pas fermé la porte derrière lui, et Yuna reste à la regarder très longtemps.")},
+          "Puis il revient s'asseoir sur le bord du lit, manteau toujours sur le bras, "
+          "comme quelqu'un qui négocie avec lui-même.\n\n"
+          "Ils ne parlent pas. Pas une fois.\n\n"
+          "Au bout de onze minutes, il se lève.\n\n"
+          "« Je dois y aller. »\n\n"
+          "« Je sais. »\n\n"
+          "À la porte : « Yuna. »\n\n"
+          "« Mmh ? »\n\n"
+          "« Rien. »\n\n"
+          "Il sort.")},
       "rien": {"pose": ["distance_seojun"],
-        "texte": ("Elle referme les yeux et attend d'entendre la porte.\n\n"
-          "Il reste immobile un moment — assez longtemps pour qu'elle se demande s'il sait "
-          "qu'elle ne dort pas.\n\n"
-          "Puis il part.\n\n"
-          "Le café sur la table de nuit est encore chaud.")}}}},
-  # ─── 8 ───────────────────────────────────────────────
+        "texte": ("Elle ferme les yeux et attend.\n\n"
+          "Il reste immobile un long moment — assez pour qu'elle se demande "
+          "s'il sait qu'elle ne dort pas.\n\n"
+          "Puis la porte.\n\n"
+          "Le gobelet sur la table de nuit est encore chaud.")}}}},
+
+  # ═══ ÉPISODE 8 ═══════════════════════════════════
   {"titre": "Ce qu'elle n'entend pas",
    "scenes": [
-    ("*Pendant qu'elle dort.*\n\n"
-     "Seo-jun est dans le couloir de l'hôtel avec son téléphone contre l'oreille.\n\n"
+    ("*Couloir du huitième étage. 06h14.*\n\n"
      "« Non. »\n\n"
      "…\n\n"
      "« J'ai dit non, maman. »"),
-    ("« Elle ne doit jamais apprendre pourquoi son père est parti. Tu comprends ce que "
-     "ça déclencherait. »\n\n"
-     "Un long silence.\n\n"
+    ("« Elle ne doit pas apprendre pourquoi son père est parti. Tu comprends "
+     "ce que ça déclencherait ? »\n\n"
+     "« Je comprends surtout que tu as payé pour que personne ne le sache. »\n\n"
+     "« J'ai payé pour que ta famille existe encore aujourd'hui. »\n\n"
+     "Long silence.\n\n"
      "« Et si elle l'apprend toute seule ? »\n\n"
-     "« Alors tu auras trois mois d'avance pour décider de quel côté tu es. »\n\n"
-     "Il raccroche. Il supprime l'appel de son journal.\n\n"
-     "Dans la chambre, Yuna dort encore."),
-    ("*Vous savez. Elle non.*"),
+     "« Alors tu auras eu trois mois d'avance pour décider de quel côté tu es. »"),
+    ("Il raccroche.\n\n"
+     "Il supprime l'appel du journal — geste rapide, machinal, celui de quelqu'un "
+     "qui l'a déjà fait.\n\n"
+     "Puis il reste dans le couloir, le front contre le mur, "
+     "pendant un temps qu'il ne compte pas."),
+    ("Dans la chambre, Yuna dort encore.\n\n"
+     "*Vous savez.*\n\n"
+     "*Elle non.*"),
+    ("*Le même matin, ailleurs.*\n\n"
+     "Sora est assise sur son lit avec une boîte à chaussures ouverte "
+     "sur les genoux.\n\n"
+     "Dedans : des papiers. Une photo. Un bracelet.\n\n"
+     "Elle referme la boîte. Elle la remet en haut de l'armoire.\n\n"
+     "Puis elle va faire du café comme tous les matins."),
    ],
-   "interlude": {"type": "instagram", "compte": "@sora_",
-     "texte": "Une photo d'un vieux bracelet posé sur une table.\n\n« retrouvé en rangeant 🥲 »",
-     "likes": 89, "detail": "Hae-rin porte le même sur une photo de l'épisode 6."}},
-  # ─── 9 ───────────────────────────────────────────────
+   "interlude": {"type": "instagram", "compte": "@sora.__",
+     "texte": "Photo d'un bracelet posé sur une table.\n\n« rangement de printemps 🥲 »",
+     "likes": 74, "detail": "Hae-rin porte le même sur une photo publiée en février."}},
+
+  # ═══ ÉPISODE 9 ═══════════════════════════════════
   {"titre": "Le tiroir",
    "scenes": [
+    ("Mme Kang n'était pas censée venir.\n\n"
+     "Elle est là quand Yuna rentre, assise dans le salon, avec Sora debout "
+     "dans la cuisine qui articule silencieusement *JE SAIS PAS* par-dessus son épaule."),
     {"si": "enveloppe_tiroir", "texte":
-     ("Mme Kang n'était pas censée venir.\n\n"
-      "Elle est là quand Yuna rentre, assise dans le salon, avec Sora qui lui a ouvert "
-      "et qui n'a pas su dire non.\n\n"
-      "« Votre chambre est jolie. »\n\n"
+     ("« Votre chambre est jolie. »\n\n"
       "Yuna se fige.\n\n"
-      "Le tiroir du bas est entrouvert. L'enveloppe dépasse d'un centimètre.\n\n"
+      "La porte de sa chambre est ouverte. Le tiroir du bas — celui qui coince, "
+      "celui qu'on ne referme jamais complètement — dépasse d'un centimètre.\n\n"
+      "L'enveloppe est visible.\n\n"
       "*Celle-là.*\n\n"
       "🦋 *Votre décision de l'épisode 2 vient de vous rattraper.*")},
+    {"si": "question_pere", "texte":
+     ("« Vous avez posé des questions sur votre père. »\n\n"
+      "Yuna ne bouge pas.\n\n"
+      "« À mon fils. Au café. Le premier soir. »\n\n"
+      "Elle sourit.\n\n"
+      "« Vous voyez, c'est exactement ce que je craignais. »\n\n"
+      "🦋 *Votre décision de l'épisode 1 vient de vous rattraper.*")},
     {"sauf": "enveloppe_tiroir", "texte":
-     ("Mme Kang n'était pas censée venir.\n\n"
-      "Elle est là quand Yuna rentre, assise dans le salon, avec Sora qui lui a ouvert "
-      "et qui n'a pas su dire non.\n\n"
-      "« Vous rangez bien », dit-elle en balayant la pièce du regard.\n\n"
-      "Elle ne trouve rien. Ça ne l'empêche pas de sourire.")},
+     ("« Vous rangez bien. »\n\n"
+      "Elle balaie la pièce du regard. Elle ne trouve rien.\n\n"
+      "Ça ne l'empêche pas d'avoir l'air satisfaite.")},
     ("« Le contrat se termine dans cinq semaines. »\n\n"
      "« Je sais compter. »\n\n"
-     "« Alors comptez aussi ceci : mon fils n'a jamais rompu un accord de sa vie. "
-     "Pas un seul. »\n\n"
-     "Elle se lève, remet son manteau, et s'arrête à la porte.\n\n"
-     "« Ce serait dommage que vous soyez la première chose qu'il perde. »"),
-   ]},
-  # ─── 10 ──────────────────────────────────────────────
+     "« Vous le dites souvent. »\n\n"
+     "Elle repose sa tasse.\n\n"
+     "« Alors comptez ceci : mon fils n'a jamais rompu un accord de sa vie. Pas un seul. "
+     "Même quand ça lui coûtait quelque chose. Surtout quand ça lui coûtait quelque chose. »"),
+    ("Elle se lève, remet son manteau.\n\n"
+     "À la porte :\n\n"
+     "« Ce serait dommage que vous soyez la première chose qu'il perde. »\n\n"
+     "La porte se ferme.\n\n"
+     "Sora sort de la cuisine avec deux tasses.\n\n"
+     "« Bon. »\n\n"
+     "« Sora. »\n\n"
+     "« Je sais. »\n\n"
+     "« Sora, tu connais Hae-rin ? »\n\n"
+     "Sora repose les tasses un peu trop lentement."),
+   ],
+   "choix": {"question": "Sora n'a pas répondu.",
+     "options": [("insister", "🅰️", "Insister maintenant"),
+                 ("attendre", "🅱️", "Laisser passer et observer"),
+                 ("fouiller", "🅲", "Chercher toute seule plus tard")],
+     "suites": {
+      "insister": {"pose": ["sora_avoue", "verite_sora"],
+        "texte": ("« Sora. »\n\n"
+          "« Ma cousine a travaillé pour eux. »\n\n"
+          "« …Et ? »\n\n"
+          "« Et elle a signé un truc. Et après elle a plus eu le droit d'en parler. »\n\n"
+          "Sora s'assoit. Elle a l'air fatiguée d'un coup.\n\n"
+          "« Je voulais te le dire. Le premier soir. Puis t'avais l'air tellement soulagée "
+          "d'avoir de l'argent que j'ai— »\n\n"
+          "Elle s'arrête.\n\n"
+          "« Désolée. »")},
+      "attendre": {"pose": ["soupcon_sora"],
+        "texte": ("« Laisse tomber. »\n\n"
+          "Sora hoche la tête un peu trop vite et va faire la vaisselle "
+          "qui était déjà faite.\n\n"
+          "Yuna la regarde frotter la même assiette pendant deux minutes.")},
+      "fouiller": {"pose": ["dossier_ouvert", "trahison_sora"], "ferme": ["secret"],
+        "texte": ("Elle attend que Sora sorte.\n\n"
+          "La boîte est en haut de l'armoire. Elle n'était même pas cachée, "
+          "au fond — juste rangée.\n\n"
+          "Des papiers. Une photo. Un bracelet.\n\n"
+          "Sur le premier document, un nom qu'elle connaît.\n\n"
+          "Le sien.")}}}},
+
+  # ═══ ÉPISODE 10 ══════════════════════════════════
   {"titre": "La photo",
    "scenes": [
-    ("La photo sort un jeudi matin.\n\n"
-     "Eux deux, dans le hall de l'hôtel, à six heures du matin. L'angle est mauvais. "
-     "L'intention ne l'est pas.\n\n"
+    ("La photo sort un jeudi à sept heures du matin.\n\n"
+     "Eux deux, dans le hall d'un hôtel, à six heures.\n\n"
      "En trois heures, elle est partout."),
-    ("« Ce n'est pas Hae-rin », dit Seo-jun au téléphone. « Elle n'était pas à Séoul. »\n\n"
-     "« Comment tu le sais ? »\n\n"
-     "« Parce que je lui ai demandé. »\n\n"
-     "Yuna repense à l'épisode du café. À la fatigue sur son visage.\n\n"
-     "Puis elle repense à Sora, qui savait pour l'hôtel avant tout le monde."),
+    ("**Seo-jun** — *c'est pas hae-rin*\n\n"
+     "**Yuna** — *comment tu sais*\n\n"
+     "**Seo-jun** — *je lui ai demandé*\n\n"
+     "**Yuna** — *tu lui as DEMANDÉ ?*\n\n"
+     "**Seo-jun** — *oui*\n\n"
+     "**Seo-jun** — *elle a répondu « encore moi ? vraiment ? » et elle m'a bloqué*\n\n"
+     "**Yuna** — *…ok*"),
+    ("Le hall de l'hôtel a une caméra. La réception garde quinze jours.\n\n"
+     "Il en reste trois."),
    ],
    "choix": {"question": "🔎 Qui a envoyé cette photo ?",
+     "decisif": True,
      "options": [("acc_sora", "🅰️", "Sora"),
                  ("acc_haerin", "🅱️", "Hae-rin"),
-                 ("acc_kang", "🅲", "Mme Kang elle-même")],
+                 ("acc_kang", "🅲", "Quelqu'un envoyé par Mme Kang")],
      "suites": {
       "acc_sora": {"pose": ["accuse_sora"],
-        "texte": ("Yuna pose la question directement.\n\n"
-          "Sora ne nie pas. Elle ne confirme pas non plus.\n\n"
-          "« Tu crois vraiment que je te ferais ça ? »\n\n"
-          "« Je ne sais plus ce que je crois. »\n\n"
-          "Sora prend son manteau et sort. Elle ne rentre pas dormir ce soir-là.")},
+        "texte": ("Yuna pose la question en face.\n\n"
+          "Sora ne nie pas tout de suite. C'est ça, le pire.\n\n"
+          "« Tu crois vraiment que je te ferais ça. »\n\n"
+          "« Je sais plus ce que je crois. »\n\n"
+          "Sora prend son manteau.\n\n"
+          "« Ok. »\n\n"
+          "Elle ne rentre pas dormir.")},
       "acc_haerin": {"pose": ["accuse_haerin"],
-        "texte": ("Hae-rin répond en trois mots.\n\n"
-          "« Encore moi ? Vraiment ? »\n\n"
-          "Puis elle bloque le numéro.\n\n"
+        "texte": ("Trois mots en réponse.\n\n"
+          "**Hae-rin** — *encore moi ? vraiment ?*\n\n"
+          "Puis le numéro est bloqué.\n\n"
           "Yuna reste avec l'écran allumé dans le noir, et l'impression très nette "
           "d'avoir fait exactement ce qu'on attendait d'elle.")},
       "acc_kang": {"pose": ["soupcon_kang", "dossier_ouvert"],
-        "texte": ("Elle ne l'accuse pas. Elle vérifie.\n\n"
-          "L'hôtel a une caméra dans le hall. La réception garde les enregistrements "
-          "quinze jours. Il en reste trois.\n\n"
-          "Sur la vidéo, à 05h52, une femme en manteau clair traverse le hall "
-          "et lève son téléphone.\n\n"
+        "texte": ("Elle demande à voir la vidéo.\n\n"
+          "05h52. Une femme en manteau clair traverse le hall et lève son téléphone.\n\n"
           "Ce n'est pas Mme Kang.\n\n"
-          "C'est son assistante.")}}}},
-  # ─── 11 ──────────────────────────────────────────────
-  {"titre": "Le dossier",
+          "C'est la femme qui lui sert le thé.")}}}},
+
+  # ═══ ÉPISODE 11 ══════════════════════════════════
+  {"titre": "Quarante pages",
    "scenes": [
     {"si": "dossier_ouvert", "texte":
-     ("Le dossier fait quarante pages. Yuna en lit six avant de devoir s'arrêter.\n\n"
+     ("Le dossier fait quarante pages. Elle en lit six avant de devoir s'asseoir "
+      "par terre, dos contre le lit.\n\n"
       "Son père n'est pas parti.\n\n"
-      "Il a été payé pour partir. Par le groupe Kang. Il y a dix-neuf ans, "
-      "après un accident sur un chantier dont personne n'a jamais entendu parler.\n\n"
+      "Il a été payé pour partir. Il y a dix-neuf ans. Après un accident sur un chantier "
+      "dont personne n'a jamais entendu parler.\n\n"
       "Le nom sur l'ordre de virement est celui de Mme Kang.\n\n"
       "La signature en dessous est celle de son père.")},
     {"sauf": "dossier_ouvert", "texte":
-     ("C'est Sora qui le lui donne, dans une enveloppe kraft, sans un mot.\n\n"
-      "« Ma cousine l'a gardé pendant six ans. »\n\n"
-      "Yuna l'ouvre dans la cuisine, debout, et lit les six premières pages "
-      "avant de devoir s'asseoir.\n\n"
+     ("C'est Sora qui le lui donne. Enveloppe kraft, posée sur la table, sans un mot.\n\n"
+      "« Ma cousine l'a gardé six ans. »\n\n"
+      "Yuna l'ouvre debout dans la cuisine et lit six pages avant de devoir s'asseoir.\n\n"
       "Son père n'est pas parti. Il a été payé pour partir.")},
-    ("Seo-jun arrive à vingt-trois heures parce qu'elle a écrit trois mots et raccroché.\n\n"
+    ("Elle écrit trois mots à Seo-jun et éteint son téléphone.\n\n"
+     "Il est là quarante minutes plus tard.\n\n"
      "Il voit le dossier sur la table.\n\n"
-     "Il ne demande pas ce que c'est.\n\n"
-     "*Il sait.*"),
+     "Il ne demande pas ce que c'est."),
+    ("« Depuis quand. »\n\n"
+     "« L'hôtel. »\n\n"
+     "Neuf jours.\n\n"
+     "« Neuf jours. »\n\n"
+     "« Oui. »\n\n"
+     "« Tu m'as apporté un CAFÉ. »\n\n"
+     "« Oui. »\n\n"
+     "Il ne se défend pas. C'est encore pire."),
    ],
-   "choix": {"question": "Il est là, debout dans l'entrée. Il n'a pas enlevé son manteau.",
+   "choix": {"question": "Il est debout dans l'entrée. Il n'a pas enlevé son manteau.",
      "decisif": True,
-     "options": [("pardon", "🅰️", "« Depuis quand tu le sais ? »"),
-                 ("dehors", "🅱️", "Lui dire de partir"),
-                 ("ensemble", "🅲", "« Aide-moi à comprendre »")],
+     "options": [("pardon", "🅰️", "« Pourquoi tu n'as rien dit ? »"),
+                 ("dehors", "🅱️", "« Sors de chez moi. »"),
+                 ("ensemble", "🅲", "« Assieds-toi. Aide-moi à comprendre. »")],
      "suites": {
-      "pardon": {"pose": ["verite_partagee"],
-        "texte": ("« Depuis l'hôtel. »\n\n"
-          "Neuf jours. Il a su pendant neuf jours.\n\n"
-          "« Pourquoi tu n'as rien dit ? »\n\n"
-          "« Parce que je cherchais une façon de te le dire qui ne te ferait pas partir. »\n\n"
-          "Il n'en a pas trouvé. Il est venu quand même.")},
+      "pardon": {"pose": ["pardon_accorde"],
+        "texte": ("« Pourquoi tu n'as rien dit ? »\n\n"
+          "« Parce que je cherchais une façon de te le dire qui te ferait pas partir. »\n\n"
+          "« Et tu l'as trouvée ? »\n\n"
+          "« Non. »\n\n"
+          "Il est venu quand même.\n\n"
+          "Elle regarde ses mains. Il n'a pas retiré son manteau parce qu'il "
+          "s'attendait à ressortir.")},
       "dehors": {"pose": ["rupture"], "ferme": ["seojun", "secret"],
         "texte": ("« Sors de chez moi. »\n\n"
-          "Il ne discute pas. Il ne plaide pas. Il hoche la tête une fois et il s'en va, "
-          "et c'est peut-être ça le pire.\n\n"
+          "Il ne plaide pas. Il ne discute pas. Il hoche la tête une fois.\n\n"
+          "« Ok. »\n\n"
+          "Et c'est peut-être ça le pire — qu'il parte aussi proprement.\n\n"
           "Elle entend la porte de l'immeuble claquer six étages plus bas.\n\n"
           "Puis plus rien pendant très longtemps.")},
       "ensemble": {"pose": ["verite_partagee", "confiance_seojun", "confrontation_kang"],
         "texte": ("« Assieds-toi. Aide-moi à comprendre. »\n\n"
           "Il enlève son manteau.\n\n"
-          "Ils restent à cette table jusqu'à cinq heures du matin, avec quarante pages "
+          "Ils restent à cette table jusqu'à cinq heures, avec quarante pages "
           "étalées entre eux, à reconstituer dix-neuf ans.\n\n"
-          "Au lever du jour, il dit :\n\n"
+          "Vers quatre heures, il fait du café. Il met de la cannelle sans demander.\n\n"
+          "Au lever du jour :\n\n"
           "« Si on va au bout, je perds ma famille. »\n\n"
           "« Je sais. »\n\n"
-          "« Je n'ai pas dit que je ne voulais pas. »")}}}},
-  # ─── 12 ──────────────────────────────────────────────
-  {"titre": "Cinq semaines",
+          "« J'ai pas dit que je voulais pas. »")}}}},
+
+  # ═══ ÉPISODE 12 ══════════════════════════════════
+  {"titre": "Cinq jours",
    "scenes": [
-    ("Le contrat se termine dans cinq jours, et personne n'en parle.\n\n"
-     "Ils continuent les dîners. Les photos. Les mains posées au bon moment.\n\n"
-     "Sauf que maintenant, quand la porte se referme, aucun des deux ne retire sa main "
-     "tout de suite."),
+    ("Le contrat se termine vendredi et personne n'en parle.\n\n"
+     "Ils continuent. Les dîners. Les photos. Les mains posées au bon moment.\n\n"
+     "Sauf que maintenant, quand la porte se referme, aucun des deux ne retire "
+     "sa main tout de suite."),
     {"si": "verite_minjae", "texte":
-     ("Min-jae passe le mercredi. Il apporte du ramyeon, par habitude.\n\n"
-      "« Tu vas faire quoi, vendredi ? »\n\n"
-      "« Je ne sais pas. »\n\n"
+     ("Min-jae passe le mercredi. Ramyeon, par habitude.\n\n"
+      "« Tu fais quoi vendredi. »\n\n"
+      "« Je sais pas. »\n\n"
       "« Menteuse. »\n\n"
-      "Il sourit en le disant. C'est un vrai sourire, et ça lui coûte visiblement quelque chose.\n\n"
-      "« Vas-y. Je te récupérerai si ça se passe mal. Comme toujours. »")},
+      "Il sourit en le disant, et ça lui coûte visiblement quelque chose.\n\n"
+      "« Vas-y. Je te récupère si ça se passe mal. Comme toujours. »\n\n"
+      "« Min-jae— »\n\n"
+      "« Mange ton œuf. »")},
     {"si": "mensonge_minjae", "texte":
      ("Min-jae ne passe pas.\n\n"
       "Il n'a pas répondu depuis onze jours.\n\n"
-      "Yuna commence trois messages. Elle n'en envoie aucun.")},
+      "Elle commence trois messages. Elle n'en envoie aucun.\n\n"
+      "Le quatrième, elle l'envoie.\n\n"
+      "**Yuna** — *je suis désolée*\n\n"
+      "**Min-jae** — *ok*")},
+    {"si": "sora_avoue", "texte":
+     ("Sora fait des pâtes à minuit, ce qui chez elle signifie qu'elle veut parler.\n\n"
+      "« J'ai appelé ma cousine. »\n\n"
+      "« Et ? »\n\n"
+      "« Elle témoignera. Si tu vas au bout. »\n\n"
+      "Elle remue les pâtes trop longtemps.\n\n"
+      "« Je te devais bien ça. »")},
+    ("Jeudi soir, il l'appelle à vingt-trois heures pour lui dire qu'il n'a rien "
+     "à lui dire.\n\n"
+     "Ils restent en ligne trente-cinq minutes.\n\n"
+     "Ils parlent des huîtres, de sa sœur, d'un immeuble à Busan, "
+     "et de rien du tout.\n\n"
+     "🦋 *Ce que vous avez décidé à l'hôtel décide aussi de ce coup de fil.*"),
    ]},
-  # ─── 13 ──────────────────────────────────────────────
+
+  # ═══ ÉPISODE 13 ══════════════════════════════════
   {"titre": "Vendredi",
    "scenes": [
-    ("Le dernier soir du contrat, Mme Kang organise un dîner. Évidemment.\n\n"
-     "Trente personnes. Un discours. Une annonce de fiançailles prévue au dessert "
-     "dont Yuna n'a été informée par personne."),
+    ("Mme Kang a organisé un dîner. Évidemment.\n\n"
+     "Trente personnes. Un discours prévu au dessert.\n\n"
+     "Et une annonce de fiançailles dont Yuna n'a été informée par personne."),
     ("Elle l'apprend en entendant le traiteur en parler dans le couloir.\n\n"
-     "Elle reste dix minutes dans les toilettes du deuxième étage à respirer.\n\n"
-     "Quand elle ressort, Seo-jun est appuyé contre le mur d'en face.\n\n"
-     "« Tu es au courant depuis quand ? »\n\n"
-     "« Quatre minutes de plus que toi. »"),
+     "Elle passe dix minutes dans les toilettes du deuxième à respirer "
+     "en comptant les carreaux."),
+    ("Quand elle ressort, Seo-jun est appuyé contre le mur d'en face.\n\n"
+     "« Tu sais depuis quand. »\n\n"
+     "« Quatre minutes de plus que toi. »\n\n"
+     "« Menteur. »\n\n"
+     "« …Six. »"),
+    ("Il regarde l'escalier. Puis elle. Puis l'escalier.\n\n"
+     "« Il y a une sortie de service au bout du couloir. »\n\n"
+     "« Tu me proposes de fuir ? »\n\n"
+     "« Je te donne une information. »\n\n"
+     "En bas, trente personnes attendent le dessert."),
    ],
-   "choix": {"question": "En bas, trente personnes attendent le dessert.",
+   "choix": {"question": "Le traiteur vient de passer avec le plateau.",
      "decisif": True,
-     "options": [("partir", "🅰️", "Partir maintenant, tous les deux"),
-                 ("verite_publique", "🅱️", "Descendre et dire la vérité devant tout le monde"),
+     "options": [("partir", "🅰️", "Sortir par l'escalier de service, tous les deux"),
+                 ("verite_publique", "🅱️", "Descendre et tout dire devant tout le monde"),
                  ("jouer", "🅲", "Descendre et jouer le rôle une dernière fois")],
      "suites": {
-      "partir": {"pose": ["fuite_ensemble", "confiance_seojun"],
+      "partir": {"pose": ["fuite_ensemble", "confiance_seojun", "il_a_choisi"],
         "texte": ("Ils sortent par l'escalier de service.\n\n"
-          "Personne ne les voit partir. La voiture démarre au moment exact où le traiteur "
-          "entre en salle avec le dessert.\n\n"
-          "Ils roulent une heure sans destination.\n\n"
+          "La voiture démarre exactement quand le traiteur entre en salle.\n\n"
+          "Ils roulent une heure sans destination. À un moment elle rit toute seule "
+          "et il demande pourquoi et elle répond *rien* et il n'insiste pas.\n\n"
           "« On va où ? »\n\n"
           "« Aucune idée. »\n\n"
-          "C'est la première décision qu'aucun contrat n'a prévue.")},
-      "verite_publique": {"pose": ["verite_publique", "confrontation_kang", "dossier_ouvert"],
+          "C'est la première chose qu'aucun contrat n'avait prévue.")},
+      "verite_publique": {"pose": ["verite_publique", "confrontation_kang",
+                                   "dossier_ouvert", "il_a_choisi"],
         "ferme": ["secret"],
         "texte": ("Elle prend le micro avant le discours.\n\n"
-          "Elle parle quatre minutes. Elle ne pleure pas. Elle ne crie pas.\n\n"
-          "Elle dit le contrat, les trois mois, le montant exact. Puis elle dit le nom "
-          "de son père et la date du virement.\n\n"
-          "À la fin, il y a un silence absolu dans une salle de trente personnes.\n\n"
-          "Puis Seo-jun se lève, traverse la pièce, et vient se placer à côté d'elle.\n\n"
-          "Il ne dit rien. Il n'a pas besoin.")},
+          "Elle parle quatre minutes. Elle ne pleure pas. Elle ne crie pas. "
+          "Elle a la voix de quelqu'un qui a répété dans des toilettes.\n\n"
+          "Le contrat. Les douze semaines. Le montant exact.\n\n"
+          "Puis le nom de son père et la date du virement.\n\n"
+          "Silence absolu dans une salle de trente personnes.\n\n"
+          "Puis une chaise racle le sol.\n\n"
+          "Seo-jun traverse la pièce et vient se placer à côté d'elle.\n\n"
+          "Il ne dit rien. Il n'en a pas besoin.")},
       "jouer": {"pose": ["derniere_scene"],
         "texte": ("Elle descend. Elle sourit. Elle joue.\n\n"
-          "C'est la meilleure performance des trois mois — tout le monde le remarque, "
-          "personne ne comprend pourquoi.\n\n"
-          "Au dessert, Mme Kang se lève pour son annonce.\n\n"
-          "Seo-jun lui coupe la parole.\n\n"
-          "« Le contrat s'achève ce soir. Merci d'être venus. »\n\n"
-          "Il pose sa serviette et il sort.")}}}},
-  # ─── 14 — FINALE ─────────────────────────────────────
+          "C'est la meilleure performance des douze semaines. Tout le monde le remarque. "
+          "Personne ne comprend pourquoi.\n\n"
+          "Au dessert, Mme Kang se lève.\n\n"
+          "Seo-jun se lève une seconde avant elle.\n\n"
+          "« Le contrat s'achève ce soir à minuit. Merci d'être venus. »\n\n"
+          "Il pose sa serviette et il sort.\n\n"
+          "Trente personnes regardent Yuna.\n\n"
+          "Elle repose sa fourchette et elle sort aussi.")}}}},
+
+  # ═══ ÉPISODE 14 — FINALE ═════════════════════════
   {"titre": "Cette fois, pour de vrai",
    "finale": True,
    "scenes": [
     ("Le contrat a expiré à minuit.\n\n"
-     "Il n'y a plus de clause 4. Plus de montant mensuel. Plus de raison de se voir.\n\n"
+     "Plus de clause 4. Plus de virement mensuel. Plus une seule raison "
+     "de se croiser.\n\n"
      "C'est exactement ce qui rend la suite terrifiante."),
+    ("Yuna dort quatre heures et se réveille à six heures par habitude, "
+     "pour un travail qu'elle n'a plus.\n\n"
+     "Elle reste allongée à regarder le plafond.\n\n"
+     "Puis elle se lève et met de la cannelle dans son café, comme tous les jours "
+     "depuis qu'elle a huit ans."),
    ]},
  ],
- "epilogue": ("**6 MOIS PLUS TARD**\n\n"
-   "Sora a ouvert son propre café. Le détail ridicule que Yuna ajoute à son café "
-   "est sur la carte, sous un faux nom.\n\n"
-   "Hae-rin a témoigné. Elle n'était pas obligée.\n\n"
+ "epilogue": ("**SIX MOIS PLUS TARD**\n\n"
+   "Sora a ouvert un café. Il y a de la cannelle sur le comptoir, en libre-service, "
+   "et une pancarte qui dit *oui c'est bizarre, essayez quand même*.\n\n"
+   "Hae-rin a témoigné. Personne ne l'y obligeait. Elle n'a pas demandé "
+   "qu'on la remercie, ce qui n'a pas empêché Yuna de le faire.\n\n"
    "Mme Kang n'a rien perdu — les gens comme elle ne perdent jamais vraiment. "
    "Mais elle n'appelle plus.\n\n"
-   "Min-jae s'est installé à Busan en septembre. Il envoie encore des photos de son ramyeon. "
-   "Yuna répond à chaque fois."),
+   "Min-jae s'est installé à Busan en septembre. Il envoie toujours des photos "
+   "de son ramyeon à des heures indues. Yuna répond à chaque fois.\n\n"
+   "Le tiroir du bas coince encore."),
 }
 
 CHRONIQUE_SAISONS["colocation"] = {
@@ -22344,14 +22838,18 @@ def chro_ending():
     s = chro_saison()
     if not s:
         return None
-    meilleur, score_max = None, -1
+    meilleur, score_max = None, None
     for cle, fin in s["endings"].items():
         if not chro_route_ouverte(fin.get("route", cle)):
             continue
-        score = sum(1 for d in fin.get("exige", []) if chro_drapeau(d))
-        score -= sum(2 for d in fin.get("interdit", []) if chro_drapeau(d))
-        score += fin.get("poids", 0)
-        if score > score_max:
+        exige = fin.get("exige", [])
+        # Une fin ne se déclenche que si TOUTES ses conditions sont réunies.
+        if exige and not all(chro_drapeau(d) for d in exige):
+            continue
+        if any(chro_drapeau(d) for d in fin.get("interdit", [])):
+            continue
+        score = len(exige) * 10 + fin.get("poids", 0)
+        if score_max is None or score > score_max:
             meilleur, score_max = cle, score
     return meilleur or s.get("ending_defaut")
 
