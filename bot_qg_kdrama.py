@@ -9179,6 +9179,7 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
     elif var == "SALON_BOUTIQUE_ID": SALON_BOUTIQUE_ID = ctx.channel.id
     elif var == "SALON_CASINO_ID": SALON_CASINO_ID = ctx.channel.id
     elif var == "SALON_EVENT_ID": SALON_EVENT_ID = ctx.channel.id
+    elif var == "SALON_CHRONIQUE_ID": SALON_CHRONIQUE_ID = ctx.channel.id
     elif var == "SALON_LEVELUP_ID": SALON_LEVELUP_ID = ctx.channel.id
     elif var == "SALON_GUIDE_ID": SALON_GUIDE_ID = ctx.channel.id
     elif var == "SALON_INVITATION_ID": SALON_INVITATION_ID = ctx.channel.id
@@ -9196,6 +9197,10 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
     elif var == "SALON_ANNONCES_ID":
         global SALON_ANNONCES_ID
         SALON_ANNONCES_ID = ctx.channel.id
+    # Filet de sécurité : si un type du mapping n'a pas de branche dédiée,
+    # on l'assigne quand même — sinon `.setsalon` confirmerait sans rien enregistrer.
+    if globals().get(var) != ctx.channel.id:
+        globals()[var] = ctx.channel.id
     sauvegarder_salons()
     await ctx.send(embed=discord.Embed(
         description=f"✅ Salon **{type_salon}** configuré sur {ctx.channel.mention} !", color=0x2ecc71))
@@ -13096,12 +13101,24 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "5.6.0"
+BOT_VERSION = "5.6.1"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "5.6.1": {
+   "titre": "Correctifs Chronique 📖",
+   "ajouts": [],
+   "correctifs": [
+     "📖 **`.setsalon chronique`** enregistre enfin le salon — il était accepté mais jamais retenu",
+     "🗂️ L'aide `.help` et `.helpadmin` parlent maintenant de la Chronique, plus de l'ancien Drama",
+   ],
+   "ameliorations": [
+     "📢 Les annonces de mise à jour mentionnent désormais **@everyone**",
+     "📖 La régie affiche le nom exact du salon de publication",
+   ],
+ },
  "5.6.0": {
    "titre": "Chronique — la série dont vous écrivez l'histoire 📖",
    "ajouts": [
@@ -13248,8 +13265,13 @@ async def annoncer_maj(guild):
     if manque:
         return False, f"permissions manquantes dans #{salon.name} : {', '.join(manque)}"
     try:
-        msg = await salon.send(embed=embed)
-        return True, f"#{salon.name} ({origine}) · message_id={msg.id}"
+        # Une mise à jour concerne tout le monde : on mentionne @everyone.
+        _mention = "@everyone" if salon.permissions_for(guild.me).mention_everyone else None
+        msg = await salon.send(
+            content=_mention, embed=embed,
+            allowed_mentions=discord.AllowedMentions(everyone=True))
+        return True, (f"#{salon.name} ({origine}) · message_id={msg.id}"
+                      + ("" if _mention else " · ⚠️ sans @everyone, permission manquante"))
     except discord.Forbidden:
         return False, f"envoi refusé par Discord dans #{salon.name}"
     except Exception as e:
@@ -17697,8 +17719,10 @@ class ChroRegieView(ui.View):
         if not chro_active():
             e.description = ("*Aucune saison en cours.*\n\n"
                              f"**{len(CHRONIQUE_SAISONS)}** saison(s) disponible(s).")
-            e.set_footer(text="Salon : " + (f"configuré" if SALON_CHRONIQUE_ID
-                                            else "⚠️ aucun — .setsalon chronique #salon"))
+            e.set_footer(text="📖 Salon : " + (f"#{self.ctx.guild.get_channel(SALON_CHRONIQUE_ID).name}"
+                                              if SALON_CHRONIQUE_ID and self.ctx.guild
+                                              and self.ctx.guild.get_channel(SALON_CHRONIQUE_ID)
+                                              else "⚠️ aucun — .setsalon chronique #salon"))
             return e
         s = chro_saison()
         etat_lib = {"ATTENTE": "⏸️ en attente de publication", "VOTE": "💌 vote ouvert",
@@ -17715,7 +17739,9 @@ class ChroRegieView(ui.View):
         if votes:
             e.add_field(name="🗳️ Votes en cours", value=f"**{len(votes)}** lecteur(s)", inline=True)
         e.add_field(name="👥 Lecteurs", value=f"**{len(CHRONIQUE_LU)}**", inline=True)
-        e.set_footer(text=f"📖 Salon : {'configuré' if SALON_CHRONIQUE_ID else '⚠️ non configuré'}")
+        _sc = (self.ctx.guild.get_channel(SALON_CHRONIQUE_ID)
+               if SALON_CHRONIQUE_ID and self.ctx.guild else None)
+        e.set_footer(text=f"📖 Salon : {'#' + _sc.name if _sc else '⚠️ non configuré'}")
         return e
 
 
