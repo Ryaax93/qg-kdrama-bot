@@ -13101,12 +13101,25 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "5.7.2"
+BOT_VERSION = "5.7.3"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "5.7.3": {
+   "titre": "Chronique — workflow fiabilisé 📖",
+   "ajouts": [],
+   "correctifs": [
+     "▶️ **Le bouton « Publier l'épisode 1 » réapparaît** après le lancement d'une saison",
+     "🔒 « Fermer les votes » n'apparaît plus que lorsqu'un vote existe réellement",
+     "👥 Si personne ne vote, la régie peut trancher — plus de blocage",
+   ],
+   "ameliorations": [
+     "🧭 L'interface est désormais calculée à partir de l'état réel, vérifié à chaque affichage",
+     "🔄 Un redémarrage à n'importe quelle étape retrouve le bon bouton",
+   ],
+ },
  "5.7.2": {
    "titre": "Chronique — les votes fonctionnent 💌",
    "ajouts": [],
@@ -16663,7 +16676,18 @@ async def chro_fermer_vote(guild, salon=None):
                 pass
             return False, "Égalité — vote prolongé."
         if top == 0:
-            return False, "Personne n'a voté."
+            # Personne n'a voté : l'admin tranche plutôt que de rester bloqué.
+            CHRONIQUE["etat"] = "EGALITE"
+            CHRONIQUE["egalite"] = [c_ for c_, _e, _l in choix["options"]]
+            save_all_data()
+            try:
+                await salon.send(embed=discord.Embed(
+                    description=("👥 *Personne n'a voté.*\n"
+                                 "-# La régie peut trancher pour faire avancer l'histoire."),
+                    color=0xe67e22))
+            except Exception:
+                pass
+            return False, "Aucun vote — à la régie de trancher."
         cle = gagnants[0]
         return await chro_appliquer_choix(guild, salon, cle)
 
@@ -17764,8 +17788,8 @@ class ChroRegieView(ui.View):
     def construire(self):
         self.clear_items()
         if self.ecran == "accueil":
-            etat = CHRONIQUE.get("etat")
-            if not chro_active():
+            etat, d = chro_etat_ui()
+            if etat == "INACTIVE":
                 opts = [discord.SelectOption(
                     label=s["titre"], value=k, emoji=s["genre"].split()[0],
                     description=s["accroche"][:95]) for k, s in CHRONIQUE_SAISONS.items()]
@@ -17774,38 +17798,50 @@ class ChroRegieView(ui.View):
                     await self.lancer(itx, sel.values[0])
                 sel.callback = cbs
                 self.add_item(sel)
-            else:
-                if etat == "ERREUR_VOTE":
-                    # Décision non résolue : impossible de passer à la suite.
-                    br = ui.Button(label="Republier le vote", emoji="🔁",
-                                   style=discord.ButtonStyle.danger, row=0)
-                    async def cbr(itx):
-                        await self.republier_vote(itx)
-                    br.callback = cbr
-                    self.add_item(br)
-                elif etat == "ATTENTE":
-                    b = ui.Button(label="Fermer les votes", emoji="🔒",
-                                  style=discord.ButtonStyle.primary, row=0)
-                    async def cbf(itx):
-                        await self.fermer(itx)
-                    b.callback = cbf
-                    self.add_item(b)
-                    if etat == "EGALITE":
-                        for g in (CHRONIQUE.get("egalite") or [])[:3]:
-                            ep = chro_episode()
-                            lib = next((l for c_, e_, l in ep["choix"]["options"] if c_ == g), g)
-                            bb = ui.Button(label=f"Trancher : {lib}"[:78], emoji="⚖️", row=1)
-                            async def cbt(itx, _g=g):
-                                await self.trancher(itx, _g)
-                            bb.callback = cbt
-                            self.add_item(bb)
-                self._b("État de l'histoire", "🧠", "etat", 2)
-                b2 = ui.Button(label="Arrêter la saison", emoji="⏹️",
-                               style=discord.ButtonStyle.danger, row=2)
-                async def cba(itx):
-                    await self.arreter(itx)
-                b2.callback = cba
-                self.add_item(b2)
+                return
+
+            # ── Un état = un seul bouton d'action possible ──
+            if etat == "READY_EPISODE":
+                b = ui.Button(label=f"Publier l'épisode {d['episode']}", emoji="▶️",
+                              style=discord.ButtonStyle.success, row=0)
+                async def cbp(itx):
+                    await self.publier(itx)
+                b.callback = cbp
+                self.add_item(b)
+
+            elif etat in ("VOTE_OPEN", "VOTE_TIE"):
+                b = ui.Button(label="Fermer les votes", emoji="🔒",
+                              style=discord.ButtonStyle.primary, row=0)
+                async def cbf(itx):
+                    await self.fermer(itx)
+                b.callback = cbf
+                self.add_item(b)
+                if etat == "VOTE_TIE":
+                    ep = chro_episode()
+                    for g in (CHRONIQUE.get("egalite") or [])[:3]:
+                        lib = next((l for c_, e_, l in ep["choix"]["options"] if c_ == g), g)
+                        bb = ui.Button(label=f"Trancher : {lib}"[:78], emoji="⚖️", row=1)
+                        async def cbt(itx, _g=g):
+                            await self.trancher(itx, _g)
+                        bb.callback = cbt
+                        self.add_item(bb)
+
+            elif etat == "VOTE_ERROR":
+                br = ui.Button(label="Republier le vote", emoji="🔁",
+                               style=discord.ButtonStyle.danger, row=0)
+                async def cbr(itx):
+                    await self.republier_vote(itx)
+                br.callback = cbr
+                self.add_item(br)
+
+            # PUBLISHING : aucun bouton d'action tant que ça publie
+            self._b("État de l'histoire", "🧠", "etat", 2)
+            b2 = ui.Button(label="Arrêter la saison", emoji="⏹️",
+                           style=discord.ButtonStyle.danger, row=2)
+            async def cba(itx):
+                await self.arreter(itx)
+            b2.callback = cba
+            self.add_item(b2)
             return
         self._b("Régie", "◀️", "accueil", 1)
 
@@ -17941,11 +17977,12 @@ class ChroRegieView(ui.View):
                                               else "⚠️ aucun — .setsalon chronique #salon"))
             return e
         s = chro_saison()
-        etat_lib = {"ATTENTE": "⏸️ en attente de publication",
-                    "ERREUR_VOTE": "⚠️ décision non publiée — à republier",
-                    "VOTE": "💌 vote ouvert",
-                    "EGALITE": "⚖️ égalité à départager", "EPISODE": "📖 publication en cours",
-                    "TERMINEE": "🎬 terminée"}.get(CHRONIQUE.get("etat"), CHRONIQUE.get("etat"))
+        _fsm, _d = chro_etat_ui()
+        etat_lib = {"READY_EPISODE": f"⏸️ en attente de l'épisode {_d.get('episode', 1)}",
+                    "PUBLISHING": "📖 publication en cours",
+                    "VOTE_OPEN": "💌 vote ouvert",
+                    "VOTE_TIE": "⚖️ égalité à départager",
+                    "VOTE_ERROR": "⚠️ décision non publiée — à republier"}.get(_fsm, _fsm)
         e.description = (f"### 🎬 {s['titre']}\n"
                          f"Épisode **{min(CHRONIQUE.get('episode', 1), len(s['episodes']))}"
                          f"/{len(s['episodes'])}**\n\n"
@@ -23106,6 +23143,64 @@ def chro_choix_decisifs():
         if marquants & set(pose) or (ep or {}).get("choix", {}).get("decisif"):
             out.append(h)
     return out or CHRONIQUE.get("historique", [])[:4]
+
+# ── Machine à états Chronique : une seule fonction décide de tout ──
+# Les invariants sont vérifiés ICI, pas dans l'interface.
+CHRO_FSM = ("INACTIVE", "READY_EPISODE", "PUBLISHING",
+            "VOTE_OPEN", "VOTE_TIE", "VOTE_ERROR")
+
+def chro_etat_ui():
+    """État canonique de l'interface, dérivé de l'état persisté ET vérifié.
+    Retourne (etat_fsm, détail). Ne modifie rien."""
+    if not chro_active():
+        return "INACTIVE", {}
+    brut = CHRONIQUE.get("etat")
+    ep_courant = CHRONIQUE.get("episode", 1)
+    publies = CHRONIQUE.get("publies") or []
+    ep = chro_episode()
+    choix = (ep or {}).get("choix")
+    detail = {"episode": ep_courant, "publie": ep_courant in publies,
+              "a_choix": bool(choix), "brut": brut}
+
+    # (TERMINEE est déjà filtré par chro_active() : la saison redevient sélectionnable)
+    if brut == "EPISODE":
+        return "PUBLISHING", detail
+    if brut == "ERREUR_VOTE":
+        return "VOTE_ERROR", detail
+
+    # ── Invariant 1 : un vote ouvert exige un message réel et un épisode publié ──
+    if brut in ("VOTE", "EGALITE"):
+        if not (CHRONIQUE.get("msg_vote") and CHRONIQUE.get("salon_vote")
+                and ep_courant in publies and choix):
+            detail["invariant"] = "VOTE sans message, sans épisode publié ou sans choix"
+            return "VOTE_ERROR", detail
+        return ("VOTE_TIE" if brut == "EGALITE" else "VOTE_OPEN"), detail
+
+    # ── Invariant 2 : hors vote, l'épisode courant reste à publier ──
+    return "READY_EPISODE", detail
+
+def chro_verifier_invariants():
+    """Corrige un état incohérent hérité d'une version précédente.
+    Retourne la liste des anomalies traitées."""
+    anomalies = []
+    if not CHRONIQUE:
+        return anomalies
+    brut = CHRONIQUE.get("etat")
+    ep_courant = CHRONIQUE.get("episode", 1)
+    publies = CHRONIQUE.get("publies") or []
+    # Invariant 2 : épisode non publié ⟹ aucun vote
+    if ep_courant not in publies and (CHRONIQUE.get("msg_vote")
+                                      or brut in ("VOTE", "EGALITE")):
+        CHRONIQUE["msg_vote"] = None
+        CHRONIQUE["salon_vote"] = None
+        CHRONIQUE["etat"] = "ATTENTE"
+        anomalies.append("vote fantôme sur un épisode non publié")
+    # Invariant 1 : VOTE sans message
+    if CHRONIQUE.get("etat") in ("VOTE", "EGALITE") and not CHRONIQUE.get("msg_vote"):
+        CHRONIQUE["etat"] = "ERREUR_VOTE"
+        CHRONIQUE["vote_a_republier"] = True
+        anomalies.append("état VOTE sans message_id")
+    return anomalies
 
 def chro_reset():
     CHRONIQUE.clear()
@@ -33334,6 +33429,9 @@ async def on_ready():
         print(f"[Gacha] Migration échouée : {e}")
     # Chronique : un vote coupé est rouvert, jamais tranché deux fois
     try:
+        _anom = chro_verifier_invariants()
+        for _a in _anom:
+            print(f"[Chronique] ⚠️ incohérence corrigée : {_a}")
         _ch = await chro_reprendre_apres_restart()
         if _ch:
             if _ch.get("vote_restaure"):
