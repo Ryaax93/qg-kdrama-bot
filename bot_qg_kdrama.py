@@ -192,6 +192,7 @@ SALON_LEVELUP_ID = None   # Met l'ID du salon level up ici
 SALON_CASINO_ID = None    # Met l'ID du salon casino ici
 SALON_GACHA_ID = None     # Met l'ID du salon gacha ici
 SALON_EVENT_ID = None     # Salon pour les events
+SALON_CHRONIQUE_ID = None # Salon officiel de 📖 Chronique
 SALON_GUIDE_ID = None      # Salon pour le guide (invasions, nuit de chasse, coffres, marché noir)
 SALON_BOUTIQUE_ID = None
 SALON_DASHBOARD_ID = None  # salon tableau de bord admin  # Met l'ID du salon boutique ici
@@ -215,6 +216,7 @@ def sauvegarder_salons():
         "SALON_CASINO_ID":    SALON_CASINO_ID,
         "SALON_GACHA_ID":     SALON_GACHA_ID,
         "SALON_EVENT_ID":     SALON_EVENT_ID,
+        "SALON_CHRONIQUE_ID": SALON_CHRONIQUE_ID,
         "SALON_GUIDE_ID":     SALON_GUIDE_ID,
         "SALON_BOUTIQUE_ID":  SALON_BOUTIQUE_ID,
         "SALON_GACHABATTLE_ID":    SALON_GACHABATTLE_ID,
@@ -245,6 +247,7 @@ def sauvegarder_salons():
 
 def charger_salons():
     """Charge les IDs de salons depuis le fichier JSON au démarrage"""
+    global SALON_CHRONIQUE_ID
     global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_EVENT_ID, SALON_GUIDE_ID, ROLE_GACHA_ID, ROLE_GIRLS_ID, ROLE_ANIME_ID, ROLE_HOMME_ID, ROLE_FEMME_ID
     global SALON_GACHABATTLE_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID
     global SALON_BOOST_ID, SALON_HOF_ID, SALON_REGLEMENT_ID, ROLE_MEMBRE_NAME, REGLEMENT_ROLE_ID, REGLEMENT_MSG_ID
@@ -257,6 +260,8 @@ def charger_salons():
         SALON_CASINO_ID    = data.get("SALON_CASINO_ID")
         SALON_GACHA_ID     = data.get("SALON_GACHA_ID")
         SALON_EVENT_ID     = data.get("SALON_EVENT_ID")
+
+        SALON_CHRONIQUE_ID = data.get("SALON_CHRONIQUE_ID")
         SALON_GUIDE_ID     = data.get("SALON_GUIDE_ID")
         SALON_BOUTIQUE_ID  = data.get("SALON_BOUTIQUE_ID")
         SALON_GACHABATTLE_ID    = data.get("SALON_GACHABATTLE_ID")
@@ -9144,7 +9149,7 @@ async def stopervent_cmd(ctx):
 @bot.command(name="setsalon")
 @commands.has_permissions(administrator=True)
 async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
-    global SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_CASINO_ID, SALON_EVENT_ID
+    global SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_CASINO_ID, SALON_EVENT_ID, SALON_CHRONIQUE_ID
     global SALON_LEVELUP_ID, SALON_GACHABATTLE_ID, SALON_DUEL_ID, SALON_DASHBOARD_ID
     global SALON_BIENVENUE_ID, SALON_AUREVOIR_ID, SALON_HOF_ID, SALON_GUIDE_ID, SALON_INVITATION_ID
     global SALON_BOOST_ID, SALON_REGLEMENT_ID
@@ -9152,11 +9157,13 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
         return await ctx.send(
             "❌ Types : `gacha` `boutique` `casino` `event` `levelup` `guide` `combat` `duel` "
             "`dashboard` `bienvenue` `aurevoir` `halloffame` `girlsonly` `annonces` `invitation` "
+            "`chronique` "
             "`boost` `reglement`\n\n"
             "💡 Pour le règlement : `.setsalon reglement @RôleMembre`")
     mapping = {
         "gacha": "SALON_GACHA_ID", "boutique": "SALON_BOUTIQUE_ID",
         "casino": "SALON_CASINO_ID", "event": "SALON_EVENT_ID",
+        "chronique": "SALON_CHRONIQUE_ID", "drama": "SALON_CHRONIQUE_ID",
         "levelup": "SALON_LEVELUP_ID", "guide": "SALON_GUIDE_ID",
         "gachabattle": "SALON_GACHABATTLE_ID", "gachabattle": "SALON_GACHABATTLE_ID", "combat": "SALON_GACHABATTLE_ID",
         "duel": "SALON_DUEL_ID", "dashboard": "SALON_DASHBOARD_ID",
@@ -12470,9 +12477,8 @@ async def resoudre_episode(guild, salon):
             for k, v in sorted(cnt.items()))
         rappel = {"detail": detail, "gagnant": texte, "index": gagnant,
                   "consequence": random.choice(DRAMA_CONSEQ)}
-        for uid in votes:
-            economy_data[str(uid)]["coins"] += 150
-            gazette_gain(str(uid), 150)
+        # Chronique 2.0 : plus aucune récompense pour voter.
+        # On vote parce qu'on est impliqué dans l'histoire, pas pour farmer.
         gazette_fait("divers",
                      f"Le serveur a voté « {texte} » — épisode {s['episode']} du drama.", 2)
     else:
@@ -13090,12 +13096,30 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "5.5.0"
+BOT_VERSION = "5.6.0"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "5.6.0": {
+   "titre": "Chronique — la série dont vous écrivez l'histoire 📖",
+   "ajouts": [
+     "📖 **Chronique remplace Drama** — de vraies saisons écrites, avec un casting et des arcs",
+     "💌 **Vos votes sont publics** — on voit qui choisit quoi, et vous pouvez changer d'avis",
+     "🦋 **Vos décisions reviennent** — un choix de l'épisode 2 peut vous rattraper à l'épisode 9",
+     "💕 **Plusieurs fins réelles** par saison, décidées par l'ensemble de vos choix",
+     "📱 **Faux SMS et réseaux sociaux** entre les épisodes — les personnages vivent hors caméra",
+   ],
+   "correctifs": [
+     "🚫 **Plus aucune pièce pour voter** — on vote parce qu'on est impliqué, pas pour farmer",
+     "📖 **`.setsalon chronique`** — toute la série se publie dans son salon dédié",
+   ],
+   "ameliorations": [
+     "⚖️ En cas d'égalité, le vote est prolongé — jamais tranché au hasard",
+     "🎬 Deux saisons pour commencer : **Faux Couple** et **La Chambre d'à côté**",
+   ],
+ },
  "5.5.0": {
    "titre": "Secret Story — La Voix vous écoute 👁️",
    "ajouts": [
@@ -16245,6 +16269,292 @@ async def ss_terminer(salon):
                 print(f"[SS] suppression du salon : {type(ex).__name__}: {ex}")
         asyncio.create_task(_fermer(salon))
 
+class ChroVoteView(ui.View):
+    """Vote public : on voit qui vote pour quoi. Modifiable jusqu'à fermeture."""
+
+    def __init__(self, num_ep, choix, msg=None):
+        super().__init__(timeout=None)
+        self.num_ep, self.choix, self.msg = num_ep, choix, msg
+        self.verrou = asyncio.Lock()
+        for i, (cle, emo, lib) in enumerate(choix["options"]):
+            b = ui.Button(label=lib[:78], emoji=emo,
+                          style=discord.ButtonStyle.secondary, row=i)
+            async def cb(itx, _c=cle):
+                await self.voter(itx, _c)
+            b.callback = cb
+            self.add_item(b)
+
+    async def voter(self, itx, cle):
+        try:
+            if CHRONIQUE.get("etat") not in ("VOTE", "EGALITE"):
+                return await itx.response.send_message("📖 Les votes sont fermés.",
+                                                       ephemeral=True)
+            if CHRONIQUE.get("episode") != self.num_ep:
+                return await itx.response.send_message("📖 Ce vote appartient à un épisode passé.",
+                                                       ephemeral=True)
+            uid = str(itx.user.id)
+            async with self.verrou:
+                votes = CHRONIQUE.setdefault("votes", {})
+                ancien = votes.get(uid)
+                if ancien == cle:
+                    return await itx.response.send_message("📖 C'est déjà ton choix.",
+                                                           ephemeral=True)
+                votes[uid] = cle
+                CHRONIQUE_LU[uid] = CHRONIQUE_LU.get(uid, 0) + (0 if ancien else 1)
+                save_all_data()
+            lib = next(l for c_, e_, l in self.choix["options"] if c_ == cle)
+            await itx.response.send_message(
+                ("📖 Tu as changé pour " if ancien else "📖 Ton choix : ") + f"**{lib}**",
+                ephemeral=True)
+            await self.rafraichir(itx)
+        except (discord.NotFound, discord.HTTPException, discord.InteractionResponded):
+            pass
+        except Exception as e:
+            print(f"[Chronique] vote : {type(e).__name__}: {e}")
+
+    async def rafraichir(self, itx=None):
+        """Met à jour le message existant — jamais de nouveau message."""
+        try:
+            if self.msg:
+                await self.msg.edit(embed=self.embed(itx.guild if itx else None), view=self)
+        except (discord.NotFound, discord.HTTPException):
+            pass
+
+    def embed(self, guild=None):
+        votes = CHRONIQUE.get("votes") or {}
+        e = discord.Embed(
+            title="💌  À VOUS D'ÉCRIRE LA SUITE",
+            description=f"**{self.choix['question']}**",
+            color=0xff9ec7)
+        for cle, emo, lib in self.choix["options"]:
+            pour = [u for u, v in votes.items() if v == cle]
+            noms = " · ".join(f"<@{u}>" for u in pour[:15]) if pour else "*personne pour l'instant*"
+            if len(pour) > 15:
+                noms += f" *+{len(pour)-15}*"
+            e.add_field(name=f"{emo}  {lib}   —   {len(pour)}", value=noms, inline=False)
+        e.set_footer(text=f"{len(votes)} lecteur(s) ont voté  ·  tu peux changer d'avis "
+                          f"jusqu'à la fermeture")
+        return e
+
+
+async def chro_publier_episode(guild, salon=None):
+    """Publie l'épisode courant, scène par scène, puis le vote s'il y en a un."""
+    salon = salon or chro_salon(guild)
+    if not salon:
+        return False, "Aucun salon Chronique configuré — `.setsalon chronique #salon`."
+    s, ep = chro_saison(), chro_episode()
+    if not s or not ep:
+        return False, "Aucun épisode à publier."
+    num = CHRONIQUE.get("episode", 1)
+    CHRONIQUE["etat"] = "EPISODE"
+    save_all_data()
+
+    # ── Teaser ──
+    tete = discord.Embed(
+        title=f"🎬  {s['titre']} — Épisode {num}",
+        description=f"### {ep['titre']}",
+        color=0x9b59b6)
+    prec = ep.get("precedemment")
+    if not prec and CHRONIQUE.get("historique"):
+        dernier = CHRONIQUE["historique"][-1]
+        prec = f"Vous aviez choisi : *{dernier['libelle']}*"
+    if prec:
+        tete.add_field(name="📌 La dernière fois…", value=prec, inline=False)
+    try:
+        await salon.send(embed=tete)
+    except Exception as e:
+        return False, f"Publication impossible : {type(e).__name__}"
+
+    # ── Scènes ──
+    for i, texte in enumerate(chro_scenes_visibles(ep)):
+        if i:
+            await asyncio.sleep(CHRO_DELAI_SCENE)
+        try:
+            await salon.send(embed=discord.Embed(description=texte, color=0x9b59b6))
+        except Exception:
+            pass
+
+    # ── Finale ? ──
+    if ep.get("finale"):
+        return await chro_finale(guild, salon)
+
+    # ── Interlude éventuel ──
+    inter = ep.get("interlude")
+    if inter:
+        await asyncio.sleep(CHRO_DELAI_SCENE)
+        await chro_publier_interlude(salon, inter)
+
+    # ── Choix ──
+    choix = ep.get("choix")
+    if not choix:
+        CHRONIQUE["etat"] = "ATTENTE"
+        save_all_data()
+        try:
+            await salon.send(embed=discord.Embed(
+                description="*à suivre…*", color=0x2c2f33))
+        except Exception:
+            pass
+        return True, salon
+    CHRONIQUE["etat"] = "VOTE"
+    CHRONIQUE["votes"] = {}
+    save_all_data()
+    await asyncio.sleep(2)
+    vue = ChroVoteView(num, choix)
+    try:
+        msg = await salon.send(embed=vue.embed(guild), view=vue)
+        vue.msg = msg
+        CHRONIQUE["msg_vote"] = msg.id
+        save_all_data()
+    except Exception as e:
+        print(f"[Chronique] vote : {type(e).__name__}: {e}")
+    return True, salon
+
+
+async def chro_publier_interlude(salon, inter):
+    """Faux SMS, réseau social… du lore, aucun vote, aucune récompense."""
+    try:
+        if inter["type"] == "sms":
+            lignes = []
+            for qui, txt in inter["lignes"]:
+                lignes.append(f"*{txt}*" if qui == "_système_" else f"**{qui}**\n> {txt}")
+            await salon.send(embed=discord.Embed(
+                title=f"📱  MESSAGES — {inter.get('heure', '')}",
+                description="\n\n".join(lignes), color=0x2c2f33))
+        else:
+            e = discord.Embed(
+                title=f"📱  INSTAGRAM — {inter.get('compte', '')}",
+                description=inter["texte"], color=0x2c2f33)
+            bas = []
+            if inter.get("likes"):
+                bas.append(f"❤️ {inter['likes']:,}".replace(",", " "))
+            if inter.get("detail"):
+                bas.append(inter["detail"])
+            if bas:
+                e.set_footer(text="   ·   ".join(bas))
+            await salon.send(embed=e)
+    except Exception as e:
+        print(f"[Chronique] interlude : {type(e).__name__}: {e}")
+
+
+async def chro_fermer_vote(guild, salon=None):
+    """Ferme le vote, applique la suite canonique. Gère l'égalité sans tirage silencieux."""
+    async with _CHRO_LOCK:
+        if CHRONIQUE.get("etat") not in ("VOTE", "EGALITE"):
+            return False, "Aucun vote ouvert."
+        salon = salon or chro_salon(guild)
+        ep = chro_episode()
+        choix = (ep or {}).get("choix")
+        if not choix:
+            return False, "Cet épisode n'a pas de choix."
+        votes = CHRONIQUE.get("votes") or {}
+        compte = {c: 0 for c, _e, _l in choix["options"]}
+        for v in votes.values():
+            if v in compte:
+                compte[v] += 1
+        top = max(compte.values()) if compte else 0
+        gagnants = [c for c, n in compte.items() if n == top]
+        # ── Égalité : jamais de tirage au sort silencieux ──
+        if top > 0 and len(gagnants) > 1 and CHRONIQUE.get("etat") == "VOTE":
+            CHRONIQUE["etat"] = "EGALITE"
+            CHRONIQUE["egalite"] = gagnants
+            save_all_data()
+            libs = [next(l for c_, e_, l in choix["options"] if c_ == g) for g in gagnants]
+            try:
+                await salon.send(embed=discord.Embed(
+                    title="⚖️  ÉGALITÉ",
+                    description=("Le serveur est partagé :\n"
+                                 + "\n".join(f"• **{l}** — {top} voix" for l in libs)
+                                 + f"\n\n*Vous avez {CHRO_PROLONGATION // 60} minutes de plus "
+                                   f"pour départager. L'admin peut aussi trancher.*"),
+                    color=0xe67e22))
+            except Exception:
+                pass
+            return False, "Égalité — vote prolongé."
+        if top == 0:
+            return False, "Personne n'a voté."
+        cle = gagnants[0]
+        return await chro_appliquer_choix(guild, salon, cle)
+
+
+async def chro_appliquer_choix(guild, salon, cle):
+    """Applique la suite. Un épisode ne peut jamais recevoir deux décisions."""
+    ep = chro_episode()
+    choix = ep["choix"]
+    num = CHRONIQUE.get("episode", 1)
+    lib = next(l for c_, e_, l in choix["options"] if c_ == cle)
+    if not chro_enregistrer_choix(num, cle, lib):
+        return False, "Une décision a déjà été validée pour cet épisode."
+    suite = choix["suites"][cle]
+    chro_poser(*suite.get("pose", []))
+    chro_fermer_route(*suite.get("ferme", []))
+    CHRONIQUE["etat"] = "ATTENTE"
+    CHRONIQUE["derniere_decision"] = lib
+    CHRONIQUE.pop("egalite", None)
+    save_all_data()
+
+    votes = CHRONIQUE.get("votes") or {}
+    compte = {}
+    for v in votes.values():
+        compte[v] = compte.get(v, 0) + 1
+    e = discord.Embed(title="🗳️  DÉCISION DU SERVEUR", color=0xff9ec7)
+    e.description = "\n".join(
+        f"{emo}  {l} — **{compte.get(c_, 0)}**" + ("  ✅" if c_ == cle else "")
+        for c_, emo, l in choix["options"])
+    e.add_field(name="\u200b", value=f"### Vous avez choisi\n*{lib}*", inline=False)
+    try:
+        await salon.send(embed=e)
+        await asyncio.sleep(3)
+        await salon.send(embed=discord.Embed(description=suite["texte"], color=0x9b59b6))
+    except Exception as ex:
+        print(f"[Chronique] suite : {type(ex).__name__}: {ex}")
+    CHRONIQUE["episode"] = num + 1
+    CHRONIQUE["votes"] = {}
+    save_all_data()
+    return True, lib
+
+
+async def chro_finale(guild, salon):
+    """Fin de saison : ending calculé sur l'ensemble des décisions."""
+    s = chro_saison()
+    fin_cle = chro_ending()
+    fin = s["endings"].get(fin_cle) or {}
+    CHRONIQUE["ending"] = fin_cle
+    CHRONIQUE["etat"] = "TERMINEE"
+    save_all_data()
+    try:
+        await asyncio.sleep(CHRO_DELAI_SCENE)
+        await salon.send(embed=discord.Embed(
+            description=fin.get("texte", "*Fin.*"), color=0xff9ec7))
+        await asyncio.sleep(CHRO_DELAI_SCENE)
+        jours = max(1, int((time.time() - CHRONIQUE.get("debut", time.time())) // 86400))
+        e = discord.Embed(title="FIN.", color=0x2c2f33,
+            description=(f"**{s['titre']}**\n\n"
+                         f"📖 {len(s['episodes'])} épisodes\n"
+                         f"💌 {len(CHRONIQUE.get('historique', []))} décisions\n"
+                         f"👥 {len(CHRONIQUE_LU)} lecteurs\n"
+                         f"📅 {jours} jour(s)"))
+        e.add_field(name="💕 Ending obtenu", value=f"### {fin.get('nom', '?')}", inline=False)
+        await salon.send(embed=e)
+        # ── Les choix qui ont tout changé ──
+        await asyncio.sleep(CHRO_DELAI_SCENE)
+        dec = chro_choix_decisifs()
+        if dec:
+            e2 = discord.Embed(title="🦋  VOS CHOIX QUI ONT CHANGÉ L'HISTOIRE",
+                               color=0x9b59b6)
+            e2.description = "\n\n".join(
+                f"**Épisode {d['episode']}**\n*{d['libelle']}*" for d in dec[:6])
+            autres = len(s["endings"]) - 1
+            e2.set_footer(text=f"🔒 {autres} autres fins existaient.")
+            await salon.send(embed=e2)
+        # ── Épilogue ──
+        if s.get("epilogue"):
+            await asyncio.sleep(CHRO_DELAI_SCENE)
+            await salon.send(embed=discord.Embed(
+                description=s["epilogue"], color=0x2c2f33))
+    except Exception as ex:
+        print(f"[Chronique] finale : {type(ex).__name__}: {ex}")
+    return True, fin_cle
+
 class SSDepotModal(ui.Modal, title="🔒 Ton secret"):
     """Le texte n'est jamais affiché publiquement, la confirmation est éphémère."""
     secret = ui.TextInput(label="Ton secret / ton anecdote",
@@ -17194,6 +17504,240 @@ class SSRegieView(ui.View):
         emb.set_footer(text="Le lancement manuel est toujours possible")
         return emb
 
+
+class ChroRegieView(ui.View):
+    """Régie Chronique — l'admin pilote, les lecteurs ne voient jamais les coulisses."""
+
+    def __init__(self, ctx):
+        super().__init__(timeout=600)
+        self.ctx = ctx
+        self.ecran = "accueil"
+        self.construire()
+
+    async def interaction_check(self, itx):
+        if not itx.user.guild_permissions.administrator:
+            await itx.response.send_message("📖 Régie réservée aux admins.", ephemeral=True)
+            return False
+        return True
+
+    async def aller(self, itx, ecran):
+        try:
+            self.ecran = ecran
+            self.construire()
+            emb = self.embed()
+        except Exception as e:
+            print(f"[Chronique régie] {ecran} : {type(e).__name__}: {e}")
+            emb = discord.Embed(description="😿 Écran indisponible — refais `.chronique`.",
+                                color=0xe74c3c)
+            self.clear_items()
+        try:
+            if not itx.response.is_done():
+                await itx.response.edit_message(embed=emb, view=self)
+            else:
+                await itx.edit_original_response(embed=emb, view=self)
+        except (discord.NotFound, discord.HTTPException, discord.InteractionResponded):
+            pass
+
+    async def on_timeout(self):
+        for x in self.children:
+            x.disabled = True
+
+    def _b(self, label, emoji, ecran, row, style=discord.ButtonStyle.secondary):
+        b = ui.Button(label=label, emoji=emoji, style=style, row=row)
+        async def cb(itx, _e=ecran):
+            await self.aller(itx, _e)
+        b.callback = cb
+        self.add_item(b)
+
+    def construire(self):
+        self.clear_items()
+        if self.ecran == "accueil":
+            etat = CHRONIQUE.get("etat")
+            if not chro_active():
+                opts = [discord.SelectOption(
+                    label=s["titre"], value=k, emoji=s["genre"].split()[0],
+                    description=s["accroche"][:95]) for k, s in CHRONIQUE_SAISONS.items()]
+                sel = ui.Select(placeholder="Lancer une saison…", options=opts, row=0)
+                async def cbs(itx):
+                    await self.lancer(itx, sel.values[0])
+                sel.callback = cbs
+                self.add_item(sel)
+            else:
+                if etat == "ATTENTE":
+                    b = ui.Button(label="Publier l'épisode suivant", emoji="▶️",
+                                  style=discord.ButtonStyle.success, row=0)
+                    async def cbp(itx):
+                        await self.publier(itx)
+                    b.callback = cbp
+                    self.add_item(b)
+                elif etat in ("VOTE", "EGALITE"):
+                    b = ui.Button(label="Fermer les votes", emoji="🔒",
+                                  style=discord.ButtonStyle.primary, row=0)
+                    async def cbf(itx):
+                        await self.fermer(itx)
+                    b.callback = cbf
+                    self.add_item(b)
+                    if etat == "EGALITE":
+                        for g in (CHRONIQUE.get("egalite") or [])[:3]:
+                            ep = chro_episode()
+                            lib = next((l for c_, e_, l in ep["choix"]["options"] if c_ == g), g)
+                            bb = ui.Button(label=f"Trancher : {lib}"[:78], emoji="⚖️", row=1)
+                            async def cbt(itx, _g=g):
+                                await self.trancher(itx, _g)
+                            bb.callback = cbt
+                            self.add_item(bb)
+                self._b("État de l'histoire", "🧠", "etat", 2)
+                b2 = ui.Button(label="Arrêter la saison", emoji="⏹️",
+                               style=discord.ButtonStyle.danger, row=2)
+                async def cba(itx):
+                    await self.arreter(itx)
+                b2.callback = cba
+                self.add_item(b2)
+            return
+        self._b("Régie", "◀️", "accueil", 1)
+
+    # ── Actions ──
+    async def lancer(self, itx, cle):
+        try:
+            if not itx.response.is_done():
+                await itx.response.defer()
+            salon = chro_salon(itx.guild)
+            if not salon:
+                return await itx.followup.send(
+                    "📖 Aucun salon configuré.\nUtilise `.setsalon chronique #salon`.",
+                    ephemeral=True)
+            async with _CHRO_LOCK:
+                if chro_active():
+                    return await itx.followup.send("📖 Une saison est déjà en cours.",
+                                                   ephemeral=True)
+                chro_reset()
+                CHRONIQUE.update({"saison": cle, "episode": 1, "etat": "ATTENTE",
+                                  "drapeaux": [], "routes_fermees": [], "historique": [],
+                                  "votes": {}, "debut": time.time(), "salon": salon.id})
+                save_all_data()
+            s = CHRONIQUE_SAISONS[cle]
+            await salon.send(embed=discord.Embed(
+                title=f"📖  {s['titre']}",
+                description=(f"### {s['genre']}\n\n*{s['accroche']}*\n\n"
+                             f"**{len(s['episodes'])} épisodes.** "
+                             f"C'est vous qui écrivez la suite."),
+                color=0xff9ec7).add_field(
+                    name="Casting",
+                    value="\n".join(f"{e} **{n}** — *{d}*"
+                                    for e, n, d in list(s["casting"].values())[:6]),
+                    inline=False))
+            await self.aller(itx, "accueil")
+        except Exception as e:
+            print(f"[Chronique] lancement : {type(e).__name__}: {e}")
+
+    async def publier(self, itx):
+        try:
+            if not itx.response.is_done():
+                await itx.response.defer()
+            ok, res = await chro_publier_episode(itx.guild)
+            if not ok:
+                await itx.followup.send(f"❌ {res}", ephemeral=True)
+            await self.aller(itx, "accueil")
+        except Exception as e:
+            print(f"[Chronique] publication : {type(e).__name__}: {e}")
+
+    async def fermer(self, itx):
+        try:
+            if not itx.response.is_done():
+                await itx.response.defer()
+            ok, res = await chro_fermer_vote(itx.guild)
+            if not ok:
+                await itx.followup.send(f"⚖️ {res}", ephemeral=True)
+            await self.aller(itx, "accueil")
+        except Exception as e:
+            print(f"[Chronique] fermeture : {type(e).__name__}: {e}")
+
+    async def trancher(self, itx, cle):
+        try:
+            if not itx.response.is_done():
+                await itx.response.defer()
+            await chro_appliquer_choix(itx.guild, chro_salon(itx.guild), cle)
+            await self.aller(itx, "accueil")
+        except Exception as e:
+            print(f"[Chronique] arbitrage : {type(e).__name__}: {e}")
+
+    async def arreter(self, itx):
+        try:
+            chro_reset()
+            save_all_data()
+            await self.aller(itx, "accueil")
+        except Exception as e:
+            print(f"[Chronique] arrêt : {type(e).__name__}: {e}")
+
+    # ── Écrans ──
+    def embed(self):
+        if self.ecran == "etat":
+            s = chro_saison()
+            e = discord.Embed(title="🧠  État de l'histoire",
+                              color=0x9b59b6)
+            e.description = (f"*Visible uniquement en régie.*\n\n"
+                             f"**Drapeaux posés** — {len(CHRONIQUE.get('drapeaux') or [])}\n"
+                             f"`{', '.join(CHRONIQUE.get('drapeaux') or []) or 'aucun'}`\n\n"
+                             f"**Routes fermées** — {len(CHRONIQUE.get('routes_fermees') or [])}\n"
+                             f"`{', '.join(CHRONIQUE.get('routes_fermees') or []) or 'aucune'}`")
+            if s:
+                proj = chro_ending()
+                fins = [f"{'➤' if k == proj else '　'} {v['nom']}"
+                        + ("" if chro_route_ouverte(v.get("route", k)) else "  🔒")
+                        for k, v in s["endings"].items()]
+                e.add_field(name="Fins possibles", value="\n".join(fins), inline=False)
+            h = CHRONIQUE.get("historique") or []
+            if h:
+                e.add_field(name="Décisions canoniques",
+                            value="\n".join(f"Ép. {x['episode']} — *{x['libelle']}*"
+                                            for x in h[-6:]), inline=False)
+            return e
+        # accueil
+        e = discord.Embed(title="📖  CHRONIQUE", color=0xff9ec7)
+        if not chro_active():
+            e.description = ("*Aucune saison en cours.*\n\n"
+                             f"**{len(CHRONIQUE_SAISONS)}** saison(s) disponible(s).")
+            e.set_footer(text="Salon : " + (f"configuré" if SALON_CHRONIQUE_ID
+                                            else "⚠️ aucun — .setsalon chronique #salon"))
+            return e
+        s = chro_saison()
+        etat_lib = {"ATTENTE": "⏸️ en attente de publication", "VOTE": "💌 vote ouvert",
+                    "EGALITE": "⚖️ égalité à départager", "EPISODE": "📖 publication en cours",
+                    "TERMINEE": "🎬 terminée"}.get(CHRONIQUE.get("etat"), CHRONIQUE.get("etat"))
+        e.description = (f"### 🎬 {s['titre']}\n"
+                         f"Épisode **{min(CHRONIQUE.get('episode', 1), len(s['episodes']))}"
+                         f"/{len(s['episodes'])}**\n\n"
+                         f"📍 État : {etat_lib}")
+        if CHRONIQUE.get("derniere_decision"):
+            e.add_field(name="💌 Dernière décision",
+                        value=f"*{CHRONIQUE['derniere_decision']}*", inline=False)
+        votes = CHRONIQUE.get("votes") or {}
+        if votes:
+            e.add_field(name="🗳️ Votes en cours", value=f"**{len(votes)}** lecteur(s)", inline=True)
+        e.add_field(name="👥 Lecteurs", value=f"**{len(CHRONIQUE_LU)}**", inline=True)
+        e.set_footer(text=f"📖 Salon : {'configuré' if SALON_CHRONIQUE_ID else '⚠️ non configuré'}")
+        return e
+
+
+@bot.command(name="chronique", aliases=["chro", "lachronique"])
+async def chronique_cmd(ctx):
+    """📖 Chronique — régie pour les admins, résumé pour les lecteurs"""
+    if ctx.author.guild_permissions.administrator:
+        vue = ChroRegieView(ctx)
+        return await ctx.send(embed=vue.embed(), view=vue)
+    if not chro_active():
+        return await ctx.send(embed=discord.Embed(
+            description="📖 *Aucune saison en cours pour le moment.*", color=0x9b59b6))
+    s = chro_saison()
+    e = discord.Embed(title=f"📖  {s['titre']}", color=0xff9ec7,
+        description=(f"### {s['genre']}\n*{s['accroche']}*\n\n"
+                     f"Épisode **{min(CHRONIQUE.get('episode', 1), len(s['episodes']))}"
+                     f"/{len(s['episodes'])}**"))
+    if CHRONIQUE.get("derniere_decision"):
+        e.add_field(name="💌 Votre dernière décision",
+                    value=f"*{CHRONIQUE['derniere_decision']}*", inline=False)
+    e.set_footer(text=f"{len(CHRONIQUE_LU)} lecteur(s) suivent cette saison")
+    await ctx.send(embed=e)
 
 @bot.command(name="secretstory", aliases=["ss", "secret"])
 async def secretstory_cmd(ctx, membre: discord.Member = None):
@@ -20889,6 +21433,935 @@ def pet_jours(uid):
         return 0
     st.setdefault("adoption", _t.time())
     return int((_t.time() - st["adoption"]) / 86400) + 1
+
+# ============================================================
+#  📖 CHRONIQUE 2.0 — moteur narratif
+# ============================================================
+# Une saison = un scénario ÉCRIT, pas un assemblage de blocs.
+# Chaque épisode : des scènes (2-3 messages), parfois un choix.
+# Un choix pose des DRAPEAUX invisibles, consultés plus tard —
+# parfois immédiatement, parfois six épisodes après.
+#
+# Format d'un épisode :
+#   titre, precedemment (optionnel)
+#   scenes : [texte, …]  ou  {"si": drapeau, "texte": …} pour une scène conditionnelle
+#   choix  : {"question": …, "options": [(cle, emoji, libellé)],
+#             "suites": {cle: {"texte": …, "pose": [drapeaux], "ferme": [routes]}}}
+#   interlude : publié APRÈS l'épisode, sans vote (faux SMS, réseau social…)
+
+CHRONIQUE_SAISONS = {}
+
+CHRONIQUE_SAISONS["faux_couple"] = {
+ "titre": "FAUX COUPLE",
+ "genre": "💋 Fake Dating",
+ "accroche": "Trois mois. Un contrat. Personne ne devait y croire — surtout pas eux.",
+ "casting": {
+   "elle":   ("👩", "Yuna", "Vingt-trois ans, deux jobs, aucune patience pour les mensonges. Sauf celui-là."),
+   "seojun": ("🖤", "Seo-jun", "Fils Kang. Poli avec tout le monde, sincère avec personne."),
+   "minjae": ("🤍", "Min-jae", "Ami d'enfance de Yuna. Il attend depuis six ans qu'elle remarque."),
+   "sora":   ("💫", "Sora", "Meilleure amie. Elle sait quelque chose qu'elle ne dit pas."),
+   "haerin": ("🌹", "Hae-rin", "L'ex de Seo-jun. Tout le monde la déteste. Personne ne l'a écoutée."),
+   "kang":   ("👠", "Mme Kang", "La mère. Elle a signé le contrat. Elle a aussi d'autres papiers."),
+ },
+ "ending_defaut": "seule",
+ "endings": {
+  "seojun": {"nom": "💋 Pour de vrai", "route": "seojun",
+    "exige": ["confiance_seojun", "verite_partagee", "nuit_hotel"], "poids": 0,
+    "texte": ("Il n'y a pas de grande déclaration. Juste Seo-jun, appuyé contre sa voiture, "
+      "à sept heures du matin, avec deux cafés et l'air de quelqu'un qui n'a pas dormi.\n\n"
+      "« Le contrat s'est terminé hier soir. »\n\n"
+      "« Je sais. »\n\n"
+      "Il lui tend un café. Elle le prend. Leurs doigts se touchent, et cette fois personne "
+      "ne regarde autour pour vérifier qui les voit.\n\n"
+      "« Donc à partir de maintenant, dit-il, tout ce que je fais, c'est parce que j'en ai envie. »\n\n"
+      "Elle boit une gorgée. C'est exactement sa commande. Il ne l'a jamais demandée.\n\n"
+      "« Alors commence par m'emmener quelque part, Kang Seo-jun. »")},
+  "minjae": {"nom": "🤍 Celui qui était déjà là", "route": "minjae",
+    "exige": ["confiance_minjae", "verite_minjae"], "poids": 0,
+    "texte": ("Min-jae ne dit rien pendant tout le trajet. Il conduit, une main sur le volant, "
+      "l'autre posée entre eux comme il l'a toujours fait.\n\n"
+      "Au feu rouge, il finit par parler.\n\n"
+      "« Je ne t'ai jamais demandé de choisir. »\n\n"
+      "« Je sais. »\n\n"
+      "« C'est peut-être ça, mon problème. »\n\n"
+      "Elle regarde sa main. Six ans qu'elle est là, à cet endroit exact, et elle ne l'avait "
+      "jamais vraiment vue.\n\n"
+      "Elle pose la sienne dessus.\n\n"
+      "Le feu passe au vert. Personne ne démarre.")},
+  "verite": {"nom": "🖤 La vérité, mais seule", "route": "verite",
+    "exige": ["dossier_ouvert", "confrontation_kang"], "interdit": ["confiance_seojun"], "poids": 1,
+    "texte": ("Elle sort du bâtiment avec le dossier sous le bras. Il pleut. Elle n'a pas de parapluie.\n\n"
+      "Seo-jun est là, sur le trottoir d'en face. Il ne traverse pas.\n\n"
+      "Ils se regardent pendant ce qui ressemble à très longtemps.\n\n"
+      "Puis elle hoche la tête — une fois, doucement — et elle part dans l'autre direction.\n\n"
+      "Elle sait tout, maintenant. Sur son père, sur le contrat, sur ce que Mme Kang a payé "
+      "pour que personne ne pose de questions.\n\n"
+      "Ça a coûté exactement ce que ça devait coûter.")},
+  "secret": {"nom": "🤫 Personne ne saura", "route": "secret",
+    "exige": ["relation_cachee", "confiance_seojun"], "interdit": ["verite_partagee"], "poids": 0,
+    "texte": ("Officiellement, le contrat s'est terminé. Officiellement, ils ne se voient plus.\n\n"
+      "Officiellement.\n\n"
+      "Sora s'en est aperçue en février. Elle n'a rien dit — elle a juste commencé à laisser "
+      "traîner deux tasses au lieu d'une quand Yuna rentrait tard.\n\n"
+      "Ce n'est pas la vie que Yuna avait imaginée. C'est plus petit, plus silencieux, "
+      "et entièrement à eux.\n\n"
+      "Un soir, il lui demande si ça lui manque, de pouvoir le dire aux gens.\n\n"
+      "Elle réfléchit vraiment avant de répondre.\n\n"
+      "« Non. »")},
+  "seule": {"nom": "🌙 Elle est partie la première", "route": "seule",
+    "exige": [], "poids": -1,
+    "texte": ("Le dernier virement arrive un mardi. Le montant exact prévu au contrat, "
+      "au won près.\n\n"
+      "Yuna le regarde longtemps, puis ferme l'application.\n\n"
+      "Elle rend les clés de l'appartement le vendredi. Sora l'aide à porter les cartons "
+      "et ne pose aucune question, ce qui est la chose la plus gentille qu'on ait faite "
+      "pour elle depuis des mois.\n\n"
+      "Seo-jun envoie un message à 23h47. Elle le lit. Elle ne répond pas.\n\n"
+      "Ce n'est pas triste, en fait. C'est juste fini.\n\n"
+      "Et pour la première fois depuis trois mois, personne n'attend rien d'elle.")},
+ },
+ "episodes": [
+  # ─── 1 ───────────────────────────────────────────────
+  {"titre": "Le contrat",
+   "scenes": [
+    ("Le café ferme à vingt-trois heures. Il est vingt-trois heures dix, et Yuna essuie la même "
+     "table depuis quatre minutes parce que la femme assise en face refuse de partir.\n\n"
+     "« Trois mois », répète Mme Kang.\n\n"
+     "Elle a posé une enveloppe sur la table. Elle ne l'a pas ouverte. Elle n'en a pas besoin — "
+     "l'épaisseur parle toute seule."),
+    ("« Vous voulez que je fasse semblant de sortir avec votre fils. »\n\n"
+     "« Je veux que vous soyez convaincante. C'est différent. »\n\n"
+     "Yuna repose son chiffon. Elle pense au loyer. Elle pense à sa sœur. Elle pense qu'il y a "
+     "trois semaines, elle aurait ri au nez de cette femme.\n\n"
+     "« Pourquoi moi ? »\n\n"
+     "Mme Kang sourit, et c'est la première chose sincère de la soirée.\n\n"
+     "« Parce que personne ne vous croira intéressée par l'argent. »"),
+    ("Elle signe à minuit vingt.\n\n"
+     "Dans la voiture, en rentrant, elle relit la clause 4 : *aucun sentiment réel ne devra "
+     "interférer avec l'exécution du présent accord.*\n\n"
+     "Elle trouve ça ridicule.\n\n"
+     "Elle le trouvera moins ridicule dans onze semaines."),
+   ]},
+  # ─── 2 ───────────────────────────────────────────────
+  {"titre": "Première apparition",
+   "precedemment": "Yuna a signé. Trois mois, à partir de maintenant.",
+   "scenes": [
+    ("Seo-jun est en retard de douze minutes et ne s'excuse pas.\n\n"
+     "« Vous êtes la fille du café. »\n\n"
+     "« Yuna. »\n\n"
+     "« Je sais. »\n\n"
+     "Il ne la regarde pas en disant ça. Il regarde son téléphone, la porte, le serveur — "
+     "tout sauf elle."),
+    ("Le dîner dure une heure quarante. Ils parlent de la météo, d'un immeuble que son père "
+     "construit à Busan, et d'absolument rien d'autre.\n\n"
+     "Au dessert, une femme s'arrête à leur table pour saluer Mme Kang, qui n'est pas là.\n\n"
+     "La main de Seo-jun se pose sur celle de Yuna. Naturellement. Sans hésiter une seconde.\n\n"
+     "Il rit à quelque chose qu'elle n'a pas dit. La femme repart charmée.\n\n"
+     "Il retire sa main exactement au moment où la porte se referme."),
+    ("Dans le hall, il lui tend une enveloppe.\n\n"
+     "« Vos frais du mois. »\n\n"
+     "« Vous auriez pu virer ça. »\n\n"
+     "« Ma mère préfère le papier. »\n\n"
+     "Il part sans dire au revoir. Yuna reste avec l'enveloppe dans les mains, "
+     "au milieu d'un hall en marbre, à vingt-deux heures un mardi."),
+   ],
+   "choix": {"question": "L'enveloppe. Qu'est-ce qu'elle en fait ?",
+     "decisif": True,
+     "options": [("garder", "🅰️", "L'ouvrir et compter"),
+                 ("cacher", "🅱️", "La cacher dans le tiroir sans l'ouvrir"),
+                 ("rendre", "🅲", "La lui renvoyer")],
+     "suites": {
+      "garder": {"pose": ["compte_argent"],
+        "texte": ("Elle compte deux fois. Le montant est plus élevé que prévu.\n\n"
+          "Elle range les billets, garde l'enveloppe vide, et ne se demande pas pourquoi.")},
+      "cacher": {"pose": ["enveloppe_tiroir"],
+        "texte": ("Elle ouvre le tiroir du bas, celui qui coince, et la glisse au fond "
+          "sous les vieux papiers.\n\n"
+          "Elle referme. Elle n'y repensera pas avant longtemps.")},
+      "rendre": {"pose": ["fierte"], "ferme": ["secret"],
+        "texte": ("Elle la dépose à la réception de l'immeuble Kang le lendemain matin, "
+          "sans mot, sans explication.\n\n"
+          "Il l'appelle à quinze heures. C'est la première fois qu'elle entend sa voix "
+          "sans son masque poli.\n\n"
+          "« Vous êtes sérieuse ? »\n\n"
+          "« Très. »\n\n"
+          "Il raccroche. Elle sourit toute l'après-midi.")}}},
+   "interlude": {"type": "instagram", "compte": "@seojun.k",
+     "texte": "Photo d'un plafond de restaurant. Rien d'autre dans le cadre.\n\n« long. »",
+     "likes": 3402, "detail": "Hae-rin a aimé cette publication."}},
+  # ─── 3 ───────────────────────────────────────────────
+  {"titre": "Ce que Sora sait",
+   "scenes": [
+    ("« Tu sors avec Kang Seo-jun. »\n\n"
+     "Sora n'a pas posé une question. Elle a posé son téléphone, écran vers le haut, "
+     "avec une photo d'eux deux au restaurant. Prise de loin. Par quelqu'un d'autre.\n\n"
+     "« C'est compliqué. »\n\n"
+     "« C'est toujours compliqué avec eux. »\n\n"
+     "*Eux.* Le pluriel reste en suspens."),
+    ("Plus tard, dans la cuisine, Sora dit une chose bizarre.\n\n"
+     "« Fais juste attention à sa mère. »\n\n"
+     "« Tu la connais ? »\n\n"
+     "Sora ouvre le frigo, regarde à l'intérieur pendant trop longtemps, et le referme "
+     "sans rien prendre.\n\n"
+     "« Ma cousine a travaillé pour eux. »\n\n"
+     "Elle ne dit pas ce qui est arrivé à sa cousine."),
+    {"si": "enveloppe_tiroir", "texte":
+     ("Cette nuit-là, Yuna rêve du tiroir du bas.\n\n"
+      "Elle se réveille à quatre heures, va vérifier qu'il est bien fermé, et se recouche "
+      "en se trouvant complètement ridicule.")},
+   ]},
+  # ─── 4 ───────────────────────────────────────────────
+  {"titre": "Min-jae",
+   "scenes": [
+    ("Il l'attend devant chez elle avec deux sachets de ramyeon et un air qu'elle connaît "
+     "depuis le lycée.\n\n"
+     "« Tu ne réponds plus. »\n\n"
+     "« J'ai été occupée. »\n\n"
+     "« Avec Kang Seo-jun. »\n\n"
+     "Il le dit sans reproche, ce qui est infiniment pire."),
+    ("Ils mangent assis sur les marches parce que l'ascenseur est en panne et qu'aucun des "
+     "deux n'a envie de monter six étages.\n\n"
+     "Il lui vole un morceau d'œuf. Elle lui donne un coup de coude. Il rit, et pendant "
+     "trente secondes tout est exactement comme avant.\n\n"
+     "Puis il dit :\n\n"
+     "« Tu es heureuse ? »\n\n"
+     "Et elle met une seconde de trop à répondre."),
+   ],
+   "choix": {"question": "Min-jae attend la réponse.",
+     "options": [("verite_mj", "🅰️", "Lui dire la vérité sur le contrat"),
+                 ("mentir_mj", "🅱️", "Mentir : « Oui, je suis heureuse »"),
+                 ("esquiver", "🅲", "Changer de sujet")],
+     "suites": {
+      "verite_mj": {"pose": ["verite_minjae", "confiance_minjae"], "ferme": ["secret"],
+        "texte": ("Elle lui raconte tout. Le café, l'enveloppe, la clause 4.\n\n"
+          "Min-jae écoute jusqu'au bout sans l'interrompre une seule fois.\n\n"
+          "Puis : « D'accord. Qu'est-ce que je peux faire ? »\n\n"
+          "Pas *pourquoi tu as fait ça*. Pas *tu es folle*.\n\n"
+          "Elle se met à pleurer sur les marches d'un immeuble, avec un sachet de ramyeon "
+          "froid sur les genoux, et elle ne sait pas exactement pourquoi.")},
+      "mentir_mj": {"pose": ["mensonge_minjae"],
+        "texte": ("« Oui. »\n\n"
+          "Il hoche la tête. Il finit son ramyeon. Il rentre chez lui.\n\n"
+          "Il ne la croit pas. Elle le sait. Il sait qu'elle le sait.\n\n"
+          "Aucun des deux ne dit rien.")},
+      "esquiver": {"pose": ["distance_minjae"],
+        "texte": ("« Tu as vu qu'ils rouvrent le marché de nuit ? »\n\n"
+          "Min-jae la regarde une seconde de trop.\n\n"
+          "« Ouais. J'ai vu. »\n\n"
+          "Il part vingt minutes plus tôt que d'habitude.")}}}},
+  # ─── 5 ───────────────────────────────────────────────
+  {"titre": "Le sweat",
+   "precedemment": None,
+   "scenes": [
+    ("L'événement caritatif dure quatre heures. Yuna porte des chaussures qui la tuent "
+     "et un sourire qui la tue davantage.\n\n"
+     "Seo-jun la présente à quarante personnes. Il retient tous les prénoms. Il ne se trompe "
+     "jamais sur le sien.\n\n"
+     "À un moment, entre deux conversations, il lui glisse : « Encore vingt minutes. »\n\n"
+     "Ce n'est pas de la gentillesse. C'est de la logistique.\n\n"
+     "Ça lui fait quand même quelque chose."),
+    ("Sur le parking, il fait quatre degrés. Elle a oublié son manteau à l'intérieur "
+     "et refuse d'y retourner.\n\n"
+     "Il retire son sweat et le lui tend sans commentaire.\n\n"
+     "« Vous allez avoir froid. »\n\n"
+     "« Je conduis. »\n\n"
+     "Ce n'est pas une réponse. Elle le prend quand même."),
+    ("Dans la voiture, elle remarque qu'il a mémorisé son café.\n\n"
+     "Il y en a un dans le porte-gobelet. Chaud. Sa commande exacte, y compris "
+     "le détail ridicule qu'elle ajoute toujours et dont elle a honte.\n\n"
+     "Elle ne dit rien.\n\n"
+     "Il ne dit rien non plus.\n\n"
+     "La radio joue une chanson que personne n'éteint."),
+   ],
+   "interlude": {"type": "sms", "heure": "02:41",
+     "lignes": [("Min-jae", "t'es rentrée ?"), ("Min-jae", "ok laisse tomber"),
+                ("_système_", "Message supprimé.")]}},
+  # ─── 6 ───────────────────────────────────────────────
+  {"titre": "Hae-rin",
+   "scenes": [
+    ("Elle l'attend à la sortie du café. Yuna la reconnaît avant même qu'elle parle — "
+     "on lui a montré assez de photos.\n\n"
+     "« Vous avez cinq minutes ? »\n\n"
+     "Hae-rin ne ressemble pas du tout à ce qu'on raconte. Elle a l'air fatiguée."),
+    ("« Je ne suis pas là pour faire une scène. »\n\n"
+     "Elle sort son téléphone, fait défiler, et le pose sur la table.\n\n"
+     "C'est un virement. De Mme Kang. Daté d'il y a deux ans.\n\n"
+     "« Elle m'a payée aussi. »\n\n"
+     "Yuna ne dit rien pendant un long moment.\n\n"
+     "« Pourquoi vous me racontez ça ? »\n\n"
+     "« Parce que moi, personne ne m'a prévenue. »"),
+   ],
+   "choix": {"question": "Que fait Yuna de cette information ?",
+     "decisif": True,
+     "options": [("confronter", "🅰️", "En parler directement à Seo-jun"),
+                 ("garder", "🅱️", "Ne rien dire et observer"),
+                 ("kang", "🅲", "Aller voir Mme Kang")],
+     "suites": {
+      "confronter": {"pose": ["verite_partagee", "confiance_seojun"],
+        "texte": ("Elle lui montre la capture le soir même.\n\n"
+          "Il la regarde longtemps. Puis il s'assoit, ce qu'il ne fait jamais en premier.\n\n"
+          "« Je ne savais pas pour Hae-rin. »\n\n"
+          "« Je te crois. »\n\n"
+          "Elle réalise en le disant que c'est vrai.")},
+      "garder": {"pose": ["soupcon", "relation_cachee"],
+        "texte": ("Elle range la capture d'écran dans un dossier sans nom.\n\n"
+          "Pendant les deux semaines qui suivent, elle observe. La façon dont il répond "
+          "au téléphone quand c'est sa mère. La seconde d'hésitation avant certaines phrases.\n\n"
+          "Elle ne trouve rien.\n\n"
+          "Ce qui ne veut pas dire qu'il n'y a rien.")},
+      "kang": {"pose": ["confrontation_kang", "dossier_ouvert"], "ferme": ["secret"],
+        "texte": ("Mme Kang la reçoit sans rendez-vous, ce qui est en soi une réponse.\n\n"
+          "« Hae-rin est venue vous voir. »\n\n"
+          "Ce n'est pas une question.\n\n"
+          "« Elle a été payée. Comme moi. »\n\n"
+          "« Elle a été payée pour partir. Vous, pour rester. Ce n'est pas le même contrat. »\n\n"
+          "Elle sert le thé. Sa main ne tremble pas du tout.\n\n"
+          "« Asseyez-vous, Yuna. Il y a des choses que vous devriez savoir sur votre père. »")}}}},
+  # ─── 7 ───────────────────────────────────────────────
+  {"titre": "La soirée où tout a dérapé",
+   "scenes": [
+    ("Il pleut depuis quatre heures et l'hôtel est complet à cause du congrès.\n\n"
+     "Une chambre. Deux personnes. Un contrat qui ne prévoit absolument pas ce cas de figure.\n\n"
+     "« Je prends le canapé », dit-il avant qu'elle ait ouvert la bouche."),
+    ("À une heure du matin, ils sont toujours réveillés tous les deux et font semblant "
+     "de ne pas le savoir.\n\n"
+     "C'est lui qui craque en premier.\n\n"
+     "« Tu dors ? »\n\n"
+     "« Non. »\n\n"
+     "« Ma mère t'a dit quoi, exactement, le premier soir ? »"),
+    ("Ils parlent jusqu'à quatre heures.\n\n"
+     "Il lui raconte l'internat, le divorce, la fois où il a raté un vol exprès pour rester "
+     "trois jours de plus quelque part où personne ne le connaissait.\n\n"
+     "Elle lui raconte sa sœur, les deux jobs, la honte du détail dans son café.\n\n"
+     "À un moment, elle s'endort au milieu d'une phrase.\n\n"
+     "Il ne la réveille pas. Il éteint la lampe et reste assis dans le noir encore un moment."),
+   ],
+   "choix": {"question": "Au matin, il est déjà debout près de la porte.",
+     "decisif": True,
+     "options": [("embrasser", "🅰️", "L'embrasser avant qu'il parte"),
+                 ("demander", "🅱️", "Lui demander qui est vraiment Hae-rin"),
+                 ("rien", "🅲", "Faire comme si la nuit n'avait pas existé")],
+     "suites": {
+      "embrasser": {"pose": ["nuit_hotel", "confiance_seojun"], "ferme": ["minjae"],
+        "texte": ("Elle traverse la chambre pieds nus et l'embrasse avant d'avoir décidé "
+          "qu'elle allait le faire.\n\n"
+          "Il ne recule pas.\n\n"
+          "Quand elle s'écarte, il a l'air de quelqu'un à qui on vient de casser quelque chose "
+          "d'important et qui n'arrive pas à en être en colère.\n\n"
+          "« Clause 4 », murmure-t-il.\n\n"
+          "« Attaque-moi en justice. »")},
+      "demander": {"pose": ["nuit_hotel", "verite_partagee"],
+        "texte": ("« Qui est Hae-rin, vraiment ? »\n\n"
+          "Il s'arrête, la main sur la poignée.\n\n"
+          "« Quelqu'un que ma mère a fait disparaître de ma vie en dix-sept jours. »\n\n"
+          "Il sort.\n\n"
+          "Il n'a pas fermé la porte derrière lui, et Yuna reste à la regarder très longtemps.")},
+      "rien": {"pose": ["distance_seojun"],
+        "texte": ("Elle referme les yeux et attend d'entendre la porte.\n\n"
+          "Il reste immobile un moment — assez longtemps pour qu'elle se demande s'il sait "
+          "qu'elle ne dort pas.\n\n"
+          "Puis il part.\n\n"
+          "Le café sur la table de nuit est encore chaud.")}}}},
+  # ─── 8 ───────────────────────────────────────────────
+  {"titre": "Ce qu'elle n'entend pas",
+   "scenes": [
+    ("*Pendant qu'elle dort.*\n\n"
+     "Seo-jun est dans le couloir de l'hôtel avec son téléphone contre l'oreille.\n\n"
+     "« Non. »\n\n"
+     "…\n\n"
+     "« J'ai dit non, maman. »"),
+    ("« Elle ne doit jamais apprendre pourquoi son père est parti. Tu comprends ce que "
+     "ça déclencherait. »\n\n"
+     "Un long silence.\n\n"
+     "« Et si elle l'apprend toute seule ? »\n\n"
+     "« Alors tu auras trois mois d'avance pour décider de quel côté tu es. »\n\n"
+     "Il raccroche. Il supprime l'appel de son journal.\n\n"
+     "Dans la chambre, Yuna dort encore."),
+    ("*Vous savez. Elle non.*"),
+   ],
+   "interlude": {"type": "instagram", "compte": "@sora_",
+     "texte": "Une photo d'un vieux bracelet posé sur une table.\n\n« retrouvé en rangeant 🥲 »",
+     "likes": 89, "detail": "Hae-rin porte le même sur une photo de l'épisode 6."}},
+  # ─── 9 ───────────────────────────────────────────────
+  {"titre": "Le tiroir",
+   "scenes": [
+    {"si": "enveloppe_tiroir", "texte":
+     ("Mme Kang n'était pas censée venir.\n\n"
+      "Elle est là quand Yuna rentre, assise dans le salon, avec Sora qui lui a ouvert "
+      "et qui n'a pas su dire non.\n\n"
+      "« Votre chambre est jolie. »\n\n"
+      "Yuna se fige.\n\n"
+      "Le tiroir du bas est entrouvert. L'enveloppe dépasse d'un centimètre.\n\n"
+      "*Celle-là.*\n\n"
+      "🦋 *Votre décision de l'épisode 2 vient de vous rattraper.*")},
+    {"sauf": "enveloppe_tiroir", "texte":
+     ("Mme Kang n'était pas censée venir.\n\n"
+      "Elle est là quand Yuna rentre, assise dans le salon, avec Sora qui lui a ouvert "
+      "et qui n'a pas su dire non.\n\n"
+      "« Vous rangez bien », dit-elle en balayant la pièce du regard.\n\n"
+      "Elle ne trouve rien. Ça ne l'empêche pas de sourire.")},
+    ("« Le contrat se termine dans cinq semaines. »\n\n"
+     "« Je sais compter. »\n\n"
+     "« Alors comptez aussi ceci : mon fils n'a jamais rompu un accord de sa vie. "
+     "Pas un seul. »\n\n"
+     "Elle se lève, remet son manteau, et s'arrête à la porte.\n\n"
+     "« Ce serait dommage que vous soyez la première chose qu'il perde. »"),
+   ]},
+  # ─── 10 ──────────────────────────────────────────────
+  {"titre": "La photo",
+   "scenes": [
+    ("La photo sort un jeudi matin.\n\n"
+     "Eux deux, dans le hall de l'hôtel, à six heures du matin. L'angle est mauvais. "
+     "L'intention ne l'est pas.\n\n"
+     "En trois heures, elle est partout."),
+    ("« Ce n'est pas Hae-rin », dit Seo-jun au téléphone. « Elle n'était pas à Séoul. »\n\n"
+     "« Comment tu le sais ? »\n\n"
+     "« Parce que je lui ai demandé. »\n\n"
+     "Yuna repense à l'épisode du café. À la fatigue sur son visage.\n\n"
+     "Puis elle repense à Sora, qui savait pour l'hôtel avant tout le monde."),
+   ],
+   "choix": {"question": "🔎 Qui a envoyé cette photo ?",
+     "options": [("acc_sora", "🅰️", "Sora"),
+                 ("acc_haerin", "🅱️", "Hae-rin"),
+                 ("acc_kang", "🅲", "Mme Kang elle-même")],
+     "suites": {
+      "acc_sora": {"pose": ["accuse_sora"],
+        "texte": ("Yuna pose la question directement.\n\n"
+          "Sora ne nie pas. Elle ne confirme pas non plus.\n\n"
+          "« Tu crois vraiment que je te ferais ça ? »\n\n"
+          "« Je ne sais plus ce que je crois. »\n\n"
+          "Sora prend son manteau et sort. Elle ne rentre pas dormir ce soir-là.")},
+      "acc_haerin": {"pose": ["accuse_haerin"],
+        "texte": ("Hae-rin répond en trois mots.\n\n"
+          "« Encore moi ? Vraiment ? »\n\n"
+          "Puis elle bloque le numéro.\n\n"
+          "Yuna reste avec l'écran allumé dans le noir, et l'impression très nette "
+          "d'avoir fait exactement ce qu'on attendait d'elle.")},
+      "acc_kang": {"pose": ["soupcon_kang", "dossier_ouvert"],
+        "texte": ("Elle ne l'accuse pas. Elle vérifie.\n\n"
+          "L'hôtel a une caméra dans le hall. La réception garde les enregistrements "
+          "quinze jours. Il en reste trois.\n\n"
+          "Sur la vidéo, à 05h52, une femme en manteau clair traverse le hall "
+          "et lève son téléphone.\n\n"
+          "Ce n'est pas Mme Kang.\n\n"
+          "C'est son assistante.")}}}},
+  # ─── 11 ──────────────────────────────────────────────
+  {"titre": "Le dossier",
+   "scenes": [
+    {"si": "dossier_ouvert", "texte":
+     ("Le dossier fait quarante pages. Yuna en lit six avant de devoir s'arrêter.\n\n"
+      "Son père n'est pas parti.\n\n"
+      "Il a été payé pour partir. Par le groupe Kang. Il y a dix-neuf ans, "
+      "après un accident sur un chantier dont personne n'a jamais entendu parler.\n\n"
+      "Le nom sur l'ordre de virement est celui de Mme Kang.\n\n"
+      "La signature en dessous est celle de son père.")},
+    {"sauf": "dossier_ouvert", "texte":
+     ("C'est Sora qui le lui donne, dans une enveloppe kraft, sans un mot.\n\n"
+      "« Ma cousine l'a gardé pendant six ans. »\n\n"
+      "Yuna l'ouvre dans la cuisine, debout, et lit les six premières pages "
+      "avant de devoir s'asseoir.\n\n"
+      "Son père n'est pas parti. Il a été payé pour partir.")},
+    ("Seo-jun arrive à vingt-trois heures parce qu'elle a écrit trois mots et raccroché.\n\n"
+     "Il voit le dossier sur la table.\n\n"
+     "Il ne demande pas ce que c'est.\n\n"
+     "*Il sait.*"),
+   ],
+   "choix": {"question": "Il est là, debout dans l'entrée. Il n'a pas enlevé son manteau.",
+     "decisif": True,
+     "options": [("pardon", "🅰️", "« Depuis quand tu le sais ? »"),
+                 ("dehors", "🅱️", "Lui dire de partir"),
+                 ("ensemble", "🅲", "« Aide-moi à comprendre »")],
+     "suites": {
+      "pardon": {"pose": ["verite_partagee"],
+        "texte": ("« Depuis l'hôtel. »\n\n"
+          "Neuf jours. Il a su pendant neuf jours.\n\n"
+          "« Pourquoi tu n'as rien dit ? »\n\n"
+          "« Parce que je cherchais une façon de te le dire qui ne te ferait pas partir. »\n\n"
+          "Il n'en a pas trouvé. Il est venu quand même.")},
+      "dehors": {"pose": ["rupture"], "ferme": ["seojun", "secret"],
+        "texte": ("« Sors de chez moi. »\n\n"
+          "Il ne discute pas. Il ne plaide pas. Il hoche la tête une fois et il s'en va, "
+          "et c'est peut-être ça le pire.\n\n"
+          "Elle entend la porte de l'immeuble claquer six étages plus bas.\n\n"
+          "Puis plus rien pendant très longtemps.")},
+      "ensemble": {"pose": ["verite_partagee", "confiance_seojun", "confrontation_kang"],
+        "texte": ("« Assieds-toi. Aide-moi à comprendre. »\n\n"
+          "Il enlève son manteau.\n\n"
+          "Ils restent à cette table jusqu'à cinq heures du matin, avec quarante pages "
+          "étalées entre eux, à reconstituer dix-neuf ans.\n\n"
+          "Au lever du jour, il dit :\n\n"
+          "« Si on va au bout, je perds ma famille. »\n\n"
+          "« Je sais. »\n\n"
+          "« Je n'ai pas dit que je ne voulais pas. »")}}}},
+  # ─── 12 ──────────────────────────────────────────────
+  {"titre": "Cinq semaines",
+   "scenes": [
+    ("Le contrat se termine dans cinq jours, et personne n'en parle.\n\n"
+     "Ils continuent les dîners. Les photos. Les mains posées au bon moment.\n\n"
+     "Sauf que maintenant, quand la porte se referme, aucun des deux ne retire sa main "
+     "tout de suite."),
+    {"si": "verite_minjae", "texte":
+     ("Min-jae passe le mercredi. Il apporte du ramyeon, par habitude.\n\n"
+      "« Tu vas faire quoi, vendredi ? »\n\n"
+      "« Je ne sais pas. »\n\n"
+      "« Menteuse. »\n\n"
+      "Il sourit en le disant. C'est un vrai sourire, et ça lui coûte visiblement quelque chose.\n\n"
+      "« Vas-y. Je te récupérerai si ça se passe mal. Comme toujours. »")},
+    {"si": "mensonge_minjae", "texte":
+     ("Min-jae ne passe pas.\n\n"
+      "Il n'a pas répondu depuis onze jours.\n\n"
+      "Yuna commence trois messages. Elle n'en envoie aucun.")},
+   ]},
+  # ─── 13 ──────────────────────────────────────────────
+  {"titre": "Vendredi",
+   "scenes": [
+    ("Le dernier soir du contrat, Mme Kang organise un dîner. Évidemment.\n\n"
+     "Trente personnes. Un discours. Une annonce de fiançailles prévue au dessert "
+     "dont Yuna n'a été informée par personne."),
+    ("Elle l'apprend en entendant le traiteur en parler dans le couloir.\n\n"
+     "Elle reste dix minutes dans les toilettes du deuxième étage à respirer.\n\n"
+     "Quand elle ressort, Seo-jun est appuyé contre le mur d'en face.\n\n"
+     "« Tu es au courant depuis quand ? »\n\n"
+     "« Quatre minutes de plus que toi. »"),
+   ],
+   "choix": {"question": "En bas, trente personnes attendent le dessert.",
+     "decisif": True,
+     "options": [("partir", "🅰️", "Partir maintenant, tous les deux"),
+                 ("verite_publique", "🅱️", "Descendre et dire la vérité devant tout le monde"),
+                 ("jouer", "🅲", "Descendre et jouer le rôle une dernière fois")],
+     "suites": {
+      "partir": {"pose": ["fuite_ensemble", "confiance_seojun"],
+        "texte": ("Ils sortent par l'escalier de service.\n\n"
+          "Personne ne les voit partir. La voiture démarre au moment exact où le traiteur "
+          "entre en salle avec le dessert.\n\n"
+          "Ils roulent une heure sans destination.\n\n"
+          "« On va où ? »\n\n"
+          "« Aucune idée. »\n\n"
+          "C'est la première décision qu'aucun contrat n'a prévue.")},
+      "verite_publique": {"pose": ["verite_publique", "confrontation_kang", "dossier_ouvert"],
+        "ferme": ["secret"],
+        "texte": ("Elle prend le micro avant le discours.\n\n"
+          "Elle parle quatre minutes. Elle ne pleure pas. Elle ne crie pas.\n\n"
+          "Elle dit le contrat, les trois mois, le montant exact. Puis elle dit le nom "
+          "de son père et la date du virement.\n\n"
+          "À la fin, il y a un silence absolu dans une salle de trente personnes.\n\n"
+          "Puis Seo-jun se lève, traverse la pièce, et vient se placer à côté d'elle.\n\n"
+          "Il ne dit rien. Il n'a pas besoin.")},
+      "jouer": {"pose": ["derniere_scene"],
+        "texte": ("Elle descend. Elle sourit. Elle joue.\n\n"
+          "C'est la meilleure performance des trois mois — tout le monde le remarque, "
+          "personne ne comprend pourquoi.\n\n"
+          "Au dessert, Mme Kang se lève pour son annonce.\n\n"
+          "Seo-jun lui coupe la parole.\n\n"
+          "« Le contrat s'achève ce soir. Merci d'être venus. »\n\n"
+          "Il pose sa serviette et il sort.")}}}},
+  # ─── 14 — FINALE ─────────────────────────────────────
+  {"titre": "Cette fois, pour de vrai",
+   "finale": True,
+   "scenes": [
+    ("Le contrat a expiré à minuit.\n\n"
+     "Il n'y a plus de clause 4. Plus de montant mensuel. Plus de raison de se voir.\n\n"
+     "C'est exactement ce qui rend la suite terrifiante."),
+   ]},
+ ],
+ "epilogue": ("**6 MOIS PLUS TARD**\n\n"
+   "Sora a ouvert son propre café. Le détail ridicule que Yuna ajoute à son café "
+   "est sur la carte, sous un faux nom.\n\n"
+   "Hae-rin a témoigné. Elle n'était pas obligée.\n\n"
+   "Mme Kang n'a rien perdu — les gens comme elle ne perdent jamais vraiment. "
+   "Mais elle n'appelle plus.\n\n"
+   "Min-jae s'est installé à Busan en septembre. Il envoie encore des photos de son ramyeon. "
+   "Yuna répond à chaque fois."),
+}
+
+CHRONIQUE_SAISONS["colocation"] = {
+ "titre": "LA CHAMBRE D'À CÔTÉ",
+ "genre": "🔥 Enemies to Lovers",
+ "accroche": "Ils se détestent depuis la fac. L'agence a fait une erreur. Le bail dure un an.",
+ "casting": {
+   "elle":   ("👩", "Da-eun", "Architecte junior. Range par couleur. Ne cède jamais en premier."),
+   "taeyang":("🔥", "Tae-yang", "Chef de rang. Bordélique, drôle, insupportable de calme."),
+   "jiho":   ("🎧", "Ji-ho", "Le frère de Da-eun. Vit sur leur canapé « deux nuits max »."),
+   "yerin":  ("🌸", "Ye-rin", "Collègue de Da-eun. Elle a un plan pour tout, surtout pour les autres."),
+   "chef":   ("🍳", "Chef Baek", "Le patron de Tae-yang. Il sait pourquoi Tae-yang a quitté Paris."),
+ },
+ "ending_defaut": "colocs",
+ "endings": {
+  "ensemble": {"nom": "🔥 On garde l'appartement", "route": "ensemble",
+    "exige": ["nuit_cuisine", "verite_paris", "il_est_reste"], "poids": 0,
+    "texte": ("Le bail se renouvelle un mardi. L'agence envoie un formulaire à signer.\n\n"
+      "Da-eun le pose sur la table de la cuisine sans rien dire.\n\n"
+      "Tae-yang le lit en mangeant des céréales à quinze heures, ce qui devrait encore l'agacer "
+      "et ne l'agace plus du tout.\n\n"
+      "« Une case pour deux occupants. »\n\n"
+      "« Je sais. »\n\n"
+      "« Ou une case pour un couple. »\n\n"
+      "Elle lève les yeux. Il ne sourit même pas — c'est ça, le pire, il a l'air sérieux.\n\n"
+      "Elle prend le stylo. Elle coche la deuxième case.\n\n"
+      "« Si tu laisses encore une poêle sale, je te fais expulser. »\n\n"
+      "« Noté. »")},
+  "paris": {"nom": "✈️ Il est reparti", "route": "paris",
+    "exige": ["verite_paris"], "interdit": ["il_est_reste"], "poids": 1,
+    "texte": ("Le vol est à six heures dix. Elle ne va pas à l'aéroport — ils en avaient parlé, "
+      "tous les deux, et ils étaient d'accord que ce serait ridicule.\n\n"
+      "Elle se réveille quand même à quatre heures.\n\n"
+      "La porte de sa chambre est ouverte. Le lit est fait pour la première fois en onze mois.\n\n"
+      "Sur la table de la cuisine, une poêle. Propre. Retournée sur le torchon.\n\n"
+      "Et un post-it :\n\n"
+      "*« Deux ans. Je reviens. Ne relouе pas ma chambre. »*\n\n"
+      "Elle garde le post-it. Elle ne reloue pas la chambre.")},
+  "amis": {"nom": "🤍 Ce qu'on est devenus", "route": "amis",
+    "exige": ["choix_amitie"], "poids": 0,
+    "texte": ("Ils ne se mettent jamais ensemble.\n\n"
+      "C'est une décision, pas un échec — ils en parlent une fois, une seule, "
+      "un soir de novembre où il pleut trop pour sortir.\n\n"
+      "« On serait horribles ensemble », dit-elle.\n\n"
+      "« Catastrophiques. »\n\n"
+      "« Tu laisses tes chaussettes partout. »\n\n"
+      "« Tu ranges mes affaires et après je les trouve plus. »\n\n"
+      "Ils rient. Puis le silence retombe, confortable.\n\n"
+      "Quatre ans plus tard, il est témoin à son mariage. Il fait le meilleur discours "
+      "que quiconque ait jamais entendu, et il pleure plus que la mariée.")},
+  "colocs": {"nom": "🚪 Chacun sa chambre", "route": "colocs", "exige": [], "poids": -1,
+    "texte": ("Le bail se termine en juin. Personne ne propose de le renouveler.\n\n"
+      "Ils déménagent le même week-end, à trois heures d'intervalle, "
+      "pour ne pas avoir à se croiser dans l'escalier avec des cartons.\n\n"
+      "Elle trouve un studio près du bureau. Il prend une colocation avec deux collègues.\n\n"
+      "Ils s'envoient un message à Noël. Poli. Court.\n\n"
+      "Parfois, dans sa nouvelle cuisine trop silencieuse, Da-eun se surprend à attendre "
+      "le bruit d'une poêle qu'on repose mal.")},
+ },
+ "episodes": [
+  {"titre": "L'erreur de l'agence",
+   "scenes": [
+    ("Il y a exactement une seconde entre le moment où la porte s'ouvre et celui où "
+     "Da-eun comprend.\n\n"
+     "« Non. »\n\n"
+     "« Bonjour à toi aussi. »\n\n"
+     "Tae-yang est appuyé contre le chambranle avec un carton sous le bras "
+     "et l'air de quelqu'un qui trouve la situation très drôle."),
+    ("L'agence a mélangé deux dossiers. Le bail est signé. Par les deux.\n\n"
+     "« On peut résilier », dit-elle au téléphone.\n\n"
+     "« Trois mois de préavis et deux mois de pénalité, madame. »\n\n"
+     "Elle raccroche. Tae-yang la regarde depuis le canapé, où il s'est déjà installé.\n\n"
+     "« Alors ? »\n\n"
+     "« Ne me parle pas. »"),
+    ("Ils établissent des règles le premier soir, sur un papier, comme deux adultes.\n\n"
+     "*1. La cuisine est partagée. Chacun nettoie.*\n"
+     "*2. Pas d'invités après 23h.*\n"
+     "*3. On ne se parle pas si ce n'est pas nécessaire.*\n\n"
+     "Le papier tient trois jours."),
+   ]},
+  {"titre": "La poêle",
+   "scenes": [
+    ("Le conflit éclate sur une poêle.\n\n"
+     "Pas sur la fac. Pas sur ce qu'il avait dit en troisième année devant tout le monde.\n\n"
+     "Sur une poêle laissée dans l'évier pendant deux jours."),
+    ("« Tu es chef. CHEF. Comment tu peux laisser ça ? »\n\n"
+     "« Je cuisine douze heures par jour. Chez moi, je décompresse. »\n\n"
+     "« Ce n'est pas *chez toi*. C'est chez nous. »\n\n"
+     "Il s'arrête. Elle réalise ce qu'elle vient de dire.\n\n"
+     "« Chez nous », il répète, et cette fois il sourit vraiment."),
+   ],
+   "choix": {"question": "Il attend une réaction.",
+     "decisif": True,
+     "options": [("lave", "🅰️", "Laver la poêle en silence"),
+                 ("laisse", "🅱️", "Laisser la poêle et partir"),
+                 ("cuisine", "🅲", "« Alors apprends-moi à faire mieux que toi »")],
+     "suites": {
+      "lave": {"pose": ["tension_froide"],
+        "texte": ("Elle lave la poêle. Elle la range. Elle ne dit plus un mot de la soirée.\n\n"
+          "Le lendemain matin, la poêle est de nouveau dans l'évier.\n\n"
+          "Cette fois, elle sait qu'il l'a fait exprès.")},
+      "laisse": {"pose": ["guerre_froide"], "ferme": ["ensemble"],
+        "texte": ("Elle sort en claquant la porte.\n\n"
+          "Quand elle rentre à minuit, la cuisine est impeccable. Tout. Y compris "
+          "les placards qu'elle voulait réorganiser depuis un mois.\n\n"
+          "Il dort déjà.\n\n"
+          "Elle reste dix minutes debout dans la cuisine propre, très en colère "
+          "sans arriver à savoir contre qui.")},
+      "cuisine": {"pose": ["nuit_cuisine", "complicite"],
+        "texte": ("« Alors apprends-moi à faire mieux que toi. »\n\n"
+          "Il la regarde une seconde de trop.\n\n"
+          "Puis il ouvre le frigo.\n\n"
+          "Ils cuisinent jusqu'à deux heures du matin. Elle rate deux fois la sauce. "
+          "Il ne se moque qu'une seule fois, ce qui est un exploit.\n\n"
+          "À un moment, il pose sa main sur la sienne pour corriger un geste, "
+          "et aucun des deux ne commente.")}}},
+   "interlude": {"type": "sms", "heure": "01:52",
+     "lignes": [("Ye-rin", "alors la coloc ?"), ("Da-eun", "je vais le tuer"),
+                ("Ye-rin", "tu as mis 4h à répondre"), ("Ye-rin", "🤨")]}},
+  {"titre": "Ji-ho",
+   "scenes": [
+    ("Le frère de Da-eun débarque un dimanche avec un sac et une explication vague.\n\n"
+     "« Deux nuits max. »\n\n"
+     "Il restera six semaines."),
+    ("Ji-ho a une qualité : il désamorce tout.\n\n"
+     "Quand Da-eun et Tae-yang commencent à se disputer sur la température du "
+     "chauffage, il met la musique plus fort et commande du poulet.\n\n"
+     "Quand personne ne veut céder sur la télécommande, il s'assoit entre eux deux "
+     "et regarde un documentaire sur les pieuvres que personne n'avait choisi.\n\n"
+     "C'est le premier soir où les trois rient en même temps."),
+    {"si": "nuit_cuisine", "texte":
+     ("Plus tard, dans la cuisine, Ji-ho dit à sa sœur :\n\n"
+      "« Il te regarde quand tu parles. »\n\n"
+      "« Tout le monde regarde les gens qui parlent. »\n\n"
+      "« Non. »\n\n"
+      "Il ouvre le frigo, prend une bière, et sort sans développer.")},
+   ]},
+  {"titre": "Ce qu'il a dit en troisième année",
+   "scenes": [
+    ("Ye-rin le ressort un vendredi soir, un peu ivre, en pensant faire de l'humour.\n\n"
+     "« Attends, c'est PAS le mec qui avait dit devant tout l'amphi que ton projet "
+     "était joli mais vide ? »\n\n"
+     "Le silence tombe d'un coup."),
+    ("Dans le taxi du retour, aucun des deux ne parle pendant quinze minutes.\n\n"
+     "Puis Tae-yang :\n\n"
+     "« J'avais vingt et un ans et j'étais un con. »\n\n"
+     "« Tu avais raison. »\n\n"
+     "Il tourne la tête vers elle.\n\n"
+     "« Le projet était vide. J'ai passé quatre ans à essayer que plus jamais "
+     "personne ne puisse dire ça. »\n\n"
+     "« Da-eun… »\n\n"
+     "« C'est bon. Vraiment. »\n\n"
+     "Ce n'est pas bon du tout, et ils le savent tous les deux."),
+   ],
+   "choix": {"question": "Le taxi s'arrête en bas de l'immeuble.",
+     "options": [("monter", "🅰️", "Monter sans en reparler"),
+                 ("parler", "🅱️", "Rester dans la voiture et vider le sac"),
+                 ("marcher", "🅲", "« Marche avec moi »")],
+     "suites": {
+      "monter": {"pose": ["non_dit"],
+        "texte": ("Ils montent. Chacun sa chambre. Chacun sa porte.\n\n"
+          "À trois heures du matin, elle l'entend faire du bruit dans la cuisine.\n\n"
+          "Elle ne se lève pas.")},
+      "parler": {"pose": ["verite_dite", "complicite"],
+        "texte": ("Ils restent quarante minutes dans une voiture à l'arrêt, "
+          "compteur tournant, chauffeur très patient.\n\n"
+          "Elle lui dit tout : l'amphi, les quatre ans, la fois où elle a failli "
+          "abandonner l'architecture à cause d'une phrase de dix secondes.\n\n"
+          "Il écoute sans se justifier une seule fois.\n\n"
+          "À la fin : « Je suis désolé. Vraiment. »\n\n"
+          "Ce n'est pas suffisant. C'est déjà quelque chose.")},
+      "marcher": {"pose": ["complicite", "nuit_cuisine"],
+        "texte": ("Ils marchent une heure dans un quartier vide.\n\n"
+          "Ils ne parlent presque pas de l'amphi. Ils parlent d'autre chose — "
+          "de son premier service raté, de sa première maquette, de la fois où "
+          "elle a pleuré dans un placard de la fac.\n\n"
+          "Au retour, il dit :\n\n"
+          "« Pour info, ton projet de fin d'année, je l'ai gardé en fond d'écran "
+          "pendant six mois. »\n\n"
+          "Puis il monte les escaliers sans attendre sa réaction.")}}}},
+  {"titre": "Paris",
+   "scenes": [
+    ("Chef Baek passe à l'appartement. C'est la première fois.\n\n"
+     "Il apporte du soju et une enveloppe.\n\n"
+     "« Ils te reveulent. »"),
+    ("Da-eun entend depuis le couloir. Elle ne bouge pas.\n\n"
+     "« Deux ans. Sous-chef. C'est le poste que tu voulais. »\n\n"
+     "« J'ai dit non il y a trois ans. »\n\n"
+     "« Tu avais une raison, il y a trois ans. »\n\n"
+     "Un silence.\n\n"
+     "« Et maintenant ? »\n\n"
+     "Tae-yang ne répond pas."),
+    ("*Vous savez. Elle ne sait pas encore pourquoi il avait dit non la première fois.*"),
+   ],
+   "interlude": {"type": "instagram", "compte": "@taeyang.k",
+     "texte": "Photo d'un carnet de recettes ouvert, écriture serrée, une page cornée.\n\n« vieux trucs. »",
+     "likes": 512, "detail": "Chef Baek a commenté : « Rappelle-moi. »"}},
+  {"titre": "La question",
+   "scenes": [
+    ("Elle attend six jours avant d'en parler. Six jours pendant lesquels il ne dit rien "
+     "non plus, ce qui est une réponse en soi.\n\n"
+     "C'est un mardi, à onze heures du soir, dans la cuisine.\n\n"
+     "« Paris. »\n\n"
+     "Il pose son verre."),
+   ],
+   "choix": {"question": "Il attend qu'elle finisse sa phrase.",
+     "decisif": True,
+     "options": [("reste", "🅰️", "« Ne pars pas »"),
+                 ("libre", "🅱️", "« Tu devrais y aller »"),
+                 ("pourquoi", "🅲", "« Pourquoi tu avais dit non la première fois ? »")],
+     "suites": {
+      "reste": {"pose": ["il_est_reste", "aveu"], "ferme": ["paris", "amis"],
+        "texte": ("« Ne pars pas. »\n\n"
+          "Elle l'a dit trop vite, trop fort, et maintenant c'est dans la pièce "
+          "et on ne peut plus le reprendre.\n\n"
+          "Il ne répond pas tout de suite. Il fait le tour du plan de travail. "
+          "Il s'arrête à quarante centimètres d'elle.\n\n"
+          "« Répète. »\n\n"
+          "« Non. »\n\n"
+          "« Répète, Da-eun. »\n\n"
+          "Elle répète.")},
+      "libre": {"pose": ["choix_amitie"], "ferme": ["ensemble"],
+        "texte": ("« Tu devrais y aller. »\n\n"
+          "C'est vrai. C'est même la seule chose vraie qu'elle puisse dire.\n\n"
+          "Il hoche la tête lentement.\n\n"
+          "« Ouais. »\n\n"
+          "Il finit son verre. Il le lave. Il le range — à sa place, pour la première fois.\n\n"
+          "« Merci de me l'avoir dit comme ça. »")},
+      "pourquoi": {"pose": ["verite_paris"],
+        "texte": ("« Pourquoi tu avais dit non, il y a trois ans ? »\n\n"
+          "Long silence.\n\n"
+          "« Mon père était malade. Personne ne le savait, à part Chef Baek. »\n\n"
+          "« Il va comment ? »\n\n"
+          "« Il est mort en février. »\n\n"
+          "Elle réalise qu'elle vivait avec lui à ce moment-là. Qu'il est allé travailler "
+          "tous les jours. Qu'elle s'est plainte d'une poêle.\n\n"
+          "« Tae-yang… »\n\n"
+          "« C'est pour ça que je décompresse mal », dit-il. « Désolé pour la vaisselle. »")}}}},
+  {"titre": "Février",
+   "scenes": [
+    {"si": "verite_paris", "texte":
+     ("Elle ne dit rien pendant deux jours. Puis elle fait une chose bizarre.\n\n"
+      "Elle achète une poêle. Une bonne. Celle qu'il regarde en ligne depuis des mois "
+      "sans jamais l'acheter.\n\n"
+      "Elle la pose sur le plan de travail sans emballage, sans mot.\n\n"
+      "Quand il rentre à une heure du matin, elle l'entend s'arrêter net dans la cuisine.\n\n"
+      "Puis plus rien pendant très longtemps.")},
+    {"sauf": "verite_paris", "texte":
+     ("Elle apprend pour son père par Ji-ho, qui l'apprend par Ye-rin, "
+      "qui l'apprend par une collègue du restaurant.\n\n"
+      "Trois personnes savaient avant elle.\n\n"
+      "Elle vit avec lui.")},
+    ("Ce soir-là, ils regardent un film que personne ne suit.\n\n"
+     "Vers le milieu, elle s'endort contre son épaule.\n\n"
+     "Il ne bouge pas pendant une heure et vingt minutes. Il a une crampe au bras.\n\n"
+     "Il s'en fout complètement."),
+   ]},
+  {"titre": "Le formulaire",
+   "finale": True,
+   "scenes": [
+    ("L'agence envoie le renouvellement de bail un mardi de juin.\n\n"
+     "Il traîne sur la table de la cuisine pendant quatre jours.\n\n"
+     "Personne n'ose être le premier à en parler."),
+   ]},
+ ],
+ "epilogue": ("**8 MOIS PLUS TARD**\n\n"
+   "Ji-ho a fini par prendre son propre appartement. Il vient dîner tous les jeudis.\n\n"
+   "Ye-rin s'attribue tout le mérite et personne ne la contredit, "
+   "parce que c'est plus simple.\n\n"
+   "Chef Baek a ouvert un second restaurant. Tae-yang y travaille trois soirs par semaine.\n\n"
+   "La poêle est toujours là. Elle est toujours propre.\n\n"
+   "Enfin — presque toujours."),
+}
+
+CHRONIQUE = {}          # état courant, persisté
+CHRONIQUE_LU = {}       # {uid: nb d'épisodes suivis} — statistiques lecteurs
+_CHRO_LOCK = asyncio.Lock()
+CHRO_ETATS = ("IDLE", "EPISODE", "VOTE", "EGALITE", "ATTENTE", "TERMINEE")
+CHRO_DELAI_SCENE = 4        # secondes entre deux scènes d'un même épisode
+CHRO_DUREE_VOTE = 86400     # le vote reste ouvert jusqu'à ce que l'admin ferme
+CHRO_PROLONGATION = 300     # rallonge en cas d'égalité
+
+def chro_salon(guild):
+    return guild.get_channel(SALON_CHRONIQUE_ID) if (guild and SALON_CHRONIQUE_ID) else None
+
+def chro_active():
+    return bool(CHRONIQUE) and CHRONIQUE.get("etat") not in (None, "TERMINEE")
+
+def chro_saison():
+    return CHRONIQUE_SAISONS.get(CHRONIQUE.get("saison"))
+
+def chro_episode():
+    s = chro_saison()
+    if not s:
+        return None
+    i = CHRONIQUE.get("episode", 1) - 1
+    eps = s["episodes"]
+    return eps[i] if 0 <= i < len(eps) else None
+
+def chro_drapeau(nom):
+    """Un drapeau posé par un choix passé. Invisible pour les lecteurs."""
+    return nom in (CHRONIQUE.get("drapeaux") or [])
+
+def chro_poser(*noms):
+    d = CHRONIQUE.setdefault("drapeaux", [])
+    for n in noms:
+        if n and n not in d:
+            d.append(n)
+
+def chro_fermer_route(*routes):
+    f = CHRONIQUE.setdefault("routes_fermees", [])
+    for r in routes:
+        if r and r not in f:
+            f.append(r)
+
+def chro_route_ouverte(r):
+    return r not in (CHRONIQUE.get("routes_fermees") or [])
+
+def chro_scenes_visibles(ep):
+    """Filtre les scènes conditionnelles selon les drapeaux déjà posés."""
+    out = []
+    for sc in ep.get("scenes", []):
+        if isinstance(sc, dict):
+            si, sauf = sc.get("si"), sc.get("sauf")
+            if si and not chro_drapeau(si):
+                continue
+            if sauf and chro_drapeau(sauf):
+                continue
+            out.append(sc["texte"])
+        else:
+            out.append(sc)
+    return out
+
+def chro_enregistrer_choix(num_ep, cle, libelle):
+    """Un choix validé est canonique. Aucun retour arrière."""
+    h = CHRONIQUE.setdefault("historique", [])
+    if any(x["episode"] == num_ep for x in h):
+        return False                       # jamais deux décisions pour un même épisode
+    h.append({"episode": num_ep, "cle": cle, "libelle": libelle, "t": time.time()})
+    return True
+
+def chro_ending():
+    """Détermine la fin d'après l'ENSEMBLE des décisions, jamais un vote unique."""
+    s = chro_saison()
+    if not s:
+        return None
+    meilleur, score_max = None, -1
+    for cle, fin in s["endings"].items():
+        if not chro_route_ouverte(fin.get("route", cle)):
+            continue
+        score = sum(1 for d in fin.get("exige", []) if chro_drapeau(d))
+        score -= sum(2 for d in fin.get("interdit", []) if chro_drapeau(d))
+        score += fin.get("poids", 0)
+        if score > score_max:
+            meilleur, score_max = cle, score
+    return meilleur or s.get("ending_defaut")
+
+def chro_choix_decisifs():
+    """Les décisions qui ont réellement orienté la fin."""
+    s = chro_saison()
+    if not s:
+        return []
+    fin = s["endings"].get(CHRONIQUE.get("ending") or "")
+    marquants = set((fin or {}).get("exige", []))
+    out = []
+    for h in CHRONIQUE.get("historique", []):
+        ep = s["episodes"][h["episode"] - 1] if h["episode"] <= len(s["episodes"]) else None
+        pose = ((ep or {}).get("choix", {}).get("suites", {}).get(h["cle"], {}) or {}).get("pose", [])
+        if marquants & set(pose) or (ep or {}).get("choix", {}).get("decisif"):
+            out.append(h)
+    return out or CHRONIQUE.get("historique", [])[:4]
+
+def chro_reset():
+    CHRONIQUE.clear()
+
+def chro_reprendre_apres_restart():
+    """Priorité à l'intégrité : un vote coupé est rouvert, jamais tranché en double."""
+    if not CHRONIQUE:
+        return None
+    etat = CHRONIQUE.get("etat")
+    info = {"etat": etat, "episode": CHRONIQUE.get("episode")}
+    if etat in ("VOTE", "EGALITE"):
+        # La View Discord est morte : on repasse en attente, l'admin republiera le vote.
+        CHRONIQUE["etat"] = "ATTENTE"
+        CHRONIQUE["vote_a_republier"] = True
+        info["vote_rouvert"] = True
+    elif etat == "EPISODE":
+        CHRONIQUE["etat"] = "ATTENTE"
+        info["episode_interrompu"] = True
+    return info
 
 # ============================================================
 #  👁️ SECRET STORY
@@ -30495,6 +31968,8 @@ def save_all_data():
             "migration_state": dict(migration_state),
             "petamitie": dict(petamitie),
             "foyers": dict(foyers),
+            "chronique": {k: v for k, v in CHRONIQUE.items() if k != "vue"},
+            "chronique_lu": dict(CHRONIQUE_LU),
             "ss_secrets": dict(SS_SECRETS),
             "ss_stats": dict(SS_STATS),
             "ss_config": dict(SS_CONFIG),
@@ -30601,6 +32076,8 @@ def load_all_data():
             petamitie.update(data.get("petamitie", {}))
             foyers.clear()
             foyers.update(data.get("foyers", {}))
+            CHRONIQUE.clear(); CHRONIQUE.update(data.get("chronique", {}))
+            CHRONIQUE_LU.clear(); CHRONIQUE_LU.update(data.get("chronique_lu", {}))
             SS_SECRETS.clear(); SS_SECRETS.update(data.get("ss_secrets", {}))
             SS_STATS.clear();   SS_STATS.update(data.get("ss_stats", {}))
             SS_CONFIG.update(data.get("ss_config", {}))
@@ -31058,6 +32535,17 @@ async def on_ready():
             print(f"[Gacha] Migration v{GACHA_CATALOG_MIGRATION_VERSION} déjà appliquée")
     except Exception as e:
         print(f"[Gacha] Migration échouée : {e}")
+    # Chronique : un vote coupé est rouvert, jamais tranché deux fois
+    try:
+        _ch = chro_reprendre_apres_restart()
+        if _ch:
+            print(f"[Chronique] reprise — état {_ch.get('etat')} · "
+                  f"épisode {_ch.get('episode')} · "
+                  f"vote à republier : {bool(_ch.get('vote_rouvert'))}")
+            save_all_data()
+    except Exception as e:
+        print(f"[Chronique] reprise : {type(e).__name__}: {e}")
+
     # Secret Story : une manche coupée par un redémarrage est annulée proprement
     try:
         _ss = ss_annuler_manche_interrompue()
