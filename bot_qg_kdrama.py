@@ -13101,12 +13101,26 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "5.7.0"
+BOT_VERSION = "5.7.1"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "5.7.1": {
+   "titre": "Chronique — votes réparés et lecture allégée 📖",
+   "ajouts": [],
+   "correctifs": [
+     "💌 **Les boutons de vote apparaissent enfin** — l'état « vote ouvert » ne peut plus exister sans message",
+     "🔁 Si un vote échoue ou disparaît, un admin peut le **republier** sans relancer la saison",
+     "🔄 Un vote **survit désormais au redémarrage** du bot, avec les votes déjà enregistrés",
+   ],
+   "ameliorations": [
+     "📱 **Lecture repensée pour mobile** — scènes regroupées, séparateurs, en-têtes de lieu",
+     "🎬 Chaque épisode se termine par un vrai **FIN DE L'ÉPISODE**",
+     "🔒 Les boutons se retirent automatiquement à la fermeture des votes",
+   ],
+ },
  "5.7.0": {
    "titre": "Faux Couple, réécrit de zéro 📖",
    "ajouts": [
@@ -16318,7 +16332,9 @@ class ChroVoteView(ui.View):
         self.num_ep, self.choix, self.msg = num_ep, choix, msg
         self.verrou = asyncio.Lock()
         for i, (cle, emo, lib) in enumerate(choix["options"]):
+            # custom_id stable : la vue peut être réenregistrée après un restart
             b = ui.Button(label=lib[:78], emoji=emo,
+                          custom_id=f"chro_vote:{num_ep}:{cle}",
                           style=discord.ButtonStyle.secondary, row=i)
             async def cb(itx, _c=cle):
                 await self.voter(itx, _c)
@@ -16365,16 +16381,16 @@ class ChroVoteView(ui.View):
         votes = CHRONIQUE.get("votes") or {}
         e = discord.Embed(
             title="💌  À VOUS D'ÉCRIRE LA SUITE",
-            description=f"**{self.choix['question']}**",
+            description=f"{CHRO_SEP}\n### {self.choix['question']}\n{CHRO_SEP}",
             color=0xff9ec7)
         for cle, emo, lib in self.choix["options"]:
             pour = [u for u, v in votes.items() if v == cle]
-            noms = " · ".join(f"<@{u}>" for u in pour[:15]) if pour else "*personne pour l'instant*"
+            noms = " · ".join(f"<@{u}>" for u in pour[:15]) if pour else "*—*"
             if len(pour) > 15:
                 noms += f" *+{len(pour)-15}*"
             e.add_field(name=f"{emo}  {lib}   —   {len(pour)}", value=noms, inline=False)
-        e.set_footer(text=f"{len(votes)} lecteur(s) ont voté  ·  tu peux changer d'avis "
-                          f"jusqu'à la fermeture")
+        e.set_footer(text=(f"{len(votes)} lecteur(s) ont voté  ·  "
+                           f"tu peux changer d'avis jusqu'à la fermeture"))
         return e
 
 
@@ -16415,13 +16431,16 @@ async def chro_publier_episode(guild, salon=None):
         return False, f"Publication impossible : {type(e).__name__}"
 
     # ── Scènes ──
-    for i, texte in enumerate(chro_scenes_visibles(ep)):
+    # Regroupées par narration, pas par taille arbitraire.
+    paquets = chro_grouper_scenes(chro_scenes_visibles(ep))
+    for i, paquet in enumerate(paquets):
         if i:
             await asyncio.sleep(CHRO_DELAI_SCENE)
+        corps = ("\n\n" + CHRO_SEP + "\n\n").join(chro_rendu_scene(x) for x in paquet)
         try:
-            await salon.send(embed=discord.Embed(description=texte, color=0x9b59b6))
-        except Exception:
-            pass
+            await salon.send(embed=discord.Embed(description=corps[:4090], color=0x9b59b6))
+        except Exception as e:
+            print(f"[Chronique] scène : {type(e).__name__}: {e}")
 
     # ── Finale ? ──
     if ep.get("finale"):
@@ -16444,22 +16463,49 @@ async def chro_publier_episode(guild, salon=None):
         save_all_data()
         try:
             await salon.send(embed=discord.Embed(
-                description="*à suivre…*", color=0x2c2f33))
+                description=f"{CHRO_SEP}\n### FIN DE L'ÉPISODE {num}\n*La suite arrive bientôt…*",
+                color=0x2c2f33))
         except Exception:
             pass
         return True, salon
-    CHRONIQUE["etat"] = "VOTE"
-    CHRONIQUE["votes"] = {}
-    save_all_data()
+    # ── Vote ──
+    # L'état VOTE n'est JAMAIS enregistré tant que le message interactif
+    # n'a pas été publié avec succès. Sinon `.chronique` afficherait
+    # « vote ouvert » alors qu'aucun bouton n'existe.
     await asyncio.sleep(2)
     vue = ChroVoteView(num, choix)
     try:
         msg = await salon.send(embed=vue.embed(guild), view=vue)
-        vue.msg = msg
-        CHRONIQUE["msg_vote"] = msg.id
-        save_all_data()
     except Exception as e:
-        print(f"[Chronique] vote : {type(e).__name__}: {e}")
+        print(f"[Chronique] ❌ ÉCHEC de publication du vote (épisode {num}) : "
+              f"{type(e).__name__}: {e}")
+        CHRONIQUE["etat"] = "ATTENTE"
+        CHRONIQUE["vote_a_republier"] = True
+        save_all_data()
+        try:
+            await salon.send(embed=discord.Embed(
+                description=("⚠️ *Le vote n'a pas pu être publié.*\n"
+                             "-# Un admin peut le republier depuis `.chronique`."),
+                color=0xe74c3c))
+        except Exception:
+            pass
+        return True, salon
+    # Envoi confirmé : on peut passer en VOTE.
+    if not vue.children:
+        print(f"[Chronique] ❌ vote publié sans bouton (épisode {num})")
+        CHRONIQUE["etat"] = "ATTENTE"
+        CHRONIQUE["vote_a_republier"] = True
+        save_all_data()
+        return True, salon
+    vue.msg = msg
+    CHRONIQUE["msg_vote"] = msg.id
+    CHRONIQUE["salon_vote"] = salon.id
+    CHRONIQUE["votes"] = {}
+    CHRONIQUE["etat"] = "VOTE"
+    CHRONIQUE.pop("vote_a_republier", None)
+    save_all_data()
+    print(f"[Chronique] ✅ vote publié · épisode {num} · "
+          f"message_id={msg.id} · {len(vue.children)} bouton(s)")
     return True, salon
 
 
@@ -16490,10 +16536,21 @@ async def chro_publier_interlude(salon, inter):
 
 
 async def chro_fermer_vote(guild, salon=None):
-    """Ferme le vote, applique la suite canonique. Gère l'égalité sans tirage silencieux."""
+    """Ferme le vote, applique la suite canonique. Gère l'égalité sans tirage silencieux.
+    Le verrou garantit qu'un double clic ne résout jamais deux fois."""
     async with _CHRO_LOCK:
         if CHRONIQUE.get("etat") not in ("VOTE", "EGALITE"):
             return False, "Aucun vote ouvert."
+        # Les boutons du message de vote sont retirés dès la fermeture
+        _mid, _cid = CHRONIQUE.get("msg_vote"), CHRONIQUE.get("salon_vote")
+        if _mid and _cid and guild:
+            _ch = guild.get_channel(_cid)
+            if _ch:
+                try:
+                    _m = await _ch.fetch_message(_mid)
+                    await _m.edit(view=None)
+                except Exception:
+                    pass
         salon = salon or chro_salon(guild)
         ep = chro_episode()
         choix = (ep or {}).get("choix")
@@ -17617,6 +17674,13 @@ class ChroRegieView(ui.View):
                 self.add_item(sel)
             else:
                 if etat == "ATTENTE":
+                    if CHRONIQUE.get("vote_a_republier"):
+                        br = ui.Button(label="Republier le vote", emoji="🔁",
+                                       style=discord.ButtonStyle.danger, row=0)
+                        async def cbr(itx):
+                            await self.republier_vote(itx)
+                        br.callback = cbr
+                        self.add_item(br)
                     b = ui.Button(label="Publier l'épisode suivant", emoji="▶️",
                                   style=discord.ButtonStyle.success, row=0)
                     async def cbp(itx):
@@ -17695,6 +17759,37 @@ class ChroRegieView(ui.View):
         except Exception as e:
             print(f"[Chronique] publication : {type(e).__name__}: {e}")
 
+    async def republier_vote(self, itx):
+        """Republie le vote de l'épisode courant après un échec ou un message perdu."""
+        try:
+            if not itx.response.is_done():
+                await itx.response.defer()
+            salon = chro_salon(itx.guild)
+            ep = chro_episode()
+            choix = (ep or {}).get("choix")
+            if not salon or not choix:
+                CHRONIQUE.pop("vote_a_republier", None)
+                save_all_data()
+                return await self.aller(itx, "accueil")
+            vue = ChroVoteView(CHRONIQUE.get("episode"), choix)
+            try:
+                msg = await salon.send(embed=vue.embed(itx.guild), view=vue)
+            except Exception as e:
+                await itx.followup.send(f"❌ Republication impossible — "
+                                        f"{type(e).__name__}", ephemeral=True)
+                return
+            vue.msg = msg
+            CHRONIQUE["msg_vote"] = msg.id
+            CHRONIQUE["salon_vote"] = salon.id
+            CHRONIQUE.setdefault("votes", {})
+            CHRONIQUE["etat"] = "VOTE"
+            CHRONIQUE.pop("vote_a_republier", None)
+            save_all_data()
+            print(f"[Chronique] ✅ vote republié · message_id={msg.id}")
+            await self.aller(itx, "accueil")
+        except Exception as e:
+            print(f"[Chronique] republication : {type(e).__name__}: {e}")
+
     async def fermer(self, itx):
         try:
             if not itx.response.is_done():
@@ -17757,7 +17852,9 @@ class ChroRegieView(ui.View):
                                               else "⚠️ aucun — .setsalon chronique #salon"))
             return e
         s = chro_saison()
-        etat_lib = {"ATTENTE": "⏸️ en attente de publication", "VOTE": "💌 vote ouvert",
+        etat_lib = {"ATTENTE": ("⚠️ vote à republier" if CHRONIQUE.get("vote_a_republier")
+                                else "⏸️ en attente de publication"),
+                    "VOTE": "💌 vote ouvert",
                     "EGALITE": "⚖️ égalité à départager", "EPISODE": "📖 publication en cours",
                     "TERMINEE": "🎬 terminée"}.get(CHRONIQUE.get("etat"), CHRONIQUE.get("etat"))
         e.description = (f"### 🎬 {s['titre']}\n"
@@ -22810,6 +22907,59 @@ def chro_fermer_route(*routes):
 def chro_route_ouverte(r):
     return r not in (CHRONIQUE.get("routes_fermees") or [])
 
+# ── Renderer : le contenu narratif ne dépend jamais de la mise en page ──
+# Les scènes restent des textes purs dans CHRONIQUE_SAISONS.
+# Ce sont ces fonctions, et elles seules, qui décident du rendu Discord.
+
+CHRO_SEP = "━━━━━━━━━━━━━━━━━━━━"
+
+def chro_est_dialogue(bloc_):
+    """Un paragraphe qui commence par un guillemet français."""
+    return bloc_.lstrip().startswith("«")
+
+def chro_marqueur_scene(texte):
+    """Repère un en-tête de scène en italique du type *Deux heures plus tôt.*"""
+    prem = texte.lstrip().split("\n", 1)[0].strip()
+    if prem.startswith("*") and prem.endswith("*") and 4 < len(prem) < 90:
+        return prem.strip("*").strip()
+    return None
+
+def chro_rendu_scene(texte, numero=None):
+    """Transforme une scène en contenu Discord lisible sur mobile.
+    Les dialogues respirent, les en-têtes de scène ressortent."""
+    entete = chro_marqueur_scene(texte)
+    corps = texte
+    if entete:
+        corps = texte.lstrip().split("\n", 1)[1].lstrip() if "\n" in texte.lstrip() else ""
+    lignes = []
+    if entete:
+        lignes.append(f"### ◈ {entete}")
+        lignes.append("")
+    for para in corps.split("\n\n"):
+        p = para.strip()
+        if not p:
+            continue
+        lignes.append(p)
+        lignes.append("")
+    return "\n".join(lignes).rstrip()
+
+def chro_grouper_scenes(scenes, max_car=1700):
+    """Regroupe les scènes courtes pour éviter une avalanche d'embeds espacés.
+    Le découpage suit la narration : on ne coupe jamais au milieu d'une scène."""
+    paquets, courant = [], []
+    taille = 0
+    for sc in scenes:
+        n = len(sc)
+        # Une scène avec en-tête ouvre toujours un nouveau bloc
+        if courant and (taille + n > max_car or chro_marqueur_scene(sc)):
+            paquets.append(courant)
+            courant, taille = [], 0
+        courant.append(sc)
+        taille += n
+    if courant:
+        paquets.append(courant)
+    return paquets
+
 def chro_scenes_visibles(ep):
     """Filtre les scènes conditionnelles selon les drapeaux déjà posés."""
     out = []
@@ -22871,20 +23021,50 @@ def chro_choix_decisifs():
 def chro_reset():
     CHRONIQUE.clear()
 
-def chro_reprendre_apres_restart():
-    """Priorité à l'intégrité : un vote coupé est rouvert, jamais tranché en double."""
+async def chro_reprendre_apres_restart():
+    """Au démarrage : on tente de récupérer le vote en cours.
+    Si le message existe encore, on réattache une View fonctionnelle.
+    S'il a disparu, on sort du faux état VOTE et on propose une republication."""
     if not CHRONIQUE:
         return None
     etat = CHRONIQUE.get("etat")
     info = {"etat": etat, "episode": CHRONIQUE.get("episode")}
-    if etat in ("VOTE", "EGALITE"):
-        # La View Discord est morte : on repasse en attente, l'admin republiera le vote.
-        CHRONIQUE["etat"] = "ATTENTE"
-        CHRONIQUE["vote_a_republier"] = True
-        info["vote_rouvert"] = True
-    elif etat == "EPISODE":
+    if etat == "EPISODE":
         CHRONIQUE["etat"] = "ATTENTE"
         info["episode_interrompu"] = True
+        return info
+    if etat not in ("VOTE", "EGALITE"):
+        return info
+    mid, cid = CHRONIQUE.get("msg_vote"), CHRONIQUE.get("salon_vote")
+    ep = chro_episode()
+    choix = (ep or {}).get("choix")
+    if not (mid and cid and choix):
+        CHRONIQUE["etat"] = "ATTENTE"
+        CHRONIQUE["vote_a_republier"] = True
+        info["vote_perdu"] = True
+        return info
+    for g in bot.guilds:
+        salon = g.get_channel(cid)
+        if not salon:
+            continue
+        try:
+            msg = await salon.fetch_message(mid)
+        except Exception:
+            break                      # message supprimé ou introuvable
+        vue = ChroVoteView(CHRONIQUE.get("episode"), choix, msg=msg)
+        try:
+            bot.add_view(vue, message_id=mid)     # réattache les interactions
+            await msg.edit(embed=vue.embed(g), view=vue)
+            info["vote_restaure"] = True
+            info["votes"] = len(CHRONIQUE.get("votes") or {})
+            return info
+        except Exception as e:
+            print(f"[Chronique] restauration du vote : {type(e).__name__}: {e}")
+            break
+    # Message introuvable : on refuse de rester dans un faux état VOTE
+    CHRONIQUE["etat"] = "ATTENTE"
+    CHRONIQUE["vote_a_republier"] = True
+    info["vote_perdu"] = True
     return info
 
 # ============================================================
@@ -33061,11 +33241,17 @@ async def on_ready():
         print(f"[Gacha] Migration échouée : {e}")
     # Chronique : un vote coupé est rouvert, jamais tranché deux fois
     try:
-        _ch = chro_reprendre_apres_restart()
+        _ch = await chro_reprendre_apres_restart()
         if _ch:
-            print(f"[Chronique] reprise — état {_ch.get('etat')} · "
-                  f"épisode {_ch.get('episode')} · "
-                  f"vote à republier : {bool(_ch.get('vote_rouvert'))}")
+            if _ch.get("vote_restaure"):
+                print(f"[Chronique] ✅ vote de l'épisode {_ch.get('episode')} restauré "
+                      f"({_ch.get('votes')} vote(s) conservé(s))")
+            elif _ch.get("vote_perdu"):
+                print(f"[Chronique] ⚠️ message de vote introuvable (épisode "
+                      f"{_ch.get('episode')}) — republication possible depuis `.chronique`")
+            else:
+                print(f"[Chronique] reprise — état {_ch.get('etat')} · "
+                      f"épisode {_ch.get('episode')}")
             save_all_data()
     except Exception as e:
         print(f"[Chronique] reprise : {type(e).__name__}: {e}")
