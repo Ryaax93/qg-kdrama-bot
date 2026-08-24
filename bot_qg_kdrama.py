@@ -13101,12 +13101,26 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "5.7.3"
+BOT_VERSION = "5.8.0"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "5.8.0": {
+   "titre": "Chronique — on sait enfin qui parle 💬",
+   "ajouts": [
+     "💬 **Chaque réplique porte le nom de son personnage**, avec son emoji",
+     "🎭 Les dialogues sont présentés en citation, séparés de la narration",
+   ],
+   "correctifs": [
+     "❓ Fini les échanges où l'on ne savait pas qui disait quoi",
+     "🔁 Deux répliques d'affilée du même personnage n'affichent son nom qu'une fois",
+   ],
+   "ameliorations": [
+     "📱 Lecture nettement plus claire sur téléphone",
+   ],
+ },
  "5.7.3": {
    "titre": "Chronique — workflow fiabilisé 📖",
    "ajouts": [],
@@ -16740,7 +16754,8 @@ async def chro_appliquer_choix(guild, salon, cle):
     try:
         await salon.send(embed=e)
         await asyncio.sleep(3)
-        await salon.send(embed=discord.Embed(description=suite["texte"], color=0x9b59b6))
+        await salon.send(embed=discord.Embed(
+            description=chro_rendu_scene(suite["texte"])[:4090], color=0x9b59b6))
     except Exception as ex:
         print(f"[Chronique] suite : {type(ex).__name__}: {ex}")
     CHRONIQUE["episode"] = num + 1
@@ -16760,7 +16775,7 @@ async def chro_finale(guild, salon):
     try:
         await asyncio.sleep(CHRO_DELAI_SCENE)
         await salon.send(embed=discord.Embed(
-            description=fin.get("texte", "*Fin.*"), color=0xff9ec7))
+            description=chro_rendu_scene(fin.get("texte", "*Fin.*"))[:4090], color=0xff9ec7))
         await asyncio.sleep(CHRO_DELAI_SCENE)
         jours = max(1, int((time.time() - CHRONIQUE.get("debut", time.time())) // 86400))
         e = discord.Embed(title="FIN.", color=0x2c2f33,
@@ -16786,7 +16801,7 @@ async def chro_finale(guild, salon):
         if s.get("epilogue"):
             await asyncio.sleep(CHRO_DELAI_SCENE)
             await salon.send(embed=discord.Embed(
-                description=s["epilogue"], color=0x2c2f33))
+                description=chro_rendu_scene(s["epilogue"])[:4090], color=0x2c2f33))
     except Exception as ex:
         print(f"[Chronique] finale : {type(ex).__name__}: {ex}")
     return True, fin_cle
@@ -21750,33 +21765,33 @@ CHRONIQUE_SAISONS["faux_couple"] = {
     "exige": ["confiance_seojun", "verite_partagee", "nuit_hotel"], "poids": 0,
     "texte": ("Sept heures du matin. Il est appuyé contre sa voiture, deux gobelets à la main, "
       "avec la tête de quelqu'un qui n'a pas dormi.\n\n"
-      "« Le contrat s'est terminé hier soir à minuit. »\n\n"
-      "« Je sais compter. »\n\n"
+      "Seojun|« Le contrat s'est terminé hier soir à minuit. »\n\n"
+      "Yuna|« Je sais compter. »\n\n"
       "Il lui tend un gobelet. Elle le prend. Elle boit avant de regarder.\n\n"
       "Cannelle.\n\n"
       "Elle relève les yeux. Il regarde ailleurs, très concentré sur un immeuble "
       "parfaitement banal.\n\n"
-      "« Clause 4 », dit-elle.\n\n"
-      "« Il n'y a plus de clause 4. »\n\n"
-      "« Alors tu fais quoi, là ? »\n\n"
+      "Yuna|« Clause 4. »\n\n"
+      "Seojun|« Il n'y a plus de clause 4. »\n\n"
+      "Yuna|« Alors tu fais quoi, là ? »\n\n"
       "Il met beaucoup trop de temps à répondre.\n\n"
-      "« J'improvise. »\n\n"
+      "Seojun|« J'improvise. »\n\n"
       "Elle sourit dans son gobelet pour qu'il ne le voie pas. Il le voit quand même.")},
   "minjae": {"nom": "🤍 Celui qui était déjà là", "route": "minjae",
     "exige": ["confiance_minjae", "verite_minjae"], "poids": 0,
     "texte": ("Il conduit. Une main sur le volant, l'autre posée entre eux, "
       "exactement là où elle est depuis six ans.\n\n"
       "Au feu rouge, il dit :\n\n"
-      "« Je t'ai jamais demandé de choisir. »\n\n"
-      "« Je sais. »\n\n"
-      "« C'est peut-être ça mon problème, en fait. »\n\n"
+      "Minjae|« Je t'ai jamais demandé de choisir. »\n\n"
+      "Yuna|« Je sais. »\n\n"
+      "Minjae|« C'est peut-être ça mon problème, en fait. »\n\n"
       "Elle regarde sa main. Elle a toujours été là. Elle ne l'avait jamais *vue*.\n\n"
       "Elle pose la sienne dessus.\n\n"
       "Il ne bouge pas. Il ne respire même plus, on dirait.\n\n"
-      "« Min-jae. »\n\n"
-      "« Ouais. »\n\n"
-      "« Le feu est vert. »\n\n"
-      "« Je sais. »\n\n"
+      "Yuna|« Min-jae. »\n\n"
+      "Minjae|« Ouais. »\n\n"
+      "Yuna|« Le feu est vert. »\n\n"
+      "Minjae|« Je sais. »\n\n"
       "Il ne démarre pas.")},
   "verite": {"nom": "🖤 La vérité, mais seule", "route": "verite",
     "exige": ["dossier_ouvert", "confrontation_kang"], "interdit": ["confiance_seojun"], "poids": 1,
@@ -21794,13 +21809,13 @@ CHRONIQUE_SAISONS["faux_couple"] = {
     "texte": ("Officiellement, le contrat s'est terminé. Officiellement, ils ne se voient plus.\n\n"
       "Sora a compris en février. Elle n'a rien dit. Elle a juste commencé à sortir "
       "deux tasses le matin, sans commentaire, en fixant Yuna avec une intensité insupportable.\n\n"
-      "« Quoi ? »\n\n"
-      "« Rien. »\n\n"
-      "« SORA. »\n\n"
-      "« J'ai rien dit. »\n\n"
+      "Yuna|« Quoi ? »\n\n"
+      "Sora|« Rien. »\n\n"
+      "Yuna|« SORA. »\n\n"
+      "Sora|« J'ai rien dit. »\n\n"
       "Un soir, il lui demande si ça lui manque, de pouvoir le dire aux gens.\n\n"
       "Elle réfléchit vraiment.\n\n"
-      "« Non. »")},
+      "Yuna|« Non. »")},
   "seule": {"nom": "🌙 Elle est partie la première", "route": "seule",
     "exige": [], "poids": -1,
     "texte": ("Le dernier virement arrive un mardi. Au won près.\n\n"
@@ -21823,87 +21838,88 @@ CHRONIQUE_SAISONS["faux_couple"] = {
      "parce que la femme assise en face ne bouge pas.\n\n"
      "Manteau clair. Sac posé sur la chaise d'à côté, pas par terre. Elle n'a pas touché "
      "à son thé."),
-    ("« On ferme, madame. »\n\n"
-     "« Je sais. »\n\n"
+    ("Yuna|« On ferme, madame. »\n\n"
+     "Kang|« Je sais. »\n\n"
      "Yuna attend. La femme ne développe pas.\n\n"
-     "« …Vous voulez autre chose ? »\n\n"
-     "« Je voudrais que vous vous asseyiez. »\n\n"
-     "« Je travaille. »\n\n"
-     "« Vous finissez dans » — elle regarde sa montre — « quatre minutes. Et vous "
-     "enchaînez à six heures au centre de tri. »\n\n"
+     "Yuna|« …Vous voulez autre chose ? »\n\n"
+     "Kang|« Je voudrais que vous vous asseyiez. »\n\n"
+     "Yuna|« Je travaille. »\n\n"
+     "Elle regarde sa montre.\n\n"
+     "Kang|« Vous finissez dans quatre minutes. Et vous enchaînez à six heures "
+     "au centre de tri. »\n\n"
      "Yuna arrête d'essuyer."),
     ("*Deux heures plus tôt.*\n\n"
-     "« Tu peux pas continuer comme ça. »\n\n"
+     "Sora|« Tu peux pas continuer comme ça. »\n\n"
      "Sora est allongée sur le canapé, la tête en bas, les pieds contre le mur. "
      "Elle mange des chips dans cette position, ce qui devrait être impossible.\n\n"
-     "« Je gère. »\n\n"
-     "« Tu as dormi quatre heures. »\n\n"
-     "« Cinq. »\n\n"
-     "« Tu t'es endormie dans la douche mardi. »\n\n"
-     "« Ça compte pas comme du sommeil ça. »\n\n"
-     "« JUSTEMENT. »"),
+     "Yuna|« Je gère. »\n\n"
+     "Sora|« Tu as dormi quatre heures. »\n\n"
+     "Yuna|« Cinq. »\n\n"
+     "Sora|« Tu t'es endormie dans la douche mardi. »\n\n"
+     "Yuna|« Ça compte pas comme du sommeil ça. »\n\n"
+     "Sora|« JUSTEMENT. »"),
     ("Sora se redresse d'un coup, ce qui fait tomber les chips.\n\n"
-     "« Yuna. »\n\n"
-     "« Quoi. »\n\n"
-     "« Combien il reste. »\n\n"
+     "Sora|« Yuna. »\n\n"
+     "Yuna|« Quoi. »\n\n"
+     "Sora|« Combien il reste. »\n\n"
      "Silence.\n\n"
-     "« Combien. »\n\n"
-     "« Quatre mois d'arriérés. Plus l'inscription de Ha-eun. »\n\n"
+     "Sora|« Combien. »\n\n"
+     "Yuna|« Quatre mois d'arriérés. Plus l'inscription de Ha-eun. »\n\n"
      "Sora ne dit rien pendant trois secondes, ce qui chez elle est un record.\n\n"
-     "« Ok. »\n\n"
+     "Sora|« Ok. »\n\n"
      "Puis elle ramasse une chips par terre et la mange, parce que c'est Sora."),
     ("*Retour au café.*\n\n"
-     "« Trois mois », dit Mme Kang.\n\n"
+     "Kang|« Trois mois. »\n\n"
      "Elle pose une enveloppe sur la table. Elle ne l'ouvre pas. L'épaisseur suffit.\n\n"
-     "« Vous voulez que je fasse quoi, exactement ? »\n\n"
-     "« Que vous fréquentiez mon fils. »\n\n"
+     "Yuna|« Vous voulez que je fasse quoi, exactement ? »\n\n"
+     "Kang|« Que vous fréquentiez mon fils. »\n\n"
      "Yuna repose le chiffon.\n\n"
-     "« …Pardon ? »"),
-    ("« Publiquement. Correctement. Pendant douze semaines. »\n\n"
-     "« Vous êtes en train de me proposer de— »\n\n"
-     "« Je vous propose un travail. Le troisième, si je compte bien. Celui-ci paie mieux "
+     "Yuna|« …Pardon ? »"),
+    ("Kang|« Publiquement. Correctement. Pendant douze semaines. »\n\n"
+     "Yuna|« Vous êtes en train de me proposer de— »\n\n"
+     "Kang|« Je vous propose un travail. Le troisième, si je compte bien. Celui-ci paie mieux "
      "et vous laisse dormir. »\n\n"
-     "« Pourquoi moi ? »\n\n"
+     "Yuna|« Pourquoi moi ? »\n\n"
      "Mme Kang sourit. C'est la première chose sincère de la soirée.\n\n"
-     "« Parce que personne ne vous croira intéressée par l'argent. »\n\n"
+     "Kang|« Parce que personne ne vous croira intéressée par l'argent. »\n\n"
      "Yuna encaisse.\n\n"
-     "« C'est censé être un compliment ? »\n\n"
-     "« C'est un constat. »"),
+     "Yuna|« C'est censé être un compliment ? »\n\n"
+     "Kang|« C'est un constat. »"),
     ("Il arrive à vingt-trois heures quarante et il ne s'excuse pas.\n\n"
      "Il retire son manteau, le pose sur le dossier, s'assoit. Il regarde le café, "
      "les chaises retournées, la serpillière contre le mur.\n\n"
      "Puis il regarde sa mère.\n\n"
-     "« C'est elle ? »\n\n"
-     "« Kang Seo-jun. »\n\n"
-     "« Je pose une question. »\n\n"
-     "« Et je te réponds : sois poli. »"),
+     "Seojun|« C'est elle ? »\n\n"
+     "Kang|« Kang Seo-jun. »\n\n"
+     "Seojun|« Je pose une question. »\n\n"
+     "Kang|« Et je te réponds : sois poli. »"),
     ("Il se tourne enfin vers Yuna.\n\n"
-     "« Vous savez ce qu'elle vous demande ? »\n\n"
-     "« De faire semblant. »\n\n"
-     "« De mentir. À des gens qui vont vous prendre en photo. »\n\n"
-     "« C'est la même chose avec des flashs. »\n\n"
+     "Seojun|« Vous savez ce qu'elle vous demande ? »\n\n"
+     "Yuna|« De faire semblant. »\n\n"
+     "Seojun|« De mentir. À des gens qui vont vous prendre en photo. »\n\n"
+     "Yuna|« C'est la même chose avec des flashs. »\n\n"
      "Une seconde. Deux.\n\n"
      "Quelque chose bouge très légèrement au coin de sa bouche, puis disparaît.\n\n"
-     "« Vous avez un travail. »\n\n"
-     "« J'en ai deux. »\n\n"
-     "« Et vous voulez le troisième. »\n\n"
-     "« Je veux dormir. »"),
+     "Seojun|« Vous avez un travail. »\n\n"
+     "Yuna|« J'en ai deux. »\n\n"
+     "Seojun|« Et vous voulez le troisième. »\n\n"
+     "Yuna|« Je veux dormir. »"),
     ("Il sort son téléphone, tape quelque chose, le retourne vers elle.\n\n"
      "Un document. Neuf pages.\n\n"
-     "« Lisez la clause 4. »\n\n"
+     "Seojun|« Lisez la clause 4. »\n\n"
      "Elle fait défiler.\n\n"
      "*4. Aucun sentiment réel ne devra interférer avec l'exécution du présent accord.*\n\n"
      "Elle relève les yeux.\n\n"
-     "« Vous avez mis ça dans un contrat. »\n\n"
-     "« C'est ma mère qui l'a mise. »\n\n"
-     "« Et vous avez signé. »\n\n"
-     "« Évidemment que j'ai signé. »\n\n"
+     "Yuna|« Vous avez mis ça dans un contrat. »\n\n"
+     "Seojun|« C'est ma mère qui l'a mise. »\n\n"
+     "Yuna|« Et vous avez signé. »\n\n"
+     "Seojun|« Évidemment que j'ai signé. »\n\n"
      "Il dit ça exactement comme on dit *évidemment que je respire*, et pour la première "
      "fois de la soirée, Yuna se demande à quoi ressemble sa vie."),
     ("Mme Kang se lève, remet son manteau, prend son sac.\n\n"
-     "« Réfléchissez jusqu'à demain midi. »\n\n"
+     "Kang|« Réfléchissez jusqu'à demain midi. »\n\n"
      "Elle est déjà à la porte quand elle ajoute, sans se retourner :\n\n"
-     "« Votre père faisait la même tête quand il calculait. »\n\n"
+     "Kang|« Votre père faisait la même tête quand il calculait. »\n\n"
      "La porte se referme.\n\n"
      "Yuna reste debout, le chiffon à la main.\n\n"
      "Elle n'a jamais parlé de son père."),
@@ -21915,28 +21931,28 @@ CHRONIQUE_SAISONS["faux_couple"] = {
                  ("partir", "🅲", "Prendre son manteau et sortir")],
      "suites": {
       "demander": {"pose": ["question_pere", "curiosite"],
-        "texte": ("« Comment elle connaît mon père ? »\n\n"
+        "texte": ("Yuna|« Comment elle connaît mon père ? »\n\n"
           "Seo-jun ne répond pas tout de suite. Il regarde la porte par laquelle "
           "sa mère vient de sortir.\n\n"
-          "« Ma mère connaît beaucoup de gens. »\n\n"
-          "« C'est pas une réponse. »\n\n"
-          "« Non. »\n\n"
+          "Seojun|« Ma mère connaît beaucoup de gens. »\n\n"
+          "Yuna|« C'est pas une réponse. »\n\n"
+          "Seojun|« Non. »\n\n"
           "Il se lève, enfile son manteau.\n\n"
-          "« Si vous signez, posez-lui la question vous-même. Elle répond mieux "
+          "Seojun|« Si vous signez, posez-lui la question vous-même. Elle répond mieux "
           "aux gens qui ont un contrat. »\n\n"
           "Il sort.\n\n"
           "Yuna signe à minuit vingt.")},
       "signer": {"pose": ["pragmatique"],
-        "texte": ("« Où je signe. »\n\n"
+        "texte": ("Yuna|« Où je signe. »\n\n"
           "Il la regarde une seconde de trop.\n\n"
-          "« Vous ne demandez rien ? »\n\n"
-          "« Vous répondriez ? »\n\n"
-          "« …Non. »\n\n"
-          "« Voilà. »\n\n"
+          "Seojun|« Vous ne demandez rien ? »\n\n"
+          "Yuna|« Vous répondriez ? »\n\n"
+          "Seojun|« …Non. »\n\n"
+          "Yuna|« Voilà. »\n\n"
           "Il fait défiler jusqu'à la dernière page et lui tend le téléphone.\n\n"
           "Elle signe avec l'index. La signature est horrible.\n\n"
-          "« C'est censé ressembler à quoi, ça ? »\n\n"
-          "« À quelqu'un qui a fait douze heures debout. »")},
+          "Yuna|« C'est censé ressembler à quoi, ça ? »\n\n"
+          "Seojun|« À quelqu'un qui a fait douze heures debout. »")},
       "partir": {"pose": ["fierte"], "ferme": ["secret"],
         "texte": ("Elle attrape son manteau et sort sans un mot.\n\n"
           "Elle marche quatre cents mètres avant de s'arrêter net au milieu du trottoir.\n\n"
@@ -21950,64 +21966,64 @@ CHRONIQUE_SAISONS["faux_couple"] = {
   {"titre": "Douze semaines",
    "precedemment": "Yuna a signé. Le contrat court à partir de maintenant.",
    "scenes": [
-    ("« TU AS FAIT QUOI ? »\n\n"
-     "« Chut. »\n\n"
-     "« NON JE CHUTE PAS. »\n\n"
+    ("Sora|« TU AS FAIT QUOI ? »\n\n"
+     "Yuna|« Chut. »\n\n"
+     "Sora|« NON JE CHUTE PAS. »\n\n"
      "Sora fait trois fois le tour de la table basse. Elle s'arrête. Elle repart.\n\n"
-     "« Tu as signé un CONTRAT. Avec la mère de KANG SEO-JUN. À MINUIT. Dans un CAFÉ. »\n\n"
-     "« Dit comme ça— »\n\n"
-     "« Il y a pas d'autre façon de le dire ! »"),
+     "Sora|« Tu as signé un CONTRAT. Avec la mère de KANG SEO-JUN. À MINUIT. Dans un CAFÉ. »\n\n"
+     "Yuna|« Dit comme ça— »\n\n"
+     "Sora|« Il y a pas d'autre façon de le dire ! »"),
     ("Elle finit par s'asseoir sur l'accoudoir, ce qui est sa position de négociation.\n\n"
-     "« Combien. »\n\n"
+     "Sora|« Combien. »\n\n"
      "Yuna lui montre le montant.\n\n"
      "Sora regarde l'écran. Elle regarde Yuna. Elle regarde l'écran.\n\n"
-     "« Bon. »\n\n"
-     "« Bon ? »\n\n"
-     "« J'ai des principes mais j'ai aussi des yeux. »"),
+     "Sora|« Bon. »\n\n"
+     "Yuna|« Bon ? »\n\n"
+     "Sora|« J'ai des principes mais j'ai aussi des yeux. »"),
     ("Le premier dîner est un lundi, dans un endroit où le pain coûte le prix "
      "d'une heure de travail.\n\n"
      "Il est en retard de neuf minutes.\n\n"
-     "« Vous êtes toujours en retard ? »\n\n"
-     "« Vous allez toujours compter ? »\n\n"
-     "« Oui. »\n\n"
-     "« Alors on va très bien s'entendre. »"),
+     "Yuna|« Vous êtes toujours en retard ? »\n\n"
+     "Seojun|« Vous allez toujours compter ? »\n\n"
+     "Yuna|« Oui. »\n\n"
+     "Seojun|« Alors on va très bien s'entendre. »"),
     ("Le repas dure une heure quarante.\n\n"
      "Ils parlent de la météo. D'un chantier à Busan. D'une exposition qu'aucun des deux "
      "n'a vue.\n\n"
      "À un moment, Yuna se surprend à compter les secondes entre deux phrases.\n\n"
      "Vingt-deux. Puis dix-neuf. Puis trente et une."),
     ("Une femme s'arrête à leur table.\n\n"
-     "« Seo-jun ! Ta mère m'a dit— »\n\n"
+     "Femme|« Seo-jun ! Ta mère m'a dit— »\n\n"
      "La main de Seo-jun se pose sur celle de Yuna.\n\n"
      "Naturellement. Sans hésiter. Sans la regarder.\n\n"
      "Il rit à quelque chose que Yuna n'a pas dit. Il l'appelle par son prénom deux fois "
      "en trente secondes. Il incline la tête vers elle d'exactement quinze degrés.\n\n"
      "La femme repart charmée.\n\n"
      "Il retire sa main au moment précis où elle passe la porte."),
-    ("« C'était quoi, ça ? »\n\n"
-     "« Le travail. »\n\n"
-     "« Vous étiez— »\n\n"
+    ("Yuna|« C'était quoi, ça ? »\n\n"
+     "Seojun|« Le travail. »\n\n"
+     "Yuna|« Vous étiez— »\n\n"
      "Elle cherche le mot.\n\n"
-     "« Convaincant ? »\n\n"
-     "« Flippant. »\n\n"
+     "Seojun|« Convaincant ? »\n\n"
+     "Yuna|« Flippant. »\n\n"
      "Il boit une gorgée d'eau.\n\n"
-     "« On me le dit souvent. »"),
+     "Seojun|« On me le dit souvent. »"),
     ("Dans le hall, il lui tend une enveloppe.\n\n"
-     "« Vos frais du mois. »\n\n"
-     "« Vous pouvez pas virer ça comme tout le monde ? »\n\n"
-     "« Ma mère préfère le papier. »\n\n"
-     "« Pourquoi ? »\n\n"
-     "« Parce que le papier, ça ne laisse pas de trace bancaire. »\n\n"
+     "Seojun|« Vos frais du mois. »\n\n"
+     "Yuna|« Vous pouvez pas virer ça comme tout le monde ? »\n\n"
+     "Seojun|« Ma mère préfère le papier. »\n\n"
+     "Yuna|« Pourquoi ? »\n\n"
+     "Seojun|« Parce que le papier, ça ne laisse pas de trace bancaire. »\n\n"
      "Il dit ça très simplement, en enfilant ses gants, comme un détail météo.\n\n"
      "Puis il part."),
     ("Elle rentre à pied. Trente-cinq minutes, parce que le bus était passé.\n\n"
      "Sora est réveillée.\n\n"
-     "« Alors ? »\n\n"
-     "« Il est— »\n\n"
+     "Sora|« Alors ? »\n\n"
+     "Yuna|« Il est— »\n\n"
      "Yuna cherche encore.\n\n"
-     "« Poli. »\n\n"
-     "« C'est le pire truc que tu pouvais dire sur quelqu'un. »\n\n"
-     "« Je sais. »"),
+     "Yuna|« Poli. »\n\n"
+     "Sora|« C'est le pire truc que tu pouvais dire sur quelqu'un. »\n\n"
+     "Yuna|« Je sais. »"),
    ],
    "choix": {"question": "L'enveloppe est encore dans son sac.",
      "decisif": True,
@@ -22032,12 +22048,12 @@ CHRONIQUE_SAISONS["faux_couple"] = {
         "texte": ("Elle la dépose à l'accueil de la tour Kang à huit heures du matin, "
           "sans un mot, et repart avant qu'on lui pose une question.\n\n"
           "Il appelle à quinze heures.\n\n"
-          "« C'est une blague ? »\n\n"
-          "« Non. »\n\n"
-          "« Tu réalises que ma mère va— »\n\n"
-          "« Je réalise très bien. »\n\n"
+          "Seojun|« C'est une blague ? »\n\n"
+          "Yuna|« Non. »\n\n"
+          "Seojun|« Tu réalises que ma mère va— »\n\n"
+          "Yuna|« Je réalise très bien. »\n\n"
           "Silence.\n\n"
-          "« …Ok. »\n\n"
+          "Seojun|« …Ok. »\n\n"
           "Il raccroche.\n\n"
           "C'est la première fois qu'il dit *ok* comme quelqu'un de normal.")}}},
    "interlude": {"type": "sms", "heure": "01:47",
@@ -22052,49 +22068,49 @@ CHRONIQUE_SAISONS["faux_couple"] = {
     ("Deuxième semaine. Sixième apparition publique.\n\n"
      "Une inauguration. Trop de monde, trop de lumière, et des chaussures que Yuna "
      "a empruntées à Sora et qui font exactement une demi-pointure de trop."),
-    ("« Vous boitez. »\n\n"
-     "« Non. »\n\n"
-     "« Vous boitez depuis le troisième couloir. »\n\n"
-     "« Je boite pas. »\n\n"
+    ("Seojun|« Vous boitez. »\n\n"
+     "Yuna|« Non. »\n\n"
+     "Seojun|« Vous boitez depuis le troisième couloir. »\n\n"
+     "Yuna|« Je boite pas. »\n\n"
      "Il s'arrête. Il regarde ses pieds. Il regarde son visage.\n\n"
-     "« Attendez ici. »\n\n"
-     "« Quoi— Seo-jun. Seo-jun. »\n\n"
+     "Seojun|« Attendez ici. »\n\n"
+     "Yuna|« Quoi— Seo-jun. Seo-jun. »\n\n"
      "Il est déjà parti."),
     ("Il revient six minutes plus tard avec deux pansements et un gobelet.\n\n"
-     "« Assis. »\n\n"
-     "« Je vais pas m'asseoir par terre dans une— »\n\n"
-     "« Assis. »\n\n"
+     "Seojun|« Assis. »\n\n"
+     "Yuna|« Je vais pas m'asseoir par terre dans une— »\n\n"
+     "Seojun|« Assis. »\n\n"
      "Elle s'assoit sur une marche, dans une robe empruntée, entre deux plantes vertes.\n\n"
      "Il ne s'agenouille pas — il lui tend les pansements et détourne le regard.\n\n"
      "C'est étrangement plus délicat que s'il l'avait fait lui-même."),
     ("Elle boit une gorgée sans regarder.\n\n"
      "Puis elle s'arrête.\n\n"
-     "« Vous avez demandé quoi, exactement ? »\n\n"
-     "« Un café. »\n\n"
-     "« Il y a de la cannelle dedans. »\n\n"
-     "« Il y avait un pot à côté de la machine. »\n\n"
-     "« …Et ? »\n\n"
-     "« Et vous en mettez. Au café. Le matin. J'ai vu le pot sur votre comptoir. »\n\n"
+     "Yuna|« Vous avez demandé quoi, exactement ? »\n\n"
+     "Seojun|« Un café. »\n\n"
+     "Yuna|« Il y a de la cannelle dedans. »\n\n"
+     "Seojun|« Il y avait un pot à côté de la machine. »\n\n"
+     "Yuna|« …Et ? »\n\n"
+     "Seojun|« Et vous en mettez. Au café. Le matin. J'ai vu le pot sur votre comptoir. »\n\n"
      "Il regarde toujours ailleurs.\n\n"
-     "« C'est bizarre, d'ailleurs. »\n\n"
-     "« C'est PAS bizarre. »\n\n"
-     "« C'est un peu bizarre. »"),
+     "Seojun|« C'est bizarre, d'ailleurs. »\n\n"
+     "Yuna|« C'est PAS bizarre. »\n\n"
+     "Seojun|« C'est un peu bizarre. »"),
     ("Plus tard, dans la voiture, elle réalise deux choses.\n\n"
      "La première, c'est qu'elle a parlé de son pot de cannelle une seule fois, "
      "il y a onze jours, en passant, à quelqu'un d'autre.\n\n"
      "La deuxième, c'est qu'il n'était même pas censé écouter."),
     ("Le lendemain, Sora la fixe au-dessus de son bol.\n\n"
-     "« Quoi. »\n\n"
-     "« Rien. »\n\n"
-     "« Sora. »\n\n"
-     "« J'ai rien dit. »\n\n"
-     "« Tu me regardes depuis huit minutes. »\n\n"
-     "« Je peux pas regarder ma coloc ? »\n\n"
-     "« Pas comme ça. »\n\n"
+     "Yuna|« Quoi. »\n\n"
+     "Sora|« Rien. »\n\n"
+     "Yuna|« Sora. »\n\n"
+     "Sora|« J'ai rien dit. »\n\n"
+     "Yuna|« Tu me regardes depuis huit minutes. »\n\n"
+     "Sora|« Je peux pas regarder ma coloc ? »\n\n"
+     "Yuna|« Pas comme ça. »\n\n"
      "Sora repose son bol.\n\n"
-     "« Tu as souri en racontant l'histoire des pansements. »\n\n"
-     "« C'était une histoire drôle. »\n\n"
-     "« Mmh. »"),
+     "Sora|« Tu as souri en racontant l'histoire des pansements. »\n\n"
+     "Yuna|« C'était une histoire drôle. »\n\n"
+     "Sora|« Mmh. »"),
    ],
    "choix": {"question": "Min-jae appelle. Troisième fois cette semaine.",
      "options": [("repondre", "🅰️", "Répondre et tout lui dire"),
@@ -22105,23 +22121,23 @@ CHRONIQUE_SAISONS["faux_couple"] = {
         "texte": ("Elle lui raconte tout. Le café, l'enveloppe, la clause 4.\n\n"
           "Min-jae écoute sans l'interrompre. Pas une fois.\n\n"
           "Puis :\n\n"
-          "« D'accord. Qu'est-ce que je peux faire ? »\n\n"
+          "Minjae|« D'accord. Qu'est-ce que je peux faire ? »\n\n"
           "Pas *pourquoi t'as fait ça*. Pas *t'es folle*.\n\n"
           "Yuna s'assoit par terre dans le couloir, le téléphone contre l'oreille, "
           "et met une seconde de trop à répondre.\n\n"
-          "« Rien. Juste… reste. »\n\n"
-          "« Ok. »")},
+          "Yuna|« Rien. Juste… reste. »\n\n"
+          "Minjae|« Ok. »")},
       "mentir": {"pose": ["mensonge_minjae"],
-        "texte": ("« Je bosse. Nouveau boulot. Horaires bizarres. »\n\n"
-          "« Ah. »\n\n"
-          "« Ouais. »\n\n"
-          "« Cool. »\n\n"
+        "texte": ("Yuna|« Je bosse. Nouveau boulot. Horaires bizarres. »\n\n"
+          "Minjae|« Ah. »\n\n"
+          "Yuna|« Ouais. »\n\n"
+          "Minjae|« Cool. »\n\n"
           "Silence.\n\n"
-          "« Yuna. »\n\n"
-          "« Mmh ? »\n\n"
-          "« T'es dans la merde ? »\n\n"
-          "« Non. »\n\n"
-          "« Ok. »\n\n"
+          "Minjae|« Yuna. »\n\n"
+          "Yuna|« Mmh ? »\n\n"
+          "Minjae|« T'es dans la merde ? »\n\n"
+          "Yuna|« Non. »\n\n"
+          "Minjae|« Ok. »\n\n"
           "Il raccroche le premier. Il ne raccroche jamais le premier.")},
       "ignorer": {"pose": ["distance_minjae"],
         "texte": ("Elle regarde le téléphone vibrer jusqu'à ce qu'il s'arrête.\n\n"
@@ -22135,38 +22151,38 @@ CHRONIQUE_SAISONS["faux_couple"] = {
    "scenes": [
     ("Il l'attend en bas de son immeuble à vingt-trois heures, assis sur le capot "
      "de sa voiture avec deux sachets de ramyeon.\n\n"
-     "« L'ascenseur est encore en panne. »\n\n"
-     "« Je sais. Je suis monté. Puis je suis redescendu. »\n\n"
-     "« Pourquoi ? »\n\n"
-     "« Parce que t'étais pas là et que j'ai eu l'air d'un idiot devant ta porte. »"),
+     "Yuna|« L'ascenseur est encore en panne. »\n\n"
+     "Minjae|« Je sais. Je suis monté. Puis je suis redescendu. »\n\n"
+     "Yuna|« Pourquoi ? »\n\n"
+     "Minjae|« Parce que t'étais pas là et que j'ai eu l'air d'un idiot devant ta porte. »"),
     ("Ils mangent assis sur les marches du hall.\n\n"
      "Min-jae lui vole un morceau d'œuf. Elle lui donne un coup de coude. Il fait "
      "semblant d'être blessé et manque de renverser son bol.\n\n"
      "Pendant quatre minutes, tout est exactement comme depuis toujours."),
-    ("« Tu te rappelles quand t'as vomi dans le bus scolaire. »\n\n"
-     "« On avait DIX ANS. »\n\n"
-     "« Sur les chaussures de Min-seo. »\n\n"
-     "« MIN-JAE. »\n\n"
-     "« Elle a changé d'école le mois d'après. Je dis ça, je dis rien. »\n\n"
+    ("Minjae|« Tu te rappelles quand t'as vomi dans le bus scolaire. »\n\n"
+     "Yuna|« On avait DIX ANS. »\n\n"
+     "Minjae|« Sur les chaussures de Min-seo. »\n\n"
+     "Yuna|« MIN-JAE. »\n\n"
+     "Minjae|« Elle a changé d'école le mois d'après. Je dis ça, je dis rien. »\n\n"
      "Elle lui met un coup de pied. Il rit tellement qu'il s'étouffe à moitié."),
     ("Puis il pose son bol.\n\n"
-     "« Il y a une photo de toi. »\n\n"
-     "« …Quoi ? »\n\n"
+     "Minjae|« Il y a une photo de toi. »\n\n"
+     "Yuna|« …Quoi ? »\n\n"
      "Il lui tend son téléphone.\n\n"
      "Elle et Seo-jun, à l'inauguration. Elle est assise sur une marche. "
      "Il est debout à côté, la tête tournée.\n\n"
      "Le cliché est mauvais. L'angle ne l'est pas."),
-    ("« C'est pas ce que tu crois. »\n\n"
-     "« Je crois rien. »\n\n"
-     "« Min-jae. »\n\n"
-     "« Non, vraiment. Je te connais depuis qu'on a six ans. Si tu fais un truc, "
+    ("Yuna|« C'est pas ce que tu crois. »\n\n"
+     "Minjae|« Je crois rien. »\n\n"
+     "Yuna|« Min-jae. »\n\n"
+     "Minjae|« Non, vraiment. Je te connais depuis qu'on a six ans. Si tu fais un truc, "
      "y a une raison. »\n\n"
      "Il ramasse les bols.\n\n"
-     "« Je préférerais juste l'apprendre par toi. »"),
+     "Minjae|« Je préférerais juste l'apprendre par toi. »"),
     ("Il remonte les marches deux par deux et s'arrête à mi-hauteur.\n\n"
-     "« Ah. La cannelle. »\n\n"
-     "« Quoi la cannelle ? »\n\n"
-     "« T'en avais plus. J'en ai mis un pot dans ton placard mardi. »\n\n"
+     "Minjae|« Ah. La cannelle. »\n\n"
+     "Yuna|« Quoi la cannelle ? »\n\n"
+     "Minjae|« T'en avais plus. J'en ai mis un pot dans ton placard mardi. »\n\n"
      "Il continue de monter sans attendre de réponse.\n\n"
      "Yuna reste sur les marches un moment."),
     ("*Plus tard cette nuit-là.*\n\n"
@@ -22188,40 +22204,40 @@ CHRONIQUE_SAISONS["faux_couple"] = {
     ("Elle l'attend à la sortie du café, appuyée contre un poteau, "
      "avec un gobelet dans chaque main.\n\n"
      "Yuna la reconnaît avant qu'elle parle. Tout le monde reconnaîtrait Hae-rin.\n\n"
-     "« J'en ai pris un pour vous. »\n\n"
-     "« Je vous connais pas. »\n\n"
-     "« Non. Mais moi je sais qui vous êtes, et ça vous met déjà en position de faiblesse, "
+     "Haerin|« J'en ai pris un pour vous. »\n\n"
+     "Yuna|« Je vous connais pas. »\n\n"
+     "Haerin|« Non. Mais moi je sais qui vous êtes, et ça vous met déjà en position de faiblesse, "
      "alors autant que vous ayez un café. »"),
     ("Elles s'assoient sur un banc parce que Yuna refuse d'entrer quelque part.\n\n"
-     "« Je vais pas faire une scène. »\n\n"
-     "« Bien. »\n\n"
-     "« Je vais pas non plus vous dire de le quitter. »\n\n"
-     "« …Bien ? »\n\n"
-     "« Je vais juste vous montrer un truc et repartir, et vous allez passer "
+     "Haerin|« Je vais pas faire une scène. »\n\n"
+     "Yuna|« Bien. »\n\n"
+     "Haerin|« Je vais pas non plus vous dire de le quitter. »\n\n"
+     "Yuna|« …Bien ? »\n\n"
+     "Haerin|« Je vais juste vous montrer un truc et repartir, et vous allez passer "
      "une très mauvaise semaine. »\n\n"
      "Elle sourit en le disant. Ce n'est pas méchant. C'est presque désolé."),
     ("Elle fait défiler son téléphone et le pose sur le banc.\n\n"
      "Un virement. Le nom de Mme Kang. Il y a deux ans.\n\n"
      "Yuna regarde le montant.\n\n"
      "C'est presque exactement le sien."),
-    ("« Elle vous a payée. »\n\n"
-     "« Elle m'a payée pour partir. Vous, c'est pour rester. Je trouve ça plus vicieux, "
+    ("Yuna|« Elle vous a payée. »\n\n"
+     "Haerin|« Elle m'a payée pour partir. Vous, c'est pour rester. Je trouve ça plus vicieux, "
      "personnellement. »\n\n"
-     "« Pourquoi vous me montrez ça ? »\n\n"
+     "Yuna|« Pourquoi vous me montrez ça ? »\n\n"
      "Hae-rin met du temps à répondre.\n\n"
-     "« Parce que moi, personne m'a prévenue. »\n\n"
+     "Haerin|« Parce que moi, personne m'a prévenue. »\n\n"
      "Elle se lève, récupère son gobelet vide.\n\n"
-     "« Et parce que j'aimais bien Seo-jun. Ça aussi, personne m'a crue. »"),
+     "Haerin|« Et parce que j'aimais bien Seo-jun. Ça aussi, personne m'a crue. »"),
     ("Elle fait trois pas puis se retourne.\n\n"
-     "« Demandez-lui pour février. »\n\n"
-     "« Février quoi ? »\n\n"
-     "« Demandez-lui, c'est tout. »\n\n"
+     "Haerin|« Demandez-lui pour février. »\n\n"
+     "Yuna|« Février quoi ? »\n\n"
+     "Haerin|« Demandez-lui, c'est tout. »\n\n"
      "Puis elle part vraiment."),
     ("Sora écoute toute l'histoire sans manger, ce qui n'arrive jamais.\n\n"
-     "« Elle a dit février ? »\n\n"
-     "« Ouais. »\n\n"
-     "« Février de cette année ? »\n\n"
-     "« Elle a pas précisé. Pourquoi ? »\n\n"
+     "Sora|« Elle a dit février ? »\n\n"
+     "Yuna|« Ouais. »\n\n"
+     "Sora|« Février de cette année ? »\n\n"
+     "Yuna|« Elle a pas précisé. Pourquoi ? »\n\n"
      "Sora hausse les épaules un peu trop vite et se lève chercher de l'eau "
      "qu'elle avait déjà sur la table."),
    ],
@@ -22235,14 +22251,14 @@ CHRONIQUE_SAISONS["faux_couple"] = {
         "texte": ("Elle lui montre la capture à vingt-trois heures dans un parking.\n\n"
           "Il la regarde longtemps. Puis il s'assoit sur le muret, ce qu'il ne fait jamais "
           "en premier.\n\n"
-          "« Je savais pas pour Hae-rin. »\n\n"
-          "« Tu savais quoi, alors ? »\n\n"
-          "« Qu'elle était partie très vite. Et que ma mère avait l'air soulagée. »\n\n"
+          "Seojun|« Je savais pas pour Hae-rin. »\n\n"
+          "Yuna|« Tu savais quoi, alors ? »\n\n"
+          "Seojun|« Qu'elle était partie très vite. Et que ma mère avait l'air soulagée. »\n\n"
           "Il passe une main sur son visage.\n\n"
-          "« J'ai jamais fait le lien. Ou j'ai pas voulu. »\n\n"
+          "Seojun|« J'ai jamais fait le lien. Ou j'ai pas voulu. »\n\n"
           "Yuna s'assoit à côté de lui. Elle ne l'avait jamais vu comme ça — "
           "sans posture, sans quinze degrés d'inclinaison.\n\n"
-          "« Elle a dit de te demander pour février. »\n\n"
+          "Yuna|« Elle a dit de te demander pour février. »\n\n"
           "Il ne répond pas.")},
       "observer": {"pose": ["soupcon", "relation_cachee"],
         "texte": ("Elle ne dit rien.\n\n"
@@ -22253,15 +22269,15 @@ CHRONIQUE_SAISONS["faux_couple"] = {
           "Ce qui n'est pas du tout la même chose que : il n'y a rien.")},
       "kang": {"pose": ["confrontation_kang", "dossier_ouvert"], "ferme": ["secret"],
         "texte": ("Mme Kang la reçoit sans rendez-vous, ce qui est déjà une réponse.\n\n"
-          "« Hae-rin est venue vous voir. »\n\n"
+          "Kang|« Hae-rin est venue vous voir. »\n\n"
           "Ce n'est pas une question.\n\n"
-          "« Vous l'avez payée. »\n\n"
-          "« J'ai payé beaucoup de gens, Yuna. C'est mon métier. »\n\n"
+          "Yuna|« Vous l'avez payée. »\n\n"
+          "Kang|« J'ai payé beaucoup de gens, Yuna. C'est mon métier. »\n\n"
           "Elle sert le thé. Sa main est parfaitement stable.\n\n"
-          "« Asseyez-vous. Puisque vous êtes là, autant qu'on parle de votre père. »\n\n"
+          "Kang|« Asseyez-vous. Puisque vous êtes là, autant qu'on parle de votre père. »\n\n"
           "Yuna ne s'assoit pas.\n\n"
-          "« Comment ça, mon père. »\n\n"
-          "« Asseyez-vous, je vous en prie. C'est une longue histoire et vous "
+          "Yuna|« Comment ça, mon père. »\n\n"
+          "Kang|« Asseyez-vous, je vous en prie. C'est une longue histoire et vous "
           "travaillez à six heures. »")}}}},
 
   # ═══ ÉPISODE 6 ═══════════════════════════════════
@@ -22270,25 +22286,25 @@ CHRONIQUE_SAISONS["faux_couple"] = {
     ("Le gala dure quatre heures.\n\n"
      "Yuna sourit à quarante-trois personnes. Elle en compte trente-huit avant "
      "de perdre le fil."),
-    ("« Encore vingt minutes. »\n\n"
+    ("Seojun|« Encore vingt minutes. »\n\n"
      "Il dit ça sans la regarder, entre deux poignées de main, à peine plus fort "
      "qu'un souffle.\n\n"
      "Ce n'est pas de la gentillesse. C'est de la logistique.\n\n"
      "Ça lui fait quelque chose quand même."),
     ("Sur le parking, il fait quatre degrés. Elle a laissé son manteau au vestiaire "
      "et refuse catégoriquement d'y retourner.\n\n"
-     "« Pourquoi ? »\n\n"
-     "« Parce que la dame du vestiaire m'a appelée *mademoiselle Kang* et que "
+     "Seojun|« Pourquoi ? »\n\n"
+     "Yuna|« Parce que la dame du vestiaire m'a appelée *mademoiselle Kang* et que "
      "j'ai pas eu le courage de corriger. »\n\n"
      "Il s'arrête net au milieu du parking.\n\n"
      "Puis il rit.\n\n"
      "Vraiment. Une seconde entière, la tête un peu en arrière.\n\n"
      "C'est la première fois."),
     ("Il retire son sweat et le lui tend.\n\n"
-     "« Tu vas avoir froid. »\n\n"
-     "« Je conduis. »\n\n"
-     "« C'est pas une réponse. »\n\n"
-     "« Non. »\n\n"
+     "Seojun|« Tu vas avoir froid. »\n\n"
+     "Yuna|« Je conduis. »\n\n"
+     "Seojun|« C'est pas une réponse. »\n\n"
+     "Yuna|« Non. »\n\n"
      "Elle le prend."),
     ("Dans la voiture, il y a un gobelet dans le porte-gobelet.\n\n"
      "Elle ne dit rien.\n\n"
@@ -22296,20 +22312,20 @@ CHRONIQUE_SAISONS["faux_couple"] = {
      "Elle boit. Cannelle.\n\n"
      "La radio joue quelque chose que personne n'éteint pendant vingt-deux minutes."),
     ("Devant chez elle, il coupe le moteur alors qu'il n'était pas obligé.\n\n"
-     "« Yuna. »\n\n"
-     "« Mmh. »\n\n"
-     "« Février. »\n\n"
+     "Seojun|« Yuna. »\n\n"
+     "Yuna|« Mmh. »\n\n"
+     "Seojun|« Février. »\n\n"
      "Elle se redresse d'un coup.\n\n"
-     "« Mon père est mort en février. »\n\n"
+     "Seojun|« Mon père est mort en février. »\n\n"
      "Silence.\n\n"
-     "« Je travaillais. Tous les jours. Personne l'a su à part Chef— à part deux personnes. »\n\n"
+     "Seojun|« Je travaillais. Tous les jours. Personne l'a su à part Chef— à part deux personnes. »\n\n"
      "Il regarde droit devant.\n\n"
-     "« Voilà. C'est tout. C'est ça, février. »"),
+     "Seojun|« Voilà. C'est tout. C'est ça, février. »"),
     ("Elle ne sait pas quoi dire, alors elle ne dit rien pendant longtemps.\n\n"
      "Puis :\n\n"
-     "« Tu veux monter ? Il y a du ramyeon. »\n\n"
-     "« …C'est une très mauvaise idée. »\n\n"
-     "« Oui. »\n\n"
+     "Yuna|« Tu veux monter ? Il y a du ramyeon. »\n\n"
+     "Seojun|« …C'est une très mauvaise idée. »\n\n"
+     "Yuna|« Oui. »\n\n"
      "Il coupe les phares."),
    ],
    "interlude": {"type": "instagram", "compte": "@seojun.k",
@@ -22322,18 +22338,18 @@ CHRONIQUE_SAISONS["faux_couple"] = {
     ("Il pleut depuis quatre heures et le congrès a vidé tous les hôtels de la ville.\n\n"
      "Une chambre. Deux personnes. Un contrat de neuf pages qui n'a absolument pas "
      "prévu ce cas de figure."),
-    ("« Je prends le canapé. »\n\n"
-     "« Il fait un mètre quarante. »\n\n"
-     "« J'ai dormi dans pire. »\n\n"
-     "« Où ça ? »\n\n"
+    ("Seojun|« Je prends le canapé. »\n\n"
+     "Yuna|« Il fait un mètre quarante. »\n\n"
+     "Seojun|« J'ai dormi dans pire. »\n\n"
+     "Yuna|« Où ça ? »\n\n"
      "Il ne répond pas, ce qui est en train de devenir une habitude "
      "extrêmement agaçante."),
     ("À une heure du matin, ils sont réveillés tous les deux et font semblant "
      "de l'ignorer.\n\n"
      "C'est lui qui craque.\n\n"
-     "« Tu dors ? »\n\n"
-     "« Tu vas vraiment recommencer avec ça. »\n\n"
-     "« …Oui. »\n\n"
+     "Seojun|« Tu dors ? »\n\n"
+     "Yuna|« Tu vas vraiment recommencer avec ça. »\n\n"
+     "Seojun|« …Oui. »\n\n"
      "Elle se retourne vers le canapé dans le noir."),
     ("Il parle d'abord de choses sans importance.\n\n"
      "L'internat à onze ans. La première fois qu'il a raté un avion exprès pour rester "
@@ -22343,11 +22359,11 @@ CHRONIQUE_SAISONS["faux_couple"] = {
     ("Elle parle de sa sœur. Des deux boulots. De la fois où elle s'est endormie "
      "debout dans le métro et où une dame l'a réveillée à son arrêt "
      "en lui disant *courage*.\n\n"
-     "« Et la cannelle ? »\n\n"
-     "« Quoi la cannelle. »\n\n"
-     "« Pourquoi. »\n\n"
+     "Seojun|« Et la cannelle ? »\n\n"
+     "Yuna|« Quoi la cannelle. »\n\n"
+     "Seojun|« Pourquoi. »\n\n"
      "Long silence.\n\n"
-     "« C'est mon père qui faisait ça. »\n\n"
+     "Yuna|« C'est mon père qui faisait ça. »\n\n"
      "Elle entend le canapé grincer. Il s'est redressé."),
     ("Elle s'endort au milieu d'une phrase, vers quatre heures.\n\n"
      "Il ne la réveille pas. Il éteint la lampe.\n\n"
@@ -22366,21 +22382,22 @@ CHRONIQUE_SAISONS["faux_couple"] = {
           "Puis il lâche son manteau.\n\n"
           "Quand elle s'écarte, il a la tête de quelqu'un à qui on vient de casser "
           "quelque chose d'important et qui n'arrive pas à s'en plaindre.\n\n"
-          "« Clause 4 », murmure-t-il.\n\n"
-          "« Attaque-moi. »\n\n"
-          "« Je vais y réfléchir. »")},
+          "Il murmure :\n\n"
+          "Seojun|« Clause 4. »\n\n"
+          "Yuna|« Attaque-moi. »\n\n"
+          "Seojun|« Je vais y réfléchir. »")},
       "demander": {"pose": ["nuit_hotel", "verite_partagee"],
-        "texte": ("« Reste. Cinq minutes. »\n\n"
+        "texte": ("Yuna|« Reste. Cinq minutes. »\n\n"
           "Il s'arrête, la main sur la poignée.\n\n"
           "Puis il revient s'asseoir sur le bord du lit, manteau toujours sur le bras, "
           "comme quelqu'un qui négocie avec lui-même.\n\n"
           "Ils ne parlent pas. Pas une fois.\n\n"
           "Au bout de onze minutes, il se lève.\n\n"
-          "« Je dois y aller. »\n\n"
-          "« Je sais. »\n\n"
+          "Seojun|« Je dois y aller. »\n\n"
+          "Yuna|« Je sais. »\n\n"
           "À la porte : « Yuna. »\n\n"
-          "« Mmh ? »\n\n"
-          "« Rien. »\n\n"
+          "Yuna|« Mmh ? »\n\n"
+          "Seojun|« Rien. »\n\n"
           "Il sort.")},
       "rien": {"pose": ["distance_seojun"],
         "texte": ("Elle ferme les yeux et attend.\n\n"
@@ -22393,16 +22410,16 @@ CHRONIQUE_SAISONS["faux_couple"] = {
   {"titre": "Ce qu'elle n'entend pas",
    "scenes": [
     ("*Couloir du huitième étage. 06h14.*\n\n"
-     "« Non. »\n\n"
+     "Seojun|« Non. »\n\n"
      "…\n\n"
-     "« J'ai dit non, maman. »"),
-    ("« Elle ne doit pas apprendre pourquoi son père est parti. Tu comprends "
+     "Seojun|« J'ai dit non, maman. »"),
+    ("Kang|« Elle ne doit pas apprendre pourquoi son père est parti. Tu comprends "
      "ce que ça déclencherait ? »\n\n"
-     "« Je comprends surtout que tu as payé pour que personne ne le sache. »\n\n"
-     "« J'ai payé pour que ta famille existe encore aujourd'hui. »\n\n"
+     "Seojun|« Je comprends surtout que tu as payé pour que personne ne le sache. »\n\n"
+     "Kang|« J'ai payé pour que ta famille existe encore aujourd'hui. »\n\n"
      "Long silence.\n\n"
-     "« Et si elle l'apprend toute seule ? »\n\n"
-     "« Alors tu auras eu trois mois d'avance pour décider de quel côté tu es. »"),
+     "Seojun|« Et si elle l'apprend toute seule ? »\n\n"
+     "Kang|« Alors tu auras eu trois mois d'avance pour décider de quel côté tu es. »"),
     ("Il raccroche.\n\n"
      "Il supprime l'appel du journal — geste rapide, machinal, celui de quelqu'un "
      "qui l'a déjà fait.\n\n"
@@ -22429,7 +22446,7 @@ CHRONIQUE_SAISONS["faux_couple"] = {
      "Elle est là quand Yuna rentre, assise dans le salon, avec Sora debout "
      "dans la cuisine qui articule silencieusement *JE SAIS PAS* par-dessus son épaule."),
     {"si": "enveloppe_tiroir", "texte":
-     ("« Votre chambre est jolie. »\n\n"
+     ("Kang|« Votre chambre est jolie. »\n\n"
       "Yuna se fige.\n\n"
       "La porte de sa chambre est ouverte. Le tiroir du bas — celui qui coince, "
       "celui qu'on ne referme jamais complètement — dépasse d'un centimètre.\n\n"
@@ -22437,31 +22454,31 @@ CHRONIQUE_SAISONS["faux_couple"] = {
       "*Celle-là.*\n\n"
       "🦋 *Votre décision de l'épisode 2 vient de vous rattraper.*")},
     {"si": "question_pere", "texte":
-     ("« Vous avez posé des questions sur votre père. »\n\n"
+     ("Kang|« Vous avez posé des questions sur votre père. »\n\n"
       "Yuna ne bouge pas.\n\n"
-      "« À mon fils. Au café. Le premier soir. »\n\n"
+      "Kang|« À mon fils. Au café. Le premier soir. »\n\n"
       "Elle sourit.\n\n"
-      "« Vous voyez, c'est exactement ce que je craignais. »\n\n"
+      "Kang|« Vous voyez, c'est exactement ce que je craignais. »\n\n"
       "🦋 *Votre décision de l'épisode 1 vient de vous rattraper.*")},
     {"sauf": "enveloppe_tiroir", "texte":
-     ("« Vous rangez bien. »\n\n"
+     ("Kang|« Vous rangez bien. »\n\n"
       "Elle balaie la pièce du regard. Elle ne trouve rien.\n\n"
       "Ça ne l'empêche pas d'avoir l'air satisfaite.")},
-    ("« Le contrat se termine dans cinq semaines. »\n\n"
-     "« Je sais compter. »\n\n"
-     "« Vous le dites souvent. »\n\n"
+    ("Kang|« Le contrat se termine dans cinq semaines. »\n\n"
+     "Yuna|« Je sais compter. »\n\n"
+     "Kang|« Vous le dites souvent. »\n\n"
      "Elle repose sa tasse.\n\n"
-     "« Alors comptez ceci : mon fils n'a jamais rompu un accord de sa vie. Pas un seul. "
+     "Kang|« Alors comptez ceci : mon fils n'a jamais rompu un accord de sa vie. Pas un seul. "
      "Même quand ça lui coûtait quelque chose. Surtout quand ça lui coûtait quelque chose. »"),
     ("Elle se lève, remet son manteau.\n\n"
      "À la porte :\n\n"
-     "« Ce serait dommage que vous soyez la première chose qu'il perde. »\n\n"
+     "Kang|« Ce serait dommage que vous soyez la première chose qu'il perde. »\n\n"
      "La porte se ferme.\n\n"
      "Sora sort de la cuisine avec deux tasses.\n\n"
-     "« Bon. »\n\n"
-     "« Sora. »\n\n"
-     "« Je sais. »\n\n"
-     "« Sora, tu connais Hae-rin ? »\n\n"
+     "Sora|« Bon. »\n\n"
+     "Yuna|« Sora. »\n\n"
+     "Sora|« Je sais. »\n\n"
+     "Yuna|« Sora, tu connais Hae-rin ? »\n\n"
      "Sora repose les tasses un peu trop lentement."),
    ],
    "choix": {"question": "Sora n'a pas répondu.",
@@ -22470,17 +22487,17 @@ CHRONIQUE_SAISONS["faux_couple"] = {
                  ("fouiller", "🅲", "Chercher toute seule plus tard")],
      "suites": {
       "insister": {"pose": ["sora_avoue", "verite_sora"],
-        "texte": ("« Sora. »\n\n"
-          "« Ma cousine a travaillé pour eux. »\n\n"
-          "« …Et ? »\n\n"
-          "« Et elle a signé un truc. Et après elle a plus eu le droit d'en parler. »\n\n"
+        "texte": ("Yuna|« Sora. »\n\n"
+          "Sora|« Ma cousine a travaillé pour eux. »\n\n"
+          "Yuna|« …Et ? »\n\n"
+          "Sora|« Et elle a signé un truc. Et après elle a plus eu le droit d'en parler. »\n\n"
           "Sora s'assoit. Elle a l'air fatiguée d'un coup.\n\n"
-          "« Je voulais te le dire. Le premier soir. Puis t'avais l'air tellement soulagée "
+          "Sora|« Je voulais te le dire. Le premier soir. Puis t'avais l'air tellement soulagée "
           "d'avoir de l'argent que j'ai— »\n\n"
           "Elle s'arrête.\n\n"
-          "« Désolée. »")},
+          "Sora|« Désolée. »")},
       "attendre": {"pose": ["soupcon_sora"],
-        "texte": ("« Laisse tomber. »\n\n"
+        "texte": ("Yuna|« Laisse tomber. »\n\n"
           "Sora hoche la tête un peu trop vite et va faire la vaisselle "
           "qui était déjà faite.\n\n"
           "Yuna la regarde frotter la même assiette pendant deux minutes.")},
@@ -22517,10 +22534,10 @@ CHRONIQUE_SAISONS["faux_couple"] = {
       "acc_sora": {"pose": ["accuse_sora"],
         "texte": ("Yuna pose la question en face.\n\n"
           "Sora ne nie pas tout de suite. C'est ça, le pire.\n\n"
-          "« Tu crois vraiment que je te ferais ça. »\n\n"
-          "« Je sais plus ce que je crois. »\n\n"
+          "Sora|« Tu crois vraiment que je te ferais ça. »\n\n"
+          "Yuna|« Je sais plus ce que je crois. »\n\n"
           "Sora prend son manteau.\n\n"
-          "« Ok. »\n\n"
+          "Sora|« Ok. »\n\n"
           "Elle ne rentre pas dormir.")},
       "acc_haerin": {"pose": ["accuse_haerin"],
         "texte": ("Trois mots en réponse.\n\n"
@@ -22547,20 +22564,20 @@ CHRONIQUE_SAISONS["faux_couple"] = {
       "La signature en dessous est celle de son père.")},
     {"sauf": "dossier_ouvert", "texte":
      ("C'est Sora qui le lui donne. Enveloppe kraft, posée sur la table, sans un mot.\n\n"
-      "« Ma cousine l'a gardé six ans. »\n\n"
+      "Sora|« Ma cousine l'a gardé six ans. »\n\n"
       "Yuna l'ouvre debout dans la cuisine et lit six pages avant de devoir s'asseoir.\n\n"
       "Son père n'est pas parti. Il a été payé pour partir.")},
     ("Elle écrit trois mots à Seo-jun et éteint son téléphone.\n\n"
      "Il est là quarante minutes plus tard.\n\n"
      "Il voit le dossier sur la table.\n\n"
      "Il ne demande pas ce que c'est."),
-    ("« Depuis quand. »\n\n"
-     "« L'hôtel. »\n\n"
+    ("Yuna|« Depuis quand. »\n\n"
+     "Seojun|« L'hôtel. »\n\n"
      "Neuf jours.\n\n"
-     "« Neuf jours. »\n\n"
-     "« Oui. »\n\n"
-     "« Tu m'as apporté un CAFÉ. »\n\n"
-     "« Oui. »\n\n"
+     "Yuna|« Neuf jours. »\n\n"
+     "Seojun|« Oui. »\n\n"
+     "Yuna|« Tu m'as apporté un CAFÉ. »\n\n"
+     "Seojun|« Oui. »\n\n"
      "Il ne se défend pas. C'est encore pire."),
    ],
    "choix": {"question": "Il est debout dans l'entrée. Il n'a pas enlevé son manteau.",
@@ -22570,30 +22587,30 @@ CHRONIQUE_SAISONS["faux_couple"] = {
                  ("ensemble", "🅲", "« Assieds-toi. Aide-moi à comprendre. »")],
      "suites": {
       "pardon": {"pose": ["pardon_accorde"],
-        "texte": ("« Pourquoi tu n'as rien dit ? »\n\n"
-          "« Parce que je cherchais une façon de te le dire qui te ferait pas partir. »\n\n"
-          "« Et tu l'as trouvée ? »\n\n"
-          "« Non. »\n\n"
+        "texte": ("Yuna|« Pourquoi tu n'as rien dit ? »\n\n"
+          "Seojun|« Parce que je cherchais une façon de te le dire qui te ferait pas partir. »\n\n"
+          "Yuna|« Et tu l'as trouvée ? »\n\n"
+          "Seojun|« Non. »\n\n"
           "Il est venu quand même.\n\n"
           "Elle regarde ses mains. Il n'a pas retiré son manteau parce qu'il "
           "s'attendait à ressortir.")},
       "dehors": {"pose": ["rupture"], "ferme": ["seojun", "secret"],
-        "texte": ("« Sors de chez moi. »\n\n"
+        "texte": ("Yuna|« Sors de chez moi. »\n\n"
           "Il ne plaide pas. Il ne discute pas. Il hoche la tête une fois.\n\n"
-          "« Ok. »\n\n"
+          "Seojun|« Ok. »\n\n"
           "Et c'est peut-être ça le pire — qu'il parte aussi proprement.\n\n"
           "Elle entend la porte de l'immeuble claquer six étages plus bas.\n\n"
           "Puis plus rien pendant très longtemps.")},
       "ensemble": {"pose": ["verite_partagee", "confiance_seojun", "confrontation_kang"],
-        "texte": ("« Assieds-toi. Aide-moi à comprendre. »\n\n"
+        "texte": ("Yuna|« Assieds-toi. Aide-moi à comprendre. »\n\n"
           "Il enlève son manteau.\n\n"
           "Ils restent à cette table jusqu'à cinq heures, avec quarante pages "
           "étalées entre eux, à reconstituer dix-neuf ans.\n\n"
           "Vers quatre heures, il fait du café. Il met de la cannelle sans demander.\n\n"
           "Au lever du jour :\n\n"
-          "« Si on va au bout, je perds ma famille. »\n\n"
-          "« Je sais. »\n\n"
-          "« J'ai pas dit que je voulais pas. »")}}}},
+          "Seojun|« Si on va au bout, je perds ma famille. »\n\n"
+          "Yuna|« Je sais. »\n\n"
+          "Seojun|« J'ai pas dit que je voulais pas. »")}}}},
 
   # ═══ ÉPISODE 12 ══════════════════════════════════
   {"titre": "Cinq jours",
@@ -22604,13 +22621,13 @@ CHRONIQUE_SAISONS["faux_couple"] = {
      "sa main tout de suite."),
     {"si": "verite_minjae", "texte":
      ("Min-jae passe le mercredi. Ramyeon, par habitude.\n\n"
-      "« Tu fais quoi vendredi. »\n\n"
-      "« Je sais pas. »\n\n"
-      "« Menteuse. »\n\n"
+      "Minjae|« Tu fais quoi vendredi. »\n\n"
+      "Yuna|« Je sais pas. »\n\n"
+      "Minjae|« Menteuse. »\n\n"
       "Il sourit en le disant, et ça lui coûte visiblement quelque chose.\n\n"
-      "« Vas-y. Je te récupère si ça se passe mal. Comme toujours. »\n\n"
-      "« Min-jae— »\n\n"
-      "« Mange ton œuf. »")},
+      "Minjae|« Vas-y. Je te récupère si ça se passe mal. Comme toujours. »\n\n"
+      "Yuna|« Min-jae— »\n\n"
+      "Minjae|« Mange ton œuf. »")},
     {"si": "mensonge_minjae", "texte":
      ("Min-jae ne passe pas.\n\n"
       "Il n'a pas répondu depuis onze jours.\n\n"
@@ -22620,11 +22637,11 @@ CHRONIQUE_SAISONS["faux_couple"] = {
       "**Min-jae** — *ok*")},
     {"si": "sora_avoue", "texte":
      ("Sora fait des pâtes à minuit, ce qui chez elle signifie qu'elle veut parler.\n\n"
-      "« J'ai appelé ma cousine. »\n\n"
-      "« Et ? »\n\n"
-      "« Elle témoignera. Si tu vas au bout. »\n\n"
+      "Sora|« J'ai appelé ma cousine. »\n\n"
+      "Yuna|« Et ? »\n\n"
+      "Sora|« Elle témoignera. Si tu vas au bout. »\n\n"
       "Elle remue les pâtes trop longtemps.\n\n"
-      "« Je te devais bien ça. »")},
+      "Sora|« Je te devais bien ça. »")},
     ("Jeudi soir, il l'appelle à vingt-trois heures pour lui dire qu'il n'a rien "
      "à lui dire.\n\n"
      "Ils restent en ligne trente-cinq minutes.\n\n"
@@ -22643,14 +22660,14 @@ CHRONIQUE_SAISONS["faux_couple"] = {
      "Elle passe dix minutes dans les toilettes du deuxième à respirer "
      "en comptant les carreaux."),
     ("Quand elle ressort, Seo-jun est appuyé contre le mur d'en face.\n\n"
-     "« Tu sais depuis quand. »\n\n"
-     "« Quatre minutes de plus que toi. »\n\n"
-     "« Menteur. »\n\n"
-     "« …Six. »"),
+     "Yuna|« Tu sais depuis quand. »\n\n"
+     "Seojun|« Quatre minutes de plus que toi. »\n\n"
+     "Yuna|« Menteur. »\n\n"
+     "Seojun|« …Six. »"),
     ("Il regarde l'escalier. Puis elle. Puis l'escalier.\n\n"
-     "« Il y a une sortie de service au bout du couloir. »\n\n"
-     "« Tu me proposes de fuir ? »\n\n"
-     "« Je te donne une information. »\n\n"
+     "Seojun|« Il y a une sortie de service au bout du couloir. »\n\n"
+     "Yuna|« Tu me proposes de fuir ? »\n\n"
+     "Seojun|« Je te donne une information. »\n\n"
      "En bas, trente personnes attendent le dessert."),
    ],
    "choix": {"question": "Le traiteur vient de passer avec le plateau.",
@@ -22664,8 +22681,8 @@ CHRONIQUE_SAISONS["faux_couple"] = {
           "La voiture démarre exactement quand le traiteur entre en salle.\n\n"
           "Ils roulent une heure sans destination. À un moment elle rit toute seule "
           "et il demande pourquoi et elle répond *rien* et il n'insiste pas.\n\n"
-          "« On va où ? »\n\n"
-          "« Aucune idée. »\n\n"
+          "Yuna|« On va où ? »\n\n"
+          "Seojun|« Aucune idée. »\n\n"
           "C'est la première chose qu'aucun contrat n'avait prévue.")},
       "verite_publique": {"pose": ["verite_publique", "confrontation_kang",
                                    "dossier_ouvert", "il_a_choisi"],
@@ -22685,7 +22702,7 @@ CHRONIQUE_SAISONS["faux_couple"] = {
           "Personne ne comprend pourquoi.\n\n"
           "Au dessert, Mme Kang se lève.\n\n"
           "Seo-jun se lève une seconde avant elle.\n\n"
-          "« Le contrat s'achève ce soir à minuit. Merci d'être venus. »\n\n"
+          "Seojun|« Le contrat s'achève ce soir à minuit. Merci d'être venus. »\n\n"
           "Il pose sa serviette et il sort.\n\n"
           "Trente personnes regardent Yuna.\n\n"
           "Elle repose sa fourchette et elle sort aussi.")}}}},
@@ -22736,13 +22753,13 @@ CHRONIQUE_SAISONS["colocation"] = {
       "Da-eun le pose sur la table de la cuisine sans rien dire.\n\n"
       "Tae-yang le lit en mangeant des céréales à quinze heures, ce qui devrait encore l'agacer "
       "et ne l'agace plus du tout.\n\n"
-      "« Une case pour deux occupants. »\n\n"
-      "« Je sais. »\n\n"
-      "« Ou une case pour un couple. »\n\n"
+      "Taeyang|« Une case pour deux occupants. »\n\n"
+      "Daeun|« Je sais. »\n\n"
+      "Taeyang|« Ou une case pour un couple. »\n\n"
       "Elle lève les yeux. Il ne sourit même pas — c'est ça, le pire, il a l'air sérieux.\n\n"
       "Elle prend le stylo. Elle coche la deuxième case.\n\n"
-      "« Si tu laisses encore une poêle sale, je te fais expulser. »\n\n"
-      "« Noté. »")},
+      "Daeun|« Si tu laisses encore une poêle sale, je te fais expulser. »\n\n"
+      "Taeyang|« Noté. »")},
   "paris": {"nom": "✈️ Il est reparti", "route": "paris",
     "exige": ["verite_paris"], "interdit": ["il_est_reste"], "poids": 1,
     "texte": ("Le vol est à six heures dix. Elle ne va pas à l'aéroport — ils en avaient parlé, "
@@ -22758,10 +22775,10 @@ CHRONIQUE_SAISONS["colocation"] = {
     "texte": ("Ils ne se mettent jamais ensemble.\n\n"
       "C'est une décision, pas un échec — ils en parlent une fois, une seule, "
       "un soir de novembre où il pleut trop pour sortir.\n\n"
-      "« On serait horribles ensemble », dit-elle.\n\n"
-      "« Catastrophiques. »\n\n"
-      "« Tu laisses tes chaussettes partout. »\n\n"
-      "« Tu ranges mes affaires et après je les trouve plus. »\n\n"
+      "Daeun|« On serait horribles ensemble. »\n\n"
+      "Taeyang|« Catastrophiques. »\n\n"
+      "Daeun|« Tu laisses tes chaussettes partout. »\n\n"
+      "Taeyang|« Tu ranges mes affaires et après je les trouve plus. »\n\n"
       "Ils rient. Puis le silence retombe, confortable.\n\n"
       "Quatre ans plus tard, il est témoin à son mariage. Il fait le meilleur discours "
       "que quiconque ait jamais entendu, et il pleure plus que la mariée.")},
@@ -22779,16 +22796,16 @@ CHRONIQUE_SAISONS["colocation"] = {
    "scenes": [
     ("Il y a exactement une seconde entre le moment où la porte s'ouvre et celui où "
      "Da-eun comprend.\n\n"
-     "« Non. »\n\n"
-     "« Bonjour à toi aussi. »\n\n"
+     "Daeun|« Non. »\n\n"
+     "Taeyang|« Bonjour à toi aussi. »\n\n"
      "Tae-yang est appuyé contre le chambranle avec un carton sous le bras "
      "et l'air de quelqu'un qui trouve la situation très drôle."),
     ("L'agence a mélangé deux dossiers. Le bail est signé. Par les deux.\n\n"
-     "« On peut résilier », dit-elle au téléphone.\n\n"
-     "« Trois mois de préavis et deux mois de pénalité, madame. »\n\n"
+     "Daeun|« On peut résilier ? »\n\n"
+     "Voix|« Trois mois de préavis et deux mois de pénalité, madame. »\n\n"
      "Elle raccroche. Tae-yang la regarde depuis le canapé, où il s'est déjà installé.\n\n"
-     "« Alors ? »\n\n"
-     "« Ne me parle pas. »"),
+     "Taeyang|« Alors ? »\n\n"
+     "Daeun|« Ne me parle pas. »"),
     ("Ils établissent des règles le premier soir, sur un papier, comme deux adultes.\n\n"
      "*1. La cuisine est partagée. Chacun nettoie.*\n"
      "*2. Pas d'invités après 23h.*\n"
@@ -22800,11 +22817,12 @@ CHRONIQUE_SAISONS["colocation"] = {
     ("Le conflit éclate sur une poêle.\n\n"
      "Pas sur la fac. Pas sur ce qu'il avait dit en troisième année devant tout le monde.\n\n"
      "Sur une poêle laissée dans l'évier pendant deux jours."),
-    ("« Tu es chef. CHEF. Comment tu peux laisser ça ? »\n\n"
-     "« Je cuisine douze heures par jour. Chez moi, je décompresse. »\n\n"
-     "« Ce n'est pas *chez toi*. C'est chez nous. »\n\n"
+    ("Daeun|« Tu es chef. CHEF. Comment tu peux laisser ça ? »\n\n"
+     "Taeyang|« Je cuisine douze heures par jour. Chez moi, je décompresse. »\n\n"
+     "Daeun|« Ce n'est pas *chez toi*. C'est chez nous. »\n\n"
      "Il s'arrête. Elle réalise ce qu'elle vient de dire.\n\n"
-     "« Chez nous », il répète, et cette fois il sourit vraiment."),
+     "Taeyang|« Chez nous. »\n\n"
+     "Il le répète lentement, et cette fois il sourit vraiment."),
    ],
    "choix": {"question": "Il attend une réaction.",
      "decisif": True,
@@ -22824,7 +22842,7 @@ CHRONIQUE_SAISONS["colocation"] = {
           "Elle reste dix minutes debout dans la cuisine propre, très en colère "
           "sans arriver à savoir contre qui.")},
       "cuisine": {"pose": ["nuit_cuisine", "complicite"],
-        "texte": ("« Alors apprends-moi à faire mieux que toi. »\n\n"
+        "texte": ("Daeun|« Alors apprends-moi à faire mieux que toi. »\n\n"
           "Il la regarde une seconde de trop.\n\n"
           "Puis il ouvre le frigo.\n\n"
           "Ils cuisinent jusqu'à deux heures du matin. Elle rate deux fois la sauce. "
@@ -22837,7 +22855,7 @@ CHRONIQUE_SAISONS["colocation"] = {
   {"titre": "Ji-ho",
    "scenes": [
     ("Le frère de Da-eun débarque un dimanche avec un sac et une explication vague.\n\n"
-     "« Deux nuits max. »\n\n"
+     "Jiho|« Deux nuits max. »\n\n"
      "Il restera six semaines."),
     ("Ji-ho a une qualité : il désamorce tout.\n\n"
      "Quand Da-eun et Tae-yang commencent à se disputer sur la température du "
@@ -22847,26 +22865,25 @@ CHRONIQUE_SAISONS["colocation"] = {
      "C'est le premier soir où les trois rient en même temps."),
     {"si": "nuit_cuisine", "texte":
      ("Plus tard, dans la cuisine, Ji-ho dit à sa sœur :\n\n"
-      "« Il te regarde quand tu parles. »\n\n"
-      "« Tout le monde regarde les gens qui parlent. »\n\n"
-      "« Non. »\n\n"
+      "Jiho|« Il te regarde quand tu parles. »\n\n"
+      "Daeun|« Tout le monde regarde les gens qui parlent. »\n\n"
+      "Jiho|« Non. »\n\n"
       "Il ouvre le frigo, prend une bière, et sort sans développer.")},
    ]},
   {"titre": "Ce qu'il a dit en troisième année",
    "scenes": [
     ("Ye-rin le ressort un vendredi soir, un peu ivre, en pensant faire de l'humour.\n\n"
-     "« Attends, c'est PAS le mec qui avait dit devant tout l'amphi que ton projet "
+     "Yerin|« Attends, c'est PAS le mec qui avait dit devant tout l'amphi que ton projet "
      "était joli mais vide ? »\n\n"
      "Le silence tombe d'un coup."),
     ("Dans le taxi du retour, aucun des deux ne parle pendant quinze minutes.\n\n"
-     "Puis Tae-yang :\n\n"
-     "« J'avais vingt et un ans et j'étais un con. »\n\n"
-     "« Tu avais raison. »\n\n"
+     "Taeyang|« J'avais vingt et un ans et j'étais un con. »\n\n"
+     "Daeun|« Tu avais raison. »\n\n"
      "Il tourne la tête vers elle.\n\n"
-     "« Le projet était vide. J'ai passé quatre ans à essayer que plus jamais "
+     "Daeun|« Le projet était vide. J'ai passé quatre ans à essayer que plus jamais "
      "personne ne puisse dire ça. »\n\n"
-     "« Da-eun… »\n\n"
-     "« C'est bon. Vraiment. »\n\n"
+     "Taeyang|« Da-eun… »\n\n"
+     "Daeun|« C'est bon. Vraiment. »\n\n"
      "Ce n'est pas bon du tout, et ils le savent tous les deux."),
    ],
    "choix": {"question": "Le taxi s'arrête en bas de l'immeuble.",
@@ -22884,7 +22901,7 @@ CHRONIQUE_SAISONS["colocation"] = {
           "Elle lui dit tout : l'amphi, les quatre ans, la fois où elle a failli "
           "abandonner l'architecture à cause d'une phrase de dix secondes.\n\n"
           "Il écoute sans se justifier une seule fois.\n\n"
-          "À la fin : « Je suis désolé. Vraiment. »\n\n"
+          "Taeyang|« Je suis désolé. Vraiment. »\n\n"
           "Ce n'est pas suffisant. C'est déjà quelque chose.")},
       "marcher": {"pose": ["complicite", "nuit_cuisine"],
         "texte": ("Ils marchent une heure dans un quartier vide.\n\n"
@@ -22892,20 +22909,20 @@ CHRONIQUE_SAISONS["colocation"] = {
           "de son premier service raté, de sa première maquette, de la fois où "
           "elle a pleuré dans un placard de la fac.\n\n"
           "Au retour, il dit :\n\n"
-          "« Pour info, ton projet de fin d'année, je l'ai gardé en fond d'écran "
+          "Taeyang|« Pour info, ton projet de fin d'année, je l'ai gardé en fond d'écran "
           "pendant six mois. »\n\n"
           "Puis il monte les escaliers sans attendre sa réaction.")}}}},
   {"titre": "Paris",
    "scenes": [
     ("Chef Baek passe à l'appartement. C'est la première fois.\n\n"
      "Il apporte du soju et une enveloppe.\n\n"
-     "« Ils te reveulent. »"),
+     "Baek|« Ils te reveulent. »"),
     ("Da-eun entend depuis le couloir. Elle ne bouge pas.\n\n"
-     "« Deux ans. Sous-chef. C'est le poste que tu voulais. »\n\n"
-     "« J'ai dit non il y a trois ans. »\n\n"
-     "« Tu avais une raison, il y a trois ans. »\n\n"
+     "Baek|« Deux ans. Sous-chef. C'est le poste que tu voulais. »\n\n"
+     "Taeyang|« J'ai dit non il y a trois ans. »\n\n"
+     "Baek|« Tu avais une raison, il y a trois ans. »\n\n"
      "Un silence.\n\n"
-     "« Et maintenant ? »\n\n"
+     "Baek|« Et maintenant ? »\n\n"
      "Tae-yang ne répond pas."),
     ("*Vous savez. Elle ne sait pas encore pourquoi il avait dit non la première fois.*"),
    ],
@@ -22917,7 +22934,7 @@ CHRONIQUE_SAISONS["colocation"] = {
     ("Elle attend six jours avant d'en parler. Six jours pendant lesquels il ne dit rien "
      "non plus, ce qui est une réponse en soi.\n\n"
      "C'est un mardi, à onze heures du soir, dans la cuisine.\n\n"
-     "« Paris. »\n\n"
+     "Daeun|« Paris. »\n\n"
      "Il pose son verre."),
    ],
    "choix": {"question": "Il attend qu'elle finisse sa phrase.",
@@ -22927,32 +22944,32 @@ CHRONIQUE_SAISONS["colocation"] = {
                  ("pourquoi", "🅲", "« Pourquoi tu avais dit non la première fois ? »")],
      "suites": {
       "reste": {"pose": ["il_est_reste", "aveu"], "ferme": ["paris", "amis"],
-        "texte": ("« Ne pars pas. »\n\n"
+        "texte": ("Daeun|« Ne pars pas. »\n\n"
           "Elle l'a dit trop vite, trop fort, et maintenant c'est dans la pièce "
           "et on ne peut plus le reprendre.\n\n"
           "Il ne répond pas tout de suite. Il fait le tour du plan de travail. "
           "Il s'arrête à quarante centimètres d'elle.\n\n"
-          "« Répète. »\n\n"
-          "« Non. »\n\n"
-          "« Répète, Da-eun. »\n\n"
+          "Taeyang|« Répète. »\n\n"
+          "Daeun|« Non. »\n\n"
+          "Taeyang|« Répète, Da-eun. »\n\n"
           "Elle répète.")},
       "libre": {"pose": ["choix_amitie"], "ferme": ["ensemble"],
-        "texte": ("« Tu devrais y aller. »\n\n"
+        "texte": ("Daeun|« Tu devrais y aller. »\n\n"
           "C'est vrai. C'est même la seule chose vraie qu'elle puisse dire.\n\n"
           "Il hoche la tête lentement.\n\n"
-          "« Ouais. »\n\n"
+          "Taeyang|« Ouais. »\n\n"
           "Il finit son verre. Il le lave. Il le range — à sa place, pour la première fois.\n\n"
-          "« Merci de me l'avoir dit comme ça. »")},
+          "Taeyang|« Merci de me l'avoir dit comme ça. »")},
       "pourquoi": {"pose": ["verite_paris"],
-        "texte": ("« Pourquoi tu avais dit non, il y a trois ans ? »\n\n"
+        "texte": ("Daeun|« Pourquoi tu avais dit non, il y a trois ans ? »\n\n"
           "Long silence.\n\n"
-          "« Mon père était malade. Personne ne le savait, à part Chef Baek. »\n\n"
-          "« Il va comment ? »\n\n"
-          "« Il est mort en février. »\n\n"
+          "Taeyang|« Mon père était malade. Personne ne le savait, à part Chef Baek. »\n\n"
+          "Daeun|« Il va comment ? »\n\n"
+          "Taeyang|« Il est mort en février. »\n\n"
           "Elle réalise qu'elle vivait avec lui à ce moment-là. Qu'il est allé travailler "
           "tous les jours. Qu'elle s'est plainte d'une poêle.\n\n"
-          "« Tae-yang… »\n\n"
-          "« C'est pour ça que je décompresse mal », dit-il. « Désolé pour la vaisselle. »")}}}},
+          "Daeun|« Tae-yang… »\n\n"
+          "Taeyang|« C'est pour ça que je décompresse mal. Désolé pour la vaisselle. »")}}}},
   {"titre": "Février",
    "scenes": [
     {"si": "verite_paris", "texte":
@@ -23050,6 +23067,45 @@ def chro_marqueur_scene(texte):
         return prem.strip("*").strip()
     return None
 
+# ── Dialogues : le locuteur est porté par la DONNÉE, jamais deviné ──
+# Format d'une réplique dans les scènes :   Nom|« texte »
+# Le nom est facultatif : une réplique sans préfixe reste affichée en citation.
+# Deux répliques consécutives du même personnage ne réaffichent pas son nom.
+
+CHRO_VOIX = {
+  # saison       clé          nom affiché (sans emoji)
+  "faux_couple": {"Yuna": "Yuna", "Seojun": "Seo-jun", "Minjae": "Min-jae",
+                  "Sora": "Sora", "Haerin": "Hae-rin", "Kang": "Mme Kang",
+                  "Femme": "Une invitée", "Voix": "Au téléphone"},
+  "colocation":  {"Daeun": "Da-eun", "Taeyang": "Tae-yang", "Jiho": "Ji-ho",
+                  "Yerin": "Ye-rin", "Baek": "Chef Baek"},
+}
+
+def chro_voix(cle_perso):
+    """Nom affiché d'un personnage, pour la saison en cours."""
+    table = CHRO_VOIX.get(CHRONIQUE.get("saison")) or {}
+    return table.get(cle_perso, cle_perso)
+
+def chro_rendu_dialogue(para, dernier):
+    """Rend un paragraphe. Retourne (texte_rendu, nouveau_dernier_locuteur)."""
+    p = para.strip()
+    if not p:
+        return "", dernier
+    # Réplique attribuée : « Nom|« … » »
+    if "|" in p.split("\n", 1)[0]:
+        tete, _, reste = p.partition("|")
+        tete = tete.strip()
+        if reste.lstrip().startswith("«") and 0 < len(tete) <= 20 and " " not in tete:
+            corps = reste.strip()
+            if tete == dernier:
+                return f"> {corps}", tete           # même locuteur : pas de rappel
+            return f"**{chro_voix(tete)}**\n> {corps}", tete
+    # Réplique sans locuteur connu
+    if p.startswith("«"):
+        return f"> {p}", None
+    # Narration
+    return p, None
+
 def chro_rendu_scene(texte, numero=None):
     """Transforme une scène en contenu Discord lisible sur mobile.
     Les dialogues respirent, les en-têtes de scène ressortent."""
@@ -23061,11 +23117,12 @@ def chro_rendu_scene(texte, numero=None):
     if entete:
         lignes.append(f"### ◈ {entete}")
         lignes.append("")
+    dernier = None
     for para in corps.split("\n\n"):
-        p = para.strip()
-        if not p:
+        rendu, dernier = chro_rendu_dialogue(para, dernier)
+        if not rendu:
             continue
-        lignes.append(p)
+        lignes.append(rendu)
         lignes.append("")
     return "\n".join(lignes).rstrip()
 
