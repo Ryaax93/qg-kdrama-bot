@@ -199,6 +199,7 @@ SALON_DASHBOARD_ID = None  # salon tableau de bord admin  # Met l'ID du salon bo
 SALON_GACHABATTLE_ID = None    # Salon des Gacha Battles
 SALON_DUEL_ID = None      # Met l'ID du salon duel/pvp ici
 SALON_BIENVENUE_ID = None # Met l'ID du salon bienvenue ici
+SALON_GENERAL_ID = None   # Salon général : annonce communautaire d'arrivée
 SALON_AUREVOIR_ID = None  # Met l'ID du salon aurevoir ici
 SALON_BOOST_ID = None     # Met l'ID du salon boost ici
 SALON_HOF_ID = None       # Met l'ID du salon hall of fame ici
@@ -222,6 +223,7 @@ def sauvegarder_salons():
         "SALON_GACHABATTLE_ID":    SALON_GACHABATTLE_ID,
         "SALON_DUEL_ID":      SALON_DUEL_ID,
         "SALON_BIENVENUE_ID": SALON_BIENVENUE_ID,
+        "SALON_GENERAL_ID": SALON_GENERAL_ID,
         "SALON_AUREVOIR_ID":  SALON_AUREVOIR_ID,
         "SALON_BOOST_ID":     SALON_BOOST_ID,
         "SALON_HOF_ID":       SALON_HOF_ID,
@@ -250,6 +252,7 @@ def charger_salons():
     global SALON_CHRONIQUE_ID
     global SALON_LEVELUP_ID, SALON_CASINO_ID, SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_EVENT_ID, SALON_GUIDE_ID, ROLE_GACHA_ID, ROLE_GIRLS_ID, ROLE_ANIME_ID, ROLE_HOMME_ID, ROLE_FEMME_ID
     global SALON_GACHABATTLE_ID, SALON_DUEL_ID, SALON_BIENVENUE_ID, SALON_AUREVOIR_ID
+    global SALON_GENERAL_ID
     global SALON_BOOST_ID, SALON_HOF_ID, SALON_REGLEMENT_ID, ROLE_MEMBRE_NAME, REGLEMENT_ROLE_ID, REGLEMENT_MSG_ID
     if not os.path.exists(CONFIG_FILE):
         return
@@ -267,6 +270,7 @@ def charger_salons():
         SALON_GACHABATTLE_ID    = data.get("SALON_GACHABATTLE_ID")
         SALON_DUEL_ID      = data.get("SALON_DUEL_ID")
         SALON_BIENVENUE_ID = data.get("SALON_BIENVENUE_ID")
+        SALON_GENERAL_ID   = data.get("SALON_GENERAL_ID")
         SALON_AUREVOIR_ID  = data.get("SALON_AUREVOIR_ID")
         SALON_BOOST_ID     = data.get("SALON_BOOST_ID")
         SALON_HOF_ID       = data.get("SALON_HOF_ID")
@@ -2987,6 +2991,19 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
 # ============================================================
 #  NIVEAUX / XP
 # ============================================================
+# ── Source de vérité unique des stats d'arène ──
+ARENE_PV_BASE, ARENE_PV_PAS   = 250, 8
+ARENE_END_BASE, ARENE_END_PAS = 100, 5
+ARENE_ATK_PAS, ARENE_DEF_PAS  = 3, 3
+
+def arene_totaux(uid):
+    """PV, END, bonus ATK, bonus DEF réellement utilisés par le moteur de combat."""
+    s = arena_stats[uid]
+    return (ARENE_PV_BASE  + s["pv_bonus"]  * ARENE_PV_PAS,
+            ARENE_END_BASE + s["end_bonus"] * ARENE_END_PAS,
+            s["atk_bonus"] * ARENE_ATK_PAS,
+            s["def_bonus"] * ARENE_DEF_PAS)
+
 @bot.command(name="rank", aliases=["niveau","xp"])
 async def rank(ctx, member: discord.Member = None):
     member = member or ctx.author
@@ -2998,8 +3015,7 @@ async def rank(ctx, member: discord.Member = None):
     tier = get_tier(lvl)
     s = arena_stats[uid]
     pts = points_amelio[uid]
-    hp_total  = 250 + s["pv_bonus"]  * 8
-    end_total = 100 + s["end_bonus"] * 5
+    hp_total, end_total, _atk, _def = arene_totaux(uid)
     embed = discord.Embed(title=f"📊 Fiche de {member.display_name}", color=0xff6b9d)
     embed.add_field(name="Titre", value=tier, inline=False)
     embed.add_field(name="Niveau", value=str(lvl))
@@ -3038,7 +3054,7 @@ async def ameliorer(ctx, stat: str = None):
             description=(
                 f"Tu as **{pts} point(s)** disponible(s) !\n\n"
                 f"Utilise `.ameliorer <stat>` pour dépenser un point :\n\n"
-                f"`.ameliorer pv` — ❤️ **+8 HP max** *(actuellement {120 + s['pv_bonus']*8})*\n"
+                f"`.ameliorer pv` — ❤️ **+8 HP max** *(actuellement {ARENE_PV_BASE + s['pv_bonus']*ARENE_PV_PAS})*\n"
                 f"`.ameliorer atk` — 🗡️ **+3 ATK bonus** *(actuellement +{s['atk_bonus']*3})*\n"
                 f"`.ameliorer def` — 🛡️ **+3 DEF bonus** *(actuellement +{s['def_bonus']*3})*\n"
                 f"`.ameliorer endurance` — ⚡ **+5 END max** *(actuellement {100 + s['end_bonus']*5})*\n\n"
@@ -3067,8 +3083,7 @@ async def ameliorer(ctx, stat: str = None):
     points_amelio[uid] -= 1
 
     save_all_data()
-    hp_total  = 250 + s["pv_bonus"]  * 8
-    end_total = 100 + s["end_bonus"] * 5
+    hp_total, end_total, _atk, _def = arene_totaux(uid)
 
     embed = discord.Embed(
         title="✅ Amélioration appliquée !",
@@ -5046,6 +5061,10 @@ async def braquage_cmd(ctx, target: discord.Member = None):
             color=0xe74c3c
         ))
 
+# ── Casino : bornes de mise (source de vérité, utilisée par .slot et le help) ──
+SLOT_MISE_MIN = 10
+SLOT_MISE_MAX = 25000
+
 @bot.command(name="slot")
 async def slot_cmd(ctx, mise: str = "50"):
     """Machine à sous — .slot [mise|all]"""
@@ -5062,10 +5081,13 @@ async def slot_cmd(ctx, mise: str = "50"):
             try: mise = int(mise.replace(" ", "").replace(",", ""))
             except ValueError:
                 return await ctx.send("❌ Mise invalide ! Ex : `.slot 500` ou `.slot all`")
-    if mise < 10:
-        return await ctx.send("❌ Mise minimum : **10 pièces**.")
+    if mise < SLOT_MISE_MIN:
+        return await ctx.send(f"❌ Mise minimum : **{SLOT_MISE_MIN} pièces**.")
     if mise > solde:
         return await ctx.send(f"❌ Tu n'as que **{solde:,} pièces** — impossible de miser {mise:,}.")
+    if mise > SLOT_MISE_MAX:
+        mise = SLOT_MISE_MAX
+        await ctx.send(f"ℹ️ Mise plafonnée à **{SLOT_MISE_MAX:,} pièces** par partie.", delete_after=6)
     economy_data[uid]["coins"] -= mise
     SYMBOLES = ["🌸", "🗡️", "🦊", "👑", "🐉", "💎", "🎭", "⚡"]
     msg = await ctx.send("🎰 | ⏳ | ⏳ | ⏳ |")
@@ -5084,7 +5106,7 @@ async def slot_cmd(ctx, mise: str = "50"):
         gazette_gain(uid, gain)
         embed = discord.Embed(title="🎰 JACKPOT !!!", description=f"**{r1} {r2} {r3}**\n\n🎉 **+{gain} pièces !**", color=0xf1c40f)
     elif r1==r2 or r2==r3 or r1==r3:
-        gain = mise * (4 if casino_boost_actif else 2)
+        gain = mise * 2
         economy_data[uid]["coins"] += gain
         gazette_gain(uid, gain)
         embed = discord.Embed(title="🎰 Paire !", description=f"**{r1} {r2} {r3}**\n\n✅ **+{gain} pièces !**", color=0x2ecc71)
@@ -5092,6 +5114,21 @@ async def slot_cmd(ctx, mise: str = "50"):
         embed = discord.Embed(title="🎰 Raté...", description=f"**{r1} {r2} {r3}**\n\n💸 Perdu **{mise} pièces**", color=0xe74c3c)
     embed.set_footer(text=f"💰 Solde : {economy_data[uid]['coins']:,} pièces  •  Mise : {mise:,}")
     await ctx.send(embed=embed)
+
+# ── Banque : source de vérité des intérêts ──
+BANQUE_TAUX_JOUR  = 0.05   # 5 % par jour, linéaire
+BANQUE_JOURS_MAX  = 30     # au-delà, les intérêts cessent de courir
+
+def banque_interets(uid, now=None):
+    """Intérêts dus, plafonnés à BANQUE_JOURS_MAX jours."""
+    import time as _bt
+    now   = now if now is not None else _bt.time()
+    depot = bank_data[uid]["depot"]
+    t0    = bank_data[uid].get("depot_time") or 0
+    if depot <= 0 or t0 <= 0:
+        return 0
+    jours = min(max(0.0, (now - t0) / 86400), BANQUE_JOURS_MAX)
+    return int(depot * BANQUE_TAUX_JOUR * jours)
 
 @bot.command(name="banque")
 async def banque_cmd(ctx, action: str = None, montant: int = None):
@@ -5105,7 +5142,8 @@ async def banque_cmd(ctx, action: str = None, montant: int = None):
                          "`.banque retrait <montant>` — retirer une somme précise\n"
                          "`.banque retrait` — tout récupérer\n"
                          "`.banque solde` — voir ton compte\n\n"
-                         "📈 **+5 % d'intérêts par jour** sur ce qui dort en banque."),
+                         f"📈 **+{int(BANQUE_TAUX_JOUR*100)} % d'intérêts par jour**, "
+                         f"plafonnés à **{BANQUE_JOURS_MAX} jours**."),
             color=0xf1c40f))
     action = action.lower()
     if action == "depot":
@@ -5114,13 +5152,12 @@ async def banque_cmd(ctx, action: str = None, montant: int = None):
         economy_data[uid]["coins"] -= montant
         bank_data[uid]["depot"] += montant
         bank_data[uid]["depot_time"] = now
-        await ctx.send(embed=discord.Embed(description=f"🏦 **{montant} pièces** déposées ! +5% intérêts/24h 📈", color=0x2ecc71))
+        await ctx.send(embed=discord.Embed(description=f"🏦 **{montant:,} pièces** déposées ! Intérêts +{int(BANQUE_TAUX_JOUR*100)} %/24h (max {BANQUE_JOURS_MAX} j) 📈", color=0x2ecc71))
     elif action in ("retrait", "retirer"):
         depot = bank_data[uid]["depot"]
         if depot == 0:
             return await ctx.send("❌ Tu n'as rien en banque !")
-        elapsed = (now - bank_data[uid]["depot_time"]) / 86400
-        interets = int(depot * 0.05 * elapsed)
+        interets = banque_interets(uid, now)
         total_dispo = depot + interets
 
         # Sans montant → on retire tout
@@ -5149,8 +5186,7 @@ async def banque_cmd(ctx, action: str = None, montant: int = None):
     elif action == "solde":
         depot = bank_data[uid]["depot"]
         if depot == 0: return await ctx.send("🏦 Rien en banque !")
-        elapsed = (now - bank_data[uid]["depot_time"]) / 86400
-        interets = int(depot * 0.05 * elapsed)
+        interets = banque_interets(uid, now)
         await ctx.send(embed=discord.Embed(title="🏦 Compte bancaire", description=f"💰 Dépôt : **{depot}**\n📈 Intérêts : **+{interets}**\n💎 Total : **{depot+interets}**", color=0xf1c40f))
 
 @bot.command(name="jackpot")
@@ -9151,6 +9187,7 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
     global SALON_GACHA_ID, SALON_BOUTIQUE_ID, SALON_CASINO_ID, SALON_EVENT_ID, SALON_CHRONIQUE_ID
     global SALON_LEVELUP_ID, SALON_GACHABATTLE_ID, SALON_DUEL_ID, SALON_DASHBOARD_ID
     global SALON_BIENVENUE_ID, SALON_AUREVOIR_ID, SALON_HOF_ID, SALON_GUIDE_ID, SALON_INVITATION_ID
+    global SALON_GENERAL_ID
     global SALON_BOOST_ID, SALON_REGLEMENT_ID
     if not type_salon:
         return await ctx.send(
@@ -9167,6 +9204,7 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
         "gachabattle": "SALON_GACHABATTLE_ID", "gachabattle": "SALON_GACHABATTLE_ID", "combat": "SALON_GACHABATTLE_ID",
         "duel": "SALON_DUEL_ID", "dashboard": "SALON_DASHBOARD_ID",
         "bienvenue": "SALON_BIENVENUE_ID", "aurevoir": "SALON_AUREVOIR_ID",
+        "general": "SALON_GENERAL_ID", "général": "SALON_GENERAL_ID",
         "halloffame": "SALON_HOF_ID", "girlsonly": "SALON_GIRLS_ID",
         "annonces": "SALON_ANNONCES_ID", "invitation": "SALON_INVITATION_ID",
         "boost": "SALON_BOOST_ID", "reglement": "SALON_REGLEMENT_ID",
@@ -9188,6 +9226,7 @@ async def setsalon_cmd(ctx, type_salon: str = None, role: discord.Role = None):
     elif var == "SALON_GACHABATTLE_ID": SALON_GACHABATTLE_ID = ctx.channel.id
     elif var == "SALON_DUEL_ID": SALON_DUEL_ID = ctx.channel.id
     elif var == "SALON_DASHBOARD_ID": SALON_DASHBOARD_ID = ctx.channel.id
+    elif var == "SALON_GENERAL_ID": SALON_GENERAL_ID = ctx.channel.id
     elif var == "SALON_BIENVENUE_ID": SALON_BIENVENUE_ID = ctx.channel.id
     elif var == "SALON_AUREVOIR_ID": SALON_AUREVOIR_ID = ctx.channel.id
     elif var == "SALON_HOF_ID": SALON_HOF_ID = ctx.channel.id
@@ -10111,13 +10150,7 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
     uid2 = str(adversaire.id)
 
     def get_stats(uid):
-        s = arena_stats[uid]
-        return (
-            250 + s["pv_bonus"]  * 8,
-            100 + s["end_bonus"] * 5,
-            s["atk_bonus"] * 3,
-            s["def_bonus"] * 3,
-        )
+        return arene_totaux(uid)
 
     hp1_max, end1_max, atk1_b, def1_b = get_stats(uid1)
     hp2_max, end2_max, atk2_b, def2_b = get_stats(uid2)
@@ -11150,7 +11183,7 @@ PETS_DB = {
     "corbeau":  {"nom": "Corbeau du Destin",    "emoji": "🐦‍⬛", "rarete": "Épique",   "type": "roll",  "base": 8,  "desc": "% chance de roll gratuit"},
     # Légendaires (œuf 20000p)
     "licorne":  {"nom": "Licorne Céleste",      "emoji": "🦄", "rarete": "Légendaire", "type": "coins", "base": 25, "desc": "+% pièces sur daily/travail"},
-    "phenix":   {"nom": "Phénix Immortel",      "emoji": "🔥", "rarete": "Légendaire", "type": "xp",    "base": 25, "desc": "+% XP sur les messages"},
+    "phenixleg":{"nom": "Phénix Immortel",      "emoji": "🔥", "rarete": "Légendaire", "type": "xp",    "base": 25, "desc": "+% XP sur les messages"},
     "gumiho":   {"nom": "Gumiho aux Neuf Queues","emoji": "🌙", "rarete": "Légendaire", "type": "roll", "base": 12, "desc": "% chance de roll gratuit"},
     # ── Nouveaux : animaux réels ──
     "shiba":    {"nom": "Shiba Inu",             "emoji": "🐕", "rarete": "Commun",     "type": "coins", "base": 5,  "desc": "+% pièces sur daily/travail"},
@@ -13101,12 +13134,65 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "5.8.0"
+BOT_VERSION = "6.0.0"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "6.0.0": {
+   "titre": "MARIÉS MALGRÉ NOUS — la saison complète 💍",
+   "ajouts": [
+     "💍 **49 épisodes** — de l'omiai jusqu'au dernier matin",
+     "💌 **13 décisions** qui changent réellement l'histoire",
+     "🎬 **Cinq fins**, aucune n'est la bonne",
+     "🎭 Nao, Ren, Mei, Sota, Yui, Haru, Aya, Kaito, Ichiro et les autres",
+   ],
+   "correctifs": [],
+   "ameliorations": [
+     "📖 Un an d'histoire, de mars à mars, à lire ensemble",
+   ],
+ },
+ "5.10.0": {
+   "titre": "Mariés malgré nous — l'histoire commence 💍",
+   "ajouts": [
+     "💍 **Les six premiers épisodes sont écrits** — l'omiai, le mariage, l'emménagement",
+     "🎭 Nao, Ren, Sota, Mei, Tetsuo, Ichiro et les autres entrent en scène",
+     "💌 Trois décisions vous attendent dès le premier arc",
+   ],
+   "correctifs": [],
+   "ameliorations": [
+     "📖 Une saison de 33 épisodes, cinq fins possibles, et des choix qui reviendront",
+   ],
+ },
+ "5.9.1": {
+   "titre": "Une nouvelle Chronique se prépare 💍",
+   "ajouts": [
+     "💍 **Mariés malgré nous** — 33 épisodes, cinq fins, la prochaine série du serveur",
+     "🎭 Six personnages présentés au lancement, et bien d'autres à rencontrer",
+   ],
+   "correctifs": [],
+   "ameliorations": [
+     "🧭 La régie suit désormais les arcs, les relations et les moments marquants d'une saison",
+   ],
+ },
+ "5.9.0": {
+   "titre": "Chronique 2.0 — le moteur 📖",
+   "ajouts": [
+     "🎬 **Arcs narratifs** — un épisode peut faire avancer plusieurs intrigues en parallèle",
+     "👀 **Scènes du point de vue d'un autre personnage**, sans les héros",
+     "💗 **Relations suivies en coulisses** — elles changent les scènes, sans jamais s'afficher",
+     "🦋 **Empreintes** — un moment marquant reste dans la relation, des épisodes plus tard",
+   ],
+   "correctifs": [
+     "🔒 **Un vote ne peut plus produire deux résultats**, même en cas de double clic ou de redémarrage",
+     "🔄 Si le bot tombe entre la décision et sa publication, il termine proprement au redémarrage sans rejouer le choix",
+   ],
+   "ameliorations": [
+     "⚡ **Publication plus fluide** — les longs épisodes ne mettent plus une minute à s'afficher",
+     "📊 Un outil d'audit signale à la régie les faiblesses d'une saison",
+   ],
+ },
  "5.8.0": {
    "titre": "Chronique — on sait enfin qui parle 💬",
    "ajouts": [
@@ -16565,10 +16651,12 @@ async def chro_publier_episode(guild, salon=None):
     # ── Scènes ──
     # Regroupées par narration, pas par taille arbitraire.
     paquets = chro_grouper_scenes(chro_scenes_visibles(ep))
+    _delai = chro_delai_adaptatif(len(paquets))
     for i, paquet in enumerate(paquets):
         if i:
-            await asyncio.sleep(CHRO_DELAI_SCENE)
-        corps = ("\n\n" + CHRO_SEP + "\n\n").join(chro_rendu_scene(x) for x in paquet)
+            await asyncio.sleep(_delai)
+        corps = ("\n\n" + CHRO_SEP + "\n\n").join(
+            chro_rendu_scene(t, pov=p) for t, p in paquet)
         try:
             await salon.send(embed=discord.Embed(description=corps[:4090], color=0x9b59b6))
         except Exception as e:
@@ -16703,26 +16791,90 @@ async def chro_fermer_vote(guild, salon=None):
                 pass
             return False, "Aucun vote — à la régie de trancher."
         cle = gagnants[0]
-        return await chro_appliquer_choix(guild, salon, cle)
+    # Hors du verrou : la transaction le reprend elle-même (asyncio.Lock non réentrant)
+    return await chro_appliquer_choix(guild, salon, cle)
 
 
 async def chro_appliquer_choix(guild, salon, cle):
-    """Applique la suite. Un épisode ne peut jamais recevoir deux décisions."""
-    ep = chro_episode()
-    choix = ep["choix"]
-    num = CHRONIQUE.get("episode", 1)
-    lib = next(l for c_, e_, l in choix["options"] if c_ == cle)
-    if not chro_enregistrer_choix(num, cle, lib):
-        return False, "Une décision a déjà été validée pour cet épisode."
-    suite = choix["suites"][cle]
-    chro_poser(*suite.get("pose", []))
-    chro_fermer_route(*suite.get("ferme", []))
-    CHRONIQUE["etat"] = "ATTENTE"
-    CHRONIQUE["derniere_decision"] = lib
-    CHRONIQUE.pop("egalite", None)
-    save_all_data()
+    """Transaction UNIQUE de résolution d'un vote.
 
-    votes = CHRONIQUE.get("votes") or {}
+    Garantie : 1 résultat publié = 1 choix appliqué = 1 progression d'épisode.
+    La décision est prise sous verrou et persistée AVANT toute I/O Discord.
+    La publication se fait hors verrou et peut être rejouée sans risque :
+    si le bot tombe entre les deux, `chro_reprendre_apres_restart` la termine.
+    """
+    # ── Phase 1 : décision, sous verrou, sans aucun await Discord ──
+    async with _CHRO_LOCK:
+        num = CHRONIQUE.get("episode", 1)
+        # Idempotence : ce numéro d'épisode a-t-il déjà reçu sa décision ?
+        deja = next((h for h in (CHRONIQUE.get("historique") or [])
+                     if h["episode"] == num), None)
+        if deja:
+            return False, "Une décision a déjà été validée pour cet épisode."
+        ep = chro_episode()
+        choix = (ep or {}).get("choix")
+        if not choix or cle not in choix.get("suites", {}):
+            return False, "Ce choix n'existe pas pour cet épisode."
+        lib = next(l for c_, e_, l in choix["options"] if c_ == cle)
+        suite = choix["suites"][cle]
+
+        chro_enregistrer_choix(num, cle, lib)
+        # Une conséquence peut n'être grave que si la relation était déjà fragile.
+        _rs = suite.get("grave_si_sous")
+        if _rs:
+            for _p, _ax in _rs.items():
+                for _a, _v in _ax.items():
+                    if chro_relation(_p, _a) < _v:
+                        chro_poser(*(suite.get("grave_pose") or []))
+        chro_poser(*suite.get("pose", []))
+        chro_fermer_route(*suite.get("ferme", []))
+        # ── Chronique 2.0 : relations et empreintes portées par le choix ──
+        for _perso, _deltas in (suite.get("relation") or {}).items():
+            chro_relation_maj(_perso, _deltas, num)
+        # Plafond durable : certaines occasions manquées ne se rattrapent pas
+        for _perso, _ax in (suite.get("plafond") or {}).items():
+            CHRONIQUE.setdefault("plafonds", {}).setdefault(_perso, {}).update(_ax)
+        _mq = suite.get("marque")
+        if _mq:
+            chro_marquer(_mq.get("type"), _mq.get("cible"), num)
+
+        votes = dict(CHRONIQUE.get("votes") or {})
+        CHRONIQUE["etat"] = "ATTENTE"
+        CHRONIQUE["derniere_decision"] = lib
+        CHRONIQUE.pop("egalite", None)
+        CHRONIQUE["episode"] = num + 1
+        CHRONIQUE["votes"] = {}
+        # Résultat décidé mais pas encore publié : reprenable après un crash.
+        CHRONIQUE["resultat_a_publier"] = {
+            "episode": num, "cle": cle, "libelle": lib,
+            "votes": votes, "msg_vote": CHRONIQUE.get("msg_vote"),
+            "salon_vote": CHRONIQUE.get("salon_vote")}
+        save_all_data()
+
+    # ── Phase 2 : publication, hors verrou, rejouable ──
+    await chro_publier_resultat(guild, salon)
+    return True, lib
+
+
+async def chro_publier_resultat(guild, salon=None):
+    """Publie le résultat en attente. Idempotent : ne fait rien s'il n'y en a pas.
+    Appelé par la transaction ET par la reprise après redémarrage."""
+    paquet = CHRONIQUE.get("resultat_a_publier")
+    if not paquet:
+        return False
+    salon = salon or chro_salon(guild)
+    if not salon:
+        return False
+    num, cle, lib = paquet["episode"], paquet["cle"], paquet["libelle"]
+    votes = paquet.get("votes") or {}
+    s = chro_saison()
+    ep = (s["episodes"][num - 1] if s and num <= len(s["episodes"]) else None)
+    choix = (ep or {}).get("choix")
+    if not choix:
+        CHRONIQUE.pop("resultat_a_publier", None)
+        save_all_data()
+        return False
+
     compte = {}
     for v in votes.values():
         compte[v] = compte.get(v, 0) + 1
@@ -16730,8 +16882,7 @@ async def chro_appliquer_choix(guild, salon, cle):
     e = discord.Embed(title="🔒  LE SERVEUR A DÉCIDÉ", color=0x2c2f33)
     lignes = []
     for i, (c_, emo, l) in enumerate(choix["options"]):
-        n_ = compte.get(c_, 0)
-        pct = round(n_ / total * 100)
+        pct = round(compte.get(c_, 0) / total * 100)
         marque = "**" if c_ == cle else ""
         lignes.append(f"{chro_puce(i)}  {marque}{l} — {pct} %{marque}"
                       + ("   ✅" if c_ == cle else ""))
@@ -16741,8 +16892,8 @@ async def chro_appliquer_choix(guild, salon, cle):
                        f"-# Cette décision fait désormais partie de votre histoire."),
                 inline=False)
     e.set_footer(text=f"👥 {len(votes)} lecteur(s) ont voté")
-    # Le message de vote se transforme au lieu de devenir gris
-    _mid, _cid = CHRONIQUE.get("msg_vote"), CHRONIQUE.get("salon_vote")
+
+    _mid, _cid = paquet.get("msg_vote"), paquet.get("salon_vote")
     if _mid and _cid and guild:
         _ch = guild.get_channel(_cid)
         if _ch:
@@ -16753,15 +16904,16 @@ async def chro_appliquer_choix(guild, salon, cle):
                 pass
     try:
         await salon.send(embed=e)
-        await asyncio.sleep(3)
+        await asyncio.sleep(2)
         await salon.send(embed=discord.Embed(
-            description=chro_rendu_scene(suite["texte"])[:4090], color=0x9b59b6))
+            description=chro_rendu_scene(choix["suites"][cle]["texte"])[:4090],
+            color=0x9b59b6))
     except Exception as ex:
-        print(f"[Chronique] suite : {type(ex).__name__}: {ex}")
-    CHRONIQUE["episode"] = num + 1
-    CHRONIQUE["votes"] = {}
+        print(f"[Chronique] publication du résultat : {type(ex).__name__}: {ex}")
+    # Publié : le paquet disparaît, la reprise ne le rejouera pas.
+    CHRONIQUE.pop("resultat_a_publier", None)
     save_all_data()
-    return True, lib
+    return True
 
 
 async def chro_finale(guild, salon):
@@ -17851,6 +18003,7 @@ class ChroRegieView(ui.View):
 
             # PUBLISHING : aucun bouton d'action tant que ça publie
             self._b("État de l'histoire", "🧠", "etat", 2)
+            self._b("Audit", "📊", "audit", 2)
             b2 = ui.Button(label="Arrêter la saison", emoji="⏹️",
                            style=discord.ButtonStyle.danger, row=2)
             async def cba(itx):
@@ -17962,25 +18115,94 @@ class ChroRegieView(ui.View):
     def embed(self):
         if self.ecran == "etat":
             s = chro_saison()
-            e = discord.Embed(title="🧠  État de l'histoire",
-                              color=0x9b59b6)
-            e.description = (f"*Visible uniquement en régie.*\n\n"
-                             f"**Drapeaux posés** — {len(CHRONIQUE.get('drapeaux') or [])}\n"
-                             f"`{', '.join(CHRONIQUE.get('drapeaux') or []) or 'aucun'}`\n\n"
-                             f"**Routes fermées** — {len(CHRONIQUE.get('routes_fermees') or [])}\n"
-                             f"`{', '.join(CHRONIQUE.get('routes_fermees') or []) or 'aucune'}`")
+            e = discord.Embed(title="🧠  État de l'histoire", color=0x9b59b6)
+            e.description = "*Visible uniquement en régie — jamais publié aux lecteurs.*"
+            e.add_field(
+                name="🏳️ Drapeaux · Routes fermées",
+                value=(f"`{', '.join(CHRONIQUE.get('drapeaux') or []) or 'aucun'}`\n"
+                       f"🔒 `{', '.join(CHRONIQUE.get('routes_fermees') or []) or 'aucune'}`")[:1024],
+                inline=False)
+            if s and s.get("arcs"):
+                num = CHRONIQUE.get("episode", 1)
+                lg = []
+                for k, a in s["arcs"].items():
+                    eps = a.get("episodes") or []
+                    faits = len([x for x in eps if x < num])
+                    lg.append(f"{'✅' if eps and faits == len(eps) else '▶️'} "
+                              f"{a.get('nom', k)} — {faits}/{len(eps)}")
+                e.add_field(name="🎬 Arcs en cours", value="\n".join(lg)[:1024], inline=False)
+            rels = CHRONIQUE.get("relations") or {}
+            if rels:
+                lg = []
+                for p, ax in list(rels.items())[:8]:
+                    d = " · ".join(f"{k[:4]} {v}" for k, v in ax.items() if v)
+                    lg.append(f"**{chro_perso_nom(p)}** — {d or '—'}")
+                e.add_field(name="💗 Relations (interne)", value="\n".join(lg)[:1024], inline=False)
+            mq = CHRONIQUE.get("marques") or []
+            if mq:
+                e.add_field(
+                    name=f"🦋 Empreintes · {len(mq)}",
+                    value="\n".join(f"ép.{m_['ep']} — `{m_['type']}`"
+                                    + (f" ({chro_perso_nom(m_['cible'])})" if m_.get("cible") else "")
+                                    for m_ in mq[-6:])[:1024], inline=False)
             if s:
+                lues = set()
+                for ep_ in s["episodes"]:
+                    for sc in ep_["scenes"]:
+                        if isinstance(sc, dict):
+                            for k_ in ("si", "sauf"):
+                                if sc.get(k_): lues.add(sc[k_])
+                for f_ in s["endings"].values():
+                    lues |= set(f_.get("exige", [])) | set(f_.get("interdit", []))
+                attente = [d for d in (CHRONIQUE.get("drapeaux") or []) if d in lues]
+                if attente:
+                    e.add_field(name="⏳ Conséquences en attente",
+                                value=f"`{', '.join(attente[:14])}`"[:1024], inline=False)
                 proj = chro_ending()
                 fins = [f"{'➤' if k == proj else '　'} {v['nom']}"
                         + ("" if chro_route_ouverte(v.get("route", k)) else "  🔒")
                         for k, v in s["endings"].items()]
-                e.add_field(name="Fins possibles", value="\n".join(fins), inline=False)
+                e.add_field(name="🎬 Fins possibles", value="\n".join(fins)[:1024], inline=False)
             h = CHRONIQUE.get("historique") or []
             if h:
-                e.add_field(name="Décisions canoniques",
+                e.add_field(name="💌 Décisions canoniques",
                             value="\n".join(f"Ép. {x['episode']} — *{x['libelle']}*"
-                                            for x in h[-6:]), inline=False)
+                                            for x in h[-6:])[:1024], inline=False)
+            if CHRONIQUE.get("resultat_a_publier"):
+                e.add_field(name="⚠️ Résultat validé non publié",
+                            value=f"Épisode {CHRONIQUE['resultat_a_publier']['episode']} — "
+                                  f"sera terminé au prochain démarrage", inline=False)
             return e
+
+        if self.ecran == "audit":
+            r = chro_audit_saison()
+            e = discord.Embed(title="📊  Audit éditorial", color=0x3498db)
+            if not r:
+                e.description = "*Aucune saison en cours.*"
+                return e
+            st = r["stats"]
+            e.description = (f"**{r['titre']}** — {r['episodes']} épisodes\n"
+                             f"📝 {st['mots']} mots · {st['mots_moyen']} par épisode"
+                             + (f"\n🕊️ {st['part_calme']} % d'épisodes calmes"
+                                if "part_calme" in st else "")
+                             + (f"\n🦋 Effet papillon : {st['papillon']['moyen']} épisodes "
+                                f"en moyenne, jusqu'à {st['papillon']['max']}"
+                                if "papillon" in st else ""))
+            e.add_field(name=f"{'❌ Défauts · ' + str(len(r['defauts'])) if r['defauts'] else '✅ Défauts'}",
+                        value=("\n".join(f"• {x}" for x in r["defauts"][:8])[:1024]
+                               if r["defauts"] else "*aucun*"), inline=False)
+            if r["alertes"]:
+                e.add_field(name=f"⚠️ Alertes · {len(r['alertes'])}",
+                            value="\n".join(f"• {x}" for x in r["alertes"][:8])[:1024],
+                            inline=False)
+            court = sorted(r["episodes_detail"], key=lambda x: x["mots"])[:4]
+            e.add_field(name="Épisodes les plus courts",
+                        value="\n".join(f"ép.{x['ep']} — {x['mots']} mots · "
+                                        f"{x['ratio_dialogue']} % dialogue" for x in court)[:1024],
+                        inline=False)
+            e.set_footer(text="Les alertes ne bloquent jamais rien")
+            return e
+
         # accueil
         e = discord.Embed(title="📖  CHRONIQUE", color=0xff9ec7)
         if not chro_active():
@@ -22734,6 +22956,3722 @@ CHRONIQUE_SAISONS["faux_couple"] = {
    "Le tiroir du bas coince encore."),
 }
 
+# ============================================================
+#  💍 MARIÉS MALGRÉ NOUS — squelette structurel
+# ============================================================
+# ⚠️ AUCUN TEXTE NARRATIF ICI. Les scènes seront écrites arc par arc.
+# Ce bloc porte uniquement : métadonnées, casting, arcs, drapeaux,
+# choix, conditions de scène, routes, conséquences différées, endings.
+
+CHRONIQUE_SAISONS["maries_malgre_nous"] = {
+ "titre": "MARIÉS MALGRÉ NOUS",
+ "genre": "💍 Mariage arrangé",
+ "accroche": "Ils se sont mariés parce qu'on le leur a demandé. "
+             "Le jour où plus personne ne le leur demande, il reste une question.",
+ "duree": "quinze mois, de mars à juin",
+
+ # ── Casting affiché au lancement ──
+ "casting": {
+   "nao":     ("👩", "Nao", "25 ans · kinésithérapeute. Parle avant de réfléchir, "
+                            "défend tout le monde, ne demande jamais rien."),
+   "ren":     ("🖤", "Ren", "26 ans · ingénieur. Répond en trois mots. "
+                            "Arrange les choses sans prévenir."),
+   "sota":    ("🎒", "Sota", "17 ans · le frère de Nao. Décroche en terminale."),
+   "mei":     ("💬", "Mei", "25 ans · infirmière. Amie de Nao depuis le collège."),
+   "tetsuo":  ("🖨️", "Tetsuo", "58 ans · le père de Nao. Imprimeur."),
+   "ichiro":  ("🍵", "Ichiro", "84 ans · le grand-père de Ren. Celui qui a tout arrangé."),
+ },
+
+ # ── Personnages complets, usage interne (jamais affiché) ──
+ "personnages": {
+   "nao":    {"nom": "Nao", "age": 25, "role": "protagoniste",
+              "veut": "son propre cabinet", "craint": "qu'on décide à sa place",
+              "hors_romance": "cabinet · Sota · l'atelier · Mei"},
+   "ren":    {"nom": "Ren", "age": 26, "role": "protagoniste",
+              "veut": "retourner sur le terrain", "craint": "vouloir quelque chose à voix haute",
+              "hors_romance": "Ichiro · Haru · le carnet · la course"},
+   "sota":   {"nom": "Sota", "age": 17, "role": "secondaire",
+              "veut": "ne pas être la raison du mariage", "hors_romance": "orientation"},
+   "mei":    {"nom": "Mei", "age": 25, "role": "secondaire",
+              "veut": "arrêter de gérer la vie d'un autre", "hors_romance": "Takumi · hôpital"},
+   "yui":    {"nom": "Yui", "age": 23, "role": "secondaire", "hors_romance": "cabinet"},
+   "haru":   {"nom": "Haru", "age": 27, "role": "secondaire",
+              "veut": "monter son bureau d'études", "hors_romance": "démission"},
+   "aya":    {"nom": "Aya", "age": 28, "role": "secondaire",
+              "veut": "ne pas être celle qu'on suppose", "hors_romance": "carrière"},
+   "tetsuo": {"nom": "Tetsuo", "age": 58, "role": "famille"},
+   "kanako": {"nom": "Kanako", "age": None, "role": "absente",
+              "note": "n'apparaît jamais physiquement dans cette saison"},
+   "shigeru": {"nom": "Shigeru", "age": 60, "role": "famille"},
+   "sae":     {"nom": "Sae", "age": 54, "role": "famille"},
+   "ichiro":  {"nom": "Ichiro", "age": 84, "role": "famille"},
+   "kaito":   {"nom": "Kaito", "age": 30, "role": "famille"},
+   "hidaka":  {"nom": "Hidaka", "age": 55, "role": "ponctuel", "episodes": [18]},
+   "takumi":  {"nom": "Takumi", "age": 28, "role": "ponctuel"},
+ },
+
+ # ── Les 5 arcs ──
+ "arcs": {
+   "principal":   {"nom": "Nao & Ren", "episodes": list(range(1, 50))},
+   "acte1":       {"nom": "I — L'accord", "episodes": list(range(1, 7))},
+   "acte2":       {"nom": "II — Deux étrangers sous un toit", "episodes": list(range(7, 14))},
+   "acte3":       {"nom": "III — Ce qu'on ne sait pas", "episodes": list(range(14, 22))},
+   "acte4":       {"nom": "IV — Réparer", "episodes": list(range(22, 27))},
+   "acte5":       {"nom": "V — Devenir partenaires", "episodes": list(range(27, 33))},
+   "acte6":       {"nom": "VI — Désirer", "episodes": list(range(33, 37))},
+   "acte7":       {"nom": "VII — Apprendre à être un couple", "episodes": list(range(37, 44))},
+   "acte8":       {"nom": "VIII — Se choisir", "episodes": list(range(44, 50))},
+   "mei":         {"nom": "Mei", "episodes": [9, 16, 22, 39, 41]},
+   "sota":        {"nom": "Sota", "episodes": [2, 11, 17, 23, 32, 48]},
+   "tetsuo":      {"nom": "Tetsuo", "episodes": [3, 14, 20, 23, 25, 47]},
+   "haru":        {"nom": "Haru", "episodes": [15, 27, 49]},
+   "aya":         {"nom": "Aya", "episodes": [20, 29, 45]},
+   "ichiro":      {"nom": "Ichiro", "episodes": [1, 13, 31, 43, 44, 47]},
+   "sae":         {"nom": "Sae", "episodes": [12, 30, 47]},
+   "cabinet":     {"nom": "Le cabinet de Nao", "episodes": [10, 28, 42, 48]},
+   "terrain":     {"nom": "Le terrain de Ren", "episodes": [7, 8, 27, 42, 43]},
+   "yui":         {"nom": "Yui", "episodes": [10, 24, 28, 41]},
+ },
+
+ # ── Endings : conditions verrouillées par l'audit ──
+ # Drapeaux posés par le moteur en cours de saison, hors listes `pose`
+ "pose_runtime": ["rupture_grave"],
+ "ending_defaut": "chacun",
+ "endings": {
+  "se_choisir": {"nom": "💍 On se choisit", "route": "se_choisir",
+    "exige": ["baiser"], "interdit": ["rupture_grave"],
+    "rel_min": {"ren": {"confiance": 72}}, "poids": 2, "texte": ""},
+  "recommencer": {"nom": "🌾 On recommence autrement", "route": "recommencer",
+    "exige": ["baiser"], "interdit": ["rupture_grave"], "poids": 1, "texte": ""},
+  "confortable": {"nom": "🏠 On reste, et c'est confortable", "route": "confortable",
+    "exige": [], "interdit": ["baiser", "rupture_grave"],
+    "rel_min": {"ren": {"confiance": 38}}, "poids": 1, "texte": ""},
+  "chacun": {"nom": "🕊️ Chacun sa route", "route": "chacun",
+    "exige": [], "interdit": ["baiser", "rupture_grave"],
+    "rel_max": {"ren": {"confiance": 37}}, "poids": 0, "texte": ""},
+  "trop_tard": {"nom": "🌧️ Il a compris trop tard", "route": "trop_tard",
+    "exige": ["rupture_grave"], "interdit": [], "poids": 1, "texte": ""},
+ },
+
+ # ── Les 33 épisodes : structure seule, scènes à écrire ──
+ "episodes": [],
+ "epilogue": "",
+}
+
+# ── Les 33 épisodes : structure seule. `scenes: []` sera rempli arc par arc. ──
+# Chaque entrée porte : titre, ton, arcs, fonction (note de régie), et le choix
+# éventuel avec ses conséquences. AUCUN texte narratif.
+
+def _mmn_ep(num, titre, ton, arcs, fonction, choix=None):
+    e = {"titre": titre, "ton": ton, "arcs": arcs, "fonction": fonction, "scenes": []}
+    if choix:
+        e["choix"] = choix
+    if num == 49:
+        e["finale"] = True
+    return e
+
+CHRONIQUE_SAISONS["maries_malgre_nous"]["episodes"] = [
+ _mmn_ep(1, "L'omiai", "tension", ["acte1", "principal", "ichiro"],
+   "Poser les deux points de vue et le mépris mutuel."),
+ _mmn_ep(2, "Vingt-quatre heures", "tension", ["acte1", "principal", "sota"],
+   "Deux refus qui deviennent deux oui. L'échéance bancaire impose la date.",
+   {"question": "", "decisif": False,
+    "options": [("froide", "", ""), ("hostile", "", ""), ("resignee", "", "")],
+    "suites": {
+      "froide":   {"texte": "", "pose": ["accord_froid"]},
+      "hostile":  {"texte": "", "pose": ["accord_hostile"], "relation": {"ren": {"confiance": -4}}},
+      "resignee": {"texte": "", "pose": ["accord_resigne"], "relation": {"ren": {"confiance": 2}}}}}),
+ _mmn_ep(3, "Ce qu'on ne dit pas à son père", "calme", ["acte1", "tetsuo"],
+   "Respiration. L'atelier, l'encre, les machines. Semer le non-dit de Tetsuo.",
+   {"question": "", "decisif": False,
+    "options": [("pere_sait", "", ""), ("pere_ignore", "", "")],
+    "suites": {
+      "pere_sait":   {"texte": "", "pose": ["pere_sait"]},
+      "pere_ignore": {"texte": "", "pose": ["pere_ignore"]}}}),
+ _mmn_ep(4, "Dix-huit personnes", "tension", ["acte1", "principal"],
+   "Le mariage. Écho 4 posé : la photo de la mairie."),
+ _mmn_ep(5, "L'enveloppe", "calme", ["acte1", "principal"],
+   "Emménagement. Écho 1 posé : la clé. Semé : il ne finit jamais son café."),
+ _mmn_ep(6, "Le couloir", "calme", ["acte1", "principal"],
+   "Première nuit. Écho 2 posé : la voiture. Semé : thé d'orge, manches pliées.",
+   {"question": "", "decisif": False,
+    "options": [("negociees", "", ""), ("imposees", "", ""), ("tirage", "", "")],
+    "suites": {
+      "negociees": {"texte": "", "pose": ["chambres_negociees"], "relation": {"ren": {"confiance": 3}}},
+      "imposees":  {"texte": "", "pose": ["chambres_imposees"], "relation": {"ren": {"confiance": -2}}},
+      "tirage":    {"texte": "", "pose": ["chambres_tirage"], "relation": {"ren": {"confiance": 1}}}}}),
+ _mmn_ep(7, "Les règles du frigo", "calme", ["acte2", "principal", "terrain"],
+   "Comédie de cohabitation. Semé : les élastiques, elle chante faux."),
+ _mmn_ep(8, "Le carnet", "calme", ["acte2", "principal", "terrain"],
+   "Le carnet de croquis. Payoff le plus lointain de la saison : ép.29.",
+   {"question": "", "decisif": True,
+    "options": [("carnet_lu", "", ""), ("carnet_ferme", "", "")],
+    "suites": {
+      "carnet_lu":    {"texte": "", "pose": ["carnet_lu"], "relation": {"ren": {"confiance": 8}}},
+      "carnet_ferme": {"texte": "", "pose": ["carnet_ferme"]}}}),
+ _mmn_ep(9, "Ce que ses mains racontent", "calme", ["acte2", "principal", "mei"],
+   "Écho 3 posé : les mains. Première fissure du couple de Mei."),
+ _mmn_ep(10, "Trois millions", "calme", ["acte2", "cabinet", "yui"],
+   "Le local vide. L'ambition secrète de Nao. Payoff ép.32."),
+ _mmn_ep(11, "Sota", "tension", ["acte2", "sota"],
+   "La colère de Sota. Change une scène de l'ép.27, jamais la fin.",
+   {"question": "", "decisif": False,
+    "options": [("encaisse", "", ""), ("repond", "", "")],
+    "suites": {
+      "encaisse": {"texte": "", "pose": ["sota_encaisse"]},
+      "repond":   {"texte": "", "pose": ["sota_repond"]}}}),
+ _mmn_ep(12, "Le dîner", "tension", ["acte2", "principal", "sae"],
+   "Premier dîner Kirishima. Ils jouent le couple et sont bons. Aya aperçue."),
+ _mmn_ep(13, "Ichiro", "calme", ["acte2", "ichiro"],
+   "Le jeudi rituel. La seule pièce où Ren parle. Écho : la couverture."),
+ _mmn_ep(14, "La lettre d'annulation", "climax", ["acte3", "principal", "tetsuo"],
+   "Déclencheur : la plaisanterie de Tetsuo, deux verres, devant Ren. Route majeure.",
+   {"question": "", "decisif": True,
+    "options": [("demande", "", ""), ("enquete", "", "")],
+    "suites": {
+      "demande": {"texte": "", "pose": ["route_confiance", "il_a_parle"],
+                  "relation": {"ren": {"confiance": 15}}},
+      "enquete": {"texte": "", "pose": ["route_decouverte"]}}}),
+ _mmn_ep(15, "La radio", "calme", ["acte3", "principal", "haru"],
+   "Écho 2 : la dispute sur la musique. Haru veut partir."),
+ _mmn_ep(16, "Mei s'en va", "calme", ["acte3", "mei", "principal"],
+   "Mei quitte Takumi. Nao la récupère à 2h."),
+ _mmn_ep(17, "Une seule casserole", "calme", ["acte3", "principal", "sota"],
+   "Festival d'été. Écho 5. Sota rompt. Kaito semé.",
+   {"question": "", "decisif": False,
+    "options": [("evoque", "", ""), ("tait", "", "")],
+    "suites": {
+      "evoque": {"texte": "", "pose": ["kaito_evoque"], "relation": {"ren": {"confiance": 6}}},
+      "tait":   {"texte": "", "pose": ["kaito_tu"], "relation": {"ren": {"confiance": -3}}}}}),
+ _mmn_ep(18, "Personne ne parle d'elle comme ça", "climax", ["acte3", "principal"],
+   "Hidaka. Ren la défend. Empreinte il_ta_defendue. Quatre conséquences."),
+ _mmn_ep(19, "La voiture, après", "tension", ["acte3", "principal"],
+   "Ce qu'elle fait du geste. Écho 1 : le double de clé pour Mei.",
+   {"question": "", "decisif": False,
+    "options": [("remercie", "", ""), ("reproche", "", "")],
+    "suites": {
+      "remercie": {"texte": "", "pose": ["remercie"], "relation": {"ren": {"confiance": 10}}},
+      "reproche": {"texte": "", "pose": ["reproche"], "relation": {"ren": {"confiance": -5}}}}}),
+ _mmn_ep(20, "Ce qu'Aya a vu", "climax", ["acte3", "principal", "aya", "tetsuo"],
+   "Double révélation le même jour. Nao récupère le droit de décider pour Kanako."),
+ _mmn_ep(21, "Tu as décidé pour moi", "climax", ["acte3", "principal"],
+   "La vérité aggrave. Écho 3 : les sept minutes. Route majeure.",
+   {"question": "", "decisif": True,
+    "options": [("confronte", "", ""), ("se_tait", "", "")],
+    "suites": {
+      "confronte": {"texte": "", "pose": ["confronte"], "relation": {"ren": {"confiance": 5}}},
+      "se_tait":   {"texte": "", "pose": ["rancune_muette"], "relation": {"ren": {"confiance": -10}}}}}),
+  _mmn_ep(22, "Politesse", "calme", ["acte4", "principal", "mei"],
+   "Le froid après la dispute. Mei retourne chez Takumi et Nao ne juge pas."),
+ _mmn_ep(23, "La came", "calme", ["acte4", "tetsuo", "sota", "principal"],
+   "Ren va réparer la presse sans le dire. Nao l'apprend par Sota."),
+ _mmn_ep(24, "Deux heures du matin", "calme", ["acte4", "principal", "yui"],
+   "Urgence au cabinet. Il vient la chercher sans qu'elle ait demandé."),
+ _mmn_ep(25, "Dimanche", "calme", ["acte4", "tetsuo", "principal"],
+   "Il revient à l'atelier. Cette fois elle est là. Tetsuo l'appelle par son prénom."),
+ _mmn_ep(26, "Six étages", "calme", ["acte4", "principal"],
+   "Panne d'ascenseur, courses lourdes. Le premier vrai rire depuis l'ép.21."),
+ _mmn_ep(27, "Haru s'en va", "tension", ["acte5", "haru", "terrain"],
+   "Pot de départ. Ren perd son allié et voit quelqu'un choisir sa vie."),
+ _mmn_ep(28, "Quarante et un mètres carrés", "calme",
+   ["acte5", "cabinet", "principal", "yui"],
+   "Nao dit son projet à voix haute — à lui. Première fois qu'elle demande."),
+ _mmn_ep(29, "Ce que je n'ai pas le droit de ressentir", "tension",
+   ["acte5", "aya", "principal"],
+   "La jalousie, injuste, et Aya ne mérite rien de tout ça.",
+   {"question": "", "decisif": False,
+    "options": [("accepte", "1️⃣", ""), ("refuse", "2️⃣", "")],
+    "suites": {
+      "accepte": {"texte": "", "pose": ["aya_parle"], "relation": {"ren": {"confiance": 12}}},
+      "refuse":  {"texte": "", "pose": ["aya_refusee"], "relation": {"ren": {"confiance": -5}}}}}),
+ _mmn_ep(30, "Trente ans en octobre", "calme", ["acte5", "sae", "principal"],
+   "Sae parle de son mariage sans mesurer ce qu'elle avoue."),
+ _mmn_ep(31, "Kaito", "tension", ["acte5", "kaito", "ichiro", "principal"],
+   "Le frère revient. Il dit la seule phrase que Ren ne peut pas rejeter."),
+ _mmn_ep(32, "Ce que Sota avait à dire", "calme", ["acte5", "sota", "principal"],
+   "Payoff de l'ép.11. Sota dit à Ren ce que Nao n'aurait jamais dit."),
+ _mmn_ep(33, "Trop près", "calme", ["acte6", "principal"],
+   "La proximité est devenue normale. C'est précisément ce qui la rend anormale."),
+ _mmn_ep(34, "03h10", "calme", ["acte6", "principal"],
+   "Deux insomnies de part et d'autre d'une cloison de neuf millimètres."),
+ _mmn_ep(35, "Presque", "tension", ["acte6", "principal"],
+   "Interrompu. Ils sont soulagés tous les deux, et ça ment."),
+ _mmn_ep(36, "Un mardi", "climax", ["acte6", "principal"],
+   "Vaisselle, télé en fond. Carrefour majeur.",
+   {"question": "", "decisif": True,
+    "options": [("elle_avance", "1️⃣", ""), ("il_avance", "2️⃣", ""), ("personne", "3️⃣", "")],
+    "suites": {
+      "elle_avance": {"texte": "", "pose": ["baiser", "elle_a_ose"],
+                      "marque": {"type": "baiser"}, "relation": {"ren": {"confiance": 22}}},
+      "il_avance":   {"texte": "", "pose": ["baiser", "il_a_ose"],
+                      "marque": {"type": "baiser"}, "relation": {"ren": {"confiance": 18}}},
+      "personne":    {"texte": "", "pose": ["route_distance", "occasion_manquee"],
+                      "ferme": ["se_choisir", "recommencer"],
+                      "relation": {"ren": {"confiance": -15}},
+                      "plafond": {"ren": {"confiance": 65}}}}}),
+ _mmn_ep(37, "Le lendemain", "calme", ["acte7", "principal"],
+   "La gêne d'après, pire que celle d'avant."),
+ _mmn_ep(38, "Notre premier rendez-vous", "calme", ["acte7", "principal"],
+   "Mariés depuis neuf mois. C'est ridicule et c'est parfait."),
+ _mmn_ep(39, "Comment on fait", "calme", ["acte7", "principal", "mei"],
+   "Les maladresses. Et la question : on le dit à qui, et quand."),
+ _mmn_ep(40, "La porte du fond", "calme", ["acte7", "principal"],
+   "Une des deux chambres devient inutile. Personne ne sait comment le dire."),
+ _mmn_ep(41, "Des habitudes", "calme", ["acte7", "principal", "mei", "yui"],
+   "Le quotidien d'après. Mei repart pour de bon, et cette fois c'est un choix."),
+ _mmn_ep(42, "La première vraie dispute", "tension",
+   ["acte7", "principal", "terrain", "cabinet"],
+   "Pas sur le passé : sur l'avenir. Son poste, son cabinet, deux villes.",
+   {"question": "", "decisif": True,
+    "options": [("elle_cede", "1️⃣", ""), ("il_cede", "2️⃣", ""), ("tenu", "3️⃣", "")],
+    "suites": {
+      "elle_cede": {"texte": "", "pose": ["nao_a_cede"], "relation": {"ren": {"confiance": -4}}},
+      "il_cede":   {"texte": "", "pose": ["ren_a_cede"], "relation": {"ren": {"confiance": 4}}},
+      "tenu":      {"texte": "", "pose": ["desaccord_tenu"], "relation": {"ren": {"confiance": 8}}}}}),
+ _mmn_ep(43, "Nao se lève", "climax", ["acte7", "principal", "ichiro", "terrain"],
+   "Nouvel An. Miroir exact de l'ép.18. Payoff du carnet. Ichiro voit."),
+ _mmn_ep(44, "Un jeudi, à deux", "calme", ["acte8", "ichiro", "principal"],
+   "Ren emmène Nao chez son grand-père. Première fois en six ans."),
+ _mmn_ep(45, "Le pacte", "climax", ["acte8", "principal", "aya"],
+   "Shigeru révèle le pacte pour se justifier, sans mesurer ce qu'il dévoile."),
+ _mmn_ep(46, "Elle rentre à pied", "climax", ["acte8", "principal"],
+   "La pire dispute. Écho 2 : il la suit à vingt mètres, tout du long.",
+   {"question": "", "decisif": True,
+    "options": [("contenue", "1️⃣", ""), ("totale", "2️⃣", ""), ("rupture", "3️⃣", "")],
+    "suites": {
+      "contenue": {"texte": "", "pose": ["dispute_contenue"], "relation": {"ren": {"confiance": -5}}},
+      "totale":   {"texte": "", "pose": ["dispute_totale"], "relation": {"ren": {"confiance": -15}}},
+      "rupture":  {"texte": "", "pose": ["route_fracture"],
+                   "grave_si_sous": {"ren": {"confiance": 60}},
+                   "grave_pose": ["rupture_grave"],
+                   "relation": {"ren": {"confiance": -40}}}}}),
+ _mmn_ep(47, "Ichiro", "climax", ["acte8", "ichiro", "tetsuo", "sae", "sota"],
+   "Vivant, il reconnaît s'être trompé et leur rend leur liberté."),
+ _mmn_ep(48, "Quatre jours", "tension", ["acte8", "principal", "cabinet", "sota"],
+   "Silence. Écho 1 : la clé du local. Écho 5 : deux assiettes."),
+ _mmn_ep(49, "Nous", "climax", ["acte8", "principal", "haru"],
+   "La question. Échos 2, 3 et 4 refermés."),
+]
+
+
+# ── ARC I : épisodes 1 à 6 ──
+_MMN = CHRONIQUE_SAISONS["maries_malgre_nous"]["episodes"]
+_MMN[0]["scenes"] = [
+    "*Cabinet Miyazaki, 18h40*\n\nLa table numéro deux grince depuis quatre ans. Nao a rempli trois demandes de remplacement. La direction a répondu deux fois que c'était prévu au budget de l'année suivante, et une fois rien du tout.\n\nOda|« Elle grince. »\n\nNao|« Je sais. »\n\nOda|« C'est vous qui grincez, peut-être. »\n\nNao|« Monsieur Oda, si vous continuez, je serre. »\n\nOda|« Vous serrez déjà. »\n\nNao|« Je serre *plus*. »\n\nIl rit, ce qui lui coupe la respiration, ce qui le fait tousser, ce qui l'oblige à s'arrêter de rire. Il a soixante-dix-huit ans et une épaule qui ne remontera jamais au-dessus de l'horizontale. Il vient trois fois par semaine depuis onze mois.",
+    "Elle travaille l'articulation avec les deux pouces. Elle a des mains courtes, ongles ras, une force que les gens ne voient pas venir.\n\nOda|« Ma fille dit que je devrais aller à l'hôpital central. »\n\nNao|« Votre fille a raison. Ils ont un plateau technique et je n'ai pas de plateau technique. »\n\nOda|« Ils ont aussi trois mois d'attente. »\n\nNao|« Aussi. »\n\nElle change de prise.\n\nOda|« Et ils ne m'appelleront pas quand je rate un rendez-vous. »\n\nNao|« Vous avez raté deux rendez-vous en onze mois. »\n\nOda|« Vous comptez. »\n\nNao|« Je compte tout. »",
+    "Yui passe la tête par l'entrebâillement, un dossier serré contre elle, l'air de quelqu'un qui a une question urgente et honteuse.\n\nYui|« Nao. Le monsieur de 19h a annulé. »\n\nNao|« Encore ? »\n\nYui|« Il a dit que son genou allait mieux. »\n\nNao|« Son genou ne va pas mieux. Son genou va aller très mal en avril et il reviendra en disant qu'il ne comprend pas. »\n\nYui|« Je lui dis ça ? »\n\nNao|« Non. »\n\nYui|« Je lui dis quoi ? »\n\nNao|« Que je le note pour jeudi. »\n\nLa tête disparaît. Puis revient.\n\nYui|« Et ton père a appelé sur le fixe. »\n\nLes pouces de Nao s'arrêtent une demi-seconde sur l'épaule de monsieur Oda.\n\nNao|« Il a dit quoi ? »\n\nYui|« Que c'était ce soir. Il a pas précisé quoi. »\n\nNao|« D'accord. »\n\nElle reprend le mouvement. Monsieur Oda ne dit rien pendant un moment, et monsieur Oda dit toujours quelque chose.",
+    "*Restaurant Kanoya, 20h15*\n\nIl y a des salles privées où l'on se sent invité et des salles privées où l'on se sent convoqué. Celle-ci a des cloisons en papier, un ikebana dans la niche, et un silence qu'aucun des huit convives ne semble vouloir être le premier à casser.\n\nNao porte l'une de ses deux tenues habillées. Elle la déteste depuis 2019.\n\nÀ sa gauche, son père. Il a mis une cravate. Il n'a pas mis de cravate depuis l'enterrement de son propre père.\n\nÀ sa droite, Sota, dix-sept ans, capuche baissée sous la contrainte, qui fixe le bol de soupe comme s'il l'avait personnellement insulté.",
+    "En face, les Kirishima.\n\nLe père — costume, montre, une façon de poser les mains à plat sur la table comme si elle lui appartenait. La mère — chaleureuse, trop, elle a déjà complimenté deux fois la veste de Tetsuo qui n'a rien à complimenter.\n\nEt au bout, dans le fauteuil qu'on a visiblement fait apporter pour lui, un très vieil homme avec une canne posée contre l'accoudoir et une respiration qu'on entend entre les phrases.\n\nSae|« Nao, c'est ça ? Quel joli prénom. Vous êtes infirmière ? »\n\nNao|« Kinésithérapeute. »\n\nSae|« Ah, mais c'est encore mieux. »\n\nNao|« C'est différent. »\n\nTetsuo tousse dans son poing.\n\nSae|« Bien sûr, bien sûr. »",
+    "Le fils arrive avec onze minutes de retard.\n\nIl ne s'excuse pas. Il fait le tour de la table, salue son grand-père en premier, s'incline devant Tetsuo, dit quelque chose de correct à Sae, et s'assoit.\n\nIl n'a pas regardé Nao une seule fois.\n\nShigeru|« Tu es en retard. »\n\nRen|« Oui. »\n\nShigeru|« Le chantier de Higashi ? »\n\nRen|« Le chantier de Higashi. »\n\nEt c'est tout. Pas de justification, pas de développement. Shigeru attend encore une seconde, n'obtient rien, et se tourne vers Tetsuo pour parler d'autre chose.\n\nNao regarde le fils déplier sa serviette. Il a des mains abîmées. Des vraies mains abîmées, avec des cals et une cicatrice blanche sur le dos de la droite, et ça ne va pas du tout avec le reste de lui.",
+    "Le repas dure quarante minutes avant qu'Ichiro ne pose sa cuillère.\n\nIchiro|« Bon. »\n\nTout le monde se tait, ce qui prouve que tout le monde attendait.\n\nIchiro|« On va les laisser parler tous les deux. »\n\nShigeru|« Père— »\n\nIchiro|« On va les laisser parler tous les deux. »\n\nIl ne hausse pas la voix. Il répète exactement la même phrase, au même rythme, et Shigeru repose sa serviette.\n\nSix personnes sortent de la pièce en quatre-vingt-dix secondes. Sota est le seul à se retourner.",
+    "Il reste le bruit de la ventilation.\n\nRen remplit son verre d'eau. Il ne remplit pas celui de Nao, ce qu'elle remarque, et ce qui l'arrange, parce qu'elle aurait détesté qu'il le fasse.\n\nRen|« Vous savez ce qu'on nous demande. »\n\nNao|« Je sais lire. »\n\nRen|« Ce n'était pas une question. »\n\nNao|« C'était formulé comme une question. »\n\nRen|« Non. »\n\nElle le regarde vraiment pour la première fois. Il regarde le mur derrière elle.",
+    "Nao|« Vous êtes toujours comme ça ? »\n\nRen|« Comme quoi. »\n\nNao|« Ça. »\n\nElle fait un geste circulaire qui englobe sa posture, son verre, la pièce et peut-être l'ensemble de sa personne.\n\nRen|« Je ne sais pas de quoi vous parlez. »\n\nNao|« Vous êtes arrivé en retard, vous n'avez salué personne de mon côté sauf mon père parce qu'il fallait bien, vous n'avez pas dit un mot en quarante minutes et là vous me parlez comme à un fournisseur. »\n\nUn silence.\n\nRen|« J'ai salué votre père parce que c'est votre père. Pas parce qu'il fallait bien. »\n\nNao|« Ah. Donc vous écoutiez. »\n\nRen|« J'écoute toujours. »",
+    "Elle prend son verre. Elle le repose sans boire.\n\nNao|« Kirishima Ren. »\n\nRen|« Oui. »\n\nNao|« C'est votre signature. Sur la lettre. »\n\nIl ne bouge pas. Il ne demande pas quelle lettre. C'est ça, le pire — il ne demande même pas.\n\nNao|« Vingt-huit mars, il y a deux ans. Mon père l'a encore dans un tiroir. Il l'a plastifiée. Vous vous rendez compte de ce que ça veut dire, plastifier une lettre qui vous ruine ? »\n\nRen|« Oui. »\n\nNao|« *Oui ?* »\n\nRen|« Oui, c'est ma signature. »\n\nElle attend la suite. Il n'y a pas de suite.",
+    "Nao|« Vous n'allez rien dire. »\n\nRen|« Il n'y a rien à dire. »\n\nNao|« Il y a énormément à dire. Il y a une explication à dire, par exemple. Il y a *je suis désolé* à dire, ça se dit en trois syllabes, c'est très économique. »\n\nRen|« Est-ce que ça changerait quelque chose ? »\n\nNao|« Pour vous ou pour moi ? »\n\nIl tourne enfin la tête. Il a des yeux qui ne clignent pas assez.\n\nRen|« Pour votre père. »\n\nElle ouvre la bouche. Elle la referme.",
+    "Nao|« Vous savez ce que je pense ? »\n\nRen|« Vous allez me le dire. »\n\nNao|« Je pense que les gens comme vous signent des papiers toute la journée et que le soir vous rentrez chez vous et que ça n'existe plus. »\n\nRen|« Les gens comme moi. »\n\nNao|« Vous voyez très bien. »\n\nIl hoche la tête, lentement, comme s'il venait de recevoir une information utile et sans intérêt.\n\nRen|« Il y a deux ans, dans un restaurant sur Nakadōri, une femme s'est levée et a hurlé sur un homme devant quarante personnes pendant à peu près deux minutes. »\n\nNao se fige.\n\nRen|« Je pense que les gens comme vous décident très vite. »",
+    "Elle pourrait lui dire ce que l'homme avait dit avant. Elle pourrait lui expliquer le gamin de dix-neuf ans, le plateau renversé, la phrase sur sa mère.\n\nElle ne le fait pas, parce qu'il ne le mérite pas, et parce qu'elle vient de comprendre qu'il était là, et qu'il l'a regardée pendant deux minutes, et qu'il n'a rien fait.\n\nNao|« Vous étiez à trois tables. »\n\nRen|« Quatre. »\n\nNao|« Et vous êtes resté assis. »\n\nRen|« Oui. »\n\nNao|« Évidemment. »\n\nLa cloison coulisse. Sae passe la tête, tout sourire.\n\nSae|« On peut ? »",
+    "Dans la voiture, Tetsuo conduit à quarante et une heure du matin qui n'est pas encore arrivée.\n\nSota, à l'arrière, écouteurs sur les oreilles, volume assez fort pour qu'on entende la basse.\n\nTetsuo|« Il a l'air sérieux. »\n\nNao|« Mm. »\n\nTetsuo|« Le vieux monsieur est quelqu'un de bien. »\n\nNao|« Mm. »\n\nTetsuo|« Ils ont commandé le poisson à quatre mille yens. »\n\nNao|« Papa. »\n\nTetsuo|« Oui. »\n\nElle attend qu'il dise la chose. Elle attend pendant deux feux rouges.\n\nIl met la radio."
+  ]
+_MMN[1]["scenes"] = [
+    "*Le lendemain, 6h50*\n\nLe centre de tri ferme à sept heures. Nao n'y travaille plus depuis trois ans mais son corps continue de se réveiller à six heures cinquante, ce qui est une forme de harcèlement.\n\nElle reste allongée. Le plafond a une fissure qui ressemble à la préfecture de Nagano.\n\nSon téléphone vibre.\n\n**Mei** — *alors ??????*\n\n**Mei** — *nao*\n\n**Mei** — *NAO*\n\n**Mei** — *je sais que t'es réveillée tu te réveilles toujours à cette heure de merde*",
+    "Nao|« Il est arrivé en retard, il a dit onze mots, il m'a expliqué que je jugeais trop vite. »\n\nMei|« En onze mots ? »\n\nNao|« Environ. »\n\nMei|« Il est beau ? »\n\nNao|« Mei. »\n\nMei|« C'est une question technique. »\n\nNao|« C'est pas la question. »\n\nMei|« Donc il est beau. »\n\nNao|« Je raccroche. »\n\nMei|« Attends attends attends. »\n\nIl y a un bruit de porte, à l'autre bout. Quelqu'un demande quelque chose. Mei répond *dans le tiroir du haut* sans même marquer une pause, du ton de quelqu'un qui a répondu à cette question trois cents fois.",
+    "Mei|« Bon. Sérieusement. Tu vas faire quoi. »\n\nNao|« Il n'y a rien à faire. »\n\nMei|« Il y a toujours quelque chose à faire. »\n\nNao|« Pas quand la banque a écrit. »\n\nSilence.\n\nMei|« Elle a écrit quoi exactement ? »\n\nNao|« Que le dossier serait réexaminé fin avril et qu'en l'état, le renouvellement n'était pas acquis. »\n\nMei|« Traduis. »\n\nNao|« Ils vendent la maison. »\n\nMei|« …Ah. »\n\nNao|« Ouais. »\n\nMei|« Et l'atelier est sur la même parcelle. »\n\nNao|« L'atelier est sur la même parcelle. »",
+    "*Cabinet, 14h20*\n\nElle a mis quatre minutes de trop sur monsieur Oda et deux minutes de trop sur la dame du 3, qui n'a rien remarqué, et monsieur Oda qui a tout remarqué et qui n'a rien dit.\n\nYui la coince près de la machine à café dont Nao ne se sert jamais.\n\nYui|« Ça va ? »\n\nNao|« Oui. »\n\nYui|« Tu as dit *jeudi* à madame Fukuda alors qu'elle vient le mardi. »\n\nNao|« J'ai dit jeudi ? »\n\nYui|« Deux fois. »\n\nNao|« D'accord. »\n\nYui|« Donc ça va pas. »\n\nNao|« Yui. »\n\nYui|« Je dis rien. »\n\nElle ne dit rien pendant à peu près quatre secondes.\n\nYui|« C'est un garçon ? »\n\nNao|« C'est la banque. »\n\nYui|« Ah. C'est pire. »",
+    "*Chez les Sakurai, 19h*\n\nSota mange debout devant le frigo ouvert, ce qui est une tradition familiale qu'aucun des deux n'a jamais réussi à faire perdre à l'autre.\n\nSota|« T'as dit oui ? »\n\nNao|« Pas encore. »\n\nSota|« Mais tu vas dire oui. »\n\nNao|« Sota— »\n\nSota|« Non mais c'est bon. Je demande. J'ai le droit de demander. »\n\nIl referme le frigo avec le coude. Il a grandi de onze centimètres en un an et il ne sait toujours pas quoi faire de ses bras.",
+    "Nao|« Il y a un dossier bancaire à— »\n\nSota|« Je sais lire aussi. »\n\nNao|« Tu as lu la lettre. »\n\nSota|« Elle est restée trois jours sur la table de la cuisine. »\n\nUn temps.\n\nSota|« Trois jours, Nao. Il l'a pas rangée. Il l'a pas montrée. Il l'a *posée*. »\n\nNao|« C'est comme ça qu'il fait. »\n\nSota|« Ouais, bah c'est nul comme façon de faire. »\n\nNao|« Sota. »\n\nSota|« Quoi ? C'est nul. »\n\nElle ne le contredit pas, parce qu'elle ne peut pas.",
+    "Sota|« Si c'est pour l'école, laisse tomber. »\n\nNao|« Ce n'est pas pour l'école. »\n\nSota|« Menteuse. »\n\nNao|« Ce n'est pas *que* pour l'école. »\n\nSota|« Je peux faire le public. »\n\nNao|« Il n'y a pas d'archi au public dans cette préfecture et tu le sais très bien parce que tu as regardé, parce que je t'ai vu regarder, à deux heures du matin, en janvier. »\n\nIl ne répond pas tout de suite.\n\nSota|« T'espionnes. »\n\nNao|« Ta porte était ouverte. »\n\nSota|« Elle était pas ouverte. »\n\nNao|« Elle était entrouverte. »\n\nSota|« C'est pareil. »\n\nIl monte dans sa chambre. Il ne claque pas la porte, ce qui, chez lui, est un aveu.",
+    "*Le surlendemain, 11h*\n\nElle ne s'attendait pas à le voir là.\n\nLe vieil homme est assis dans la salle d'attente du cabinet, canne entre les genoux, manteau boutonné jusqu'en haut, parfaitement immobile entre une mère avec une poussette et un adolescent en attelle.\n\nYui, derrière le comptoir, articule silencieusement *je sais pas* par-dessus son écran.\n\nIchiro|« Vous avez vingt minutes ? »\n\nNao|« J'ai douze. »\n\nIchiro|« Ça ira. »",
+    "Ils s'installent dans la salle de repos, qui contient une table pliante, un micro-ondes et un calendrier de 2022 que personne n'a jamais décroché.\n\nIl regarde le calendrier un moment.\n\nIchiro|« Je ne suis pas venu vous convaincre. »\n\nNao|« C'est ce que disent les gens qui viennent convaincre. »\n\nIchiro|« Oui, probablement. »\n\nIl pose ses deux mains l'une sur l'autre sur le pommeau de la canne. Sa respiration prend de la place entre les phrases.\n\nIchiro|« Je suis venu vous dire ce que ça me coûte à moi. Parce que votre père ne vous le dira pas, et mon fils non plus, et mon petit-fils encore moins. »",
+    "Ichiro|« J'ai eu deux petits-fils. L'aîné est parti à vingt ans. Il vit à Singapour, il va bien, il ne rentre pas. »\n\nNao|« Je suis désolée. »\n\nIchiro|« Ne le soyez pas, il a bien fait. »\n\nElle ne s'attendait pas à ça.\n\nIchiro|« Le second est resté. Il a dix-sept ans quand son frère est parti, et depuis dix ans, je n'ai pas réussi à lui faire dire une seule fois ce qu'il voulait. Pas une fois. J'ai essayé. »\n\nIl tousse. Ça dure un peu trop longtemps.\n\nIchiro|« Je n'ai pas dix ans de plus pour essayer encore. »",
+    "Nao|« Et vous pensez que moi je vais y arriver. »\n\nIchiro|« Non. »\n\nNao|« …Non ? »\n\nIchiro|« Je pense que vous n'allez pas le laisser tranquille. Ce n'est pas la même chose et c'est beaucoup plus utile. »\n\nElle rit. Un seul son, sec, pas vraiment un rire.\n\nNao|« Vous ne me connaissez pas. »\n\nIchiro|« Non. »\n\nIl dit ça sans hésiter et il ne développe pas, et elle a la nette impression d'avoir raté quelque chose.",
+    "Ichiro|« Pour votre père. La banque acceptera si vous vous portez caution. Une caution personnelle. Pas le groupe — vous. »\n\nNao|« Je gagne trois millions et demi par an. Je ne vaux rien comme caution. »\n\nIchiro|« Vous ne valez rien comme caution *en payant un loyer*. »\n\nElle met deux secondes.\n\nNao|« Vous êtes en train de me dire que ce qui change tout, c'est un appartement gratuit. »\n\nIchiro|« Je suis en train de vous dire que les banques calculent ce qui vous reste à la fin du mois, et que c'est le chiffre le plus bête et le plus important de votre dossier. »\n\nNao|« C'est répugnant. »\n\nIchiro|« Oui. »",
+    "Ichiro|« Il y a une chose que je veux que vous entendiez, parce que personne d'autre ne vous le dira clairement. »\n\nNao|« Allez-y. »\n\nIchiro|« Si vous vous portez caution et que l'atelier coule quand même, c'est vous que la banque poursuivra. Vous seule. Personne de ma famille ne viendra vous chercher. Je ne le permettrai pas et je serai mort. »\n\nNao|« …D'accord. »\n\nIchiro|« Ce mariage ne vous sauve pas. Il vous met entre votre père et la banque. C'est tout ce qu'il fait. »\n\nIl se lève, ce qui lui prend du temps.\n\nIchiro|« Réfléchissez jusqu'à demain. Après, la banque ferme le dossier. »",
+    "Elle le raccompagne jusqu'à la porte vitrée. Dehors, il pleut à peine, ce genre de pluie qui ne mouille pas mais qui donne froid.\n\nUne voiture attend le long du trottoir. Le fils est dehors, à côté, sans parapluie, en costume, à attendre depuis Dieu sait combien de temps.\n\nIl ouvre la portière pour son grand-père. Il fait attention à la canne. Il met une main au-dessus de sa tête pour le montant de porte, exactement comme font les gens qui ont fait ça mille fois.\n\nPuis il relève les yeux et voit Nao derrière la vitre.\n\nIl ne salue pas. Il ne détourne pas le regard non plus.\n\nIl referme la portière et fait le tour."
+  ]
+_MMN[2]["scenes"] = [
+    "*Imprimerie Sakurai, dimanche, 10h*\n\nL'atelier sent l'encre, le papier humide et le white-spirit, dans cet ordre, et Nao pourrait retrouver l'endroit les yeux fermés à partir de la rue.\n\nIl y a deux presses. La grande, une Heidelberg de 1974 que son père appelle *la vieille* avec un respect qu'il n'accorde à aucun être humain. Et la petite, achetée d'occasion en 2011, qui n'a jamais eu de surnom.\n\nTetsuo est sous la grande, sur le dos, une clé de treize à la main.",
+    "Tetsuo|« Passe-moi la douze. »\n\nNao|« C'est laquelle. »\n\nTetsuo|« À côté de la treize. »\n\nNao|« Il y en a quatre à côté de la treize. »\n\nTetsuo|« Celle qui a du bleu sur le manche. »\n\nElle trouve. Elle la lui met dans la main. Il y a un bruit de métal, un juron à mi-voix, puis plus rien pendant deux minutes.\n\nNao s'assoit sur le tabouret à trois pieds qui a toujours été à cet endroit.\n\nTetsuo|« Le margeur déraille depuis mardi. »\n\nNao|« Tu l'as dit à Fujita ? »\n\nTetsuo|« Fujita facture quatre-vingt mille la visite. »\n\nNao|« Et toi tu es sous une presse un dimanche. »\n\nTetsuo|« Moi je facture rien. »",
+    "Elle regarde autour. Les casses de caractères en bois sur le mur du fond, dont il ne se sert plus depuis quinze ans et qu'il refuse de vendre. Le calendrier d'un fournisseur de papier. La photo de l'équipe de 1998, quand ils étaient cinq.\n\nSur l'étagère du bas, une casse plus petite que les autres, avec une étiquette en papier collée sur la tranche.\n\nL'écriture n'est pas celle de son père.\n\nNao|« Elle sert à quoi, celle-là ? »\n\nUn bruit de clé qui glisse sous la presse.\n\nTetsuo|« Rien. Vingt-quatre points. »\n\nNao|« Elle est étiquetée. »\n\nTetsuo|« Elles sont toutes étiquetées. »\n\nNao|« Pas comme ça. »\n\nIl sort de sous la presse, s'essuie les mains sur son bleu de travail, regarde l'étagère du bas pendant environ une seconde et demie.\n\nTetsuo|« Faut que je remette de l'huile sur l'axe. »",
+    "Ils travaillent une heure sans reparler de rien.\n\nC'est confortable, en fait. C'est même la seule chose confortable de la semaine. Elle lui tient la lampe, il jure contre 1974, elle ramasse une vis qui tombe, il dit *merci* d'une façon qui ressemble à *mm*.\n\nVers midi, il met la bouilloire sur le petit réchaud de l'établi.\n\nTetsuo|« Y a du thé d'orge dans le placard. »\n\nNao|« Il fait sept degrés. »\n\nTetsuo|« Tu en bois en février depuis que t'as huit ans. »\n\nNao|« C'est pas une raison. »\n\nTetsuo|« Non. »\n\nIl en sort une bouteille quand même.",
+    "Ils boivent debout, appuyés à l'établi, dans deux tasses dépareillées.\n\nTetsuo|« La banque a rappelé vendredi. »\n\nNao|« Je sais. »\n\nTetsuo|« Ils veulent le dossier avant le 30. »\n\nNao|« Je sais. »\n\nIl tourne sa tasse sur l'établi. Un quart de tour. Encore un quart.\n\nTetsuo|« C'est pas ce que je voulais. »\n\nNao|« Je sais. »\n\nTetsuo|« Arrête de dire que tu sais. »\n\nNao|« Alors dis quelque chose que je sais pas. »\n\nIl ne dit rien. Le réchaud fait un bruit de ventilateur fatigué.",
+    "La porte de l'atelier claque. Sota entre, capuche, sac à dos sur une épaule.\n\nTetsuo|« Tiens. »\n\nSota|« J'passais. »\n\nTetsuo|« On est dimanche. »\n\nSota|« Ouais. »\n\nIl pose son sac sur l'établi, exactement à l'endroit où son père pose ses outils, et son père le déplace de vingt centimètres sans rien dire.\n\nSota|« Elle marche encore, la vieille ? »\n\nTetsuo|« Elle marchera encore quand tu auras mon âge. »\n\nSota|« Ça veut rien dire ça. »\n\nTetsuo|« Ça veut dire qu'elle marchera encore. »",
+    "Sota fait le tour de la grande presse, les mains dans les poches, en regardant le mécanisme comme on regarde quelque chose qu'on a déjà regardé mille fois et qu'on n'a jamais complètement compris.\n\nSota|« Le margeur déraille. »\n\nTetsuo|« Comment tu sais ? »\n\nSota|« Le bruit. »\n\nTetsuo s'arrête.\n\nTetsuo|« Elle tourne pas, là. »\n\nSota|« Mardi. Je suis passé mardi. »\n\nIl ne l'avait pas dit. Nao ne le savait pas.\n\nTetsuo|« Ah. »\n\nSota|« Bon, j'y vais. »\n\nIl reprend son sac. Il est resté quatre minutes.",
+    "Quand la porte se referme, Tetsuo remet ses mains sous la presse.\n\nNao|« Il vient souvent ? »\n\nTetsuo|« Non. »\n\nNao|« Papa. »\n\nTetsuo|« Deux fois par semaine. »\n\nNao|« Deux fois par semaine c'est souvent. »\n\nTetsuo|« Il reste jamais. »\n\nElle regarde la porte. Elle repense à un garçon de dix-sept ans qui écoute le bruit d'une presse depuis le trottoir et qui repart.\n\nNao|« Tu lui as jamais proposé de rester ? »\n\nTetsuo|« S'il veut rester il reste. »\n\nNao|« Ce n'est pas comme ça que ça marche. »\n\nTetsuo|« C'est comme ça que ça a toujours marché. »\n\nNao|« Justement. »",
+    "Il ressort de sous la presse. Cette fois il la regarde.\n\nTetsuo|« Pourquoi tu acceptes, Nao. »\n\nLe réchaud s'est éteint. Il y a l'odeur d'encre, et une mouche quelque part, et soixante ans de machines autour d'eux.\n\nElle a le choix, là, tout de suite, entre lui donner la vraie raison et lui donner celle qui lui permettra de dormir."
+  ]
+_MMN[3]["scenes"] = [
+    "*Mi-avril, 8h30*\n\nMei est arrivée à sept heures avec un fer à lisser, une trousse à maquillage et deux cannettes de café qu'elle a bues toutes les deux.\n\nMei|« Bouge pas. »\n\nNao|« Je bouge pas. »\n\nMei|« Tu bouges. »\n\nNao|« Je respire. »\n\nMei|« Respire moins. »\n\nElle lui tient le menton entre deux doigts, la tête inclinée, l'air d'une personne qui désamorce quelque chose.",
+    "Mei|« Tu as dormi ? »\n\nNao|« Un peu. »\n\nMei|« Menteuse. »\n\nNao|« Quatre heures. »\n\nMei|« Donc trois. »\n\nLe téléphone de Mei vibre sur le lit. Elle le regarde sans le prendre.\n\nNao|« C'est Takumi ? »\n\nMei|« Il trouve pas la carte grise. »\n\nNao|« Elle est où ? »\n\nMei|« Dans la pochette bleue de la commode de l'entrée, deuxième tiroir, sous les manuels. »\n\nNao|« Tu vas lui répondre ? »\n\nMei|« Dans dix minutes. »\n\nElle reprend une mèche.\n\nMei|« S'il cherche dix minutes il va peut-être la trouver. »\n\nNao|« Et s'il la trouve pas ? »\n\nMei|« Bah je lui dirai où elle est. Comme d'habitude. »\n\nElle le dit en riant. Nao rit aussi. C'est drôle.",
+    '*Mairie, salle 2, 10h15*\n\nLa salle 2 est réservée aux enregistrements simples. Elle contient dix-huit chaises, un bureau, un drapeau préfectoral et un radiateur qui claque.\n\nIls sont dix-huit, ce qui veut dire zéro chaise libre et beaucoup de gens debout au fond quand même.\n\nCôté Sakurai : Tetsuo en costume, Sota en costume emprunté trop court aux poignets, Mei, deux cousines de Kōbe, et monsieur Oda, que Nao a invité par accident en le lui racontant et qui est venu.\n\nCôté Kirishima : tout le reste.',
+    "L'employé de mairie a une voix de personne qui fait ça huit fois par jour.\n\nEmploye|« Sakurai Nao. »\n\nNao|« Oui. »\n\nEmploye|« Kirishima Ren. »\n\nRen|« Oui. »\n\nEmploye|« Vous confirmez tous les deux que cette union est conclue librement ? »\n\nIl y a une seconde. Une seule.\n\nNao|« Oui. »\n\nRen|« Oui. »\n\nEmploye|« Signez ici, ici, et là où c'est jaune. »",
+    "Elle signe. Son écriture part vers le haut à droite comme toujours.\n\nIl signe. Une signature courte, nette, deux traits.\n\nC'est exactement la même signature que sur la lettre plastifiée dans le tiroir de son père, et Nao la reconnaît, et elle ne dit rien, et pendant deux secondes elle a très envie de partir.\n\nEmploye|« Voilà. Félicitations. »\n\nIl tamponne. Le tampon fait plus de bruit que tout le reste de la cérémonie.",
+    "Sae|« La photo ! On fait la photo ! »\n\nOn les met devant le drapeau. Quelqu'un dit *rapprochez-vous un peu*, ce qui produit un déplacement latéral de six centimètres de chaque côté.\n\nVingt centimètres. On peut les compter sur le tirage.\n\nRen regarde l'objectif. Nao regarde légèrement à droite de l'objectif, parce qu'au dernier moment monsieur Oda a levé le pouce et qu'elle n'a pas pu s'empêcher.\n\nFlash.\n\nSae|« Encore une ! »\n\nPersonne ne bouge pour la deuxième.",
+    "*Le restaurant, 12h40*\n\nSae s'occupe de tout le monde. Elle a mémorisé le prénom des deux cousines de Kōbe en quatre minutes, elle a demandé à monsieur Oda depuis combien de temps il connaît Nao, et elle a resservi Tetsuo trois fois.\n\nSae|« Vous savez, mon mari et moi, c'était pareil. »\n\nTetsuo|« Ah bon ? »\n\nSae|« Nos deux familles se connaissaient. On s'est vus deux fois avant. »\n\nTetsuo|« Et— »\n\nSae|« Trente ans. »\n\nElle rit et remplit son verre.\n\nSae|« Trente ans en octobre. »",
+    {
+      'si': 'accord_hostile',
+      'texte': "À l'autre bout de la table, Shigeru parle chiffres avec un cousin.\n\nRen n'a pas dit trois phrases depuis le début du repas. Nao non plus. Ils sont assis côte à côte parce qu'on les a assis côte à côte.\n\nÀ un moment, il pousse le plat de tsukemono de deux centimètres vers elle.\n\nElle ne le prend pas.\n\nIl le repousse à sa place."
+    },
+    {
+      'sauf': 'accord_hostile',
+      'texte': "À l'autre bout de la table, Shigeru parle chiffres avec un cousin.\n\nRen n'a pas dit trois phrases depuis le début du repas. Nao non plus. Ils sont assis côte à côte parce qu'on les a assis côte à côte.\n\nÀ un moment, il pousse le plat de tsukemono de deux centimètres vers elle.\n\nElle en prend un.\n\nAucun des deux ne commente."
+    },
+    "Sota n'a pas touché à son assiette.\n\nNao|« Mange. »\n\nSota|« J'ai pas faim. »\n\nNao|« Il y a du bœuf. »\n\nSota|« J'ai pas faim. »\n\nElle le laisse. C'est son mariage, elle a le droit de ne pas se battre pendant quatre-vingt-dix minutes.\n\nTrois places plus loin, Ichiro repose ses baguettes et regarde Sota. Il regarde Sota pendant un long moment, puis il regarde Nao qui regarde Sota.\n\nIl ne dit rien à personne.",
+    "*17h*\n\nLe hall du restaurant se vide par grappes de trois. Mei serre Nao trop fort et trop longtemps.\n\nMei|« Tu m'appelles ce soir. »\n\nNao|« Il sera tard. »\n\nMei|« Tu m'appelles ce soir. »\n\nNao|« Mei. »\n\nMei|« Je décrocherai. »\n\nElle part en marche arrière, en pointant son téléphone.\n\nTetsuo est le dernier. Il reste planté à trois mètres, les mains dans les poches de son costume.\n\nTetsuo|« Bon. »\n\nNao|« Bon. »\n\nTetsuo|« Y a du monde dimanche à l'atelier ? »\n\nNao|« Il y a moi. »\n\nTetsuo|« D'accord. »\n\nIl hoche la tête quatre fois et il s'en va.",
+    "Ren est sorti fumer, sauf qu'il ne fume pas.\n\nIl est simplement debout sur le parking, veste ouverte, à regarder un mur.\n\nShigeru le rejoint. Ils restent côte à côte sans se parler pendant un moment.\n\nShigeru|« Elle est bien. »\n\nRen|« Mm. »\n\nShigeru|« Ton grand-père a eu du nez. »\n\nRen|« Mm. »\n\nShigeru|« Lundi, tu passes me voir. Il faut qu'on parle du poste. »\n\nRen|« Lundi j'ai Higashi. »\n\nShigeru|« Envoie Haru à Higashi. »\n\nRen|« Haru n'est pas structure. »\n\nShigeru|« Ren. »\n\nUn temps.\n\nRen|« Lundi. D'accord. »\n\nSon père lui donne deux tapes sur l'épaule et rentre.\n\nRen reste dehors encore quatre minutes."
+  ]
+_MMN[4]["scenes"] = [
+    "*Résidence Kirishima, appartement 704*\n\nQuatre-vingt-douze mètres carrés. Trois pièces. Un canapé gris clair qui n'a jamais reçu personne, une table basse en verre, six chaises identiques autour d'une table pour huit.\n\nTout est neuf. Rien n'a été choisi.\n\nNao pose son sac au milieu du salon et il a l'air minuscule.",
+    "Ren|« Le chauffage est au tableau, à gauche de l'entrée. »\n\nNao|« D'accord. »\n\nRen|« L'eau chaude met deux minutes. »\n\nNao|« D'accord. »\n\nRen|« La poubelle brûlable, c'est mardi et vendredi. »\n\nNao|« D'accord. »\n\nIl fait le tour de la pièce en donnant des informations exactes dans un ordre logique, et elle a l'impression qu'on lui remet des clés d'hôtel.",
+    "À propos de clés.\n\nIl sort une enveloppe de la poche intérieure de sa veste. Une enveloppe kraft, format standard, sans rien écrit dessus.\n\nRen|« Il y en a deux. Celle avec le point rouge, c'est le hall. »\n\nIl la tend.\n\nElle la prend. Il lâche avant qu'elle ait fini de refermer les doigts, de sorte que leurs mains ne se touchent à aucun moment, ce qui demande un certain niveau de précision.\n\nNao|« Merci. »\n\nRen|« C'est normal. »\n\nElle garde l'enveloppe dans la main un moment après.",
+    "Ils déballent séparément, dans deux pièces différentes, avec les portes ouvertes parce que les fermer aurait voulu dire quelque chose.\n\nElle a trois cartons et une valise. Il a deux cartons, dont un rempli de livres techniques, et une housse à costumes.\n\nÀ un moment, ils arrivent en même temps devant la penderie de l'entrée.\n\nRen|« Allez-y. »\n\nNao|« Non, allez-y. »\n\nRen|« Ça m'est égal. »\n\nNao|« À moi aussi. »\n\nPersonne ne bouge pendant trois secondes.\n\nRen|« On peut couper en deux. »\n\nNao|« C'est une penderie, pas la Corée. »\n\nIl la regarde. Il ne sourit pas. Mais quelque chose dans son visage se déplace d'un millimètre et redevient immédiatement immobile.\n\nRen|« Prenez la gauche. »",
+    "*22h50*\n\nElle appelle Mei depuis le balcon parce que le balcon est le seul endroit qui n'a pas l'air d'appartenir à quelqu'un d'autre.\n\nMei|« Alors ? »\n\nNao|« Il y a six chaises. »\n\nMei|« …Quoi ? »\n\nNao|« Six chaises identiques autour d'une table de huit. Pourquoi six ? »\n\nMei|« Nao. »\n\nNao|« Non mais réfléchis. Six. C'est ni deux ni huit. Quelqu'un a décidé six. »\n\nMei|« Tu es en train de me parler de chaises. »\n\nNao|« Oui. »\n\nMei|« D'accord. Parle-moi de chaises. »\n\nAlors elle parle de chaises pendant onze minutes, et Mei écoute pendant onze minutes, et ni l'une ni l'autre ne mentionne quoi que ce soit d'autre.",
+    "En rentrant, elle trouve la cuisine allumée.\n\nIl est là, en t-shirt et pantalon de jogging, pieds nus, en train de faire du café à vingt-trois heures. C'est la première fois qu'elle le voit sans veste. Ça fait un effet bizarre, comme quand on croise un professeur au supermarché.\n\nIl ne l'entend pas arriver. Il verse, il repose la cafetière, il boit deux gorgées.\n\nPuis il pose la tasse dans l'évier.\n\nElle est encore aux trois quarts pleine.\n\nNao|« Vous l'avez pas finie. »\n\nIl se retourne. Il ne sursaute pas mais il met une demi-seconde de plus que la normale à répondre.\n\nRen|« Non. »\n\nNao|« Pourquoi vous en faites, alors ? »\n\nRen|« Bonne nuit. »",
+    "Le frigo est vide, ce qui est logique, et propre, ce qui est déprimant.\n\nNao|« Il y a rien. »\n\nRen|« Non. »\n\nNao|« On fait comment ? »\n\nRen|« Il y a une supérette au coin. »\n\nNao|« Je veux dire, en général. »\n\nIl referme le carton qu'il était en train de vider.\n\nRen|« Chacun ses courses, ou une liste commune. Les deux marchent. »\n\nNao|« Vous avez déjà réfléchi à ça. »\n\nRen|« Il fallait bien que quelqu'un y réfléchisse. »\n\nNao|« On aurait pu en parler ensemble. »\n\nRen|« On en parle. »\n\nNao|« On en parle après que vous ayez réfléchi tout seul et décidé qu'il y avait deux options. »\n\nIl la regarde. Il n'a pas l'air de comprendre où est le problème, et c'est peut-être ça le plus agaçant.\n\nRen|« …Il y en a une troisième ? »\n\nNao|« Non. »\n\nRen|« Bon. »",
+    "Ils vont à la supérette ensemble parce qu'il est vingt heures et qu'aucun des deux n'a envie de manger un carton.\n\nElle prend un panier. Il prend un panier aussi.\n\nNao|« On peut partager le panier. »\n\nRen|« C'est plus simple pour la caisse. »\n\nNao|« On va payer séparément ? »\n\nRen|« C'est plus clair. »\n\nNao|« On est mariés depuis onze heures. »\n\nIl s'arrête au rayon des œufs.\n\nRen|« Oui. »\n\nIl repose son panier et prend le sien à elle.",
+    "Rayon des boissons. Elle attrape une bouteille de thé d'orge.\n\nRen|« En avril ? »\n\nNao|« Quoi. »\n\nRen|« Rien. »\n\nNao|« Dites-le. »\n\nRen|« C'est une boisson d'été. »\n\nNao|« C'est une boisson. »\n\nRen|« En hiver aussi ? »\n\nNao|« En hiver aussi. »\n\nIl regarde la bouteille une seconde de plus que nécessaire.\n\nPuis il pousse le panier vers la caisse."
+  ]
+_MMN[5]["scenes"] = [
+    "*23h20*\n\nLe couloir fait quatre mètres. Il y a deux portes, une à chaque bout, et une troisième au milieu qui est la salle de bain.\n\nIls se retrouvent là tous les deux, chacun avec sa trousse de toilette à la main, ce qui est ridicule.\n\nRen|« Il faut décider pour les chambres. »\n\nNao|« Il y en a deux. »\n\nRen|« Elles ne sont pas identiques. Celle du fond est plus grande et plus bruyante — elle donne sur l'avenue. L'autre est plus petite et au calme. »\n\nNao|« Vous avez mesuré ? »\n\nRen|« Trois mètres soixante contre deux quatre-vingt-dix. »\n\nNao|« Vous avez mesuré. »\n\nRen|« Oui. »",
+    "*01h40*\n\nLes cloisons sont fines.\n\nPas au point d'entendre les mots. Au point d'entendre qu'il y a quelqu'un — un matelas qui bouge, un pas jusqu'à la fenêtre, la fenêtre qui s'ouvre de dix centimètres, le pas qui revient.\n\nNao fixe le plafond d'une chambre qui n'a pas de fissure.\n\nElle finit par sortir son téléphone et taper *ça y est* à Mei, puis elle efface, puis elle repose le téléphone à l'envers sur la table de nuit.",
+    "*05h20*\n\nElle ne l'entend pas se lever. Elle l'entend rentrer.\n\nIl est six heures quinze, il fait à peine jour, et il y a quelqu'un qui enlève des chaussures dans l'entrée en essayant de ne pas faire de bruit — ce qui fait toujours plus de bruit.\n\nQuand elle sort de sa chambre à sept heures, il est déjà en chemise devant l'évier, cheveux encore humides, en train de plier ses manches.\n\nDeux tours. Exactement deux. Le même pli des deux côtés.\n\nNao|« Bonjour. »\n\nRen|« Bonjour. »\n\nNao|« Vous courez ? »\n\nRen|« Oui. »\n\nNao|« Le matin. »\n\nRen|« Oui. »\n\nNao|« À cinq heures vingt. »\n\nRen|« Cinq heures vingt-cinq aujourd'hui. »\n\nElle ouvre le frigo pour ne pas avoir à répondre à ça.",
+    "Il y a du café dans la cafetière. Il y a aussi, sur l'étagère du haut, deux bouteilles de thé d'orge qu'elle n'a pas achetées.\n\nElle ne dit rien.\n\nIl ne dit rien non plus.\n\nIl boit deux gorgées de son café et laisse la tasse sur le plan de travail, aux trois quarts pleine, et il part chercher sa veste.",
+    "Il pleut. Pas beaucoup, mais assez pour que quinze minutes de vélo soient une mauvaise idée.\n\nRen|« Je vous dépose. »\n\nNao|« Ça va aller. »\n\nRen|« Il pleut. »\n\nNao|« J'ai un imperméable. »\n\nRen|« Vous avez un imperméable dans un carton que vous n'avez pas ouvert. »\n\nElle ouvre la bouche. Elle la referme.\n\nNao|« Comment vous savez ça ? »\n\nRen|« Il est écrit *hiver* dessus. »",
+    "La voiture est propre à un niveau qui n'est pas normal.\n\nNao ouvre la portière arrière, s'installe, met sa ceinture.\n\nIl ne démarre pas.\n\nElle relève la tête. Il la regarde dans le rétroviseur.\n\nRen|« Vous êtes derrière. »\n\nNao|« …Oui. »\n\nUn silence de trois secondes pendant lequel elle comprend, et pendant lequel elle comprend qu'il a compris avant elle.\n\nElle descend et remonte devant sans un mot.\n\nAucun des deux ne fait de commentaire. Il démarre.",
+    "Quatorze minutes de trajet.\n\nLa radio est éteinte. Ni l'un ni l'autre ne la met.\n\nAux feux, elle regarde par la vitre. Aux feux, il regarde droit devant.\n\nÀ un moment, un camion se rabat trop court et il freine, et son bras droit part instinctivement en travers, devant elle, à dix centimètres — le geste que font les gens qui ont eu des passagers pendant longtemps.\n\nIl le retire aussitôt.\n\nRen|« Pardon. »\n\nNao|« C'est rien. »\n\nPersonne ne parle pendant les six minutes suivantes.",
+    "*Le soir, 21h30*\n\nElle a fini à vingt et une heures, elle a mangé un onigiri dans le bus, et elle rentre dans un appartement qu'elle ne reconnaît toujours pas.\n\nElle enlève ses chaussures. Elle pose son sac. Elle avance dans le couloir.\n\nEt la porte de la salle de bain s'ouvre.",
+    "Il sort. Torse nu, une serviette autour du cou, cheveux dégoulinants, en train de s'essuyer la nuque.\n\nIl croyait manifestement être seul.\n\nNao a quatre mètres de couloir et absolument nulle part où regarder.\n\nCe n'est pas seulement les épaules. C'est le fait qu'elles n'ont rien à voir avec le costume — ce sont des épaules de quelqu'un qui a porté des choses lourdes pendant des années, et il y a une deuxième cicatrice, plus longue, sous la clavicule droite, qu'on ne voit jamais.\n\nTrois secondes. Peut-être deux.\n\nRen|« Vous êtes rentrée. »\n\nNao|« Apparemment. »",
+    "Il attrape un t-shirt posé sur la machine et l'enfile sans se presser, ce qui est pire que s'il s'était pressé.\n\nRen|« Il reste de l'eau chaude. »\n\nNao|« Merci. »\n\nRen|« Bonne nuit. »\n\nNao|« Bonne nuit. »\n\nIl rentre dans sa chambre. La porte se ferme.\n\nNao reste debout dans le couloir pendant un temps qu'elle ne compte pas, avec son manteau encore sur le dos.",
+    "Plus tard, dans la petite chambre, elle envoie enfin un message.\n\n**Nao** — *t'avais raison pour la question technique*\n\n**Mei** — *JE LE SAVAIS*\n\n**Mei** — *raconte*\n\n**Mei** — *nao*\n\n**Mei** — *NAO*\n\nElle met le téléphone en silencieux et éteint la lumière.\n\nDe l'autre côté de la cloison, quelqu'un ouvre une fenêtre de dix centimètres."
+  ]
+_MMN[1]["choix"] = {
+    'question': "Le lendemain matin. Le numéro qu'Ichiro a laissé sur un bout de papier.",
+    'decisif': False,
+    'options': [
+      (
+        'froide',
+        '1️⃣',
+        'Accepter, sans un mot de plus'
+      ),
+      (
+        'hostile',
+        '2️⃣',
+        'Accepter, en posant ses conditions'
+      ),
+      (
+        'resignee',
+        '3️⃣',
+        'Accepter, et le dire honnêtement'
+      )
+    ],
+    'suites': {
+      'froide': {
+        'pose': [
+          'accord_froid'
+        ],
+        'texte': "Elle appelle à huit heures moins dix, depuis l'escalier de secours du cabinet.\n\nIchiro|« Oui ? »\n\nNao|« C'est oui. »\n\nIchiro|« Bien. »\n\nNao|« C'est tout ce que j'ai à dire. »\n\nIchiro|« Je m'en doutais. »\n\nElle raccroche la première.\n\nPuis elle reste assise sur la troisième marche pendant onze minutes, et quand elle redescend, Yui ne lui demande rien du tout, ce qui veut dire que Yui a vu son visage."
+      },
+      'hostile': {
+        'pose': [
+          'accord_hostile'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': -4
+          }
+        },
+        'texte': "Nao|« C'est oui. À trois conditions. »\n\nIchiro|« Je vous écoute. »\n\nNao|« Un. Personne ne parle à mon frère de tout ça. Jamais. Ni vous, ni votre fils, ni votre petit-fils. »\n\nIchiro|« Accordé. »\n\nNao|« Deux. Je garde mon travail. Je ne deviens pas la femme de quelqu'un qui reçoit. »\n\nIchiro|« Accordé. Ma belle-fille va être déçue. »\n\nNao|« Trois. »\n\nElle serre le téléphone.\n\nNao|« Le jour où ça s'arrête, ça s'arrête. Personne ne me demande de faire semblant plus longtemps que prévu. »\n\nUn temps.\n\nIchiro|« Celle-là, je ne peux pas vous l'accorder. »\n\nNao|« Pourquoi ? »\n\nIchiro|« Parce qu'elle ne dépend pas de moi. Elle dépendra de vous deux. »\n\nElle raccroche sans dire au revoir."
+      },
+      'resignee': {
+        'pose': [
+          'accord_resigne'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': 2
+          }
+        },
+        'texte': "Nao|« C'est oui. »\n\nIchiro|« Bien. »\n\nNao|« Je veux que vous sachiez quelque chose. »\n\nIchiro|« Allez-y. »\n\nNao|« Je ne fais pas ça par courage. Tout le monde va me dire que c'est courageux. Ce n'est pas courageux. Je suis fatiguée et je n'ai pas trouvé d'autre solution. »\n\nLe silence dure assez longtemps pour qu'elle vérifie l'écran.\n\nIchiro|« Merci de me le dire. »\n\nNao|« Vous n'avez pas l'air surpris. »\n\nIchiro|« Non. »\n\nNao|« Vous n'avez jamais l'air surpris. »\n\nIchiro|« J'ai quatre-vingt-quatre ans, mademoiselle Sakurai. »\n\nElle sourit malgré elle, ce qui l'agace immédiatement."
+      }
+    }
+  }
+_MMN[2]["choix"] = {
+    'question': 'Il attend. Il ne détournera pas les yeux cette fois.',
+    'decisif': False,
+    'options': [
+      (
+        'pere_sait',
+        '1️⃣',
+        "Lui dire la vérité : c'est pour Sota"
+      ),
+      (
+        'pere_ignore',
+        '2️⃣',
+        "Lui dire que c'est pour l'atelier"
+      )
+    ],
+    'suites': {
+      'pere_sait': {
+        'pose': [
+          'pere_sait'
+        ],
+        'texte': "Nao|« Pour Sota. »\n\nIl ne bouge pas.\n\nNao|« Pas pour l'atelier. Pas pour toi. Si c'était que l'atelier je te dirais de vendre et de prendre un poste chez Fujita. »\n\nTetsuo|« Fujita m'embaucherait pas. »\n\nNao|« Fujita t'embaucherait demain matin et tu le sais. »\n\nIl essuie une clé qui est déjà propre.\n\nTetsuo|« Il aurait pu faire le public. »\n\nNao|« Non. »\n\nTetsuo|« Il aurait pu— »\n\nNao|« Papa. Non. »\n\nLong silence.\n\nTetsuo|« D'accord. »\n\nIl range la clé dans le tiroir du milieu, qui n'est pas le bon tiroir."
+      },
+      'pere_ignore': {
+        'pose': [
+          'pere_ignore'
+        ],
+        'texte': "Nao|« Pour l'atelier. »\n\nElle le dit sans hésiter, ce qui est exactement le problème.\n\nTetsuo|« Ah. »\n\nNao|« Quarante ans, papa. On va pas le laisser partir pour une histoire de ratio de garantie. »\n\nTetsuo|« Non. »\n\nNao|« Voilà. »\n\nTetsuo|« Voilà. »\n\nIl hoche la tête. Il a l'air soulagé, et c'est insupportable, et c'était exactement le but.\n\nTetsuo|« Bon. Faut que je remette de l'huile sur l'axe. »\n\nIl retourne sous la presse. Elle reste debout à côté de l'établi encore un moment, avec une tasse de thé d'orge froid dans les mains."
+      }
+    }
+  }
+_MMN[5]["choix"] = {
+    'question': 'Quatre mètres de couloir. Deux portes. Il faut bien en franchir une.',
+    'decisif': False,
+    'options': [
+      (
+        'negociees',
+        '1️⃣',
+        "Discuter et se mettre d'accord"
+      ),
+      (
+        'imposees',
+        '2️⃣',
+        'Prendre la petite sans discuter'
+      ),
+      (
+        'tirage',
+        '3️⃣',
+        '« Pierre-feuille-ciseaux. »'
+      )
+    ],
+    'suites': {
+      'negociees': {
+        'pose': [
+          'chambres_negociees'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': 3
+          }
+        },
+        'texte': "Nao|« Vous vous levez à quelle heure ? »\n\nRen|« Cinq heures vingt. »\n\nNao|« Tous les jours ? »\n\nRen|« Oui. »\n\nNao|« Même le dimanche. »\n\nRen|« Même le dimanche. »\n\nNao|« Bon. Alors vous prenez celle du fond. »\n\nRen|« Elle est plus grande. »\n\nNao|« Elle est sur l'avenue. Vous êtes debout avant les camions, moi non. »\n\nIl réfléchit trois secondes.\n\nRen|« C'est logique. »\n\nNao|« Vous avez l'air surpris. »\n\nRen|« Non. »\n\nNao|« Vous avez l'air surpris. »\n\nRen|« Bonne nuit. »"
+      },
+      'imposees': {
+        'pose': [
+          'chambres_imposees'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': -2
+          }
+        },
+        'texte': "Elle ne répond pas. Elle ouvre la porte de la petite chambre, celle au calme, et elle entre.\n\nNao|« Je prends celle-là. »\n\nRen|« C'est la plus petite. »\n\nNao|« Je sais. »\n\nRen|« Vous pouvez prendre— »\n\nNao|« Bonne nuit. »\n\nElle ferme.\n\nDe l'autre côté, il reste dans le couloir pendant quelques secondes. Elle l'entend. Puis les pas s'éloignent et l'autre porte se ferme, doucement, beaucoup plus doucement que la sienne."
+      },
+      'tirage': {
+        'pose': [
+          'chambres_tirage'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': 1
+          }
+        },
+        'texte': "Nao|« Pierre-feuille-ciseaux. »\n\nRen|« …Pardon ? »\n\nNao|« On a trente-quatre ans à nous deux et une trousse de toilette chacun dans un couloir. Pierre-feuille-ciseaux. »\n\nIl la regarde comme s'il envisageait sérieusement de refuser.\n\nPuis il pose sa trousse par terre et lève le poing.\n\nElle perd. Évidemment.\n\nNao|« Deux sur trois. »\n\nRen|« Non. »\n\nNao|« Comment ça non. »\n\nRen|« On a dit une. »\n\nNao|« On a rien dit du tout. »\n\nRen|« Bonne nuit. »\n\nIl prend la petite chambre. Celle au calme. Ce qui, réflexion faite, était sûrement ce qu'il voulait depuis le début — sauf qu'elle ne le saura jamais."
+      }
+    }
+  }
+del _MMN
+
+
+# ── ARC II : épisodes 7 à 13 ──
+_M2 = CHRONIQUE_SAISONS["maries_malgre_nous"]["episodes"]
+_M2[6]["scenes"] = [
+    "*Fin avril, jour six*\n\nLa feuille est apparue sur le frigo un mercredi matin, tenue par un aimant publicitaire d'une pharmacie que ni l'un ni l'autre n'a jamais fréquentée.\n\nEn haut, écrit au feutre noir, d'une écriture d'ingénieur — majuscules, espacement régulier :\n\n**ORGANISATION**\n\nDessous, une liste. Sept lignes. Numérotées.",
+    "Nao|« Vous avez fait un règlement intérieur. »\n\nRen|« C'est une liste. »\n\nNao|« Il y a des numéros. »\n\nRen|« Pour s'y retrouver. »\n\nNao|« Point quatre : *vaisselle faite avant 22h*. »\n\nRen|« Ça évite les odeurs. »\n\nNao|« Point cinq : *bruit modéré après 22h30*. »\n\nRen|« Les cloisons sont fines. »\n\nNao|« Point six : *prévenir en cas de retour après minuit*. »\n\nElle se retourne, la feuille à la main.\n\nNao|« Prévenir qui ? »\n\nRen|« …L'autre. »\n\nNao|« Pourquoi ? »\n\nIl ouvre le placard, sort une tasse, la referme.\n\nRen|« Pour ne pas s'inquiéter. »\n\nUn silence bizarre.",
+    "Nao|« Vous vous inquiéteriez ? »\n\nRen|« C'est une hypothèse générale. »\n\nNao|« C'est votre liste. »\n\nRen|« C'est une liste standard. »\n\nNao|« Standard de quoi ? Il existe un standard ? Vous avez cherché *règles colocation* sur internet ? »\n\nIl verse son café. Il ne répond pas, ce qui est une réponse.\n\nNao|« Oh mon dieu. »\n\nRen|« Il y avait un forum. »\n\nNao|« Il y avait un *forum*. »\n\nRen|« Le point sept vient de moi. »\n\nElle relit le point sept. *7 — Si quelque chose ne va pas, le dire.*\n\nElle ne trouve rien à répondre à ça.",
+    "Elle ajoute une huitième ligne le soir même, au stylo bille, en dessous, avec son écriture qui monte vers la droite :\n\n*8 — Le point 7 vaut aussi pour toi.*\n\nLe lendemain, la feuille est toujours là. Le huit n'a pas été effacé.\n\nEn dessous, au feutre noir, il a écrit :\n\n*9 — Accepté.*",
+    "*Kirishima, siège, 9h40*\n\nLe bureau de Shigeru a une baie vitrée sur trois côtés et une maquette de la tour Sakae sous cloche de plexiglas. Ren connaît cette maquette depuis qu'il a sept ans. Il a longtemps cru qu'on pouvait entrer dedans.\n\nShigeru|« Assieds-toi. »\n\nRen s'assoit.\n\nShigeru|« Direction technique. À partir de septembre. Tu prends la coordination des trois pôles. »\n\nRen|« Qui fait Higashi ? »\n\nShigeru|« Quelqu'un. »\n\nRen|« Higashi a un problème de reprise en sous-œuvre que personne d'autre n'a vu. »\n\nShigeru|« Alors écris-le dans une note et donne-la à quelqu'un. »",
+    "Ren regarde la maquette.\n\nShigeru|« Tu es ingénieur, Ren. Tu resteras ingénieur. Simplement tu arrêteras d'aller mettre des bottes dans la boue à trente ans passés. »\n\nRen|« J'en ai vingt-six. »\n\nShigeru|« Justement. »\n\nUn temps.\n\nShigeru|« C'est le poste que ton grand-père occupait à ton âge. »\n\nRen|« Je sais. »\n\nShigeru|« Alors quoi ? »\n\nIl y a une seconde où Ren pourrait dire quelque chose.\n\nRen|« Rien. »\n\nShigeru|« Bon. »",
+    "Haru l'attend dans le couloir avec deux cafés dont un est pour lui-même.\n\nHaru|« Alors ? »\n\nRen|« Septembre. »\n\nHaru|« Septembre ! Direction technique ! À vingt-six ans ! »\n\nRen|« Mm. »\n\nHaru|« Tu as dit *mm*. Tu viens d'avoir une promotion que soixante personnes ici tueraient pour avoir et tu as dit *mm*. »\n\nRen|« C'est une bonne nouvelle. »\n\nHaru|« Dis-le encore avec ton visage cette fois. »\n\nRen boit son café. Il en laisse la moitié sur le rebord de la fenêtre du couloir, où quelqu'un du ménage la trouvera à dix-huit heures.",
+    "*Appartement, 20h15*\n\nElle chante.\n\nIl l'entend depuis l'entrée, avant même d'avoir enlevé ses chaussures. C'est une chanson qu'il connaît, une vieille chanson de variété que sa mère écoutait en voiture, et elle la massacre avec une confiance absolue.\n\nIl reste dans l'entrée.\n\nElle est dans la cuisine, dos à la porte, en train de couper quelque chose, avec le téléphone posé contre le grille-pain qui diffuse la musique, et elle attaque le refrain une tierce trop bas.\n\nIl enlève ses chaussures très lentement.",
+    "Le parquet craque.\n\nElle se retourne. Elle arrête net.\n\nNao|« Vous êtes là. »\n\nRen|« Je viens d'arriver. »\n\nNao|« Depuis combien de temps. »\n\nRen|« Je viens d'arriver. »\n\nNao|« Vous mentez. »\n\nRen|« Non. »\n\nNao|« Vous avez un pied encore dans une chaussure. »\n\nIl baisse les yeux. Il a effectivement un pied encore dans une chaussure.\n\nRen|« …Depuis le deuxième couplet. »\n\nElle lui jette un torchon. Il l'attrape sans réfléchir, ce qui l'agace encore plus.",
+    "Ils mangent à la table de huit avec ses six chaises, chacun à un angle.\n\nNao|« Il y a une chanson que vous chantez, vous ? »\n\nRen|« Non. »\n\nNao|« Tout le monde a une chanson. »\n\nRen|« Pas moi. »\n\nNao|« Même sous la douche ? »\n\nRen|« Surtout pas sous la douche. »\n\nNao|« Pourquoi *surtout pas* ? »\n\nIl repose ses baguettes une seconde.\n\nRen|« Parce que mon frère chantait sous la douche. »\n\nC'est la première fois qu'il mentionne un frère.\n\nElle ouvre la bouche pour poser la question.\n\nRen|« Le riz est trop cuit. »\n\nNao|« Le riz est parfait. »\n\nRen|« Le riz est trop cuit. »\n\nEt voilà, c'est fermé.",
+    "Plus tard, en rangeant, il trouve un élastique à cheveux sur le plan de travail. Puis un deuxième derrière la bouilloire.\n\nIl les pose tous les deux dans le vide-poche de l'entrée.\n\nLe lendemain il y en a trois autres."
+  ]
+_M2[7]["scenes"] = [
+    "*Début mai, un samedi*\n\nIl est parti à sept heures pour une visite de chantier qui, en principe, ne le concerne plus.\n\nNao a la matinée. Elle a prévu de faire une lessive, d'appeler Mei, et de ne penser à rien.\n\nElle fait la lessive.\n\nPuis, en cherchant un rouleau de scotch, elle ouvre le tiroir du bas du meuble du salon.",
+    "Il n'y a pas de scotch.\n\nIl y a un carnet à couverture noire, format A5, épais, avec un élastique autour. Le coin inférieur droit est usé jusqu'au carton.\n\nElle le sort. Elle le repose. Elle referme le tiroir.\n\nElle le rouvre.\n\nCe n'est pas un journal. Elle en est presque sûre — un journal, ça ne s'use pas comme ça, ça s'use au dos. Celui-là s'use au coin, comme les choses qu'on ouvre avec le pouce, cent fois, debout, en vitesse.",
+    "*Cabinet, la veille*\n\nYui|« Tu vis avec quelqu'un depuis trois semaines et tu sais rien de lui ? »\n\nNao|« Je sais des choses. »\n\nYui|« Genre. »\n\nNao|« Il se lève à cinq heures vingt. Il ne finit jamais son café. Il plie ses manches exactement deux fois. »\n\nYui|« C'est pas des choses ça, c'est de l'observation de terrain. »\n\nNao|« C'est quoi la différence. »\n\nYui|« Tu sais ce qu'il aime ? »\n\nNao|« …Non. »\n\nYui|« Tu sais ce qu'il voulait faire quand il était petit ? »\n\nNao|« Non. »\n\nYui|« Tu sais s'il est heureux ? »\n\nNao|« Yui. »\n\nYui|« Je dis ça je dis rien. »\n\nElle avait dit ça, et elle était partie ranger des serviettes, et Nao était restée debout au milieu de la salle.",
+    "*Retour au samedi*\n\nLe carnet pèse à peu près trois cents grammes.\n\nL'élastique est tendu. Il suffirait de le faire glisser.\n\nNao reste assise par terre devant le tiroir ouvert, un carnet noir sur les genoux, pendant beaucoup plus longtemps qu'une décision de ce type ne devrait en prendre.",
+    "*Le même samedi, 14h*\n\nMei appelle pendant qu'elle étend le linge.\n\nMei|« Question. »\n\nNao|« Vas-y. »\n\nMei|« Si tu trouves un truc chez lui. Un truc perso. Tu regardes ? »\n\nNao|« Pourquoi tu me demandes ça maintenant ? »\n\nMei|« Parce que t'as une voix bizarre depuis que t'as décroché. »\n\nNao|« J'ai une voix normale. »\n\nMei|« T'as une voix de quelqu'un qui étend du linge en réfléchissant à autre chose. »\n\nNao|« C'est très précis comme diagnostic. »\n\nMei|« Je suis infirmière. »",
+    "Mei|« Moi je regarderais. »\n\nNao|« Ah bon ? »\n\nMei|« Évidemment que je regarderais, tu me connais. »\n\nNao|« Et après ? »\n\nMei|« Comment ça après ? »\n\nNao|« Après tu sais un truc qu'il t'a pas dit. Tu fais quoi de ça ? Tu le poses où ? »\n\nSilence à l'autre bout.\n\nMei|« …Ouais. »\n\nNao|« Voilà. »\n\nMei|« T'es chiante quand t'as raison. »\n\nNao|« Je sais. »"
+  ]
+_M2[8]["scenes"] = [
+    "*Mi-mai, 19h*\n\nLe bar est au sous-sol, il y a onze places au comptoir et une carte plastifiée qui n'a pas changé depuis 2016. Mei le connaît parce que sa collègue le connaît. Nao le connaît parce que Mei le connaît.\n\nMei|« Deux. Et les trucs frits. »\n\nNao|« Lesquels ? »\n\nMei|« Tous. »",
+    "Mei|« Bon. Trois semaines. Bilan. »\n\nNao|« Il a fait une liste. »\n\nMei|« Une liste. »\n\nNao|« Sur le frigo. Numérotée. »\n\nMei|« Oh non. »\n\nNao|« Il y avait un point sur le bruit après vingt-deux heures trente. »\n\nMei|« Il est *insupportable*. »\n\nNao|« Il y avait aussi un point sept qui disait *si quelque chose ne va pas, le dire*. »\n\nMei repose son verre.\n\nMei|« …Ah. »\n\nNao|« Ouais. »\n\nMei|« Ça c'est pas du forum ça. »\n\nNao|« Non. »",
+    "Mei|« Il te parle ? »\n\nNao|« Il répond. »\n\nMei|« C'est pas pareil. »\n\nNao|« Je sais. »\n\nNao tourne son verre.\n\nNao|« Il a un frère. »\n\nMei|« Tu m'as jamais dit ça. »\n\nNao|« Je l'ai appris mardi. En quatre mots. Après il a parlé du riz. »\n\nMei|« Du *riz*. »\n\nNao|« Du riz. »\n\nMei|« Ce mec est une porte de sécurité incendie. »\n\nNao rit dans son verre et s'étrangle à moitié.",
+    "Vers vingt et une heures, le téléphone de Mei s'allume pour la quatrième fois.\n\nElle le retourne face contre le comptoir.\n\nNao|« Tu peux répondre. »\n\nMei|« Non. »\n\nNao|« Mei. »\n\nMei|« C'est pour la mutuelle. Il faut renvoyer un papier. Il l'a depuis février. »\n\nNao|« Et alors ? »\n\nMei|« Alors si je réponds, je vais lui expliquer où est le papier, il va me dire qu'il l'a pas trouvé, je vais dire je te l'envoie en photo, et demain matin je vais remplir le formulaire moi-même sur son compte parce que ça prendra quatre minutes au lieu de trois jours. »\n\nElle boit.\n\nMei|« Et je fais ça depuis sept ans. »\n\nSilence.\n\nNao|« Tu m'en as jamais parlé comme ça. »\n\nMei|« J'en ai jamais parlé comme ça à personne. »\n\nElle se redresse d'un coup, sourire branché.\n\nMei|« Bon ! Les trucs frits arrivent pas, c'est un scandale. »",
+    "*Appartement, 23h40*\n\nElle rentre avec deux bières de trop et une clé qui refuse d'entrer dans la serrure du premier coup.\n\nLa lumière de la cuisine est allumée.\n\nIl est à table, ordinateur ouvert, chemise déboutonnée au col, manches remontées — pas pliées cette fois, remontées n'importe comment, ce qui ne lui ressemble pas du tout.\n\nRen|« Bonsoir. »\n\nNao|« Vous travaillez ? »\n\nRen|« Une note. »\n\nNao|« Il est minuit moins vingt. »\n\nRen|« Oui. »",
+    "Elle va se servir un verre d'eau. En repassant, elle voit l'écran — un plan, des cotes, une zone entourée en rouge.\n\nEt elle voit ses mains sur le clavier.\n\nElle les avait remarquées au premier dîner, mais de loin, dans une lumière de restaurant. Là, sous le plafonnier de la cuisine, à un mètre, c'est autre chose.\n\nCals à la base des doigts. Une cicatrice blanche en travers du dos de la main droite, ancienne, mal refermée. L'ongle du majeur gauche plus épais que les autres — un écrasement, il y a longtemps.\n\nC'est un réflexe professionnel. Elle regarde des mains toute la journée.\n\nCe n'est pas complètement un réflexe professionnel.",
+    "Nao|« Vous vous êtes fait ça comment ? »\n\nIl ne lève pas les yeux tout de suite.\n\nRen|« Laquelle ? »\n\nNao|« La grande. »\n\nRen|« Une cornière. J'avais vingt et un ans. »\n\nNao|« Recousue par qui ? »\n\nRen|« L'infirmerie du chantier. »\n\nNao|« Ça se voit. »\n\nIl regarde sa propre main comme s'il la découvrait.\n\nRen|« Ça se voit ? »\n\nNao|« Les points sont trop espacés. C'est pour ça que la cicatrice est large. »\n\nIl ne répond rien. Il replie les doigts, puis les rouvre.\n\nNao|« Bonne nuit. »\n\nRen|« Bonne nuit. »\n\nElle est dans le couloir quand il ajoute, sans élever la voix :\n\nRen|« Il y a du thé d'orge en bas du frigo. Vous avez fini l'autre bouteille mardi. »",
+    "*Cabinet, deux jours plus tard*\n\nMonsieur Oda est en retard de six minutes, ce qui ne lui est jamais arrivé.\n\nNao|« Vous êtes en retard. »\n\nOda|« Le bus. »\n\nNao|« Le bus de 14h12 ou celui de 14h27 ? »\n\nOda|« Vous comptez encore. »\n\nNao|« Je compte tout. »\n\nIl s'assoit lourdement. Il met plus longtemps que d'habitude à retirer son gilet, et elle le laisse faire sans l'aider, parce qu'il déteste qu'on l'aide.\n\nOda|« Ma fille veut que je vienne chez elle. À Sendai. »\n\nNao|« C'est loin. »\n\nOda|« C'est loin. »",
+    "Elle commence par l'échauffement. Épaule droite, amplitude, doucement.\n\nOda|« Vous en pensez quoi ? »\n\nNao|« Ce n'est pas à moi d'en penser quelque chose. »\n\nOda|« Je vous le demande quand même. »\n\nElle continue le mouvement pendant deux respirations.\n\nNao|« Il y a des kinés à Sendai. »\n\nOda|« Il y a des kinés partout. »\n\nNao|« Voilà. »\n\nOda|« Ce n'est pas une réponse. »\n\nNao|« Non. »\n\nUn temps.\n\nOda|« Vous savez ce qui me manquerait ? Pas vous. Ne le prenez pas mal. »\n\nNao|« Je ne le prends pas mal. »\n\nOda|« Le bus. La marche depuis l'arrêt. Le fait d'avoir quelque chose à faire trois fois par semaine. »\n\nElle change de prise.\n\nNao|« Alors dites-lui ça. »\n\nOda|« Elle croira que je refuse pour l'embêter. »\n\nNao|« Peut-être. Mais au moins elle saura pourquoi. »"
+  ]
+_M2[9]["scenes"] = [
+    "*Fin mai, 12h40*\n\nLe local est au rez-de-chaussée d'un immeuble de quatre étages, entre un pressing et un magasin de photocopies qui a l'air d'avoir fermé sans le dire à personne.\n\nQuarante et un mètres carrés. Une vitrine. Un point d'eau au fond. Un linoléum vert qu'il faudrait arracher.\n\nYui|« C'est vert. »\n\nNao|« C'est le sol. »\n\nYui|« C'est très vert. »\n\nNao|« On enlève le sol. »",
+    'Yui tourne sur elle-même au milieu de la pièce vide.\n\nYui|« Tu mettrais les tables où ? »\n\nNao|« Deux ici. Une là-bas près de la fenêtre pour les personnes âgées, elles ont besoin de lumière. Le bureau au fond. »\n\nYui|« Tu as déjà tout placé. »\n\nNao|« Non. »\n\nYui|« Tu viens de me le décrire sans regarder. »\n\nNao|« …Un peu. »\n\nYui|« Depuis combien de temps ? »\n\nNao|« Deux ans. »\n\nYui|« DEUX ANS ? »\n\nNao|« Chut. »\n\nYui|« On est toutes seules dans un local vide. »\n\nNao|« Chut quand même. »',
+    "L'agent immobilier arrive avec quinze minutes de retard et une chemise cartonnée.\n\nVoix|« Alors. Caution deux mois, premier loyer d'avance, plus les frais d'agence. »\n\nNao|« Ce qui fait ? »\n\nVoix|« Six cent vingt mille, à la signature. »\n\nNao|« Et pour l'équiper ? »\n\nVoix|« Ah, ça, ce n'est plus mon domaine. »\n\nNao|« Une table de kiné neuve, c'est quatre cent mille. Il en faut trois. »\n\nVoix|« …Ah. »\n\nNao|« Plus le sol. Plus l'électricité, parce que là il y a deux prises et elles sont du même côté. »\n\nL'agent regarde les deux prises comme s'il les découvrait.",
+    "Dehors, Yui mange une glace à onze heures d'intervalle avec le déjeuner.\n\nYui|« Trois millions. »\n\nNao|« Environ. »\n\nYui|« Tu les as ? »\n\nNao|« Non. »\n\nYui|« Tu les auras quand ? »\n\nNao|« À ce rythme, dans onze ans. »\n\nYui|« Onze ans c'est— »\n\nNao|« Long, oui. »\n\nElles marchent.\n\nYui|« Tu en as parlé à quelqu'un ? »\n\nNao|« Non. »\n\nYui|« À ton mari ? »\n\nNao|« Surtout pas à mon mari. »\n\nYui|« Pourquoi *surtout pas* ? »\n\nNao ouvre la bouche. Elle la referme. Elle n'a pas de réponse rapide, ce qui ne lui arrive jamais.",
+    "*Appartement, 21h*\n\nIl est rentré tôt pour une fois. Il y a une casserole sur le feu et ça sent correct.\n\nNao|« Vous cuisinez. »\n\nRen|« Je fais bouillir de l'eau. »\n\nNao|« Il y a des choses dedans. »\n\nRen|« Il y a des choses dedans. »\n\nElle pose son sac. Elle regarde par-dessus son épaule.\n\nNao|« C'est quoi ? »\n\nRen|« Du nikujaga. »\n\nNao|« Ça ressemble pas à du nikujaga. »\n\nRen|« C'est du nikujaga. »\n\nNao|« Il y a des carottes en rondelles de trois centimètres. »\n\nRen|« Elles cuiront. »\n\nNao|« Elles cuiront *jeudi*. »",
+    "Elle prend un couteau. Elle recoupe les carottes dans la casserole, ce qui est à peu près la pire méthode possible, et il la regarde faire avec une expression qu'elle n'arrive pas à lire.\n\nRen|« Vous les coupez dans l'eau. »\n\nNao|« Oui. »\n\nRen|« Dans l'eau bouillante. »\n\nNao|« Oui. »\n\nRen|« Il y a une planche à découper à trente centimètres. »\n\nNao|« Il y a une planche à découper à trente centimètres. »\n\nElle continue.\n\nUn morceau de carotte gicle et atterrit sur le carrelage.\n\nIls le regardent tous les deux.",
+    "Et Ren rit.\n\nPas un souffle, pas un coin de bouche. Un vrai rire, court, deux secondes, la tête légèrement en arrière.\n\nNao se retourne si vite qu'elle manque de lâcher le couteau.\n\nÇa s'arrête immédiatement. Il reprend son visage habituel comme on remet une veste.\n\nNao|« Vous venez de rire. »\n\nRen|« Non. »\n\nNao|« Vous avez ri. »\n\nRen|« La carotte est par terre. »\n\nNao|« Ne changez pas de sujet. »\n\nRen|« Je constate. »\n\nElle le regarde encore trois secondes. Il soutient le regard exactement une seconde de trop avant d'aller chercher l'éponge.\n\nLe nikujaga est mangeable. Les carottes sont inégales. Ils finissent la casserole.",
+    "*Chez les Sakurai, dimanche suivant*\n\nElle passe déposer des courses. Personne ne lui a rien demandé, elle passe déposer des courses.\n\nTetsuo est à l'atelier. Sota est dans le salon, avec des feuilles étalées partout sur la table basse, qu'il retourne toutes en même temps quand elle entre.\n\nNao|« C'était quoi ? »\n\nSota|« Rien. »\n\nNao|« Il y avait des lignes droites. »\n\nSota|« C'est des maths. »\n\nNao|« Les maths c'est pas à la règle. »\n\nSota|« Les miennes si. »",
+    "Elle range les courses. Il ne bouge pas des feuilles retournées.\n\nNao|« Tu as eu ton relevé ? »\n\nSota|« Ouais. »\n\nNao|« Et ? »\n\nSota|« Ça va. »\n\nNao|« *Ça va* c'est combien ? »\n\nSota|« Ça va c'est ça va. »\n\nElle referme le placard un peu fort. Elle s'en veut immédiatement.\n\nNao|« Pardon. »\n\nSota|« Ouais. »\n\nElle s'assoit sur l'accoudoir du canapé.\n\nNao|« Tu veux que je regarde ? »\n\nSota|« Non. »\n\nNao|« D'accord. »\n\nElle attend. Il ne dit rien. Elle part au bout de quatre minutes, et en sortant elle voit par la fenêtre qu'il retourne les feuilles dans le bon sens dès que la porte est fermée."
+  ]
+_M2[10]["scenes"] = [
+    "*Début juin, un mardi, 20h50*\n\nIl pleut depuis quatorze heures. Le genre de pluie de juin qui n'est pas encore la saison des pluies mais qui s'entraîne.\n\nLe téléphone de Nao sonne pendant qu'elle range la vaisselle. C'est un numéro fixe qu'elle connaît par cœur et qui n'appelle jamais.\n\nTetsuo|« Sota est pas rentré. »\n\nNao|« Il est vingt heures cinquante. »\n\nTetsuo|« Il rentre à dix-huit heures. »\n\nNao|« Tu l'as appelé ? »\n\nTetsuo|« Six fois. »",
+    "Elle enfile ses chaussures dans le couloir. Ren sort de sa chambre.\n\nRen|« Il se passe quelque chose. »\n\nNao|« Mon frère. »\n\nRen|« Je conduis. »\n\nNao|« Ce n'est pas la peine. »\n\nRen|« Il pleut, il est neuf heures moins dix, et le bus de la ligne 4 met quarante minutes à cette heure-ci. »\n\nElle s'arrête, une chaussure à moitié mise.\n\nNao|« Comment vous savez pour la ligne 4 ? »\n\nRen|« Vous la prenez le dimanche. »\n\nIl a déjà les clés.",
+    "Il la dépose devant la maison et ne coupe pas le moteur.\n\nNao|« Vous pouvez rentrer. »\n\nRen|« J'attends. »\n\nNao|« Ça peut durer. »\n\nRen|« J'attends. »\n\nElle claque la portière plus fort qu'elle ne voulait.",
+    "Il est là. Évidemment qu'il est là.\n\nIl est assis sous l'auvent de l'atelier, dans le noir, trempé jusqu'aux genoux, le sac à dos entre les pieds. Son père est à l'intérieur et ne le sait pas, parce que la porte de l'atelier donne de l'autre côté.\n\nNao|« Sota. »\n\nSota|« Ouais. »\n\nNao|« Tu es là depuis quand. »\n\nSota|« Je sais pas. »\n\nNao|« Sota. »\n\nSota|« Dix-huit heures. »\n\nTrois heures. Sous un auvent, à quinze mètres de son père.",
+    "Elle s'assoit à côté de lui sur le béton mouillé, ce qui va ruiner son pantalon, ce qui est le dernier de ses problèmes.\n\nNao|« Tu veux que j'appelle papa ? »\n\nSota|« Non. »\n\nNao|« Il est mort d'inquiétude. »\n\nSota|« Il est *inquiet*. C'est pas pareil. Il aurait fait le tour du bâtiment s'il était mort d'inquiétude. »\n\nElle ne peut rien répondre à ça non plus.",
+    "Il sort une feuille pliée en quatre de sa poche. Elle est humide, l'encre a bavé sur un angle.\n\nSota|« Les résultats du concours blanc. »\n\nNao la déplie. Elle lit. Elle relit.\n\nNao|« C'est bien. »\n\nSota|« C'est pas assez. »\n\nNao|« C'est au-dessus de la moyenne d'admission de l'an dernier. »\n\nSota|« De l'an dernier. »\n\nNao|« Sota, c'est *bien*. »\n\nSota|« JE SAIS QUE C'EST BIEN. »\n\nIl crie. C'est la première fois qu'il crie sur elle depuis qu'il a douze ans.\n\nLa pluie continue de tomber sur l'auvent en tôle.",
+    "Sota|« C'est bien et ça change rien. »\n\nNao|« Comment ça, ça change rien. »\n\nSota|« Ça change rien parce que même si je rentre, même si je suis premier, même si je suis PREMIER, ma sœur elle sera quand même mariée à un type qu'elle connaît pas pour payer l'inscription. »\n\nIl s'essuie le visage avec la manche, ce qui ne sert à rien, tout est mouillé.\n\nSota|« Donc j'ai un très bon résultat pour une école que je peux pas vouloir. »\n\nNao|« Sota— »\n\nSota|« Et le pire c'est que je la veux quand même. »"
+  ]
+_M2[11]["scenes"] = [
+    "*Mi-juin, résidence Kirishima, 18h30*\n\nLa maison a un jardin sec, une allée de dalles, et une entrée où l'on doit attendre qu'on vienne vous chercher.\n\nNao a mis sa deuxième tenue habillée. Celle qu'elle déteste depuis 2021.\n\nRen|« Trois choses. »\n\nNao|« Vous allez me briefer. »\n\nRen|« Oui. »\n\nNao|« Allez-y. »\n\nRen|« Un : ma mère va vous poser des questions sur les enfants. Répondez n'importe quoi, elle n'écoute pas la réponse. »\n\nNao|« Deux ? »\n\nRen|« Deux : mon père va vous demander votre avis sur quelque chose. Ne le donnez pas. »\n\nNao|« Et trois ? »\n\nRen|« Trois : si quelqu'un mentionne mon frère, ce n'est pas moi qu'il faut regarder, c'est ma mère. »\n\nLa porte s'ouvre avant qu'elle ait pu demander pourquoi.",
+    "Il y a onze personnes. Nao en connaît trois.\n\nSae la prend par le bras dès l'entrée et ne la lâche pas pendant vingt minutes. Elle lui présente une tante, une cousine, une voisine, un directeur de quelque chose et sa femme.\n\nSae|« Et alors, les enfants ? Vous y pensez ? »\n\nNao|« On a un frigo à remplir d'abord. »\n\nSae|« Oh, ils disent tous ça ! Ma sœur, c'est pareil. Vous avez vu le jardin ? »\n\nRen avait raison sur le point un.",
+    "Il avait raison sur le point deux aussi.\n\nShigeru|« Nao. Vous êtes du métier de la santé. »\n\nNao|« Kinésithérapeute. »\n\nShigeru|« Que pensez-vous de la réforme du financement des cliniques privées ? »\n\nDouze personnes autour d'une table basse. Un silence poli qui se fabrique en une seconde et demie.\n\nNao|« Je pense qu'il faudrait que je la lise avant d'en penser quelque chose. »\n\nShigeru|« Ah. »\n\nNao|« Ce n'est pas très intéressant comme réponse. »\n\nShigeru|« Non. »\n\nNao|« Je sais. »\n\nIl la regarde deux secondes de plus que nécessaire, puis il rit — un vrai rire d'homme qui vient de gagner quelque chose — et il change de sujet.\n\nDe l'autre côté de la pièce, Ren n'a pas bougé d'un centimètre.",
+    "Il y a une femme qu'elle n'avait pas remarquée.\n\nTrente ans à peu près, tailleur clair, un verre qu'elle ne boit pas, adossée au montant de la porte de la véranda. Elle parle avec un homme du groupe et elle a la posture de quelqu'un qui a déjà passé des centaines de soirées dans cette maison.\n\nÀ un moment, elle croise le regard de Nao et incline la tête. Poliment. Sans sourire particulier, sans froideur non plus.\n\nNao|« C'est qui ? »\n\nRen|« Aya. Elle est au développement. »\n\nNao|« Elle vient souvent ? »\n\nRen|« Depuis six ans. »\n\nIl le dit exactement comme il dirait *trois mètres soixante*.",
+    "Le dîner commence à vingt heures. Nao est placée à côté de Ren.\n\nVers vingt et une heures, la tante de Kōbe raconte pour la deuxième fois l'histoire d'un cousin qui a monté une entreprise de logistique.\n\nLa tante|« …et il a tout fait tout seul. Sans rien demander à personne. »\n\nSae|« Ah, ça. »\n\nLa tante|« Comme votre aîné, d'ailleurs, non ? Il est où déjà ? »\n\nNao ne regarde pas Ren.\n\nElle regarde Sae.\n\nLe sourire de Sae ne bouge pas. Absolument pas. Mais sa main gauche, qui était posée à plat sur la nappe, se referme lentement sur le tissu et le tord d'environ trois centimètres.\n\nSae|« Singapour. Il va très bien. Qui reprend du poisson ? »",
+    "Vingt-deux heures dix. On se lève. Il y a le moment des au revoir, qui dure toujours vingt minutes de plus que nécessaire.\n\nUne voisine s'approche.\n\nLa voisine|« Alors c'est vous ! On m'a tellement parlé de ce mariage. »\n\nNao|« Ah. »\n\nLa voisine|« Et vous vous êtes connus comment ? »\n\nUne seconde.\n\nEt la main de Ren se pose au creux de son dos.\n\nPas sur la taille. Plus haut, entre les omoplates, à plat, très légère.\n\nRen|« Par nos familles. Elles se connaissent depuis longtemps. »\n\nLa voisine|« Comme c'est romantique. »\n\nRen|« Oui. »\n\nLa main reste là pendant tout l'échange. Elle part au moment exact où la voisine se détourne.\n\nNao ne dit rien. Elle est en train de compter, mentalement, combien de secondes ça a duré, et elle se déteste de compter.",
+    "Dans la voiture, sur le retour.\n\nNao|« Point trois. »\n\nRen|« Mm. »\n\nNao|« Comment vous savez qu'il faut regarder votre mère ? »\n\nIl met un moment.\n\nRen|« Parce que tout le monde regarde moi. »\n\nNao|« Et alors ? »\n\nRen|« Alors personne ne l'a jamais regardée elle. »\n\nIls font le reste du trajet sans parler. Mais à un feu, elle allume la radio, et il ne l'éteint pas."
+  ]
+_M2[12]["scenes"] = [
+    "*Fin juin, un jeudi, 18h*\n\nLa maison d'Ichiro est de l'autre côté de la rivière, dans un quartier où les haies sont taillées et où personne n'a moins de soixante-dix ans.\n\nRen y va tous les jeudis. Il n'a jamais dit à personne pourquoi le jeudi.\n\nLa femme de ménage part à dix-huit heures. Il arrive à dix-huit heures cinq. C'est pour ça, le jeudi.",
+    'Ichiro|« Tu as maigri. »\n\nRen|« Non. »\n\nIchiro|« Tu as maigri. »\n\nRen|« Bonjour, grand-père. »\n\nIl pose le sac sur la table basse. Des dorayaki de la boutique près de la gare, les mêmes depuis six ans, que le médecin a interdits depuis deux ans.\n\nIchiro|« Tu sais que je ne dois pas. »\n\nRen|« Je sais. »\n\nIchiro|« Donne. »',
+    "Ils boivent le thé. Ichiro parle d'un merle qui vient sur la terrasse et qui est, selon lui, le même depuis quatre ans, ce qui est statistiquement improbable.\n\nIchiro|« Il a une plume blanche à l'aile gauche. »\n\nRen|« C'est peut-être son fils. »\n\nIchiro|« Ne sois pas déprimant. »\n\nRen|« Je suis précis. »\n\nIchiro|« C'est la même chose chez toi. »\n\nRen sourit. Une seule fois, très vite. Personne d'autre au monde ne le fait sourire comme ça, et personne d'autre au monde n'est là pour le voir.",
+    "Ichiro|« Ton père t'a parlé de septembre. »\n\nRen|« Oui. »\n\nIchiro|« Et ? »\n\nRen|« Et c'est un bon poste. »\n\nIchiro|« Ce n'est pas ce que je t'ai demandé. »\n\nRen|« Je sais. »\n\nLe vieil homme repose sa tasse. Sa respiration prend de la place entre les phrases, plus qu'en mars.\n\nIchiro|« Un jour, tu vas devoir dire ce que tu veux à quelqu'un. »\n\nRen|« Pourquoi ? »\n\nIchiro|« Parce que je ne serai pas toujours là pour deviner. »\n\nRen regarde le jardin. Le merle n'est pas là.",
+    "Ichiro|« Comment elle va ? »\n\nRen|« Bien. »\n\nIchiro|« Ren. »\n\nRen|« Elle chante faux. »\n\nIchiro|« Pardon ? »\n\nRen|« Elle chante faux, très fort, quand elle croit qu'il n'y a personne. Elle range en parlant. Elle laisse des élastiques à cheveux partout, il y en a sept dans le vide-poche. Elle coupe des carottes dans l'eau bouillante. »\n\nIchiro attend.\n\nRen|« Elle est allée chercher son frère sous la pluie et elle est restée assise par terre avec lui. »\n\nIchiro|« Et ? »\n\nRen|« Et rien. »\n\nIchiro|« Mm. »\n\nIl reprend un dorayaki qu'il n'a pas le droit de reprendre.",
+    "*Appartement, 23h50*\n\nIl rentre tard parce qu'il est resté plus longtemps que d'habitude.\n\nLa télévision est allumée sur un programme que personne ne regarde. Nao est sur le canapé, en travers, un bras qui pend, un dossier de patient ouvert sur le ventre et le stylo encore dans la main.\n\nElle dort profondément. Elle a la bouche légèrement ouverte, ce qui n'est pas élégant du tout.",
+    "Il éteint la télévision.\n\nIl prend le stylo entre deux doigts et le pose sur la table basse. Il referme le dossier et le pose à côté.\n\nIl y a un plaid sur le dossier du fauteuil. Il le prend et il le jette sur elle — pas *pose*, jette, du geste rapide et vaguement agacé de quelqu'un qui ne veut surtout pas que ça ressemble à quelque chose.\n\nLe plaid tombe de travers. Un pied dépasse.\n\nIl le regarde deux secondes.\n\nIl ne le recouvre pas.\n\nIl va se coucher.",
+    "Le lendemain matin, le plaid est plié sur l'accoudoir, exactement comme il était avant, et le dossier est dans son sac, et personne ne dit rien.\n\nSur le frigo, sous le point neuf, il y a un dixième point, écrit au stylo bille :\n\n*10 — Ne pas éteindre la télé, je dors mieux avec.*\n\nLe soir même, au feutre noir :\n\n*11 — Refusé. Contre-proposition : baisser le son.*"
+  ]
+_M2[7]["choix"] = {
+    'question': "L'élastique est tendu. Il suffirait de le faire glisser.",
+    'decisif': True,
+    'options': [
+      (
+        'carnet_lu',
+        '1️⃣',
+        "L'ouvrir"
+      ),
+      (
+        'carnet_ferme',
+        '2️⃣',
+        'Le remettre où il était'
+      )
+    ],
+    'suites': {
+      'carnet_lu': {
+        'pose': [
+          'carnet_lu'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': 8
+          }
+        },
+        'texte': "Elle l'ouvre.\n\nCe ne sont pas des mots. Ce sont des dessins.\n\nDes bâtiments — mais pas des façades, pas des jolies perspectives. Des coupes. Des descentes de charge. Des détails d'assemblage annotés d'une écriture minuscule et furieuse. Une page entière sur un seul nœud poteau-poutre, dessiné onze fois, avec onze variantes.\n\nElle tourne les pages pendant vingt minutes.\n\nVers le milieu, un croquis prend une double page. Une passerelle piétonne, toute en bois lamellé, au-dessus de quelque chose. Dans la marge, la date — il y a quatre ans — et trois mots soulignés deux fois :\n\n*proposer à Père*\n\nIl n'y a rien après. Pas de suite, pas de version deux, pas de « refusé ». Juste une page blanche, puis, six semaines plus tard, un plan de bureau.\n\nElle referme le carnet. Elle remet l'élastique dans le bon sens, celui qu'elle a mémorisé.\n\nLe soir, il rentre à vingt heures dix et il dit *bonsoir* et elle répond *bonsoir* et elle le regarde enlever sa veste, et elle ne dira rien pendant vingt et un épisodes."
+      },
+      'carnet_ferme': {
+        'pose': [
+          'carnet_ferme'
+        ],
+        'texte': "Elle le repose.\n\nElle referme le tiroir. Elle se relève. Elle va chercher du scotch à la supérette parce que c'est plus simple que de fouiller.\n\nCe n'est pas de la vertu. C'est plutôt qu'elle sait ce que ça fait, quelqu'un qui décide de ce que vous avez le droit de savoir, et qu'elle n'a pas envie d'être ça.\n\nLe soir, il rentre à vingt heures dix. Il pose sa veste. Il ouvre le tiroir du bas du meuble du salon, en sort le carnet, le met dans sa sacoche pour le lendemain.\n\nNao|« C'est quoi ? »\n\nRen|« Du travail. »\n\nNao|« D'accord. »\n\nEt c'est tout."
+      }
+    }
+  }
+_M2[10]["choix"] = {
+    'question': "Il est trempé, il a dix-sept ans, et il vient de dire la chose la plus vraie de l'année.",
+    'decisif': False,
+    'options': [
+      (
+        'encaisse',
+        '1️⃣',
+        'Encaisser, et rester assise à côté de lui'
+      ),
+      (
+        'repond',
+        '2️⃣',
+        'Lui répondre — vraiment'
+      )
+    ],
+    'suites': {
+      'encaisse': {
+        'pose': [
+          'sota_encaisse'
+        ],
+        'texte': "Elle ne dit rien.\n\nElle enlève sa veste et la met sur les épaules de son frère, qui la repousse, puis qui ne la repousse plus.\n\nIls restent assis sous l'auvent pendant vingt minutes, à écouter la pluie sur la tôle et la grande presse qui tourne à quinze mètres de là.\n\nSota|« T'as rien à dire ? »\n\nNao|« Non. »\n\nSota|« D'habitude t'as toujours un truc à dire. »\n\nNao|« Je sais. »\n\nAu bout d'un moment, il se lève tout seul et il fait le tour du bâtiment.\n\nElle entend la porte de l'atelier, et la presse qui s'arrête, et deux voix d'hommes dont aucune ne crie.\n\nLa voiture est toujours là.\n\nElle monte, trempée, et elle reste une seconde sans rien dire, parce qu'elle sait qu'elle va se mettre à pleurer si elle parle tout de suite.\n\nIl ne demande rien.\n\nIl ne dit pas *ça va*. Il ne dit pas *tu veux en parler*. Il enclenche le chauffage à fond, oriente les deux buses du côté passager, et démarre.\n\nAu bout de six minutes :\n\nRen|« Il a quel âge ? »\n\nNao|« Dix-sept. »\n\nRen|« Mm. »\n\nUn temps.\n\nRen|« Ça passe. »\n\nNao|« Vous en savez quoi ? »\n\nRen|« Rien. »\n\nIl le dit sans se défendre, et bizarrement c'est ce qui la calme."
+      },
+      'repond': {
+        'pose': [
+          'sota_repond'
+        ],
+        'texte': "Nao|« Alors écoute-moi bien. »\n\nSota|« Nao— »\n\nNao|« Non. Tu as parlé, maintenant tu écoutes. »\n\nElle se tourne vers lui sur le béton mouillé.\n\nNao|« Je ne me suis pas mariée pour toi. Je me suis mariée parce que la banque allait vendre la maison, et que dans cette maison il y a un atelier dans lequel papa a mis quarante ans, et il se trouve qu'il y a aussi une inscription à payer. Tu es un des cinq trucs sur la liste. Tu n'es pas la liste. »\n\nSota|« C'est faux. »\n\nNao|« C'est vrai à quatre-vingts pour cent, et les vingt pour cent qui restent ne te regardent pas. »\n\nIl la fixe, la mâchoire serrée.\n\nSota|« Tu peux pas dire des trucs comme ça. »\n\nNao|« Je viens de le dire. »\n\nIl se lève. Il attrape son sac. Il part vers la maison, pas vers l'atelier, et il claque la porte d'entrée assez fort pour qu'on l'entende sous l'auvent.\n\nLa voiture est toujours là.\n\nElle monte, trempée, et elle reste une seconde sans rien dire, parce qu'elle sait qu'elle va se mettre à pleurer si elle parle tout de suite.\n\nIl ne demande rien.\n\nIl ne dit pas *ça va*. Il ne dit pas *tu veux en parler*. Il enclenche le chauffage à fond, oriente les deux buses du côté passager, et démarre.\n\nAu bout de six minutes :\n\nRen|« Il a quel âge ? »\n\nNao|« Dix-sept. »\n\nRen|« Mm. »\n\nUn temps.\n\nRen|« Ça passe. »\n\nNao|« Vous en savez quoi ? »\n\nRen|« Rien. »\n\nIl le dit sans se défendre, et bizarrement c'est ce qui la calme."
+      }
+    }
+  }
+del _M2
+
+
+# ── ARC III : épisodes 14 à 21 ──
+_M3 = CHRONIQUE_SAISONS["maries_malgre_nous"]["episodes"]
+_M3[13]["scenes"] = [
+    "*Début juillet, chez les Sakurai, 19h30*\n\nC'est Sae qui a insisté. *Il faut bien que les familles se voient sans cravate.* Elle a apporté des fruits dans une boîte qui coûte plus cher que le repas.\n\nIls sont six autour de la table basse du salon : Tetsuo, Sota, Nao, Ren, Sae, et un ventilateur qui tourne dans le coin parce que la climatisation est morte en 2019.\n\nShigeru n'est pas venu. Personne ne fait de commentaire.",
+    "Le repas se passe mieux que prévu, ce qui est déjà un problème en soi, parce que ça détend tout le monde.\n\nSae|« Vous avez repris l'atelier de votre père, alors ? »\n\nTetsuo|« De mon père, oui. En 87. »\n\nSae|« Et vous imprimez quoi ? »\n\nTetsuo|« Tout. Des faire-part, des étiquettes, des cartes de visite. On a fait les menus du Kanoya pendant vingt-deux ans. »\n\nSae|« Le Kanoya ! Mais c'est là qu'on— »\n\nElle s'arrête juste à temps. C'est là qu'ils ont fait l'omiai.\n\nTetsuo|« Ah bon ? »\n\nSae|« Quelle coïncidence. »\n\nNao regarde son assiette.",
+    "Tetsuo en est à son troisième verre quand il commence à raconter la machine.\n\nTetsuo|« La Heidelberg, elle a été livrée en pièces. Mon père l'a montée avec deux gars du quartier. Trois semaines. »\n\nSota|« Papa, ils s'en fichent. »\n\nSae|« Pas du tout ! »\n\nTetsuo|« Trois semaines, et depuis elle a jamais eu une panne majeure. Une seule fois le margeur. En 2003. »\n\nNao|« Et mardi dernier. »\n\nTetsuo|« Mardi dernier c'était un réglage. »\n\nNao|« Tu étais sous la machine un dimanche. »\n\nTetsuo|« C'était un réglage. »",
+    "Il se ressert. Sae accepte un demi-verre par politesse.\n\nTetsuo|« Le pire, ça a jamais été les machines. »\n\nSae|« Ah ? »\n\nTetsuo|« Le pire c'est les contrats. »\n\nUn très léger changement dans la pièce. Sota lève les yeux de son téléphone.\n\nTetsuo|« On a failli y passer il y a deux ans. Un beau contrat. Signé, presque. Et puis un jeune homme a décidé que non. »\n\nIl rit. C'est censé être une plaisanterie.\n\nTetsuo|« Une signature, et quarante ans qui manquent de partir. »",
+    "Il n'y a plus que le ventilateur.\n\nSae|« Tetsuo-san— »\n\nTetsuo|« Non non, c'est de l'histoire ancienne. »\n\nIl fait un geste vague de la main.\n\nTetsuo|« Enfin. Deux ans. Ancienne. »\n\nNao regarde Ren.\n\nRen regarde la table.",
+    "Il ne dit rien.\n\nIl ne dit pas *c'était plus compliqué que ça*. Il ne dit pas *je peux vous expliquer*. Il ne dit même pas *je suis désolé*, ce qui coûterait trois syllabes et qu'elle lui a réclamé au premier dîner.\n\nIl repose ses baguettes, parfaitement parallèles, à quatre centimètres du bord de la table.\n\nRen|« La Heidelberg, elle est en quelle version ? »\n\nTetsuo|« …Hein ? »\n\nRen|« Le modèle. Cylindre ou platine ? »\n\nTetsuo|« Cylindre. »\n\nRen|« Alors le margeur, c'est probablement la came de synchronisation. Ça se règle, mais il faut la déposer. »\n\nTetsuo, complètement désarçonné, met quatre secondes à répondre.\n\nTetsuo|« …Vous connaissez ? »\n\nRen|« Non. Je connais les cames. »",
+    "Le repas repart. Sae relance sur les fruits. Sota remet ses écouteurs.\n\nNao ne mange plus.\n\nElle a vu la chose exacte : il avait la bouche ouverte pendant une demi-seconde avant de parler de la came. Il allait dire autre chose. Il a changé en cours de route.\n\nEt elle sait maintenant, avec une certitude physique, qu'il y a quelque chose.",
+    "*Sur le trottoir, 22h10*\n\nSae est partie en taxi. Sota est monté. Tetsuo range dans la cuisine en faisant beaucoup de bruit pour ne pas avoir à parler.\n\nNao et Ren attendent devant la voiture.\n\nNao|« Vous avez failli dire quelque chose. »\n\nRen|« Non. »\n\nNao|« À table. Avant les cames. Vous avez ouvert la bouche. »\n\nRen|« Je vous assure que non. »\n\nNao|« Vous êtes un très mauvais menteur pour quelqu'un qui parle si peu. »\n\nIl ouvre la portière côté conducteur.\n\nRen|« Montez, il est tard. »",
+    "Elle ne monte pas.\n\nNao|« Il y a deux ans, vous aviez vingt-quatre ans. Vous n'étiez pas décideur. Vous étiez ingénieur sur des chantiers. »\n\nRen|« C'est exact. »\n\nNao|« Alors pourquoi c'est votre nom sur cette lettre et pas celui de votre père ? »\n\nLa rue est vide. Une mobylette passe deux rues plus loin.\n\nRen|« Parce que c'est moi qui ai annulé. »\n\nNao|« Ça je le sais. »\n\nRen|« Alors vous savez tout. »\n\nNao|« Non. »\n\nElle fait un pas.\n\nNao|« Je sais *ce que* vous avez fait. Je ne sais pas *pourquoi*. Et vous n'avez jamais essayé de me le dire une seule fois en trois mois. »"
+  ]
+_M3[14]["scenes"] = [
+    "*Mi-juillet, 7h40*\n\nSa chaîne de vélo a sauté devant l'immeuble, et il n'y a pas de bus avant sept heures cinquante-deux.\n\nRen|« Montez. »\n\nNao|« C'est pas sur votre route. »\n\nRen|« Si. »\n\nNao|« Le siège est à l'opposé. »\n\nRen|« C'est sur ma route. »\n\nElle monte devant. Elle ne réfléchit plus à ça depuis juin.",
+    "Au troisième feu, elle allume la radio.\n\nUne station qui passe des tubes de 2009. Elle monte le son de deux crans.\n\nRen|« Non. »\n\nNao|« Comment ça non ? »\n\nRen|« Pas ça. »\n\nNao|« C'est un classique. »\n\nRen|« C'est une catastrophe. »\n\nNao|« *Cette chanson* a été numéro un pendant onze semaines. »\n\nRen|« Onze semaines pendant lesquelles ce pays allait mal. »",
+    "Elle se tourne complètement vers lui sur le siège.\n\nNao|« Vous écoutez quoi, vous ? »\n\nRen|« Rien. »\n\nNao|« Personne n'écoute rien. »\n\nRen|« Moi. »\n\nElle attrape son téléphone à lui, posé dans le vide-poche.\n\nRen|« Non. »\n\nNao|« Trop tard. »\n\nRen|« Nao. »\n\nNao|« Il est même pas verrouillé, c'est vous le fautif. »\n\nElle ouvre l'appli musique. Elle regarde. Elle relève les yeux, lentement.",
+    "Nao|« Du jazz. »\n\nRen|« Rendez-moi ça. »\n\nNao|« Du *jazz*. Vous avez quatre-vingt-dix heures de jazz. »\n\nRen|« C'est de la musique de fond. »\n\nNao|« Vous avez une playlist qui s'appelle *soir*. »\n\nRen|« Rendez-moi le téléphone. »\n\nNao|« Vous êtes un homme de vingt-six ans qui écoute du jazz tout seul le soir dans une cuisine. »\n\nRen|« Je ne vois pas le problème. »\n\nNao|« Il n'y a aucun problème. C'est juste extrêmement triste. »\n\nRen|« Ce n'est pas triste. »\n\nNao|« C'est un peu triste. »\n\nRen|« Le feu est vert. »\n\nNao|« Il est rouge. »\n\nRen|« …Il est rouge. »\n\nEt elle rit. Et il ne dit rien mais il ne récupère pas son téléphone non plus, et elle met une des playlists, et ils font les six dernières minutes avec du piano dans la voiture.",
+    "*Siège Kirishima, 12h40*\n\nHaru mange un bentō au-dessus d'un plan étalé, ce qui est interdit et ce qu'il fait depuis huit ans.\n\nHaru|« J'ai fait un truc. »\n\nRen|« Mm. »\n\nHaru|« J'ai déposé les statuts. »\n\nRen lève la tête.\n\nRen|« Tu as quoi ? »\n\nHaru|« Bureau d'études. Deux personnes. Moi et un gars de Nagoya que tu connais pas. »\n\nRen|« Tu as déposé. »\n\nHaru|« J'ai déposé. C'est fait. C'est enregistré. »\n\nRen|« Tu as dit à qui ? »\n\nHaru|« À toi. »",
+    "Ren repose son stylo.\n\nRen|« Ton crédit. »\n\nHaru|« Vingt-deux ans restants. »\n\nRen|« Ta femme. »\n\nHaru|« Elle est plus flippée que moi, mais elle a dit oui il y a six mois. C'est moi qui traînais. »\n\nRen|« Pourquoi tu traînais ? »\n\nHaru le regarde comme si la question était étrange.\n\nHaru|« Parce que c'est terrifiant, Ren. »\n\nUn temps.\n\nHaru|« C'est terrifiant et je le fais quand même. C'est comme ça que ça marche. »\n\nRen ne répond rien. Il regarde le plan sans le voir.",
+    "Haru|« Tu dis rien. »\n\nRen|« Je réfléchis. »\n\nHaru|« À quoi ? »\n\nRen|« À qui va reprendre Higashi. »\n\nHaru|« …Ren. »\n\nRen|« Quoi. »\n\nHaru|« Je viens de te dire que je quitte l'entreprise et tu penses au planning. »\n\nRen|« Quelqu'un doit y penser. »\n\nHaru referme son bentō.\n\nHaru|« Un jour tu vas me dire un truc qui vient de toi et je vais faire une syncope. »",
+    "*Appartement, 22h15*\n\nElle range la vaisselle. Il écrit une note à la table.\n\nNao|« Il y a un truc. »\n\nRen|« Mm ? »\n\nNao|« Vous avez pas mis de musique. Depuis ce matin. »\n\nRen|« Non. »\n\nNao|« Vous en mettez tous les soirs. »\n\nIl continue d'écrire.\n\nRen|« Vous avez dit que c'était triste. »\n\nElle s'arrête, une assiette à la main.\n\nNao|« J'ai dit *un peu* triste. »\n\nRen|« Mm. »\n\nElle repose l'assiette. Elle prend le téléphone posé sur la table — le sien à lui, encore une fois — et elle met la playlist *soir* sur l'enceinte de la cuisine.\n\nElle ne dit rien. Il ne dit rien.\n\nLe piano tourne pendant qu'elle finit la vaisselle."
+  ]
+_M3[15]["scenes"] = [
+    '*Fin juillet, 01h47*\n\nLe téléphone vibre sur la table de nuit. Trois fois avant que Nao ne le trouve.\n\nMei|« Tu dors ? »\n\nNao|« Oui. »\n\nMei|« Je suis en bas. »\n\nNao|« En bas de quoi ? »\n\nMei|« De chez toi. »\n\nNao est déjà debout.',
+    "Mei est assise sur le muret devant l'entrée de la résidence, avec un sac de sport à ses pieds et le maquillage de quelqu'un qui a pleuré et qui a arrêté il y a un moment.\n\nNao|« Mei. »\n\nMei|« Je te préviens tout de suite, je vais pas pleurer. C'est fait. J'ai pleuré dans le taxi. »\n\nNao|« D'accord. »\n\nMei|« Genre vraiment. Le chauffeur m'a donné un mouchoir. C'était horrible. »\n\nNao|« D'accord. »\n\nMei|« Arrête de dire d'accord. »\n\nNao s'assoit sur le muret à côté d'elle.",
+    "Mei|« Il a rien fait. »\n\nNao|« Je sais. »\n\nMei|« Non mais vraiment rien. Il m'a pas trompée, il m'a pas crié dessus, il a jamais rien fait de mal en sept ans. »\n\nNao|« Je sais. »\n\nMei|« Ce serait tellement plus simple s'il avait fait un truc. »\n\nElle regarde ses mains.\n\nMei|« Ce soir il m'a demandé où était le chargeur. »\n\nNao|« Et ? »\n\nMei|« Et j'ai su. Je lui ai dit *dans le tiroir*, et pendant que je disais *dans le tiroir* j'ai su que j'allais partir. Pour un chargeur. »",
+    "Nao|« C'est pas pour le chargeur. »\n\nMei|« Je sais que c'est pas pour le chargeur. »\n\nNao|« C'est pour les sept ans de chargeurs. »\n\nMei|« …Ouais. »\n\nUn scooter passe. Il est deux heures du matin, il fait vingt-huit degrés, il y a des cigales quelque part.\n\nMei|« Tu vas me dire que j'aurais dû lui parler. »\n\nNao|« Non. »\n\nMei|« Tout le monde va me dire ça. »\n\nNao|« Probablement. »\n\nMei|« Toi tu vas dire quoi ? »\n\nNao réfléchit vraiment avant de répondre.\n\nNao|« Je vais dire que tu as passé sept ans à faire tourner la vie de quelqu'un et que personne t'a jamais demandé si tu voulais faire ça. »\n\nMei ne répond pas tout de suite.\n\nMei|« Merde. »\n\nNao|« Ouais. »\n\nMei|« Bon, finalement je vais peut-être pleurer un peu. »",
+    "Elles montent à deux heures et demie.\n\nLa lumière du couloir s'allume avant qu'elles n'atteignent la porte. Ren est debout dans l'entrée, en t-shirt, cheveux dans tous les sens, parfaitement réveillé.\n\nNao|« Vous êtes debout ? »\n\nRen|« Vous êtes sortie à une heure cinquante. »\n\nNao|« Et donc vous avez attendu. »\n\nRen|« Point six. »\n\nNao|« Le point six c'est *prévenir en cas de retour après minuit*. »\n\nRen|« Voilà. »\n\nNao|« Ça veut pas dire *rester debout dans l'entrée*. »\n\nRen|« Bonsoir. »\n\nIl le dit à Mei.\n\nMei|« …Bonsoir. »",
+    "Il regarde le sac de sport. Il regarde le visage de Mei. Il met environ une seconde et demie.\n\nRen|« Il y a des draps propres dans le placard du couloir. Le canapé s'ouvre, il faut tirer d'un coup sec, la barre coince. »\n\nMei|« Ah— je vais pas— »\n\nRen|« Il est deux heures et demie. »\n\nMei|« Oui mais— »\n\nRen|« Bonne nuit. »\n\nIl retourne dans sa chambre. La porte se ferme.\n\nMei reste plantée dans l'entrée, son sac à la main.\n\nMei|« Il est *comme ça* tout le temps ? »\n\nNao|« Oui. »\n\nMei|« Bordel. »",
+    "*Le lendemain matin*\n\nIl est parti courir à cinq heures vingt comme d'habitude.\n\nSur la table de la cuisine, il y a trois tasses sorties au lieu de deux, et à côté du grille-pain, une clé sur un porte-clés en plastique gratuit d'une banque.\n\nUn post-it dessous, écriture en majuscules régulières :\n\n*Double. Pour qu'elle n'ait pas à sonner.*\n\nMei le lit par-dessus l'épaule de Nao.\n\nMei|« Il t'a demandé si t'étais d'accord ? »\n\nNao|« Non. »\n\nMei|« Ça t'énerve ? »\n\nNao regarde la clé un long moment.\n\nNao|« Je sais pas. »"
+  ]
+_M3[16]["scenes"] = [
+    "*Mi-août, festival de Tenjin, 18h30*\n\nLa rue commerçante est fermée à la circulation depuis quatorze heures. Il y a des lanternes en papier tous les quatre mètres, une odeur de sauce yakisoba qui colle aux vêtements, et deux mille personnes qui avancent à la vitesse d'une personne.\n\nYui a un yukata bleu qu'elle réajuste toutes les quatre minutes.\n\nYui|« C'est trop serré. »\n\nMei|« C'est censé être serré. »\n\nYui|« Je peux pas respirer. »\n\nMei|« Tu respires en parlant, donc si. »",
+    "Mei a insisté pour que Yui vienne. Elles se sont rencontrées trois semaines plus tôt, à l'appartement, et ont décidé en onze minutes qu'elles étaient amies.\n\nNao|« Vous vous êtes vues combien de fois ? »\n\nMei|« Quatre. »\n\nYui|« Cinq, il y a eu le café. »\n\nMei|« Le café compte pas, c'était vingt minutes. »\n\nYui|« Le café compte double, on a parlé de choses graves. »\n\nNao|« De quoi ? »\n\nYui et Mei|« De rien. »\n\nElles le disent exactement en même temps, ce qui règle la question.",
+    "Ren les rejoint à dix-neuf heures. Il a quitté le bureau, ce qui veut dire qu'il est en pantalon de costume et chemise, manches pliées deux fois, au milieu de deux mille personnes en yukata.\n\nMei|« Il est venu en costume à un festival. »\n\nNao|« Il vient du travail. »\n\nMei|« Il est *venu en costume à un festival*. »\n\nYui|« Moi je trouve que ça va. »\n\nMei|« Yui. »\n\nYui|« Quoi ! Ça va ! »",
+    "Ils font le tour des stands. Ren paie tout, ce qui provoque une dispute de quatre minutes qu'il gagne en payant pendant qu'elle argumente.\n\nDevant le stand de pêche aux poissons rouges, Yui s'accroupit avec une détermination inquiétante.\n\nYui|« J'en ai eu un l'an dernier. Il a vécu quatre jours. »\n\nMei|« C'est pas une bonne pub. »\n\nYui|« C'était pas ma faute, l'eau était calcaire. »\n\nElle crève son papier au premier essai. Puis au deuxième. Au troisième, elle se retourne vers Ren.\n\nYui|« Vous voulez essayer ? »\n\nRen|« Non. »\n\nYui|« Allez. »\n\nRen|« Non. »\n\nMei|« Il a peur. »\n\nRen|« Je n'ai pas peur d'un poisson. »\n\nMei|« Il a peur du poisson. »",
+    "Il s'accroupit. Il prend l'épuisette en papier. Il la tient d'une façon légèrement différente de tout le monde — à plat, presque parallèle à la surface.\n\nIl en attrape quatre en trente secondes.\n\nLe vieux monsieur du stand le regarde avec une hostilité franche.\n\nYui|« COMMENT. »\n\nRen|« Le papier cède quand on soulève. Il faut faire glisser. »\n\nYui|« Vous avez fait de la physique du poisson rouge. »\n\nRen|« C'est de la tension superficielle. »\n\nMei|« Il a dit *tension superficielle* à un festival. »\n\nNao rit tellement qu'elle doit s'appuyer contre le poteau du stand.",
+    "Ils s'assoient sur les marches du temple à vingt et une heures, avec trois barquettes de yakisoba et une bière chacun sauf Yui qui a pris une limonade.\n\nUne seule barquette pour Nao et Ren, parce qu'il n'en restait plus qu'une portion et que Mei a décrété que c'était très bien comme ça.\n\nIls mangent dans la même barquette avec deux paires de baguettes.\n\nPersonne ne fait de commentaire.\n\nNao s'en rend compte au bout de plusieurs minutes et décide de ne pas s'en rendre compte.",
+    "Yui|« Vous avez des frères et sœurs ? »\n\nElle demande ça à Ren, la bouche pleine, sans aucune arrière-pensée.\n\nMei ouvre grand les yeux vers Nao.\n\nRen|« Un frère. »\n\nYui|« Il fait quoi ? »\n\nRen|« Je ne sais pas. »\n\nYui|« Comment ça vous savez pas ? »\n\nRen|« Il est parti quand j'avais dix-sept ans. On ne s'écrit pas. »\n\nYui|« Ah. »\n\nSilence de trois secondes.\n\nYui|« Il vous manque ? »\n\nMei|« Yui. »\n\nYui|« Quoi ? »\n\nEt Ren répond.\n\nRen|« Oui. »\n\nIl regarde les lanternes.\n\nRen|« Il chantait sous la douche. C'est ça qui me manque. C'est ridicule. »\n\nPersonne ne dit que c'est ridicule."
+  ]
+_M3[17]["scenes"] = [
+    "*Fin septembre, restaurant Ryūsei, salle privée, 19h*\n\nDouze personnes autour d'une table basse. Signature d'un contrat-cadre de quatre ans avec un fournisseur d'aciers de charpente.\n\nNao a compté : c'est sa cinquième sortie de ce type. Elle a appris trois choses. Ne jamais accepter le troisième verre. Ne jamais répondre à une question posée à quelqu'un d'autre. Et sourire quand on ne comprend pas.\n\nElle est assise entre Ren et une femme d'une cinquantaine d'années qui ne lui a pas adressé la parole.",
+    "Hidaka est en face. Cinquante-cinq ans, directeur du fournisseur, vingt ans de relation avec le groupe.\n\nIl est de très bonne humeur. Il l'a été toute la soirée. Il a raconté trois anecdotes dont deux étaient drôles, il a resservi ses voisins, il a fait rire Shigeru deux fois, ce qui est un exploit.\n\nC'est ça, le problème. Personne dans cette pièce ne pense être en train de passer une mauvaise soirée.",
+    "Hidaka|« Et alors, Kirishima-san, ce mariage ! »\n\nShigeru|« Ah. »\n\nHidaka|« On m'a raconté ! Votre père qui arrange ça à quatre-vingt-quatre ans ! Il est incroyable, ce vieux. »\n\nShigeru|« Il l'est. »\n\nHidaka|« Et c'est la petite du printeur, c'est ça ? »\n\nUn temps de rien du tout.\n\nPersonne ne relève.",
+    "Nao regarde son verre.\n\nElle a exactement la phrase. Elle l'a depuis quatre secondes. C'est une bonne phrase, courte, qui ferait rire trois personnes à cette table et qui humilierait Hidaka pendant environ deux ans.\n\nElle pense au contrat-cadre. Quatre ans. Elle pense à Ren qui a passé la semaine dessus.\n\nElle ne dit rien.",
+    "Hidaka|« Elle fait quoi, déjà ? »\n\nUn cadre|« Elle est dans la santé, je crois. »\n\nHidaka|« Ah oui, elle masse. »\n\nIl dit ça vers Shigeru, pas vers elle.\n\nHidaka|« Des vieux, dans un cabinet de quartier. C'est bien, ça. C'est utile. »\n\nLa femme à côté de Nao hoche la tête d'un air approbateur.\n\nHidaka se tourne enfin vers Ren, et lui donne une tape sur l'épaule par-dessus la table.\n\nHidaka|« Vous avez de la chance, vous. Votre grand-père vous a évité la corvée de chercher. »",
+    "Ren pose ses baguettes.\n\nIl ne les pose pas violemment. Il les pose comme il pose toujours ses baguettes, parallèles, à quatre centimètres du bord.\n\nRen|« Hidaka-san. Une question technique, pendant que j'y pense. »\n\nHidaka|« Je vous en prie ! »\n\nRen|« La nuance qu'on vient de contractualiser pour les poutres de l'annexe. Vous la garantissez à quelle limite d'élasticité ? »\n\nHidaka|« Ah, ça, il faudrait demander à— »\n\nRen|« Vous ne savez pas ? »\n\nHidaka|« C'est très technique. »\n\nRen|« C'est la première ligne de la fiche produit. »",
+    "Un silence légèrement différent commence à s'installer.\n\nRen|« Autre question, alors. Le délai de livraison contractuel, c'est quarante-cinq jours. Vous tenez quarante-cinq jours sur les profilés spéciaux ? »\n\nHidaka|« Nous avons toujours— »\n\nRen|« Sur le chantier de Kitagawa, l'an dernier, c'était soixante-douze. »\n\nHidaka|« Il y avait un contexte. »\n\nRen|« Lequel ? »\n\nHidaka|« …Il faudrait que je vérifie. »\n\nRen|« Vous n'avez pas vérifié avant de signer un contrat de quatre ans ? »\n\nShigeru|« Ren. »\n\nRen|« Je pose des questions, père. »",
+    "Il en pose une troisième, sur les tolérances de perçage, et Hidaka ne répond pas du tout à celle-là.\n\nQuatre-vingt-dix secondes. Personne n'a haussé la voix.\n\nRen reprend ses baguettes.\n\nRen|« Excusez-moi. C'est une déformation professionnelle. Je passe mes journées avec des gens qui savent exactement ce qu'ils font de leurs mains. »\n\nIl prend une bouchée.\n\nRen|« Ma femme aussi, d'ailleurs. »\n\nEt il se remet à manger.",
+    "Le dîner reprend.\n\nQuelqu'un relance sur le typhon de la semaine dernière. La femme à côté de Nao lui demande soudain, avec un intérêt qui n'existait pas quarante minutes plus tôt, dans quel quartier se trouve son cabinet.\n\nHidaka ne boit plus. Il participe encore, il rit encore, mais il regarde surtout son assiette.\n\nÀ deux places de là, une femme en tailleur clair — Aya — regarde Ren pendant un long moment.\n\nPuis elle regarde Nao.\n\nPuis elle baisse les yeux sur son verre."
+  ]
+_M3[18]["scenes"] = [
+    "*22h40, le parking*\n\nIl fait dix-neuf degrés et il y a du vent. Nao a laissé sa veste au vestiaire et n'a aucune intention d'y retourner.\n\nIls marchent vers la voiture sans parler.\n\nNao|« Vous saviez qu'il ne saurait pas. »\n\nRen|« Oui. »\n\nNao|« Pour les trois questions. »\n\nRen|« Pour les trois. »\n\nNao|« Vous les aviez préparées ? »\n\nRen|« Non. Je les connais, c'est tout. »",
+    "Elle s'arrête au milieu du parking.\n\nNao|« Je n'avais pas besoin d'être défendue. »\n\nRen|« Je sais. »\n\nNao|« J'avais la phrase. Je l'avais depuis quatre secondes. »\n\nRen|« Je sais. »\n\nNao|« Comment vous savez ? »\n\nRen|« Vous avez arrêté de bouger. Vous bougez tout le temps. Vous avez arrêté pendant quatre secondes et vous avez regardé votre verre. »\n\nElle ne trouve rien à répondre à ça.",
+    "Nao|« Alors pourquoi vous l'avez fait ? »\n\nRen|« Parce que vous vous êtes tue. »\n\nNao|« Ce n'est pas une réponse. »\n\nRen|« Si. »\n\nIl déverrouille la voiture. Les clignotants font deux flashs orange dans le parking.\n\nRen|« Vous vous êtes tue parce que le contrat court sur quatre ans et que j'ai passé la semaine dessus. Vous avez calculé ce que ça me coûterait et vous avez décidé de payer à ma place. »\n\nIl ouvre la portière.\n\nRen|« Je n'ai pas voulu vous laisser payer. »"
+  ]
+_M3[19]["scenes"] = [
+    "*Début octobre, un samedi, 10h20*\n\nLe message arrive pendant qu'elle fait ses courses.\n\n**Numéro inconnu** — *Bonjour. Aya Morimoto, groupe Kirishima. Auriez-vous une heure aujourd'hui ? C'est au sujet de votre père.*\n\nNao reste debout dans le rayon des conserves pendant assez longtemps pour qu'une dame lui demande si elle cherche quelque chose.",
+    "Le café est à trois rues du siège, ce qui est un choix. Aya est déjà là quand Nao arrive, à une table du fond, un dossier fermé devant elle.\n\nAya|« Merci d'être venue. »\n\nNao|« Vous êtes qui, exactement ? »\n\nAya|« Directrice du développement. Six ans dans le groupe. »\n\nNao|« Et pourquoi vous me parlez de mon père ? »\n\nAya|« Parce que je crois que vous vivez avec quelqu'un depuis six mois sans savoir une chose que je sais depuis deux ans. »\n\nElle a une voix posée et un débit lent. Elle ne s'excuse de rien.",
+    "Nao|« Vous êtes proche de lui ? »\n\nAya|« Oui. »\n\nNao|« Proche comment ? »\n\nAya la regarde bien en face.\n\nAya|« Vous voulez qu'on règle ça d'abord ? On peut. Ça ira plus vite après. »\n\nNao|« …Allez-y. »\n\nAya|« Pendant quatre ans, tout le monde dans cette entreprise a supposé que Ren et moi finirions ensemble. Sa mère l'a supposé. Deux directeurs l'ont supposé. Moi aussi, à un moment, oui. »\n\nNao|« Et lui ? »\n\nAya|« Lui n'a jamais rien supposé du tout. C'est ça, le problème avec Ren. »\n\nElle boit une gorgée.\n\nAya|« Voilà. C'est réglé. »",
+    "Aya|« Il y a deux ans, en mars. Un contrat avec une imprimerie de Higashi-machi. »\n\nNao|« Sakurai. C'est mon père. »\n\nAya|« Je sais. »\n\nElle ouvre le dossier. Il n'y a rien dedans que Nao puisse lire d'où elle est. Aya ne le retourne pas.\n\nAya|« Je ne vais rien vous montrer. Je vais vous raconter. Ce que vous en ferez ne me regarde pas. »\n\nNao|« Pourquoi ? »\n\nAya|« Parce que je n'ai pas le droit de vous montrer, et parce que je ne supporte plus que personne ne le sache. »",
+    "Aya|« Le vendredi 20 mars, à dix-huit heures, Ren est passé au service juridique récupérer la version définitive. Il ne devait pas la lire. Il n'était pas sur ce dossier. Il était ingénieur sur Kitagawa. »\n\nNao|« Pourquoi il l'a lue ? »\n\nAya|« Parce qu'il lit tout. »\n\nElle tourne sa tasse.\n\nAya|« À vingt heures, il est monté à l'étage développement, où j'étais encore. Il m'a demandé si une clause de rachat progressif à trois ans, sur une structure familiale de moins de dix salariés, ça se pratiquait. »\n\nNao|« Et ça se pratique ? »\n\nAya|« Ça se pratique quand on veut absorber quelqu'un sans le racheter. »",
+    "Aya|« Il est resté. »\n\nNao|« Resté ? »\n\nAya|« Vendredi soir, samedi, samedi nuit, dimanche. Je suis passée le samedi après-midi prendre un dossier, il était au même bureau que la veille avec la même chemise. Je suis repassée le dimanche matin, il y était encore. »\n\nNao ne bouge plus du tout.\n\nAya|« Il a monté une contre-proposition complète. Même montant pour l'imprimerie, même volume, calendrier différent, sans la clause. Il a refait le plan de charge trois fois pour que ça tienne. Quarante heures. »\n\nNao|« Et après ? »\n\nAya|« Lundi matin, huit heures, il est entré chez le président. »\n\nNao|« Son père. »\n\nAya|« Son père. »",
+    "Aya|« Il en est ressorti à huit heures douze. »\n\nSilence.\n\nNao|« Douze minutes. »\n\nAya|« Douze minutes. »\n\nNao|« Et ensuite ? »\n\nAya|« Ensuite il a annulé le contrat. Il a signé la lettre lui-même, alors qu'il n'avait aucune délégation pour le faire, ce qui aurait pu lui coûter sa place. »\n\nNao|« Il aurait pu dire à mon père pourquoi. »\n\nAya|« Oui. »\n\nNao|« Il aurait pu envoyer un mot. Une ligne. »\n\nAya|« Oui. »\n\nNao|« Alors pourquoi il ne l'a pas fait ? »\n\nAya la regarde.\n\nAya|« Ça, je ne le sais pas. »",
+    "Elle se lève. Elle laisse de l'argent sur la table pour les deux cafés.\n\nAya|« Une dernière chose, et je vous laisse. »\n\nNao|« Allez-y. »\n\nAya|« Je ne vous ai pas raconté ça pour qu'il soit pardonné. Je vous l'ai raconté parce que vous avez le droit de savoir avec qui vous vivez. »\n\nElle met son manteau.\n\nAya|« Ce qu'il vous a fait en ne disant rien pendant deux ans, ça, ça vous appartient. Ce n'est pas mon affaire et je ne le défendrai pas là-dessus. »\n\nElle s'en va.\n\nNao reste assise devant deux tasses vides pendant vingt minutes.",
+    "*L'atelier, 16h*\n\nElle ne rentre pas chez elle. Elle va chez son père.\n\nIl est en train de nettoyer un rouleau. Il lève la tête, voit sa figure, et pose le chiffon.\n\nTetsuo|« Qu'est-ce qu'il y a. »\n\nNao|« Rien. »\n\nTetsuo|« Nao. »\n\nElle s'assoit sur le tabouret à trois pieds.\n\nNao|« Papa. La casse en bas. Celle avec l'étiquette. »\n\nIl ne bouge pas.\n\nNao|« C'est son écriture. »\n\nTetsuo|« Oui. »\n\nNao|« Pourquoi tu me l'as jamais dit ? »\n\nTetsuo|« Tu m'as jamais demandé. »\n\nNao|« Je te le demande. »",
+    "Il s'appuie contre l'établi. Il met très longtemps à commencer.\n\nTetsuo|« Elle est partie un dimanche. Ça tu le sais. »\n\nNao|« Oui. »\n\nTetsuo|« Elle me l'a dit le lundi d'avant. »\n\nNao|« …Quoi ? »\n\nTetsuo|« Le lundi. Elle m'a dit qu'elle partait dimanche. Elle m'a laissé six jours. »\n\nNao|« Six jours. »\n\nTetsuo|« Six jours. »\n\nLe rouleau goutte sur le sol. Personne ne le remarque.",
+    "Nao|« Tu m'as rien dit pendant six jours. »\n\nTetsuo|« Non. »\n\nNao|« J'avais douze ans et j'ai fait mes devoirs six soirs de suite à côté d'une femme qui faisait ses cartons pendant que je dormais. »\n\nTetsuo|« Oui. »\n\nNao|« J'aurais pu lui dire au revoir. »\n\nTetsuo|« Oui. »\n\nElle se lève. Elle ne sait pas pour aller où. Elle se rassoit.",
+    "Tetsuo|« Il y a autre chose. »\n\nNao|« Non. »\n\nTetsuo|« Nao. »\n\nNao|« Non, papa, il n'y a pas autre chose, il ne peut pas y avoir autre chose. »\n\nTetsuo|« Elle a demandé à vous voir. »\n\nLa ventilation de l'atelier tourne.\n\nTetsuo|« Trois mois après. Puis un an après. Deux fois. »\n\nNao|« Et tu as dit quoi. »\n\nTetsuo|« J'ai dit non. »",
+    "Il ne se justifie pas tout de suite. Il faut qu'elle attende, et l'attente dure.\n\nTetsuo|« Sota avait cinq ans. Il avait arrêté de demander depuis deux mois. Et toi tu avais recommencé à manger. »\n\nNao|« Donc tu as décidé. »\n\nTetsuo|« J'ai décidé. »\n\nNao|« Tu as décidé de ce qu'on pouvait supporter. »\n\nTetsuo|« Oui. »\n\nNao|« Et les cartes. »\n\nIl ferme les yeux une seconde.\n\nTetsuo|« Je lui ai demandé de ne pas mettre d'adresse. »\n\nNao|« …Tu lui as *demandé*. »\n\nTetsuo|« Elle a obéi. Elle a toujours obéi, c'est un peu pour ça qu'elle est partie. »",
+    "Nao|« Treize ans. »\n\nTetsuo|« Treize ans. »\n\nNao|« Treize ans que je crois qu'elle nous a pas cherchés. »\n\nTetsuo|« Je sais. »\n\nNao|« Non, tu sais pas. Tu peux pas savoir ce que ça fait de recevoir une carte par an sans adresse et de se dire chaque année qu'elle a pas voulu la mettre. »\n\nElle ne crie pas. C'est pire.\n\nTetsuo|« Nao— »\n\nNao|« Non. »",
+    "Elle prend son sac. Elle s'arrête à la porte.\n\nNao|« Je vais te dire ce qui va se passer maintenant. »\n\nTetsuo|« D'accord. »\n\nNao|« Si elle écrit encore. Si elle appelle. Si elle envoie quoi que ce soit. Tu me le donnes. Tu ne l'ouvres pas, tu ne décides pas, tu ne protèges personne. Tu me le donnes, et Sota et moi on décide. »\n\nTetsuo|« Nao— »\n\nNao|« Ce n'est pas une demande. »\n\nUn long silence.\n\nTetsuo|« D'accord. »\n\nNao|« Dis-le en entier. »\n\nTetsuo|« …Si elle écrit, je te le donne. »\n\nElle sort."
+  ]
+_M3[20]["scenes"] = [
+    "*Le même soir, 21h50*\n\nIl est rentré à vingt heures. Il a mangé seul. Il a fait la vaisselle avant vingt-deux heures, point quatre.\n\nElle rentre à vingt et une heures cinquante avec de l'encre sur le poignet et un visage qu'il regarde une demi-seconde de trop.\n\nRen|« Il y a du riz. »\n\nNao|« Vingt mars. »\n\nRen|« …Pardon ? »\n\nNao|« Vendredi 20 mars, il y a deux ans. Vous êtes passé au juridique à dix-huit heures. »",
+    "Il ne bouge pas.\n\nNao|« Vous êtes resté tout le week-end. Vous avez refait le plan de charge trois fois. Vous êtes entré chez votre père le lundi à huit heures et vous êtes ressorti à huit heures douze. »\n\nRen|« Qui vous a dit ça. »\n\nNao|« Ça n'a aucune importance. »\n\nRen|« Aya. »\n\nNao|« Ça n'a aucune importance. »\n\nIl pose le torchon. Très lentement.",
+    "Nao|« Alors je vais vous poser la question et vous allez répondre. Pourquoi vous n'avez rien dit à mon père ? »\n\nRen|« Je ne peux pas vous le dire. »\n\nNao|« Deux ans. »\n\nRen|« Je sais. »\n\nNao|« Il a plastifié la lettre, Ren. Il l'a *plastifiée*. Il la sort quand il a bu. »\n\nRen|« Je sais. »\n\nNao|« Vous savez et vous dites rien. »\n\nRen|« Oui. »",
+    "Et là elle explose.\n\nNao|« VOUS AVEZ DÉCIDÉ POUR MOI. »\n\nIl ne recule pas.\n\nNao|« Vous avez décidé que mon père ne saurait pas. Vous avez décidé ce que je pouvais encaisser. Vous avez décidé que j'allais vous détester pendant deux ans et vous avez trouvé que c'était un prix correct. »\n\nRen|« Ce n'est pas— »\n\nNao|« Vous avez calculé ! Vous avez fait un tableau dans votre tête, vous avez mis les colonnes, et vous avez conclu que le meilleur résultat c'était que je vous méprise. »",
+    "Ren|« Le meilleur résultat c'était que l'atelier existe encore. »\n\nNao|« L'ATELIER A UNE HYPOTHÈQUE DE DIX-HUIT MILLIONS. »\n\nÇa, il ne l'attendait pas.\n\nNao|« Il a hypothéqué la maison parce qu'il n'a jamais reçu l'argent du contrat. C'est pour ça que la banque a écrit en février. C'est pour ça que j'ai un anneau. »\n\nRen|« …Je sais. »\n\nNao|« Vous saviez ça aussi. »\n\nRen|« Depuis le premier soir. »",
+    "Elle s'assoit sur une chaise parce que ses jambes ne sont plus très fiables.\n\nNao|« Vous saviez, en arrivant au Kanoya, que la femme en face de vous était là à cause de vous. »\n\nRen|« Oui. »\n\nNao|« Et vous êtes arrivé avec onze minutes de retard et vous m'avez dit que je jugeais trop vite. »\n\nRen ne répond pas.\n\nNao|« Dites quelque chose. »\n\nRen|« Il n'y a rien à— »\n\nNao|« NE DITES PAS ÇA. »",
+    "Nao|« Vous savez ce qui est arrivé aujourd'hui ? Mon père m'a dit que ma mère lui avait laissé six jours et qu'il ne m'avait rien dit. Et qu'elle a demandé à nous voir et qu'il a dit non. Pour nous protéger. »\n\nElle rit, une fois, très mal.\n\nNao|« Deux fois dans la même journée. Deux hommes qui m'ont protégée en décidant que je n'avais pas besoin de savoir. »\n\nRen|« Ce n'est pas la même chose. »\n\nNao|« C'est exactement la même chose. »\n\nRen|« Non. »\n\nNao|« En quoi c'est différent ? »\n\nRen|« Parce que si je parle, ils reviennent sur l'atelier. »",
+    "La cuisine se tait complètement.\n\nNao|« …Quoi ? »\n\nIl a la mâchoire serrée. Il vient de dire une chose qu'il n'avait pas prévu de dire, et ça se voit sur lui comme un vêtement mal mis.\n\nRen|« Rien. »\n\nNao|« Vous venez de dire *ils reviennent sur l'atelier*. »\n\nRen|« J'ai dit une bêtise. »\n\nNao|« Ren. »\n\nRen|« Il est vingt-deux heures dix. »\n\nNao|« *Ren.* »\n\nRen|« Bonne nuit, Nao. »\n\nIl sort de la cuisine."
+  ]
+_M3[13]["choix"] = {
+    'question': "Il tient la portière ouverte. Il attend qu'elle monte.",
+    'decisif': True,
+    'options': [
+      (
+        'demande',
+        '1️⃣',
+        'Lui demander en face, maintenant'
+      ),
+      (
+        'enquete',
+        '2️⃣',
+        'Monter, et chercher toute seule'
+      )
+    ],
+    'suites': {
+      'demande': {
+        'pose': [
+          'route_confiance',
+          'il_a_parle'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': 15
+          }
+        },
+        'texte': "Nao|« Alors dites-le. Là. Maintenant. Sur ce trottoir. »\n\nRen|« Nao. »\n\nC'est la première fois qu'il utilise son prénom.\n\nNao|« Dites-le. »\n\nIl referme la portière. Il reste la main dessus.\n\nRen|« Le contrat qui était sur la table n'était pas celui que votre père croyait signer. »\n\nNao|« C'est-à-dire ? »\n\nRen|« C'est-à-dire qu'il y avait une clause, et que cette clause faisait que dans trois ans, l'imprimerie Sakurai n'aurait plus appartenu à un Sakurai. »\n\nElle ne bouge pas.\n\nNao|« Qui l'a écrite ? »\n\nRen|« Ça, je ne peux pas vous le dire. »\n\nNao|« Vous venez de me dire le reste. »\n\nRen|« Le reste ne coûte rien à personne. »\n\nElle le regarde longtemps.\n\nNao|« Vous êtes en train de me dire que vous avez sauvé l'atelier. »\n\nRen|« Je suis en train de vous dire que le contrat était mauvais. »\n\nNao|« Ce n'est pas la même phrase. »\n\nRen|« Non. »\n\nIl rouvre la portière.\n\nRen|« Montez. Il est vingt-deux heures vingt et vous commencez à huit heures. »"
+      },
+      'enquete': {
+        'pose': [
+          'route_decouverte'
+        ],
+        'texte': "Elle monte.\n\nElle ne dit rien pendant les quatorze minutes de trajet, et lui non plus, et il met la radio à mi-chemin, ce qu'il ne fait jamais.\n\nMais le lendemain, à la pause de midi, elle appelle son père et lui demande de photographier la lettre plastifiée. Recto verso. Y compris les mentions en bas de page.\n\nTetsuo|« Pourquoi tu veux ça ? »\n\nNao|« Pour rien. »\n\nTetsuo|« Nao. »\n\nNao|« Papa, envoie-moi la photo. »\n\nElle reçoit les deux images à quatorze heures dix.\n\nEn bas à gauche, en corps six, il y a une référence de dossier interne. Elle la recopie sur un post-it qu'elle glisse dans son portefeuille.\n\nElle ne sait pas encore ce qu'elle va en faire. Elle sait juste qu'elle ne le lui demandera pas."
+      }
+    }
+  }
+_M3[16]["choix"] = {
+    'question': "Plus tard, dans la voiture, ils sont seuls. Il n'a rien dit depuis les marches du temple.",
+    'decisif': False,
+    'options': [
+      (
+        'evoque',
+        '1️⃣',
+        'Revenir sur son frère'
+      ),
+      (
+        'tait',
+        '2️⃣',
+        'Le laisser tranquille'
+      )
+    ],
+    'suites': {
+      'evoque': {
+        'pose': [
+          'kaito_evoque'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': 6
+          }
+        },
+        'texte': "Nao|« Il s'appelle comment ? »\n\nRen|« …Kaito. »\n\nNao|« Il est plus vieux ? »\n\nRen|« Quatre ans. »\n\nNao|« Et il est parti pourquoi ? »\n\nLong silence. Deux feux.\n\nRen|« Il a dit à table qu'il ne reprendrait pas l'entreprise. »\n\nNao|« Et ? »\n\nRen|« Et il est parti le lendemain. »\n\nNao|« En une nuit ? »\n\nRen|« En une nuit. »\n\nElle regarde son profil dans la lumière des lampadaires.\n\nNao|« Et vous vous étiez où, pendant la dispute ? »\n\nRen|« À table. »\n\nNao|« Vous avez dit quoi ? »\n\nRen|« Rien. »\n\nIl met le clignotant.\n\nRen|« Je n'ai rien dit du tout. »\n\nEt elle comprend, dix secondes trop tard, que ce n'est pas de son frère qu'il vient de parler."
+      },
+      'tait': {
+        'pose': [
+          'kaito_tu'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': -3
+          }
+        },
+        'texte': "Elle ne dit rien.\n\nElle a la question dans la bouche pendant tout le trajet — quatre virages, deux feux, un rond-point — et elle la garde, parce qu'il a l'air de quelqu'un qui vient de trop payer et qu'elle n'a pas envie de lui présenter une deuxième facture.\n\nIls rentrent. Il dit bonne nuit. Elle dit bonne nuit.\n\nPlus tard, dans son lit, elle se dit qu'elle aurait dû demander.\n\nEt de l'autre côté de la cloison, quelqu'un qui n'arrive pas à dormir regarde le plafond en se disant qu'elle n'a pas demandé."
+      }
+    }
+  }
+_M3[18]["choix"] = {
+    'question': 'Il tient la portière. Le vent lui plaque une mèche sur le visage.',
+    'decisif': False,
+    'options': [
+      (
+        'remercie',
+        '1️⃣',
+        'Le remercier'
+      ),
+      (
+        'reproche',
+        '2️⃣',
+        "Lui reprocher d'avoir décidé seul"
+      )
+    ],
+    'suites': {
+      'remercie': {
+        'pose': [
+          'remercie'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': 10
+          }
+        },
+        'texte': "Nao|« Merci. »\n\nIl s'immobilise, la main sur la portière.\n\nRen|« …De rien. »\n\nNao|« Vous avez l'air surpris. »\n\nRen|« Un peu. »\n\nNao|« Vous vous attendiez à quoi ? »\n\nRen|« À une dispute. »\n\nNao|« La soirée est finie, j'ai froid, et vous avez démoli un homme de cinquante-cinq ans en lui posant des questions polies. Je vais pas gâcher ça. »\n\nElle monte.\n\nAu bout de quelques kilomètres, il enlève sa veste d'une main et la lui pose sur les genoux sans rien dire. Elle la garde.\n\nElle sent le tissu, et un peu le restaurant, et autre chose en dessous.\n\nPersonne ne parle jusqu'à l'appartement."
+      },
+      'reproche': {
+        'pose': [
+          'reproche'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': -5
+          }
+        },
+        'texte': "Nao|« Vous avez encore décidé tout seul. »\n\nRen|« Pardon ? »\n\nNao|« Vous avez décidé que je payais trop cher, vous avez décidé de payer à ma place, et vous avez décidé tout ça en quatre secondes sans me regarder une seule fois. »\n\nRen|« Vous préfériez que je ne fasse rien ? »\n\nNao|« Je préférerais que vous me demandiez ! »\n\nRen|« Devant douze personnes. »\n\nNao|« Après ! Maintenant ! N'importe quand ! »\n\nIl ne répond pas.\n\nNao|« Voilà. C'est exactement ça. »\n\nElle monte dans la voiture et claque la portière.\n\nÀ mi-chemin, il enlève sa veste d'une main et la pose sur ses genoux à elle.\n\nElle la repousse sur la banquette arrière.\n\nIl ne la reprend pas."
+      }
+    }
+  }
+_M3[20]["choix"] = {
+    'question': "Il est dans le couloir. Il n'a pas encore ouvert sa porte.",
+    'decisif': True,
+    'options': [
+      (
+        'confronte',
+        '1️⃣',
+        'Le suivre et ne pas lâcher'
+      ),
+      (
+        'se_tait',
+        '2️⃣',
+        'Le laisser partir'
+      )
+    ],
+    'suites': {
+      'confronte': {
+        'pose': [
+          'confronte'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': 5
+          }
+        },
+        'texte': "Elle le suit dans le couloir.\n\nNao|« Non. Vous ne partez pas comme ça. »\n\nRen|« Nao— »\n\nNao|« Vous avez un point sept sur votre frigo. *Si quelque chose ne va pas, le dire.* C'est vous qui l'avez écrit. »\n\nIl s'arrête, la main sur la poignée.\n\nNao|« Alors ça ne va pas. Voilà. Je le dis. »\n\nLong silence dans quatre mètres de couloir.\n\nRen|« Je ne peux pas tout vous dire. »\n\nNao|« Dites-moi ce que vous pouvez. »\n\nRen|« Le contrat a été annulé en échange de quelque chose. »\n\nNao|« En échange de quoi ? »\n\nRen|« De mon silence. »\n\nElle ouvre la bouche. Il lève une main — pas pour l'arrêter, pour demander.\n\nRen|« Je vous demande de ne pas poser la question suivante. Une fois. Une seule fois dans notre vie. »\n\nElle ne la pose pas.\n\nC'est la chose la plus difficile qu'elle ait faite depuis mars.\n\n*Trois jours plus tard, 20h*\n\nIl rentre avec la main droite enveloppée dans un mouchoir en papier complètement inutile.\n\nNao|« Qu'est-ce que vous avez fait. »\n\nRen|« Rien. »\n\nNao|« Montrez. »\n\nRen|« Ce n'est rien. »\n\nNao|« *Montrez.* »\n\nIl tend la main.\n\nUne entaille sur le dos de la main, quatre centimètres, juste au-dessus de l'ancienne cicatrice. Pas profonde. Sale.\n\nNao|« Vous vous êtes fait ça où ? »\n\nRen|« Higashi. Une bavure de coffrage. »\n\nNao|« Vous n'êtes plus censé aller sur les chantiers. »\n\nRen|« Non. »\n\nNao|« Asseyez-vous. »\n\nRen|« Ça va aller. »\n\nNao|« Asseyez-vous, Ren. »\n\nIl s'assoit.\n\nElle va chercher la trousse dans la salle de bain. Elle revient, tire une chaise en face de lui, se met à sa hauteur.\n\nElle prend sa main.\n\nC'est la première fois qu'ils se touchent volontairement depuis le mois de mars, et ça se passe dans une cuisine avec des compresses.\n\nElle nettoie. Elle est très rapide et très douce, dans cet ordre — les gestes de quelqu'un qui a fait ça quatre mille fois.\n\nElle ne dit rien pendant qu'elle travaille. Elle ne dit jamais rien pendant qu'elle travaille.\n\nIl regarde ses mains à elle.\n\nIl n'a nulle part ailleurs où regarder, en réalité — s'il lève les yeux, elle est à quarante centimètres.\n\nElle tourne la main pour dégager le bord de l'entaille. Elle appuie du pouce à trois centimètres de la plaie, là où ça ne fait pas mal.\n\nNao|« Vous serrez. »\n\nRen|« Non. »\n\nNao|« Vous serrez le poing depuis quatre minutes. Relâchez. »\n\nIl relâche.\n\nSept minutes.\n\nElle met une compresse, puis une bande, deux tours, un pli en biais qu'elle fait sans regarder.\n\nNao|« Vous refaites le pansement demain matin. »\n\nRen|« D'accord. »\n\nNao|« Et vous n'allez plus sur les chantiers avec des chaussures de ville. »\n\nRen|« …Comment vous savez que j'avais des chaussures de ville. »\n\nNao|« Parce que vous êtes allé là-bas sans prévenir personne, entre deux réunions, en costume. »\n\nIl ne dément pas.\n\nElle lâche sa main. Elle se relève trop vite. Elle range la trousse en faisant beaucoup plus de bruit que nécessaire."
+      },
+      'se_tait': {
+        'pose': [
+          'rancune_muette'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': -10
+          }
+        },
+        'texte': "Elle le laisse partir.\n\nLa porte se ferme. Elle reste dans la cuisine avec un torchon plié et un riz qu'elle ne mangera pas.\n\nElle range. Elle éteint. Elle va se coucher.\n\nEt à partir de ce soir-là, quelque chose se met en place entre eux qui n'a pas de nom : ils sont parfaitement polis. Ils se disent bonjour et bonne nuit. Ils se prêviennent quand ils rentrent tard.\n\nEt il y a, en permanence, une question qu'elle n'a pas posée, posée entre eux comme un meuble qu'on contourne.\n\n*Trois jours plus tard, 20h*\n\nIl rentre avec la main droite enveloppée dans un mouchoir en papier complètement inutile.\n\nNao|« Qu'est-ce que vous avez fait. »\n\nRen|« Rien. »\n\nNao|« Montrez. »\n\nRen|« Ce n'est rien. »\n\nNao|« *Montrez.* »\n\nIl tend la main.\n\nUne entaille sur le dos de la main, quatre centimètres, juste au-dessus de l'ancienne cicatrice. Pas profonde. Sale.\n\nNao|« Vous vous êtes fait ça où ? »\n\nRen|« Higashi. Une bavure de coffrage. »\n\nNao|« Vous n'êtes plus censé aller sur les chantiers. »\n\nRen|« Non. »\n\nNao|« Asseyez-vous. »\n\nRen|« Ça va aller. »\n\nNao|« Asseyez-vous, Ren. »\n\nIl s'assoit.\n\nElle va chercher la trousse dans la salle de bain. Elle revient, tire une chaise en face de lui, se met à sa hauteur.\n\nElle prend sa main.\n\nC'est la première fois qu'ils se touchent volontairement depuis le mois de mars, et ça se passe dans une cuisine avec des compresses.\n\nElle nettoie. Elle est très rapide et très douce, dans cet ordre — les gestes de quelqu'un qui a fait ça quatre mille fois.\n\nElle ne dit rien pendant qu'elle travaille. Elle ne dit jamais rien pendant qu'elle travaille.\n\nIl regarde ses mains à elle.\n\nIl n'a nulle part ailleurs où regarder, en réalité — s'il lève les yeux, elle est à quarante centimètres.\n\nElle tourne la main pour dégager le bord de l'entaille. Elle appuie du pouce à trois centimètres de la plaie, là où ça ne fait pas mal.\n\nNao|« Vous serrez. »\n\nRen|« Non. »\n\nNao|« Vous serrez le poing depuis quatre minutes. Relâchez. »\n\nIl relâche.\n\nSept minutes.\n\nElle met une compresse, puis une bande, deux tours, un pli en biais qu'elle fait sans regarder.\n\nNao|« Vous refaites le pansement demain matin. »\n\nRen|« D'accord. »\n\nNao|« Et vous n'allez plus sur les chantiers avec des chaussures de ville. »\n\nRen|« …Comment vous savez que j'avais des chaussures de ville. »\n\nNao|« Parce que vous êtes allé là-bas sans prévenir personne, entre deux réunions, en costume. »\n\nIl ne dément pas.\n\nElle lâche sa main. Elle se relève trop vite. Elle range la trousse en faisant beaucoup plus de bruit que nécessaire."
+      }
+    }
+  }
+del _M3
+
+
+# ── ARC IV : épisodes 22 à 26 (réparer) ──
+_M4 = CHRONIQUE_SAISONS["maries_malgre_nous"]["episodes"]
+_M4[21]["scenes"] = [
+    "*Octobre, jour trois*\n\nIls sont d'une politesse irréprochable.\n\nBonjour. Bonne nuit. Il reste du riz. Le facteur est passé. Ta veste était sur la chaise, je l'ai mise dans l'entrée.\n\nLe point sept est toujours sur le frigo. Personne ne l'utilise.",
+    "Le pire, c'est qu'il ne se venge pas.\n\nElle s'attendait à ce qu'il se ferme complètement — qu'il rentre plus tard, qu'il mange dehors, qu'il arrête d'acheter du thé d'orge.\n\nIl continue tout. Exactement pareil. Il y a toujours deux bouteilles en bas du frigo. Il y a toujours de la lumière dans l'entrée quand elle rentre tard.\n\nIl fait juste tout ça sans la regarder, et c'est infiniment pire.",
+    "*Cabinet, jeudi*\n\nYui|« Vous vous êtes disputés. »\n\nNao|« Non. »\n\nYui|« Tu as noté trois patients au crayon à papier. »\n\nNao|« Et alors ? »\n\nYui|« Tu notes au crayon quand tu veux pouvoir effacer. »\n\nNao repose son crayon.\n\nNao|« Yui, tu es beaucoup trop observatrice pour quelqu'un qui perd ses clés deux fois par semaine. »\n\nYui|« Les deux sont vrais. »",
+    "*Vendredi, 22h*\n\nMei appelle depuis la voiture. On entend le clignotant.\n\nMei|« Bon. Je te préviens avant que tu l'apprennes autrement. »\n\nNao|« Tu es où ? »\n\nMei|« Devant chez lui. »\n\nSilence.\n\nMei|« Vas-y. »\n\nNao|« Je vais rien dire. »\n\nMei|« Dis-le, je préfère. »\n\nNao|« Non. »\n\nMei|« Nao. »\n\nNao|« Mei, il est dix heures du soir, tu es dans ta voiture devant chez ton mec depuis probablement vingt minutes, et tu m'appelles pour que je te dise de pas y aller. »\n\nMei|« …Ouais. »\n\nNao|« Je vais pas le faire. »",
+    "Mei|« Pourquoi ? »\n\nNao|« Parce que c'est pas à moi de décider ce que tu peux supporter. »\n\nLe clignotant continue.\n\nMei|« C'est nouveau, ça. »\n\nNao|« Oui. »\n\nMei|« Ça vient d'où ? »\n\nNao|« De cette semaine. »\n\nUn long silence, puis le bruit d'une portière.\n\nMei|« Je te rappelle. »\n\nNao|« D'accord. »\n\nMei|« Nao ? »\n\nNao|« Mm ? »\n\nMei|« Je sais que c'est une connerie. »\n\nNao|« Je sais que tu sais. »",
+    "Elle raccroche et reste assise sur le balcon.\n\nIl est dans la cuisine, elle voit la lumière découper le sol du salon. Il n'a pas mis de musique depuis dix jours.\n\nElle rentre. Il lève les yeux, une demi-seconde.\n\nNao|« Mei est retournée chez Takumi. »\n\nElle ne sait pas pourquoi elle le lui dit.\n\nRen|« Ah. »\n\nNao|« Vous allez dire que c'est une erreur. »\n\nRen|« Non. »\n\nNao|« Tout le monde va dire que c'est une erreur. »\n\nRen|« Probablement. »\n\nIl referme son ordinateur.\n\nRen|« Ce n'est pas la même chose de savoir qu'on se trompe et d'être prêt à arrêter. »\n\nIl va se coucher.\n\nC'est la phrase la plus longue qu'il lui ait dite depuis dix jours."
+  ]
+_M4[22]["scenes"] = [
+    "*Deux semaines plus tard, un mercredi*\n\nSota l'appelle à dix-huit heures quarante, ce qui n'arrive jamais.\n\nSota|« Il était là. »\n\nNao|« Qui ? »\n\nSota|« Ton mec. »\n\nNao|« Mon— »\n\nSota|« Ton mari. Il était à l'atelier. »",
+    "Nao|« Quand ? »\n\nSota|« Samedi. Et le samedi d'avant. »\n\nNao|« Deux samedis. »\n\nSota|« Ouais. »\n\nElle s'assoit sur le premier truc disponible, qui se trouve être une table de kiné.\n\nNao|« Il faisait quoi ? »\n\nSota|« La came. »\n\nNao|« …La came. »\n\nSota|« La came de synchronisation du margeur. Il est venu avec un jeu de clés et un truc à lui, un comparateur je crois. Il a déposé la pièce, il l'a mesurée, il est reparti. Le samedi d'après il est revenu avec la pièce refaite. »\n\nNao|« Refaite où ? »\n\nSota|« Il a pas dit. »",
+    "Nao|« Et papa a dit quoi ? »\n\nSota|« Papa a rien dit pendant deux heures. »\n\nNao|« Deux heures. »\n\nSota|« Ils ont bossé deux heures sans se parler. C'était très bizarre. À la fin papa a demandé combien il devait. »\n\nNao|« Et ? »\n\nSota|« Il a dit rien. Papa a insisté. Il a re-dit rien. »\n\nUn temps.\n\nSota|« Et papa a dit *merci Kirishima-san*, et lui il a répondu— »\n\nSota s'arrête, et Nao l'entend hésiter pour la première fois depuis le début de l'appel.\n\nSota|« Il a répondu *c'est Ren*. »",
+    "Nao|« Il t'a demandé de me le dire ? »\n\nSota|« Non. »\n\nNao|« Il t'a demandé de PAS me le dire ? »\n\nSota|« Non plus. Il a rien demandé du tout. »\n\nNao|« Alors pourquoi tu m'appelles ? »\n\nSota|« Parce que ça fait deux semaines que t'as une voix bizarre au téléphone et que je suis pas complètement con. »\n\nElle regarde le mur du cabinet.\n\nNao|« Merci. »\n\nSota|« Ouais. »\n\nIl raccroche avant qu'elle puisse dire autre chose, parce qu'il a dix-sept ans.",
+    "*Appartement, 21h30*\n\nElle l'attend dans la cuisine, ce qu'elle n'a pas fait depuis dix-sept jours.\n\nIl rentre. Il enlève ses chaussures. Il voit qu'elle est assise et pas debout, et il ralentit d'un quart de seconde.\n\nNao|« La came. »\n\nIl pose sa sacoche.\n\nRen|« Elle était usée à cinq dixièmes. »\n\nNao|« Ren. »\n\nRen|« Il n'y a plus de pièce d'origine. Il a fallu la refaire. »\n\nNao|« Refaite où ? »\n\nRen|« Un atelier de mécanique de précision à Kitagawa. Ils travaillent pour nous. »\n\nNao|« Ça coûte combien, une pièce comme ça ? »\n\nRen|« Ça n'a pas d'importance. »\n\nNao|« Combien. »\n\nRen|« Nao. »",
+    "Elle se lève.\n\nNao|« Vous recommencez. »\n\nRen|« Je ne recommence rien. »\n\nNao|« Vous avez fait un truc énorme et vous n'alliez rien dire. Encore. »\n\nRen|« Ce n'est pas énorme. »\n\nNao|« Deux samedis, Ren. »\n\nIl ne répond pas tout de suite. Il regarde le plan de travail.\n\nRen|« Vous voulez que je m'excuse d'avoir réparé une presse ? »\n\nNao|« Je veux que vous me le DISIEZ. »\n\nRen|« Pour que vous me remerciiez ? »\n\nNao|« Pour que je sache ! »",
+    "Elle inspire. Elle recommence plus bas.\n\nNao|« Écoutez-moi. Vous avez le droit de faire des choses sans me demander la permission. Vous n'avez pas besoin de mon autorisation pour aider mon père. »\n\nRen|« Alors quel est le problème ? »\n\nNao|« Le problème c'est que vous ne le dites pas *après*. »\n\nSilence.\n\nNao|« Avant, c'est demander la permission. Après, c'est juste… partager. C'est pas la même chose. »\n\nIl met un temps très long.\n\nRen|« Je n'avais pas pensé à ça. »\n\nNao|« Je sais. »",
+    "Il ouvre le frigo. Il en sort deux bouteilles au lieu d'une. Il en pose une devant elle sur la table.\n\nC'est du thé d'orge. C'est le premier geste depuis dix-sept jours.\n\nRen|« Cent quatre-vingt mille yens. »\n\nNao|« …Pardon ? »\n\nRen|« La pièce. Avec l'usinage. »\n\nElle repose la bouteille sans l'avoir ouverte.\n\nRen|« Vous vouliez savoir. »\n\nNao|« …Oui. »\n\nRen|« Voilà. »\n\nIl s'assoit en face d'elle et il ouvre son ordinateur, et il ne part pas dans sa chambre, et ils restent dans la même pièce pendant une heure et demie."
+  ]
+_M4[23]["scenes"] = [
+    "*Fin octobre, 01h50*\n\nLe téléphone de garde sonne une fois sur trois semaines. Cette nuit, il sonne.\n\nVoix|« Sakurai-san ? Ici la résidence Hikari. On a un résident au sol, monsieur Oda, chambre 12. Il refuse les urgences. »\n\nNao|« J'arrive. »",
+    "Elle s'habille en trois minutes. Dans le couloir, la porte du fond s'ouvre.\n\nRen|« Il est deux heures. »\n\nNao|« Un patient est tombé. »\n\nRen|« Où ? »\n\nNao|« Résidence Hikari, derrière la gare. »\n\nRen|« Je m'habille. »\n\nNao|« Ce n'est pas la peine— »\n\nMais il est déjà rentré dans sa chambre.\n\nIl ressort quarante secondes plus tard, en jean, ce qu'elle ne l'a jamais vu porter.",
+    "Monsieur Oda est assis par terre entre son lit et le mur, parfaitement digne, en colère contre le monde entier.\n\nOda|« Je n'ai pas besoin des urgences. »\n\nNao|« Bonsoir monsieur Oda. »\n\nOda|« Vous n'aviez pas à venir. »\n\nNao|« Non. »\n\nOda|« Il est deux heures du matin. »\n\nNao|« Deux heures dix-huit. »\n\nIl grogne. C'est un grognement de soulagement.",
+    "Elle s'accroupit. Elle regarde la hanche, le poignet, la cheville, dans cet ordre, sans rien toucher d'abord.\n\nNao|« Vous êtes tombé comment ? »\n\nOda|« Bêtement. »\n\nNao|« Tout le monde tombe bêtement. Vous êtes tombé sur quoi ? »\n\nOda|« La hanche. »\n\nNao|« Laquelle ? »\n\nOda|« La bonne. »\n\nNao|« Il n'y a pas de bonne hanche à soixante-dix-huit ans. »\n\nDerrière elle, dans l'encadrement de la porte, Ren n'a pas bougé d'un centimètre.",
+    "Il faut le relever. Il pèse soixante-douze kilos et il ne peut pas s'aider du bras droit.\n\nNao|« Monsieur Oda, je vais avoir besoin de— »\n\nRen est déjà là.\n\nIl ne la bouscule pas, il ne prend pas les commandes. Il se met à genoux de l'autre côté et il attend.\n\nNao|« Vous passez sous l'aisselle gauche. Pas de traction sur le bras. Vous soulevez quand je dis. »\n\nRen|« D'accord. »\n\nNao|« Trois, deux— »\n\nOda|« Vous comptez à l'envers ? »\n\nNao|« Un. »\n\nIls le relèvent en un seul mouvement.",
+    "Elle passe quarante minutes. Bilan, glace, un mot pour le médecin du matin, un appel à la fille à Sendai qu'elle réveille et qui pleure au téléphone.\n\nPendant ce temps, Ren a remis la table de chevet en place, ramassé les lunettes sous le lit, et rebranché la lampe dont la prise avait sauté — probablement la cause de la chute, à trois heures du matin, dans le noir.\n\nIl ne le signale à personne. Nao le voit faire depuis l'autre bout de la chambre.",
+    "Oda|« C'est votre mari ? »\n\nNao|« …Oui. »\n\nOda|« Il ne parle pas beaucoup. »\n\nNao|« Non. »\n\nOda|« C'est bien. Il y a trop de gens qui parlent. »\n\nIl ferme les yeux.\n\nOda|« Vous reviendrez lundi ? »\n\nNao|« Lundi quatorze heures. Comme toujours. »\n\nOda|« Mm. »",
+    "*Dans la voiture, 03h35*\n\nIl ne démarre pas tout de suite. Il pose les mains sur le volant et il reste comme ça.\n\nRen|« Vous faites ça combien de fois par mois ? »\n\nNao|« Une garde toutes les trois semaines. Ça sonne une fois sur trois. »\n\nRen|« Et vous travaillez à huit heures. »\n\nNao|« Et je travaille à huit heures. »\n\nIl démarre.\n\nAu feu de la gare :\n\nRen|« La prise était arrachée. Il a dû tirer dessus en cherchant la lampe. »\n\nNao|« Je sais. Je vous ai vu. »\n\nRen|« Ah. »\n\nNao|« Vous auriez pu le dire. »\n\nUn temps.\n\nRen|« Je viens de le dire. »\n\nElle tourne la tête vers la vitre pour qu'il ne voie pas sa figure."
+  ]
+_M4[24]["scenes"] = [
+    "*Novembre, un dimanche, 10h*\n\nIl pleut. L'atelier sent l'encre mouillée, ce qui est différent de l'encre sèche et bien pire.\n\nNao arrive à dix heures avec des choux à la crème parce qu'elle ne sait pas arriver les mains vides.\n\nIl y a deux paires de chaussures dans l'entrée.",
+    "Ren est en bleu de travail.\n\nPas en costume, pas en t-shirt : en bleu de travail, celui de rechange que son père garde accroché derrière la porte depuis 2009 et que personne n'a jamais porté.\n\nIl a de l'encre jusqu'aux coudes.\n\nNao reste dans l'embrasure trois secondes de trop.\n\nTetsuo|« Ah, tiens. »\n\nNao|« …Salut. »\n\nTetsuo|« Y a du thé sur le réchaud. »",
+    "Ils sont en train de démonter le groupe encreur, ce qui est un travail à deux et que Tetsuo fait seul depuis six ans.\n\nTetsuo|« Tiens ça. »\n\nRen|« Comme ça ? »\n\nTetsuo|« Plus haut. Faut que le rouleau tombe pas. »\n\nRen|« Il pèse combien ? »\n\nTetsuo|« Onze kilos. »\n\nRen|« Et vous le portez seul depuis six ans. »\n\nTetsuo|« Je le fais rouler. »\n\nRen|« Vous le faites rouler sur un bâti en fonte de 1974. »\n\nTetsuo|« Ça marche. »\n\nRen|« Ça marchera jusqu'au jour où ça ne marchera pas. »\n\nNao, sur le tabouret à trois pieds, ne dit rien du tout et regarde son père se faire reprendre par quelqu'un et ne pas s'énerver.",
+    "À midi, ils s'arrêtent. Trois tasses dépareillées sur l'établi.\n\nTetsuo|« Vous avez appris ça où ? »\n\nRen|« Sur des chantiers. Ce n'est pas la même chose, mais les principes se ressemblent. »\n\nTetsuo|« Vous étiez sur les chantiers ? »\n\nRen|« Quatre ans. »\n\nTetsuo|« Et maintenant ? »\n\nRen|« Bureau. »\n\nTetsuo|« Ah. »\n\nIl boit.\n\nTetsuo|« Ça vous manque ? »\n\nRen|« Oui. »\n\nIl l'a dit sans hésiter, à un homme qu'il connaît depuis huit mois, dans un atelier, un dimanche, alors qu'il ne l'a jamais dit à son propre père.\n\nNao regarde le fond de sa tasse.",
+    "Vers quatorze heures, Tetsuo sort chercher du dégrippant.\n\nIl reste Nao, Ren, une presse démontée et la pluie sur le toit en tôle.\n\nNao|« Vous n'êtes pas obligé de faire ça. »\n\nRen|« Je sais. »\n\nNao|« Alors pourquoi ? »\n\nIl essuie une pièce avec un chiffon.\n\nRen|« Parce que je peux. »\n\nNao|« Ce n'est pas une réponse. »\n\nRen|« C'est la seule que j'ai. »",
+    "Elle s'approche de l'établi. Elle prend un chiffon aussi.\n\nNao|« Il vous appelle comment ? »\n\nRen|« Pardon ? »\n\nNao|« Mon père. Il vous appelle comment ? »\n\nRen|« Ren. »\n\nNao|« Depuis quand ? »\n\nRen|« Le deuxième samedi. »\n\nElle frotte une pièce qui est déjà propre.\n\nNao|« Il m'a appelée *Nao-chan* jusqu'à mes vingt-trois ans et il a arrêté du jour au lendemain sans explication. »\n\nRen|« Pourquoi ? »\n\nNao|« Aucune idée. »\n\nRen|« Demandez-lui. »\n\nNao|« Vous plaisantez. »\n\nRen|« Non. »\n\nIl repose sa pièce.\n\nRen|« Vous m'avez expliqué la semaine dernière la différence entre demander la permission et partager après. J'y ai réfléchi quatre jours. »\n\nNao|« Et ? »\n\nRen|« Et je crois qu'il y a aussi une différence entre deviner et demander. »",
+    "Tetsuo revient avec le dégrippant et une bouteille de thé d'orge qu'il pose sur l'établi sans commentaire, à côté du coude de sa fille.\n\nIls remontent le groupe encreur jusqu'à dix-sept heures.\n\nÀ dix-sept heures dix, la presse tourne. Le margeur ne déraille pas.\n\nLes trois restent debout devant, à écouter le bruit, pendant à peu près une minute entière, sans que personne ne dise quoi que ce soit."
+  ]
+_M4[25]["scenes"] = [
+    "*Fin novembre, samedi, 18h20*\n\nL'ascenseur est en panne depuis jeudi. Il y a un panneau. Le panneau dit *rétablissement prévu lundi*, ce qui, dans cette résidence, veut dire jeudi prochain.\n\nIls sont au septième.\n\nIl y a huit sacs de courses parce qu'ils ont décidé, pour la première fois, de faire les courses de la semaine d'un coup.",
+    "Nao|« On en prend quatre chacun. »\n\nRen|« Je prends six. »\n\nNao|« Vous prenez quatre. »\n\nRen|« Il y a deux packs d'eau. »\n\nNao|« Je porte des gens de soixante-dix kilos toute la journée. »\n\nRen|« Ce n'est pas la question. »\n\nNao|« C'est exactement la question. »\n\nIl prend cinq sacs. Elle en prend trois. Aucun des deux n'est content.",
+    "Deuxième étage.\n\nRen|« Ça va ? »\n\nNao|« Très bien. »\n\nQuatrième étage.\n\nRen|« Ça va ? »\n\nNao|« Arrêtez de demander. »\n\nCinquième étage.\n\nNao|« Ça va ? »\n\nRen|« …Oui. »\n\nNao|« Vous respirez fort. »\n\nRen|« Je ne respire pas fort. »\n\nNao|« Vous courez tous les matins et vous respirez fort à cause de cinq sacs de courses. »\n\nRen|« Il y a les packs d'eau. »\n\nNao|« Que vous avez pris. »\n\nRen|« Que j'ai pris. »",
+    "Au sixième, un des sacs cède.\n\nPas un peu : complètement, le fond entier, d'un seul coup.\n\nQuatorze mandarines partent dans l'escalier. Le bruit dure environ six secondes. Une mandarine passe entre les barreaux de la rampe et tombe de six étages, ce qui produit un dernier bruit, très loin, très net.",
+    "Ils regardent l'escalier.\n\nRen pose ses sacs. Il s'assoit sur une marche. Il met les coudes sur les genoux.\n\nEt il se met à rire.\n\nPas deux secondes. Pas un rire poli. Il rit vraiment, sans bruit d'abord, épaules qui tremblent, puis avec bruit, la tête baissée, et il n'arrive plus à s'arrêter.\n\nNao le regarde d'abord comme un phénomène naturel.\n\nPuis elle s'assoit à côté de lui et elle rit aussi, et c'est pire, parce qu'à chaque fois que l'un des deux se calme l'autre repart.",
+    "Nao|« Elle est— »\n\nRen|« Ne dites rien. »\n\nNao|« Elle est tombée de SIX ÉTAGES. »\n\nRen|« Je sais. »\n\nNao|« On l'a entendue arriver. »\n\nRen|« Je sais. »\n\nUne voisine du sixième ouvre sa porte, regarde deux adultes assis dans l'escalier au milieu de treize mandarines, et referme sa porte.\n\nCe qui les achève.",
+    "Ils mettent onze minutes à remonter le dernier étage.\n\nIls rangent les courses. Elle chante, et elle ne s'arrête pas quand il entre dans la cuisine, ce qui est nouveau.\n\nRen|« C'est encore cette chanson. »\n\nNao|« C'est un classique. »\n\nRen|« C'est une catastrophe. »\n\nNao|« Vous avez dit la même phrase en juillet. »\n\nRen|« Parce que c'est toujours vrai. »\n\nElle monte le son.",
+    "Plus tard, il y a une mandarine posée sur la table de la cuisine.\n\nElle est en très mauvais état. Elle a manifestement fait six étages en chute libre et atterri sur du carrelage.\n\nIl est descendu la chercher.\n\nNao|« Pourquoi ? »\n\nRen|« Elle bloquait la porte du local à vélos. »\n\nNao|« C'est faux. »\n\nRen|« C'est possible. »\n\nIl ne dit rien de plus.\n\nElle la garde trois jours sur le rebord de la fenêtre avant de la jeter, et elle ne saurait pas expliquer pourquoi."
+  ]
+del _M4
+
+
+# ── ARC V : épisodes 27 à 32 (devenir partenaires) ──
+_M5 = CHRONIQUE_SAISONS["maries_malgre_nous"]["episodes"]
+_M5[26]["scenes"] = [
+    "*Début décembre, izakaya près du siège, 20h*\n\nVingt-deux personnes pour le pot de départ de Haru, ce qui est six de plus que pour n'importe quel autre départ de l'année, et Haru le fait remarquer trois fois.\n\nHaru|« Vingt-deux. »\n\nRen|« Tu as compté. »\n\nHaru|« Évidemment que j'ai compté. Nakamura en a eu neuf. »\n\nRen|« Nakamura partait en retraite. »\n\nHaru|« Nakamura était insupportable, c'est différent. »",
+    "Il a bu deux bières et il est passé à la phase où il dit des choses vraies.\n\nHaru|« Tu sais ce qui me fait le plus peur ? »\n\nRen|« Le crédit. »\n\nHaru|« Non. »\n\nRen|« Les clients. »\n\nHaru|« Non. »\n\nIl tourne son verre.\n\nHaru|« C'est que dans six mois je me réveille et que je me rende compte que j'étais très bien ici. Que j'avais un salaire, une mutuelle, un bureau avec la lumière du matin, et que j'ai tout cassé pour rien. »\n\nRen|« C'est possible. »\n\nHaru|« Merci, c'est très réconfortant. »\n\nRen|« Tu voulais que je mente ? »\n\nHaru|« Un peu. »",
+    "Haru|« Toi tu ferais quoi ? »\n\nRen|« Comment ça ? »\n\nHaru|« Si t'avais pas de nom de famille. Si personne attendait rien. Tu ferais quoi ? »\n\nRen ne répond pas.\n\nHaru|« Voilà, c'est ce que je dis. »\n\nRen|« Je n'ai pas dit non. »\n\nHaru|« T'as pas dit *oui* non plus, et ça fait huit ans que ça dure. »\n\nIl finit sa bière.\n\nHaru|« Tu sais combien de fois tu m'as parlé de la passerelle de Tsuchiya ? »\n\nRen|« Une. »\n\nHaru|« Quatre. En huit ans, quatre fois. Toujours après vingt-trois heures, toujours quand t'avais bu, toujours pendant environ deux minutes, et après tu changeais de sujet. »\n\nRen|« Ce n'était rien. »\n\nHaru|« Tu m'as décrit les assemblages. »",
+    "Aya arrive à vingt et une heures, directement du bureau.\n\nElle salue Haru, lui donne une enveloppe qu'il ouvre et qui le fait rougir, puis elle s'assoit à trois places de Ren et parle avec deux personnes du juridique pendant quarante minutes.\n\nElle ne cherche pas Ren du regard une seule fois.\n\nC'est peut-être ça, le plus visible.",
+    "*23h40, sur le trottoir*\n\nHaru est parti en taxi en criant quelque chose d'incompréhensible par la vitre. Il en reste six qui attendent le suivant.\n\nAya|« Kirishima-san. »\n\nRen|« Morimoto-san. »\n\nAya|« J'ai parlé à votre femme. En octobre. »\n\nIl ne bouge pas.\n\nRen|« Je sais. »\n\nAya|« Vous ne me demandez pas ce que j'ai dit ? »\n\nRen|« Non. »\n\nAya|« Pourquoi ? »\n\nRen|« Parce que vous n'avez rien dit qui n'était pas vrai. »\n\nElle hoche la tête.\n\nAya|« C'était mieux qu'elle le sache. »\n\nRen|« Probablement. »\n\nAya|« Vous auriez pu le lui dire vous-même. »\n\nRen|« Non. »\n\nElle le regarde un moment.\n\nAya|« Un jour, j'aimerais comprendre pourquoi. »\n\nSon taxi arrive.",
+    "*Appartement, 00h30*\n\nNao est réveillée. Elle lit sur le canapé avec la télé en fond, son volume, point onze.\n\nNao|« Alors ? »\n\nRen|« Vingt-deux personnes. »\n\nNao|« C'est beaucoup ? »\n\nRen|« Nakamura en a eu neuf. »\n\nNao|« Je ne sais pas qui est Nakamura. »\n\nRen|« Personne ne sait qui est Nakamura. C'est le problème de Nakamura. »\n\nElle rit dans son livre.\n\nIl reste debout dans le salon plus longtemps que nécessaire.\n\nNao|« Il y a autre chose. »\n\nRen|« Non. »\n\nNao|« Ren. »\n\nRen|« …Haru m'a posé une question et je n'ai pas su répondre. »\n\nNao|« Laquelle ? »\n\nRen|« Bonne nuit. »\n\nElle le laisse partir. Mais elle note la date."
+  ]
+_M5[27]["scenes"] = [
+    "*Mi-décembre, samedi, 11h*\n\nLe local est toujours libre. L'agent a rappelé deux fois. Le linoléum est toujours vert.\n\nYui a insisté pour revenir *juste voir*, ce qui, chez Yui, veut dire *t'obliger à y penser*.\n\nYui|« Il est toujours là. »\n\nNao|« Il est toujours vert. »\n\nYui|« Sept mois qu'il est libre. Ça veut dire que personne n'en veut. »\n\nNao|« Merci. »\n\nYui|« Ça veut dire que tu peux négocier ! »",
+    "Elles restent vingt minutes dans le froid, à regarder par la vitrine.\n\nYui|« Tu vas le faire quand ? »\n\nNao|« Dans onze ans. »\n\nYui|« Tu dis ça depuis mai. »\n\nNao|« Parce que c'est toujours vrai. »\n\nYui|« Non. »\n\nNao|« Pardon ? »\n\nYui|« C'est plus vrai. Tu payes plus de loyer depuis avril. »\n\nNao se tourne vers elle.\n\nYui|« Quoi ? Je sais compter aussi. »",
+    "*Le soir, appartement, 21h*\n\nElle a sorti ses relevés sur la table de la cuisine. Sept mois de virements sur un compte d'épargne qu'elle avait ouvert à vingt-deux ans et qui n'avait jamais dépassé quatre-vingt mille yens.\n\nIl y a six cent quarante mille yens dessus.\n\nElle a la calculatrice du téléphone allumée depuis vingt minutes et elle refait le même calcul.",
+    "Ren rentre. Il voit les papiers, la calculatrice, le visage.\n\nRen|« Il y a un problème ? »\n\nNao|« Non. »\n\nRen|« D'accord. »\n\nIl va se servir un verre d'eau. Il ne regarde pas les papiers. Il fait exprès de ne pas regarder les papiers, ce qui est visible depuis la cuisine, le salon, et probablement depuis la rue.\n\nNao|« Vous pouvez regarder. »\n\nRen|« Ce sont vos comptes. »\n\nNao|« Je viens de vous dire que vous pouvez regarder. »\n\nIl pose son verre. Il s'assoit.",
+    "Elle prend une inspiration qui dure trop longtemps.\n\nNao|« Je veux ouvrir mon cabinet. »\n\nElle l'a dit. À voix haute. À quelqu'un.\n\nRen|« Depuis quand ? »\n\nNao|« Deux ans et demi. »\n\nRen|« Vous l'avez dit à qui ? »\n\nNao|« À Yui. Par accident. En mai. »\n\nRen|« Et à Mei ? »\n\nNao|« Non. »\n\nRen|« Et à votre père ? »\n\nNao|« Surtout pas à mon père. »\n\nIl hoche la tête une fois, lentement, comme s'il rangeait l'information à un endroit précis.",
+    "Ren|« Il vous manque combien ? »\n\nNao|« Pour ouvrir, tout. Pour signer le bail, plus rien. »\n\nRen|« …Pardon ? »\n\nNao|« Caution et premier loyer, six cent vingt mille. J'en ai six cent quarante. »\n\nSilence.\n\nRen|« Depuis quand ? »\n\nNao|« Depuis mardi. »\n\nRen|« Vous avez ça depuis mardi et vous n'avez rien dit. »\n\nNao|« Vous êtes vraiment le mieux placé pour me faire cette remarque ? »\n\nRen|« …Non. »",
+    "Il regarde les relevés. Il ne les prend pas, il les lit à l'envers.\n\nRen|« Vous avez économisé six cent quarante mille en sept mois sur un salaire de kiné. »\n\nNao|« Parce que je ne paye pas de loyer. »\n\nIl s'arrête.\n\nNao|« Voilà. Vous y êtes. »\n\nRen|« Ce mariage vous a payé votre indépendance. »\n\nNao|« Ce mariage m'a payé mon indépendance. »\n\nElle rit, très mal.\n\nNao|« C'est drôle, non ? »\n\nRen|« Non. »",
+    "Il se lève. Elle croit qu'il part. Il va chercher un stylo et un bloc dans sa sacoche et il revient s'asseoir.\n\nRen|« Vous avez quarante et un mètres carrés, une vitrine et deux prises du même côté. »\n\nNao|« Comment vous savez ça ? »\n\nRen|« Vous l'avez dit à Yui au téléphone en mai, dans la cuisine, en pensant que j'étais parti courir. »\n\nNao|« …Vous étiez là ? »\n\nRen|« Je mettais mes chaussures. »\n\nIl dessine un rectangle.\n\nRen|« Le tableau électrique est où ? »\n\nNao|« Ren— »\n\nRen|« Je ne vais rien décider. Je pose des questions. Vous répondez ou vous ne répondez pas. »\n\nElle le regarde pendant environ quatre secondes.\n\nNao|« Au fond à droite, au-dessus du point d'eau. »\n\nRen|« Bien. C'est ce qu'il y a de plus cher à déplacer. Donc on ne le déplace pas. »",
+    "Ils y passent deux heures.\n\nIl ne propose pas d'argent. Pas une fois. Elle attend qu'il le fasse pendant les vingt premières minutes, et il ne le fait pas, et au bout d'un moment elle arrête d'attendre.\n\nIl pose des questions. Elle répond. Il dessine. Il rature. Il redessine.\n\nÀ une heure du matin, il y a trois pages de croquis sur la table et une estimation de travaux à sept cent dix mille yens au lieu de deux millions, parce qu'on ne touche ni au tableau ni au point d'eau.\n\nNao|« Sept cent dix. »\n\nRen|« Plus le sol, si vous y tenez. »\n\nNao|« J'y tiens. »\n\nRen|« Alors sept cent quatre-vingt. »",
+    "Elle regarde les trois pages.\n\nL'écriture est minuscule et furieuse. Les cotes sont annotées deux fois. Il y a une flèche vers la vitrine avec la mention *lumière matin, tables ici*.\n\nElle a déjà vu cette écriture.\n\nElle l'a vue en mai, dans un carnet noir à couverture usée au coin, sur une double page où quelqu'un avait écrit *proposer à Père* et souligné deux fois.\n\nElle ne dit rien.\n\nElle plie les trois pages et les met dans son sac."
+  ]
+_M5[28]["scenes"] = [
+    "*Fin décembre, 19h40*\n\nElle passe au siège déposer un dossier d'assurance que la mutuelle réclame depuis trois semaines et qu'il a oublié deux fois.\n\nL'accueil est fermé. Le gardien la laisse monter au huitième.",
+    "La porte du bureau est ouverte.\n\nIls sont deux devant un écran. Lui assis, elle debout derrière, penchée, une main sur le dossier de la chaise.\n\nAya|« Non, là, la reprise en sous-œuvre. Si tu la mets en phase deux, le planning explose. »\n\nRen|« Il explose déjà. »\n\nAya|« Il explose de trois semaines, pas de trois mois. »\n\nRen|« Alors il faut le dire maintenant. »\n\nAya|« Il faut surtout que ce ne soit pas toi qui le dises. »\n\nRen|« Pourquoi ? »\n\nAya|« Parce que tu l'as déjà dit en octobre et que ton père l'a mal pris. Laisse-moi le porter. »\n\nIl lève les yeux vers elle.\n\nRen|« Ça va te coûter. »\n\nAya|« Moins qu'à toi. »",
+    "Nao est dans le couloir depuis onze secondes.\n\nCe n'est rien. Il n'y a rien. Une femme debout derrière une chaise à sept heures quarante du soir en train de parler planning.\n\nSauf qu'elle le tutoie.\n\nSauf qu'elle sait ce qui s'est passé en octobre.\n\nSauf qu'elle vient de proposer de payer quelque chose à sa place, et qu'il ne l'a pas refusé.\n\nNao a exactement la sensation d'être dans un couloir où elle n'a rien à faire.",
+    "Elle frappe. Ils se retournent.\n\nRen|« Nao. »\n\nNao|« La mutuelle. »\n\nElle pose le dossier sur le bureau.\n\nAya|« Bonsoir. »\n\nNao|« Bonsoir. »\n\nTrois secondes.\n\nAya|« Je vous laisse, j'ai fini. »\n\nElle prend ses affaires. Elle est très rapide. Elle n'est pas gênée — elle évite juste d'imposer sa présence, ce qui est mille fois pire.\n\nAya|« Bonne soirée à tous les deux. »",
+    "*Dans la voiture*\n\nRen|« Vous auriez pu m'appeler, je serais descendu. »\n\nNao|« Ça allait. »\n\nRen|« Il fait moins deux. »\n\nNao|« Ça allait. »\n\nTrois feux.\n\nNao|« Elle vous tutoie. »\n\nRen|« Oui. »\n\nNao|« Depuis quand ? »\n\nRen|« Six ans. »\n\nNao|« Et vous ? »\n\nRen|« Moi aussi. »\n\nNao|« Ah. »\n\nElle regarde par la vitre.\n\nNao|« Vous ne me tutoyez pas. »\n\nIl ne répond pas.",
+    "*Appartement, 22h30*\n\nElle est sur le balcon avec Mei au téléphone.\n\nMei|« Bon. Vas-y. »\n\nNao|« Il n'y a rien. »\n\nMei|« Nao, tu m'as appelée à dix heures et demie du soir en décembre pour me parler d'un dossier de mutuelle. »\n\nNao|« Il y a une femme. »\n\nMei|« Voilà. »\n\nNao|« Il n'y a rien avec cette femme. »\n\nMei|« D'accord. »\n\nNao|« Vraiment rien. Elle est bien. Elle est correcte. Elle a fait un truc généreux pour moi en octobre. »\n\nMei|« Ah, c'est ELLE ? »\n\nNao|« C'est elle. »\n\nMei|« Oh la la. »",
+    "Nao|« Je la déteste. »\n\nMei|« Ouais. »\n\nNao|« Je la déteste et elle n'a rien fait. Elle n'a strictement rien fait. Je suis en train de détester quelqu'un pour avoir existé six ans avant moi dans un bureau. »\n\nMei|« Ouais. »\n\nNao|« Arrête de dire ouais. »\n\nMei|« Qu'est-ce que tu veux que je dise ? »\n\nNao|« Que c'est pas de la jalousie. »\n\nMei|« C'est de la jalousie. »\n\nNao|« Mei. »\n\nMei|« Ma vieille. Tu es mariée à ce type depuis huit mois. Si c'était juste un arrangement, tu t'en foutrais complètement. »\n\nSilence sur le balcon.\n\nMei|« Ah. »\n\nNao|« Ne dis rien. »\n\nMei|« Je dis rien. »\n\nNao|« Mei— »\n\nMei|« JE DIS RIEN. »",
+    "*Deux jours plus tard, 12h30*\n\nLe message arrive pendant la pause.\n\n**Aya Morimoto** — *Bonjour. Je crois que ma présence l'autre soir vous a mise mal à l'aise, et j'en suis désolée. Si vous voulez qu'on en parle, je suis disponible. Si vous préférez qu'on n'en parle jamais, c'est très bien aussi.*\n\nNao regarde l'écran pendant une minute entière."
+  ]
+_M5[29]["scenes"] = [
+    "*Fin décembre, résidence Kirishima, 12h30*\n\nDéjeuner de fin d'année. Six personnes seulement : Shigeru, Sae, Ren, Nao, et deux cousins qui repartent à quatorze heures.\n\nIchiro n'est pas venu. Il ne sort plus depuis novembre.\n\nShigeru mange vite et parle du chantier de Higashi avec son fils comme s'il n'y avait personne d'autre à table.",
+    "À quinze heures, il ne reste que Sae et Nao dans la cuisine.\n\nLes hommes sont partis dans le bureau. On entend la voix de Shigeru à travers deux portes.\n\nSae|« Vous essuyez, je range. C'est plus rapide. »\n\nNao|« D'accord. »\n\nSae|« Vous avez fait ça toute votre vie, ça se voit. »\n\nNao|« Depuis mes douze ans. »\n\nSae|« Ah. »\n\nElle ne demande pas pourquoi douze. C'est la première fois que quelqu'un ne demande pas.",
+    "Sae|« Il a changé, vous savez. »\n\nNao|« Ren ? »\n\nSae|« Il rentre. »\n\nNao|« Comment ça, il rentre ? »\n\nSae|« Avant, il travaillait jusqu'à vingt-deux heures et il rentrait dans un appartement vide. Là il rentre à vingt heures. »\n\nNao|« Il rentre à vingt heures dix. »\n\nSae s'arrête, un plat à la main.\n\nSae|« Vous savez à quelle heure il rentre. »\n\nNao|« …Oui. »\n\nSae|« À dix minutes près. »\n\nNao|« Le trafic. »\n\nSae|« Bien sûr. »\n\nElle range le plat en souriant.",
+    "Nao|« Sae-san. Je peux vous demander quelque chose ? »\n\nSae|« Bien sûr. »\n\nNao|« Votre mariage. Vous vous étiez vus deux fois avant. »\n\nSae|« Trois, en fait. Mais la troisième ne comptait pas, il y avait quarante personnes. »\n\nNao|« Et ça s'est bien passé. »\n\nSae|« Trente ans en octobre dernier. Il avait réservé le restaurant en août. »\n\nNao|« Ce n'est pas ce que je demande. »\n\nSae repose son torchon.",
+    "Elle met du temps.\n\nSae|« Il est bon. Vous savez, mon mari. Les gens ne le voient pas parce qu'il est raide, mais il n'a jamais levé la voix sur moi en trente ans, il n'a jamais oublié un anniversaire, et quand ma mère est morte il a annulé trois semaines de travail sans que je lui demande. »\n\nNao|« Ça a l'air bien. »\n\nSae|« C'est bien. »\n\nElle reprend le torchon. Elle le repose.\n\nSae|« Il ne m'a jamais demandé ce que je voulais faire. »\n\nNao ne bouge plus.",
+    "Sae|« Une fois. En 1998. J'avais un projet — une petite chose, une école de musique pour enfants, dans le quartier. J'en ai parlé un soir. »\n\nNao|« Et ? »\n\nSae|« Il a dit *c'est une bonne idée*. »\n\nNao|« Et après ? »\n\nSae|« Après rien. Il n'en a plus jamais reparlé. Ni pour, ni contre. Il n'a pas dit non une seule fois. »\n\nElle plie le torchon en trois.\n\nSae|« Alors j'ai arrêté d'en parler. Et vingt-sept ans après, je ne sais toujours pas s'il a oublié ou s'il a décidé. »",
+    "Elle range le torchon dans le tiroir et se retourne, tout sourire, exactement comme si elle venait de parler de la météo.\n\nSae|« Bon ! Il reste du gâteau, vous en emportez. »\n\nNao|« Sae-san— »\n\nSae|« Il est très bon, c'est la boutique près de la gare. »\n\nNao|« …D'accord. »\n\nSae|« Et vous demandez à Ren s'il en veut, il dira non, mais il en mangera quand même. »\n\nElle emballe le gâteau dans du papier et personne ne revient sur 1998.",
+    "*Dans la voiture, 17h*\n\nIl fait déjà nuit. Elle tient le gâteau sur les genoux.\n\nRen|« Vous êtes silencieuse. »\n\nNao|« Mm. »\n\nRen|« Ma mère vous a dit quelque chose. »\n\nNao|« Elle m'a parlé d'une école de musique. »\n\nRen|« …Quoi ? »\n\nNao|« En 1998. »\n\nRen|« Je ne sais pas de quoi vous parlez. »\n\nNao|« Je sais. »\n\nElle regarde la route pendant un moment.\n\nNao|« Ren. Si un jour je vous dis un truc que je veux faire, et que vous répondez *c'est une bonne idée* et que vous n'en reparlez plus jamais, je vous préviens tout de suite que je vais devenir insupportable. »\n\nRen|« …D'accord. »\n\nNao|« Je suis sérieuse. »\n\nRen|« J'ai compris. »\n\nDeux kilomètres plus loin :\n\nRen|« Le tableau électrique au fond à droite. »\n\nNao|« Quoi ? »\n\nRen|« Votre local. J'y ai repensé. Il faudrait un différentiel séparé pour les tables. Je vous ferai un schéma. »\n\nElle serre le gâteau un peu trop fort."
+  ]
+_M5[30]["scenes"] = [
+    "*Début janvier, maison d'Ichiro, un jeudi*\n\nIl y a une paire de chaussures dans l'entrée qui n'appartient à personne.\n\nRen s'arrête au milieu du couloir.\n\nElles sont trop grandes pour son père, trop récentes pour son grand-père, et il n'y a personne d'autre qui entre dans cette maison le jeudi.",
+    "Kaito est assis dans le fauteuil qui n'est pas celui d'Ichiro, avec une tasse de thé et l'air de quelqu'un qui est là depuis deux heures.\n\nIl a trente ans. Il ressemble à leur père, ce qui a toujours été le problème.\n\nKaito|« Salut. »\n\nRen ne dit rien.\n\nIchiro|« Assieds-toi. »\n\nRen|« Depuis quand tu es là ? »\n\nKaito|« Mardi. »\n\nRen|« Mardi. »\n\nKaito|« Mardi soir. »\n\nRen|« Et personne ne me l'a dit. »\n\nIchiro|« Je viens de te le dire. »",
+    "Ren s'assoit parce qu'il n'a pas d'autre option correcte.\n\nIls boivent le thé. Ichiro parle du merle, ce qui prend six minutes, ce qui est manifestement le but.\n\nPuis il se lève, très lentement, et il sort en disant qu'il va chercher quelque chose dans la cuisine.\n\nIl ne revient pas.\n\nKaito|« Il fait ça depuis mardi. Il est très mauvais. »\n\nRen|« Il a quatre-vingt-quatre ans. »\n\nKaito|« Il était déjà mauvais à soixante-quatorze. »",
+    "Kaito|« Tu es marié. »\n\nRen|« Oui. »\n\nKaito|« Grand-père me l'a écrit. En avril. »\n\nRen|« Il t'écrit ? »\n\nKaito|« Tous les mois. Depuis dix ans. »\n\nRen repose sa tasse un peu trop fort.\n\nRen|« Tous les mois. »\n\nKaito|« Quatre-vingt-douze lettres. Il n'en a jamais raté une. »\n\nRen|« Et toi tu réponds ? »\n\nKaito|« Toujours. »\n\nUn long silence.\n\nRen|« Pourquoi tu ne m'as jamais écrit à moi ? »\n\nKaito|« J'ai écrit. »",
+    "Ren|« …Quoi ? »\n\nKaito|« La première année. Cinq fois. Au bureau, parce que je ne savais pas où tu habitais. »\n\nRen|« Je n'ai jamais rien reçu. »\n\nKaito|« Je sais. »\n\nRen|« Comment tu sais ? »\n\nKaito|« Parce que la sixième fois, j'ai eu un appel de papa qui m'a demandé d'arrêter. »\n\nLa pièce est très silencieuse. On entend le merle, ou son fils.\n\nRen|« Il t'a demandé d'arrêter. »\n\nKaito|« Il m'a dit que tu allais bien, que tu étais en train de te construire, et que ce n'était pas le moment. »\n\nRen|« Et tu as arrêté. »\n\nKaito|« J'ai arrêté. »\n\nKaito repose sa tasse.\n\nKaito|« J'avais vingt et un ans et j'étais tout seul à Singapour et il m'a dit que j'allais te faire du mal. Alors oui, j'ai arrêté. »",
+    "Ren se lève. Il fait trois pas vers la fenêtre. Il ne dit rien pendant longtemps.\n\nRen|« Dix ans. »\n\nKaito|« Dix ans. »\n\nRen|« Tu aurais pu insister. »\n\nKaito|« Oui. »\n\nRen|« Tu aurais pu venir. »\n\nKaito|« Oui. »\n\nRen|« Alors pourquoi— »\n\nKaito|« Parce que j'étais en train de me noyer, Ren. »\n\nIl le dit sans se défendre, ce qui coupe la phrase de Ren en deux.\n\nKaito|« Je ne partais pas pour être libre. Je partais parce que si je restais un an de plus, il n'y avait plus personne à sauver. Et quand tu es dans cet état, tu n'as pas de place pour la culpabilité de quelqu'un d'autre. »",
+    "Ren|« Tu m'as laissé. »\n\nKaito|« Oui. »\n\nRen|« Tu m'as laissé à dix-sept ans avec une entreprise et un père qui a posé la main sur mon épaule le surlendemain. »\n\nKaito|« …Il a fait ça ? »\n\nRen|« Le surlendemain. »\n\nKaito ferme les yeux une seconde.\n\nKaito|« Je suis désolé. »\n\nRen|« Ça ne sert à rien. »\n\nKaito|« Non. »\n\nKaito|« Ça ne sert à rien et je le dis quand même. »",
+    "Il se lève à son tour. Il est plus grand que Ren de trois centimètres, ce qui l'a toujours agacé.\n\nKaito|« Je vais te dire une seule chose et après je te laisse tranquille. »\n\nRen|« Vas-y. »\n\nKaito|« Grand-père m'écrit tous les mois. Tu sais ce qu'il y a dans les lettres ? »\n\nRen|« Non. »\n\nKaito|« Toi. Il y a toi dans les quatre-vingt-douze lettres. »\n\nRen ne bouge pas.\n\nKaito|« *Ren a fini son école. Ren est sur un chantier, il a l'air heureux. Ren est passé au bureau, il a l'air moins heureux. Ren ne dit rien. Ren ne dit toujours rien.* »\n\nIl attrape son manteau.\n\nKaito|« Dix ans de *Ren ne dit rien*. »",
+    "Ren|« Qu'est-ce que tu veux que je fasse ? »\n\nKaito s'arrête à la porte.\n\nKaito|« Tu ne leur dois pas ta vie. »\n\nRen|« Ce n'est pas si simple. »\n\nKaito|« Si. C'est exactement aussi simple que ça et c'est exactement aussi difficile que ça. Les deux en même temps. »\n\nIl enfile son manteau.\n\nKaito|« Je repars dimanche. Je serai chez grand-père jusque-là. Tu viens si tu veux, tu ne viens pas si tu veux pas. Je ne vais pas te demander deux fois, j'ai passé l'âge. »\n\nIl sort.\n\nIchiro rentre dans la pièce quarante secondes plus tard avec absolument rien dans les mains.",
+    "*Appartement, 22h50*\n\nIl ne mange pas. Il ne range pas la cuisine. Il est assis à la table, l'ordinateur fermé devant lui.\n\nNao le regarde depuis le couloir pendant un moment.\n\nNao|« Il s'est passé quelque chose. »\n\nRen|« Oui. »\n\nElle attend. Il ne développe pas.\n\nElle va chercher deux bouteilles dans le frigo. Elle en pose une devant lui, ce qui est absurde parce qu'il ne boit jamais de thé d'orge, et elle s'assoit en face.\n\nElle ne demande rien. Elle reste.",
+    "Au bout de neuf minutes :\n\nRen|« Mon frère est là. »\n\nNao|« Kaito. »\n\nRen|« Vous vous souvenez de son prénom. »\n\nNao|« Vous me l'avez dit en août dans la voiture. »\n\nIl tourne la bouteille sur la table.\n\nRen|« Il m'a écrit cinq lettres il y a dix ans. Je ne les ai jamais eues. »\n\nNao|« …Pourquoi ? »\n\nRen|« Mon père lui a demandé d'arrêter. »\n\nNao pose sa bouteille très doucement.\n\nRen|« Pour me protéger. »",
+    "Elle ne dit pas *c'est comme mon père*. Elle ne dit pas *tu vois*.\n\nElle ne dit rien du tout pendant vingt secondes.\n\nNao|« Vous voulez que je vous dise quelque chose ou vous voulez que je reste ? »\n\nRen lève les yeux.\n\nC'est la première fois de sa vie que quelqu'un lui pose cette question.\n\nRen|« …Restez. »\n\nElle reste.\n\nIls sont assis de part et d'autre d'une table de huit avec six chaises jusqu'à une heure du matin, et il ne dit presque plus rien, et elle ne part pas."
+  ]
+_M5[31]["scenes"] = [
+    "*Mi-janvier, samedi, 14h*\n\nSota arrive à l'appartement sans prévenir, ce qui n'est jamais arrivé.\n\nNao|« Qu'est-ce qui se passe ? »\n\nSota|« Rien. »\n\nNao|« Sota. »\n\nSota|« Il est là ? »\n\nNao|« …Qui ? »\n\nSota|« Bah lui. »\n\nNao|« Tu es venu pour Ren ? »\n\nSota|« J'ai pas dit ça. »\n\nNao|« Tu viens de le dire. »\n\nSota|« J'ai dit *il est là*. C'est une question neutre. »",
+    "Ren est sur le balcon en train de regarder quelque chose sur son téléphone. Il rentre, voit Sota, et fait ce qu'il fait toujours : il attend.\n\nSota|« Salut. »\n\nRen|« Bonjour. »\n\nSota|« Euh. »\n\nIl regarde sa sœur.\n\nSota|« Tu peux… »\n\nNao|« Je peux quoi ? »\n\nSota|« Genre. Pas être là. »\n\nNao|« Tu me mets dehors de chez moi. »\n\nSota|« Techniquement c'est chez lui aussi. »\n\nElle prend son manteau en marmonnant quelque chose sur les frères, et elle descend faire une course dont personne n'a besoin.",
+    "Sota sort une pochette plastique de son sac et la pose sur la table.\n\nSota|« C'est les résultats du concours. Les vrais. Ceux de janvier. »\n\nRen|« Vous voulez que je les regarde ? »\n\nSota|« Non. »\n\nIl les reprend et les remet dans le sac.\n\nSota|« Enfin si. Mais après. »\n\nRen s'assoit. Il ne dit rien d'autre. Il laisse la place.",
+    "Sota|« Je voulais dire un truc et je vais le dire mal. »\n\nRen|« D'accord. »\n\nSota|« En juin je vous ai détesté. »\n\nRen|« Je sais. »\n\nSota|« Non mais genre vraiment. Je vous ai détesté comme jamais j'ai détesté quelqu'un. »\n\nRen|« Je sais. »\n\nSota|« Vous saviez ? »\n\nRen|« Vous n'êtes pas très discret. »\n\nSota|« …Ouais. »",
+    "Sota|« Ma sœur elle s'est mariée pour payer mon école. Tout le monde fait comme si c'était pour l'atelier mais moi je sais. »\n\nRen ne confirme ni ne dément.\n\nSota|« Et ça veut dire que tout ce que je fais, tous les points que je gagne, toutes les nuits où je révise, c'est payé avec un truc que j'ai pas demandé et que je peux pas rendre. »\n\nIl tord la lanière de son sac.\n\nSota|« Vous savez ce que ça fait ? »\n\nRen|« Oui. »\n\nSota|« Non vous savez pas. »\n\nRen|« Mon frère est parti quand j'avais dix-sept ans et mon père m'a dit *ce sera toi* le surlendemain. Depuis dix ans, tout ce que j'ai fait a été payé avec quelque chose que je n'ai pas demandé. »\n\nSota s'arrête net.\n\nSota|« …Ah. »\n\nRen|« Donc si. Je sais. »",
+    "Sota|« Et vous faites comment ? »\n\nRen|« Mal. »\n\nSota|« C'est pas une réponse. »\n\nRen|« C'est la vraie. »\n\nIl regarde ses mains.\n\nRen|« Je fais mal depuis dix ans. Je me tais, je fais ce qu'on attend, et je me dis que si je fais tout parfaitement, la dette sera réglée un jour. Elle n'est jamais réglée. »\n\nSota|« Donc c'est nul. »\n\nRen|« C'est nul. »\n\nSota|« Alors pourquoi vous me le dites ? »\n\nRen|« Pour que vous ne fassiez pas pareil. »",
+    "Sota|« Je fais quoi alors ? »\n\nRen met du temps.\n\nRen|« Vous entrez dans cette école, et vous faites un truc que vous aimez vraiment. Pas un truc pour rembourser. Un truc que vous aimez. »\n\nSota|« C'est la même chose. »\n\nRen|« Non. Si vous faites ça pour rembourser, dans quinze ans vous serez architecte et vous détesterez ça, et votre sœur se sera mariée pour rien. »\n\nSilence.\n\nSota|« C'est vraiment brutal comme façon de voir les choses. »\n\nRen|« Oui. »\n\nSota|« Mais genre… ouais. »",
+    "Il sort enfin la pochette et la pousse sur la table.\n\nRen la lit. Il la lit vraiment, ligne par ligne, pendant presque une minute.\n\nRen|« Vous êtes admis. »\n\nSota|« Ouais. »\n\nRen|« Onzième sur cent quarante. »\n\nSota|« Ouais. »\n\nRen|« Vous l'avez dit à qui ? »\n\nSota|« À personne. »\n\nRen|« Ça fait combien de temps ? »\n\nSota|« Six jours. »\n\nRen repose la feuille.\n\nRen|« Vous êtes venu me le dire à moi en premier. »\n\nSota|« …Ouais. »\n\nRen|« Pourquoi ? »\n\nSota|« Parce que si je le dis à Nao elle va pleurer et après je vais pleurer et ce sera horrible. »\n\nRen|« C'est un bon raisonnement. »",
+    "Nao remonte à quinze heures dix avec un paquet de mouchoirs qu'elle n'a pas besoin d'acheter.\n\nLes deux sont assis à la table. Sota a la pochette dans les mains.\n\nNao|« Quoi ? »\n\nSota|« Rien. »\n\nNao|« Sota. »\n\nSota|« Onzième. »\n\nNao|« …Onzième quoi ? »\n\nSota|« Sur cent quarante. »\n\nElle met environ deux secondes.\n\nPuis elle pleure. Et Sota dit *ah non, non, non, non* en reculant, et elle le serre quand même, et il finit par pleurer aussi, exactement comme il l'avait prévu.\n\nRen se lève et va dans la cuisine sans que personne ne lui demande, et il reste longtemps devant le frigo ouvert à ne rien chercher du tout.",
+    "*Le soir, 21h*\n\nSota est reparti. L'appartement est trop calme.\n\nNao|« Il vous l'a dit avant moi. »\n\nRen|« Oui. »\n\nNao|« Six jours avant moi. »\n\nRen|« Oui. »\n\nNao|« Ça devrait me vexer. »\n\nRen|« Probablement. »\n\nElle appuie le front contre la porte du frigo.\n\nNao|« Ça me vexe pas du tout. »\n\nElle relève la tête.\n\nNao|« Vous lui avez dit quoi ? »\n\nRen|« Que ce serait idiot de devenir architecte pour rembourser quelqu'un. »\n\nNao|« C'est tout ? »\n\nRen|« Non. »\n\nIl ne dit pas le reste.\n\nMais il ne dit pas *non* comme avant. Il le dit comme quelqu'un qui garde quelque chose pour plus tard, et elle entend la différence."
+  ]
+_M5[28]["choix"] = {
+    'question': 'Le message est là depuis une minute. Le curseur clignote.',
+    'decisif': False,
+    'options': [
+      (
+        'accepte',
+        '1️⃣',
+        'Accepter de la voir'
+      ),
+      (
+        'refuse',
+        '2️⃣',
+        "Répondre qu'il n'y a rien à dire"
+      )
+    ],
+    'suites': {
+      'accepte': {
+        'pose': [
+          'aya_parle'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': 12
+          }
+        },
+        'texte': "Elles se voient le samedi, dans le même café qu'en octobre.\n\nAya|« Je vais être directe, ça ira plus vite. »\n\nNao|« Allez-y. »\n\nAya|« Il n'y a jamais rien eu. Pas un dîner, pas un geste, pas une phrase. Six ans. »\n\nNao|« Je sais. »\n\nAya|« Vous savez, ou vous le croyez ? »\n\nNao|« …Je le crois. »\n\nAya|« Bon. C'est déjà mieux que la moitié de l'entreprise. »\n\nElle remue son café.\n\nAya|« Ce que vous avez vu l'autre soir, c'est deux personnes qui travaillent ensemble depuis six ans et qui savent comment l'autre pense. Ça ressemble à de l'intimité. Ce n'en est pas. »\n\nNao|« Et de votre côté ? »\n\nAya prend son temps.\n\nAya|« De mon côté, pendant deux ans, j'ai attendu quelque chose qui n'est jamais arrivé, et j'ai fini par comprendre que je n'attendais pas Ren. J'attendais qu'on me choisisse. Ce n'est pas la même chose et c'est beaucoup moins flatteur. »\n\nNao ne trouve rien à répondre.\n\nAya|« Vous avez de la chance, vous savez. »\n\nNao|« Pardon ? »\n\nAya|« Il vous parle. »\n\nNao|« Il ne me parle pas. »\n\nAya|« Madame Kirishima. En six ans, il m'a dit trois choses personnelles. Trois. Je les compte. »\n\nElle se lève.\n\nAya|« Alors quand il vous en dira une, ne la laissez pas passer. »"
+      },
+      'refuse': {
+        'pose': [
+          'aya_refusee'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': -5
+          }
+        },
+        'texte': "**Nao** — *Merci de votre message. Il n'y a rien à dire, tout va bien.*\n\nElle l'envoie et elle range son téléphone et elle a l'estomac serré pendant tout l'après-midi.\n\nAya répond quarante minutes plus tard.\n\n**Aya Morimoto** — *Très bien. Bonne continuation.*\n\nRien d'autre. Rien de blessé, rien de sec.\n\nLe soir, Nao raconte à Mei qu'elle a *réglé la question*, et Mei dit *d'accord* d'une voix qui veut dire autre chose.\n\nEt pendant les mois qui suivent, chaque fois que le nom d'Aya sera prononcé dans une conversation, Nao changera de sujet en trois secondes."
+      }
+    }
+  }
+del _M5
+
+
+# ── ARC VI : épisodes 33 à 36 (désirer) ──
+_M6 = CHRONIQUE_SAISONS["maries_malgre_nous"]["episodes"]
+_M6[32]["scenes"] = [
+    "*Fin janvier*\n\nVoilà ce qui s'est installé sans que personne ne l'ait décidé.\n\nIl rentre à vingt heures dix. S'il rentre plus tard, il envoie un message — pas *je préviens conformément au point six*, juste *21h*.\n\nElle a arrêté de dire *vous pouvez mettre de la musique*. Il la met.\n\nLe samedi matin, ils font les courses ensemble. Ce n'est pas une décision. C'est arrivé trois fois et maintenant c'est comme ça.",
+    "Elle laisse traîner ses élastiques. Il les ramasse.\n\nIl y en a maintenant onze dans le vide-poche de l'entrée, et un douzième dans la poche gauche de sa veste de costume, qu'il a oublié d'y enlever en décembre et qu'il n'enlève plus.\n\nElle ne le sait pas.",
+    "*Mardi, 19h40*\n\nIls cuisinent. Enfin — elle cuisine, il coupe des choses, et il coupe extrêmement mal.\n\nNao|« Vous coupez comme un ingénieur. »\n\nRen|« Qu'est-ce que ça veut dire ? »\n\nNao|« Que vos rondelles font toutes exactement quatre millimètres et que ça prend une heure. »\n\nRen|« C'est régulier. »\n\nNao|« C'est *lent*. »\n\nElle se met à côté de lui pour lui montrer. Elle pose la main sur la sienne pour corriger l'angle du couteau.\n\nRen|« …Comme ça ? »\n\nNao|« Voilà. »\n\nElle retire sa main.\n\nIls ne disent ni l'un ni l'autre que ça vient de durer quatre secondes de trop.",
+    "*Jeudi, 22h15*\n\nElle s'endort sur le canapé pendant un documentaire sur les ponts qu'il a choisi et qu'elle a accepté de regarder en promettant de ne pas se moquer.\n\nIl baisse le son.\n\nIl ne l'éteint pas — point dix.\n\nIl prend le plaid, et cette fois il ne le jette pas. Il le pose. Il remonte un coin sur son épaule parce qu'elle a la peau de bras à découvert et qu'il fait dix-neuf degrés.\n\nIl reste debout à côté du canapé environ trois secondes de plus que ce que l'opération exigeait.\n\nPuis il va se coucher.",
+    "*Vendredi, 8h*\n\nElle sort de la salle de bain, cheveux mouillés, en train de chercher un élastique.\n\nNao|« Il y en avait un ici. »\n\nRen|« Dans le vide-poche. »\n\nNao|« Il y en a onze dans le vide-poche, c'est pas normal. »\n\nRen|« Ce sont les vôtres. »\n\nNao|« Vous les collectionnez ? »\n\nRen|« Je les ramasse. »\n\nNao|« C'est ça, collectionner. »\n\nElle en prend un, attache ses cheveux en trois secondes, et il regarde ailleurs avec une application soudaine pour le grille-pain.",
+    "*Le même vendredi, cabinet, 16h*\n\nYui|« Tu es bizarre. »\n\nNao|« Non. »\n\nYui|« Tu as souri à la fiche de madame Fukuda. »\n\nNao|« J'ai pas souri. »\n\nYui|« Tu as souri à une fiche de lombalgie chronique. »\n\nNao|« Yui. »\n\nYui|« Bon. Je dis rien. »\n\nTrois secondes.\n\nYui|« Mais tu es bizarre depuis novembre et là c'est devenu vraiment flagrant. »",
+    "*Samedi, 11h, la supérette*\n\nElle avance dans une allée étroite, il vient dans l'autre sens avec le panier.\n\nIls se croisent. Il se décale. Elle se décale du même côté. Ils se décalent tous les deux dans l'autre sens.\n\nÇa dure une seconde et demie, il pose une main sur son bras pour l'immobiliser et passer, et il la retire tout de suite.\n\nRen|« Pardon. »\n\nNao|« C'est rien. »\n\nIls font le reste des courses en parlant de riz.",
+    "*Samedi, 23h*\n\nElle est sur le balcon, au téléphone.\n\nMei|« Alors ? »\n\nNao|« Alors rien. »\n\nMei|« Nao, tu m'appelles trois fois par semaine depuis Noël pour me dire qu'il ne se passe rien. »\n\nNao|« Parce qu'il ne se passe rien. »\n\nMei|« Décris-moi une journée. »\n\nNao|« Quoi ? »\n\nMei|« Décris-moi hier. »\n\nNao|« On a mangé, on a regardé un truc, je me suis endormie sur le canapé, il a mis un plaid, je me suis réveillée à deux heures et je suis allée me coucher. »\n\nLong silence.\n\nMei|« Ma vieille. »\n\nNao|« Quoi ? »\n\nMei|« Tu viens de me décrire un couple. »\n\nNao ne répond pas.\n\nMei|« Nao. »\n\nNao|« Je sais. »"
+  ]
+_M6[33]["scenes"] = [
+    "*Début février, 02h50*\n\nElle est réveillée depuis une heure.\n\nCe n'est pas une insomnie, c'est pire : elle s'est réveillée à une heure quarante avec la tête parfaitement claire et elle n'a pas réussi à la refermer depuis.\n\nLe plafond de la petite chambre n'a toujours pas de fissure.",
+    "Ce qu'elle fait, à deux heures cinquante :\n\nElle refait la journée du mardi. Le couteau. La main sur la main. Quatre secondes.\n\nElle refait le vendredi. Le grille-pain qu'il regardait avec tellement d'attention.\n\nElle refait un dîner professionnel de septembre, un homme qui pose ses baguettes, et une phrase — *ma femme aussi, d'ailleurs.*\n\nElle se retourne dans le lit et essaie de penser à la commande de consommables du cabinet.",
+    "*03h10*\n\nUn bruit dans le couloir.\n\nPas des pas — une porte qui s'ouvre de quelques centimètres, comme si quelqu'un avait hésité.\n\nPuis rien.\n\nPuis la porte qui se referme.",
+    "De l'autre côté de la cloison, à trois mètres, quelqu'un est assis sur le bord de son lit depuis quarante minutes.\n\nIl n'a pas allumé.\n\nCe qu'il fait, à trois heures dix :\n\nIl essaie de calculer à quel moment exactement il a cessé de rentrer dans un appartement et commencé à rentrer chez lui.\n\nIl ne trouve pas de date. C'est ça qui l'empêche de dormir — il y a toujours une date. Il y a toujours un moment mesurable où une structure change d'état.\n\nLà, il n'y en a pas.",
+    "*03h40*\n\nElle se lève. Elle va boire.\n\nLa cuisine est allumée.\n\nIl est assis à la table, en t-shirt, sans ordinateur, sans téléphone, avec un verre d'eau plein devant lui.\n\nIls se regardent.\n\nNao|« Vous êtes debout. »\n\nRen|« Vous aussi. »\n\nNao|« Il est quatre heures moins vingt. »\n\nRen|« Je sais. »",
+    "Elle se sert un verre. Elle s'assoit en face.\n\nIls ne parlent pas pendant environ deux minutes, ce qui, à cette heure-là, n'est pas gênant du tout.\n\nNao|« Vous n'arrivez pas à dormir souvent ? »\n\nRen|« Deux ou trois nuits par mois. »\n\nNao|« Depuis quand ? »\n\nRen|« Depuis mes dix-sept ans. »\n\nElle repose son verre.\n\nNao|« Vous faites quoi, ces nuits-là ? »\n\nRen|« Je range la cuisine. »\n\nNao|« La cuisine est propre. »\n\nRen|« Oui. »",
+    "Nao|« Alors vous faites quoi ce soir ? »\n\nIl tourne le verre d'un quart de tour.\n\nRen|« Je réfléchis à une date. »\n\nNao|« Laquelle ? »\n\nRen|« Je ne la trouve pas. »\n\nNao|« C'est le problème ou c'est la réponse ? »\n\nIl lève les yeux.\n\nIl la regarde vraiment, quatre heures moins le quart, cheveux dans tous les sens, t-shirt trop grand, un verre d'eau entre les mains.\n\nRen|« …Je ne sais pas. »",
+    "Nao|« Vous voulez que je vous laisse ? »\n\nRen|« Non. »\n\nIl l'a dit vite. Beaucoup trop vite pour lui.\n\nIl s'en rend compte à peu près une demi-seconde après elle.\n\nRen|« Vous travaillez à huit heures. »\n\nNao|« Dans quatre heures et vingt minutes. »\n\nRen|« Vous devriez dormir. »\n\nNao|« Probablement. »\n\nElle ne bouge pas.\n\nIl ne redemande pas.",
+    "Ils restent à cette table jusqu'à quatre heures vingt.\n\nIls parlent de choses sans aucune importance. Du merle de son grand-père. De monsieur Oda qui refuse d'aller à Sendai. De la mandarine de novembre, qu'elle avoue avoir gardée trois jours et qu'il avoue être descendu chercher pour aucune raison.\n\nÀ quatre heures vingt, elle se lève.\n\nNao|« Bonne nuit. »\n\nRen|« Bonne nuit. »\n\nElle est dans le couloir quand il ajoute :\n\nRen|« Nao. »\n\nElle s'arrête.\n\nRen|« C'est peut-être la réponse. »\n\nElle ne se retourne pas. Elle rentre dans sa chambre et elle referme la porte et elle reste debout dedans, dans le noir, pendant un long moment."
+  ]
+_M6[34]["scenes"] = [
+    "*Mi-février, 20h30*\n\nLe radiateur du salon fait un bruit depuis trois jours. Pas un bruit inquiétant — un cliquetis toutes les quarante secondes, exactement assez pour qu'on ne puisse penser à rien d'autre.\n\nNao|« C'est insupportable. »\n\nRen|« C'est de l'air dans le circuit. »\n\nNao|« Ça se répare ? »\n\nRen|« Il faut purger. »\n\nNao|« Alors purgez. »\n\nRen|« Il me faut une clé de purge. »\n\nNao|« Il y en a une dans le tiroir de la cuisine. »\n\nRen|« Comment vous savez ça ? »\n\nNao|« Parce que j'ouvre les tiroirs, moi. »",
+    "Le radiateur est derrière le canapé.\n\nIl faut le déplacer, ce qui est un travail à deux, et l'espace entre le canapé déplacé et le mur fait à peu près soixante centimètres.\n\nRen|« Il faut un récipient. »\n\nNao|« J'ai un bol. »\n\nRen|« Un bol ne suffira pas. »\n\nNao|« J'ai un grand bol. »\n\nElle revient avec un saladier.",
+    "Ils sont tous les deux accroupis derrière le canapé, dans soixante centimètres.\n\nElle tient le saladier. Il dévisse.\n\nL'air sort en sifflant. Puis l'eau, d'un coup, plus fort que prévu.\n\nNao|« OH— »\n\nRen|« Ne bougez pas. »\n\nNao|« Ça déborde. »\n\nRen|« Ne bougez pas le saladier. »\n\nNao|« ÇA DÉBORDE. »\n\nIl pose une main sur le bord du saladier pour le stabiliser, ce qui met sa main sur les siennes, et il revisse de l'autre.\n\nÇa s'arrête.",
+    "Ils sont accroupis derrière un canapé avec un saladier d'eau tiède entre eux et il n'a pas retiré sa main.\n\nLe radiateur ne fait plus de bruit. C'est très, très silencieux.\n\nNao|« C'est fini ? »\n\nRen|« Oui. »\n\nNao|« Vous pouvez— »\n\nRen|« Oui. »\n\nIl ne bouge pas.\n\nElle non plus.",
+    'Elle relève la tête. Il est à trente centimètres.\n\nIl a une trace de poussière sur la joue, du plinthe, et le col de son t-shirt est de travers, et il ne regarde pas ailleurs.\n\nPour la première fois depuis onze mois, il ne regarde pas ailleurs.\n\nNao|« Ren. »\n\nIl ne dit rien.\n\nVingt centimètres.',
+    "La sonnette.\n\nDeux fois. Puis une troisième, longue, du genre appuyée avec le pouce par quelqu'un qui sait que vous êtes là.\n\nMei|« C'EST MOI, OUVREZ, J'AI DES CHOUX À LA CRÈME ET UNE HISTOIRE. »\n\nRen se lève d'un mouvement.\n\nNao renverse le saladier.",
+    'Mei raconte pendant quarante minutes une histoire de collègue et de planning de nuit qui aurait pu tenir en quatre.\n\nElle mange trois choux. Elle remarque le canapé déplacé. Elle remarque la serviette par terre.\n\nMei|« Vous faisiez quoi ? »\n\nNao|« Le radiateur. »\n\nMei|« À neuf heures du soir. »\n\nNao|« Il cliquetait. »\n\nMei|« Mm. »\n\nElle regarde Ren. Ren regarde le radiateur.\n\nMei|« Mm-mm. »',
+    "Elle part à vingt-trois heures.\n\nSur le palier, elle serre Nao dans ses bras un peu trop longtemps et lui murmure à l'oreille :\n\nMei|« Je suis désolée. »\n\nNao|« De quoi ? »\n\nMei|« Tu sais très bien de quoi. »\n\nElle descend l'escalier en riant toute seule.",
+    "L'appartement est silencieux. Le radiateur ne fait plus de bruit du tout.\n\nNao remet le canapé en place. Il l'aide. Ils le posent à peu près là où il était.\n\nRen|« Bonne nuit. »\n\nNao|« Bonne nuit. »\n\nChacun rentre dans sa chambre.\n\nChacun est extrêmement soulagé.\n\nEt aucun des deux ne dort avant deux heures."
+  ]
+_M6[35]["scenes"] = [
+    "*Fin février, un mardi, 21h20*\n\nIl n'y a rien.\n\nIl faut le dire, parce que c'est important : il n'y a rien du tout ce mardi-là.\n\nPersonne n'a de nouvelle. Personne ne s'est disputé. Il n'y a pas eu de dîner de famille, pas d'appel de la banque, pas de crise au cabinet.\n\nIl a fini à dix-neuf heures. Elle a fini à dix-neuf heures trente. Ils ont mangé des restes.",
+    "Elle lave. Il essuie.\n\nLa télévision est allumée sur une émission de variétés que personne ne regarde. Le son est bas — point onze, contre-proposition acceptée en juin.\n\nNao|« Yui a cassé le porte-serviettes. »\n\nRen|« Comment ? »\n\nNao|« En s'appuyant dessus. »\n\nRen|« Il tenait comment ? »\n\nNao|« Deux vis. »\n\nRen|« Dans du placo ? »\n\nNao|« Je sais pas ce qu'il y a dans le mur, Ren, je répare des gens. »\n\nRen|« Il faut des chevilles à expansion. »\n\nNao|« Vous voulez venir réparer le porte-serviettes de mon cabinet ? »\n\nRen|« Oui. »\n\nElle rit.",
+    'Elle lui passe une assiette.\n\nIl la prend.\n\nElle lui en passe une deuxième.\n\nIl la prend.\n\nElle lui passe la troisième et il ne la prend pas tout de suite.',
+    "Il y a une seconde.\n\nL'assiette est entre eux deux, elle la tient d'un côté et il a la main sur l'autre bord, et l'émission de variétés continue à volume bas, et le lave-vaisselle qu'ils n'utilisent jamais ne fait aucun bruit.\n\nElle relève les yeux."
+  ]
+_M6[35]["choix"] = {
+    'question': 'Une assiette mouillée entre deux mains. Personne ne bouge.',
+    'decisif': True,
+    'options': [
+      (
+        'elle_avance',
+        '1️⃣',
+        "C'est elle"
+      ),
+      (
+        'il_avance',
+        '2️⃣',
+        "C'est lui"
+      ),
+      (
+        'personne',
+        '3️⃣',
+        'Personne'
+      )
+    ],
+    'suites': {
+      'elle_avance': {
+        'pose': [
+          'baiser',
+          'elle_a_ose'
+        ],
+        'marque': {
+          'type': 'baiser'
+        },
+        'relation': {
+          'ren': {
+            'confiance': 22
+          }
+        },
+        'texte': "C'est elle.\n\nElle lâche l'assiette — qui ne se casse pas, qui tombe dans l'eau, ce qui fait un bruit ridicule — et elle a les deux mains mouillées et elle attrape le col de son t-shirt et elle l'embrasse.\n\nIl ne recule pas.\n\nIl met environ une seconde à comprendre, et cette seconde est absolument insupportable, et ensuite il ne met plus aucun temps du tout.\n\nUne main sur sa nuque. L'autre reste en l'air, ridicule, avec le torchon.\n\nIl finit par lâcher le torchon.\n\nAprès, ils ne savent absolument pas quoi faire.\n\nC'est le problème que personne ne raconte jamais.\n\nIls sont debout dans une cuisine, il est vingt et une heures quarante, il reste quatre assiettes dans l'évier et une émission de variétés qui continue toute seule.\n\nNao|« Bon. »\n\nRen|« Bon. »\n\nNao|« …Voilà. »\n\nRen|« Voilà. »\n\nUn temps assez long.\n\nNao|« On finit la vaisselle ? »\n\nRen|« …Oui ? »\n\nNao|« C'est une question ? »\n\nRen|« Je ne sais pas ce qu'on fait. »\n\nNao|« Moi non plus. »\n\nRen|« D'accord. »\n\nIls finissent la vaisselle.\n\nIls la finissent en silence, et le silence est absolument insupportable, et au bout de deux assiettes elle se met à rire.\n\nRen|« Quoi ? »\n\nNao|« Rien. »\n\nRen|« Nao. »\n\nNao|« On vient de— et on finit la vaisselle. »\n\nIl regarde l'évier.\n\nRen|« Il fallait bien la finir. »\n\nCe qui la fait rire encore plus, et il finit par sourire, ce qu'elle a vu trois fois en onze mois.\n\nÀ vingt-deux heures dix, ils sont sur le canapé.\n\nPas l'un contre l'autre. Assis à quarante centimètres, ce qui est vingt de moins que d'habitude et cent quarante de moins que la photo de mairie.\n\nL'émission est finie. Ils regardent maintenant une rediffusion d'un match de base-ball de l'an dernier.\n\nNao|« Vous aimez le base-ball ? »\n\nRen|« Non. »\n\nNao|« Moi non plus. »\n\nPersonne ne change de chaîne.\n\nÀ vingt-deux heures cinquante, elle s'endort.\n\nPas contre lui — sur son côté du canapé, la tête sur l'accoudoir, comme toujours.\n\nIl baisse le son. Il ne l'éteint pas.\n\nIl va chercher le plaid.\n\nEt cette fois, quand il le pose, il s'assoit à côté d'elle au lieu d'aller se coucher, et il reste là, à regarder un match de base-ball de l'an dernier dont il connaît déjà le résultat, jusqu'à une heure du matin."
+      },
+      'il_avance': {
+        'pose': [
+          'baiser',
+          'il_a_ose'
+        ],
+        'marque': {
+          'type': 'baiser'
+        },
+        'relation': {
+          'ren': {
+            'confiance': 18
+          }
+        },
+        'texte': "C'est lui.\n\nIl repose l'assiette sur l'égouttoir — proprement, ce qui est absurde — et il pose la main sur sa joue à elle, du bout des doigts d'abord, comme quelqu'un qui vérifie une cote.\n\nNao|« Ren. »\n\nRen|« Je peux ? »\n\nElle met une demi-seconde.\n\nNao|« Vous demandez ? »\n\nRen|« Oui. »\n\nNao|« …Depuis quand vous demandez ? »\n\nRen|« Depuis que vous m'avez expliqué la différence. »\n\nAlors elle dit oui.\n\nAprès, ils ne savent absolument pas quoi faire.\n\nC'est le problème que personne ne raconte jamais.\n\nIls sont debout dans une cuisine, il est vingt et une heures quarante, il reste quatre assiettes dans l'évier et une émission de variétés qui continue toute seule.\n\nNao|« Bon. »\n\nRen|« Bon. »\n\nNao|« …Voilà. »\n\nRen|« Voilà. »\n\nUn temps assez long.\n\nNao|« On finit la vaisselle ? »\n\nRen|« …Oui ? »\n\nNao|« C'est une question ? »\n\nRen|« Je ne sais pas ce qu'on fait. »\n\nNao|« Moi non plus. »\n\nRen|« D'accord. »\n\nIls finissent la vaisselle.\n\nIls la finissent en silence, et le silence est absolument insupportable, et au bout de deux assiettes elle se met à rire.\n\nRen|« Quoi ? »\n\nNao|« Rien. »\n\nRen|« Nao. »\n\nNao|« On vient de— et on finit la vaisselle. »\n\nIl regarde l'évier.\n\nRen|« Il fallait bien la finir. »\n\nCe qui la fait rire encore plus, et il finit par sourire, ce qu'elle a vu trois fois en onze mois.\n\nÀ vingt-deux heures dix, ils sont sur le canapé.\n\nPas l'un contre l'autre. Assis à quarante centimètres, ce qui est vingt de moins que d'habitude et cent quarante de moins que la photo de mairie.\n\nL'émission est finie. Ils regardent maintenant une rediffusion d'un match de base-ball de l'an dernier.\n\nNao|« Vous aimez le base-ball ? »\n\nRen|« Non. »\n\nNao|« Moi non plus. »\n\nPersonne ne change de chaîne.\n\nÀ vingt-deux heures cinquante, elle s'endort.\n\nPas contre lui — sur son côté du canapé, la tête sur l'accoudoir, comme toujours.\n\nIl baisse le son. Il ne l'éteint pas.\n\nIl va chercher le plaid.\n\nEt cette fois, quand il le pose, il s'assoit à côté d'elle au lieu d'aller se coucher, et il reste là, à regarder un match de base-ball de l'an dernier dont il connaît déjà le résultat, jusqu'à une heure du matin."
+      },
+      'personne': {
+        'pose': [
+          'route_distance',
+          'occasion_manquee'
+        ],
+        'ferme': [
+          'se_choisir',
+          'recommencer'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': -15
+          }
+        },
+        'plafond': {
+          'ren': {
+            'confiance': 65
+          }
+        },
+        'texte': "Il prend l'assiette.\n\nRen|« Il faut que je décale le rendez-vous de jeudi. »\n\nNao|« …Ah ? »\n\nRen|« Higashi. Ils ont avancé la réunion. »\n\nNao|« D'accord. »\n\nElle lui passe la suivante.\n\nNao|« Moi j'ai monsieur Oda à quatorze heures, donc je peux pas déjeuner. »\n\nRen|« D'accord. »\n\nIls finissent la vaisselle en parlant d'horaires.\n\nIl monte se coucher à vingt-deux heures quarante, ce qui est tôt pour lui.\n\nNao reste dans la cuisine. Elle essuie un plan de travail déjà propre.\n\nPuis elle ouvre le tiroir du meuble d'entrée, celui où la photo de la mairie a atterri en avril et qui n'est plus tout à fait à la même place depuis.\n\nElle la regarde un moment.\n\nVingt centimètres.\n\nElle la remet."
+      }
+    }
+  }
+del _M6
+
+
+# ── ARC VII : épisodes 37 à 43 (apprendre à être un couple) ──
+_M7 = CHRONIQUE_SAISONS["maries_malgre_nous"]["episodes"]
+_M7[36]["scenes"] = [
+    "*Le lendemain, 5h20*\n\nIl ne court pas.\n\nC'est la première fois depuis six ans qu'il ne court pas un mercredi. Il reste allongé jusqu'à six heures dix à regarder un plafond, ce qui est une activité qu'il méprisait encore avant-hier.",
+    "*7h05, la cuisine*\n\nIls arrivent en même temps, ce qui n'arrange rien.\n\nNao|« Bonjour. »\n\nRen|« Bonjour. »\n\nElle va au frigo. Il va au placard. Ils se croisent au niveau du plan de travail et se décalent tous les deux du même côté, exactement comme dans l'allée de la supérette en janvier.\n\nNao|« Pardon. »\n\nRen|« Pardon. »\n\nIls repartent chacun de leur côté.",
+    "Il fait du café. Il en boit deux gorgées. Il pose la tasse.\n\nNao|« Vous— »\n\nRen|« Oui ? »\n\nNao|« Rien. »\n\nTrente secondes.\n\nRen|« Vous alliez dire quelque chose. »\n\nNao|« J'allais dire *vous ne finissez jamais votre café* et j'ai réalisé que je le dis depuis onze mois et que ça n'a jamais rien changé. »\n\nRen|« C'est exact. »\n\nNao|« Donc j'ai arrêté. »\n\nRen|« D'accord. »\n\nIl finit son café.",
+    "Elle le regarde faire.\n\nNao|« Vous venez de le finir. »\n\nRen|« Oui. »\n\nNao|« Pourquoi ? »\n\nRen|« Je ne sais pas. »\n\nIl repose la tasse vide dans l'évier et il a l'air aussi surpris qu'elle.",
+    "*8h15, l'entrée*\n\nLe vrai problème arrive là.\n\nIl met ses chaussures. Elle enfile sa veste. Ils partent tous les deux, comme tous les matins depuis onze mois.\n\nEt il y a une seconde, au moment d'ouvrir la porte, où ni l'un ni l'autre ne sait ce qu'on est censé faire.\n\nNao|« Bonne journée. »\n\nRen|« Bonne journée. »\n\nIls sortent. Ils descendent les sept étages. Ils marchent jusqu'au parking.\n\nPersonne n'a rien fait.",
+    "*Cabinet, 13h40*\n\nYui|« Tu as changé de shampooing ? »\n\nNao|« Non. »\n\nYui|« Tu as un truc. »\n\nNao|« J'ai pas de truc. »\n\nYui|« Tu as vérifié ton téléphone six fois en deux heures. »\n\nNao|« C'est le cabinet qui appelle. »\n\nYui|« Le cabinet, c'est moi. »\n\nNao range un dossier qui était déjà rangé.\n\nYui|« Nao. »\n\nNao|« Yui, si tu dis un mot je te fais faire les réassorts pendant six mois. »\n\nYui|« …D'accord. »\n\nElle sourit tellement fort que ça s'entend.",
+    "*19h50*\n\nElle rentre la première pour une fois. Elle nettoie le plan de travail. Elle range trois choses. Elle se rend compte qu'elle est en train de faire du ménage à vingt heures moins dix comme quelqu'un qui attend quelqu'un.\n\nElle s'assoit sur le canapé pour ne pas faire ça.\n\nElle se relève pour ranger encore un truc.",
+    "Vingt heures dix. La clé dans la serrure.\n\nRen|« Bonsoir. »\n\nNao|« Bonsoir. »\n\nIl enlève ses chaussures. Il pose sa sacoche. Il enlève sa veste.\n\nPuis il s'arrête au milieu du salon.\n\nRen|« C'était très long. »\n\nNao|« Quoi ? »\n\nRen|« Aujourd'hui. »\n\nNao|« …Ah. »\n\nRen|« Ce n'est pas une plainte. C'est une observation. »\n\nNao|« C'est une observation très nulle. »\n\nRen|« Je sais. »",
+    "Elle traverse le salon.\n\nElle s'arrête à cinquante centimètres, ce qui est encore trop loin, et elle n'arrive pas à faire les cinquante derniers.\n\nNao|« C'est ridicule. »\n\nRen|« Oui. »\n\nNao|« On est mariés depuis onze mois. »\n\nRen|« Oui. »\n\nNao|« J'ai vu vos radios dentaires, il y a votre mutuelle dans mon tiroir. »\n\nRen|« Vous avez ouvert mon courrier ? »\n\nNao|« C'est pas le sujet. »\n\nRen|« C'est un peu le sujet. »",
+    "C'est lui qui fait les cinquante centimètres.\n\nIl pose une main dans son dos — au creux, entre les omoplates, à plat, comme au dîner de juin — sauf que là il n'y a personne pour regarder, et que la main reste.\n\nNao|« Vous avez fait ça en juin. »\n\nRen|« Je sais. »\n\nNao|« Vous l'aviez enlevée dès que la voisine s'était retournée. »\n\nRen|« Je sais. »\n\nIl ne l'enlève pas."
+  ]
+_M7[37]["scenes"] = [
+    "*Début mars, jeudi, 21h*\n\nNao|« On n'est jamais sortis. »\n\nRen|« Pardon ? »\n\nNao|« Nous deux. On n'est jamais sortis. »\n\nRen|« On est allés au festival de Tenjin. »\n\nNao|« Avec Mei et Yui. »\n\nRen|« À onze dîners professionnels. »\n\nNao|« Ce sont des dîners professionnels. »\n\nRen|« Au mariage. »\n\nNao|« C'ÉTAIT NOTRE MARIAGE. »\n\nIl pose son stylo.\n\nRen|« Alors non. »\n\nNao|« Voilà. »",
+    "Ren|« Vous voulez sortir. »\n\nNao|« Je constate. »\n\nRen|« Nao. »\n\nNao|« …Oui, je veux sortir. »\n\nRen|« Samedi ? »\n\nNao|« Samedi. »\n\nRen|« Où ? »\n\nNao|« Je sais pas. C'est vous qui invitez. »\n\nRen|« Pourquoi moi ? »\n\nNao|« Parce que j'ai demandé. Chacun son tour. »\n\nIl note quelque chose sur son bloc, ce qui est à la fois exaspérant et vaguement touchant.",
+    "*Samedi, 18h40*\n\nLe problème commence dans la salle de bain.\n\nElle a deux tenues habillées. Elle les déteste toutes les deux depuis respectivement 2019 et 2021. Elle en essaye une, l'enlève, essaye l'autre, l'enlève, et finit en jean et pull parce que c'est *un restaurant, pas une signature de contrat*.\n\nElle appelle Mei pendant qu'elle s'attache les cheveux.\n\nMei|« Tu stresses. »\n\nNao|« Je stresse pas. »\n\nMei|« Tu m'appelles à moins vingt. »\n\nNao|« Je suis mariée avec ce type depuis onze mois. »\n\nMei|« Et tu stresses. »\n\nNao|« …Ouais. »\n\nMei|« C'est mignon et c'est complètement débile et je suis très heureuse. »",
+    "Il l'attend dans l'entrée. Chemise sans cravate, manches pliées deux fois.\n\nIl la regarde descendre le couloir, et il ne dit rien du tout, ce qui est exactement sa façon de dire quelque chose.\n\nNao|« Quoi ? »\n\nRen|« Rien. »\n\nNao|« Vous me regardez. »\n\nRen|« Oui. »\n\nNao|« C'est le jean ? »\n\nRen|« Non. »\n\nIl ouvre la porte.",
+    "Le restaurant est petit, huit tables, une carte écrite à la main. Ce n'est pas un endroit de dîner professionnel.\n\nNao|« C'est où, ici ? »\n\nRen|« Derrière la gare. »\n\nNao|« Vous y venez souvent ? »\n\nRen|« Quatre fois. »\n\nNao|« Avec qui ? »\n\nRen|« Seul. »\n\nElle ouvre la carte pour ne pas répondre à ça.",
+    "Le vrai problème du premier rendez-vous, c'est qu'ils n'ont plus rien à s'apprendre de basique.\n\nIl sait qu'elle déteste le café. Elle sait qu'il ne finit pas le sien — sauf depuis mercredi. Il sait qu'elle a un frère, elle sait qu'il en a un. Il sait ce qui s'est passé quand elle avait douze ans. Elle sait ce qui s'est passé quand il en avait dix-sept.\n\nNao|« On fait quoi, du coup ? »\n\nRen|« Comment ça ? »\n\nNao|« Les gens à un premier rendez-vous, ils se demandent des trucs. Frères et sœurs, boulot, films préférés. On a déjà fait tout ça. »\n\nRen|« Pas les films. »\n\nNao|« …C'est vrai. »\n\nRen|« Allez-y. »\n\nNao|« Films catastrophe. »\n\nRen|« Pardon ? »\n\nNao|« Les films catastrophe. Volcans, astéroïdes, tsunamis. Tout. »\n\nRen|« …Pourquoi ? »\n\nNao|« Parce qu'à la fin il reste toujours quelqu'un. »",
+    "Il ne répond pas tout de suite.\n\nRen|« Ce n'est pas ce que j'attendais comme raison. »\n\nNao|« Vous attendiez quoi ? »\n\nRen|« *C'est drôle.* »\n\nNao|« C'est drôle aussi. »\n\nElle boit.\n\nNao|« À vous. »\n\nRen|« Je ne regarde pas de films. »\n\nNao|« Tout le monde regarde des films. »\n\nRen|« Des documentaires. »\n\nNao|« Sur les ponts. »\n\nRen|« Sur les ponts. »\n\nNao|« C'est encore plus triste que le jazz. »\n\nRen|« C'est faux. »\n\nNao|« C'est très légèrement moins triste que le jazz. »",
+    "Ils y restent deux heures et demie.\n\nIls parlent de choses qu'ils n'avaient jamais eu de raison d'aborder. La première fois qu'il a vu un chantier — huit ans, la main de son grand-père. La fois où elle a fait une crise d'angoisse à dix-neuf ans dans un métro et où une inconnue lui a tenu le poignet jusqu'au terminus.\n\nNao|« C'est pour ça que je fais ce métier, je crois. »\n\nRen|« Les poignets ? »\n\nNao|« Les inconnues. »",
+    "*23h20, le trajet à pied*\n\nIl fait quatre degrés. Ils ont laissé la voiture parce qu'il a bu un verre et demi.\n\nVingt minutes de marche.\n\nAu bout de trois, elle passe son bras sous le sien.\n\nIl ne dit rien. Il change juste très légèrement l'angle de son coude pour que ce soit plus confortable, et ils font les dix-sept minutes restantes comme ça."
+  ]
+_M7[38]["scenes"] = [
+    "*Mi-mars, 7h50*\n\nLe problème de l'entrée n'est toujours pas résolu.\n\nIls ont essayé quatre configurations en huit jours.\n\nLundi : rien du tout, comme avant.\n\nMardi : elle a fait un geste vers lui au moment où il se baissait pour ses chaussures, et sa main a fini sur son épaule, et elle a fait semblant d'enlever quelque chose.",
+    "Mercredi : il s'est redressé, s'est tourné vers elle, et le voisin du 703 est sorti à ce moment précis.\n\nRen|« Bonjour. »\n\nLe voisin|« Bonjour ! »\n\nNao|« Bonjour. »\n\nIls ont pris l'escalier tous les trois. Sept étages.\n\nJeudi : ils ont réussi. Deux secondes, très maladroit, elle a fermé les yeux trop tôt.\n\nVendredi : ils ont recommencé, et c'était mieux, et ils sont partis tous les deux avec quatre minutes de retard.",
+    "*Samedi, 11h*\n\nMei arrive pour un café qui dure trois heures.\n\nElle regarde autour d'elle avec l'attention d'un inspecteur des impôts.\n\nMei|« Il y a deux tasses sur l'égouttoir. »\n\nNao|« On est deux. »\n\nMei|« Elles sont l'une à côté de l'autre. »\n\nNao|« C'est un égouttoir, Mei. »\n\nMei|« Avant elles étaient jamais l'une à côté de l'autre. »\n\nNao|« Tu inventes. »\n\nMei|« Je suis venue seize fois dans cet appartement. »",
+    "Mei|« Bon. Quand est-ce que tu me le dis ? »\n\nNao|« Il n'y a rien à dire. »\n\nMei|« Nao. »\n\nNao|« …Il y a trois semaines. »\n\nMei repose sa tasse très lentement.\n\nMei|« TROIS SEMAINES ? »\n\nNao|« Chut ! »\n\nMei|« IL N'Y A PERSONNE. »\n\nNao|« Il y a les voisins. »\n\nMei|« TROIS SEMAINES, NAO. »",
+    "Mei|« Et tu me l'as pas dit. »\n\nNao|« Je savais pas comment. »\n\nMei|« *Mei je l'ai embrassé.* Neuf mots. Six si tu comptes bien. »\n\nNao|« C'est plus compliqué que ça. »\n\nMei|« En quoi ? »\n\nNao met du temps.\n\nNao|« Parce que si je le dis à voix haute, ça devient un truc. »\n\nMei|« C'est déjà un truc. »\n\nNao|« Je sais. »\n\nMei|« C'est un truc depuis novembre, ma vieille. »",
+    "Mei|« Tu vas le dire à qui ? »\n\nNao|« Comment ça, à qui ? »\n\nMei|« Ton père. Sota. Sa mère. Le monde entier croit déjà que vous êtes amoureux depuis un an. »\n\nNao|« …Ah. »\n\nMei|« Tu réalises que vous êtes le seul couple de l'histoire qui doit annoncer à sa famille qu'il est ensemble alors qu'ils sont mariés ? »\n\nNao|« Ne dis pas ça. »\n\nMei|« C'est extraordinaire. »\n\nNao|« Ne dis pas ça. »",
+    "*Le soir, 22h*\n\nNao|« Mei sait. »\n\nRen|« D'accord. »\n\nNao|« Ça vous dérange ? »\n\nRen|« Non. »\n\nNao|« Vous l'avez dit à quelqu'un, vous ? »\n\nRen|« Non. »\n\nNao|« Vous allez le dire à quelqu'un ? »\n\nRen|« À qui ? »\n\nElle réfléchit et se rend compte, avec un temps de retard désagréable, que la liste est très courte.\n\nNao|« Haru. »\n\nRen|« Haru l'a deviné en décembre. »\n\nNao|« En DÉCEMBRE ? »\n\nRen|« Il m'a dit *tu rentres à vingt heures maintenant* et il a fait une tête insupportable. »",
+    "Nao|« Et votre grand-père ? »\n\nIl ne répond pas tout de suite.\n\nRen|« Il sait. »\n\nNao|« Vous lui avez dit ? »\n\nRen|« Non. »\n\nNao|« Alors comment— »\n\nRen|« Il sait, c'est tout. »\n\nIl tourne la page de son bloc.\n\nRen|« La semaine dernière, jeudi, il m'a demandé comment vous alliez, et j'ai répondu, et il a dit *bien* et il a souri, et il n'a plus rien demandé de tout l'après-midi. »\n\nNao|« Ça veut dire quoi ? »\n\nRen|« Ça veut dire qu'il sait. »"
+  ]
+_M7[39]["scenes"] = [
+    "*Fin mars, un mardi*\n\nVoilà la situation, exposée simplement :\n\nIl y a deux chambres.\n\nDepuis cinq semaines, il n'y en a plus qu'une qui sert vraiment, sauf que personne n'a rien dit, sauf que les affaires de personne n'ont bougé, sauf qu'elle se lève à trois heures du matin pour aller chercher un tee-shirt propre dans une pièce où elle ne dort plus.",
+    "Ren|« Vous avez froid ? »\n\nNao|« Je vais chercher un truc. »\n\nRen|« Quel truc ? »\n\nNao|« Un tee-shirt. »\n\nRen|« Il est trois heures. »\n\nNao|« Je sais quelle heure il est. »\n\nElle revient. Elle se recouche.\n\nRen|« C'est la troisième fois cette semaine. »\n\nNao|« Vous comptez ? »\n\nRen|« Vous comptez tout, vous. Je peux compter aussi. »",
+    "*Le lendemain, 20h30*\n\nIl aborde le sujet comme il aborde un problème de charge.\n\nRen|« Il faut décider pour les chambres. »\n\nNao s'arrête, la fourchette en l'air.\n\nNao|« Vous avez dit exactement cette phrase le premier soir. »\n\nRen|« …Ah. »\n\nNao|« Mot pour mot. Dans le couloir. Avec les trousses de toilette. »\n\nRen|« C'est vrai. »\n\nNao|« Vous aviez mesuré les deux pièces. »\n\nRen|« Trois mètres soixante contre deux quatre-vingt-dix. »\n\nNao|« Vous vous en souvenez encore ? »\n\nRen|« Oui. »",
+    "Nao|« Bon. Alors décidez. »\n\nRen|« Ce n'est pas à moi de décider. »\n\nNao|« Vous venez de dire *il faut décider*. »\n\nRen|« *Il faut* n'est pas *je décide*. »\n\nElle repose sa fourchette.\n\nNao|« Vous avez vraiment beaucoup progressé et c'est extrêmement agaçant. »\n\nRen|« Merci. »\n\nNao|« C'était pas un compliment. »\n\nRen|« Si. »",
+    "Ils vident la petite chambre le samedi.\n\nÇa prend quatre heures parce qu'ils s'arrêtent tout le temps.\n\nElle trouve trois relevés bancaires de l'an dernier, la brochure de l'agence immobilière du local, et une carte postale sans adresse au dos qu'elle range dans un tiroir sans commentaire, et il ne demande pas.\n\nIl trouve un carton qu'elle n'a jamais ouvert.\n\nRen|« *Hiver*. »\n\nNao|« Ne dites rien. »\n\nRen|« Il est daté d'avril. »\n\nNao|« Ne dites RIEN. »",
+    "La petite chambre devient un bureau.\n\nC'est elle qui le propose, et elle le propose mal, en regardant le mur.\n\nNao|« Vous pourriez mettre une table ici. »\n\nRen|« Pour quoi faire ? »\n\nNao|« Pour dessiner. »\n\nIl ne bouge pas.\n\nNao|« Vous dessinez à la table de la cuisine à minuit sur un bloc A5. Il y a quatre-vingt-dix centimètres de mur ici et une fenêtre plein est. »\n\nRen|« Comment vous savez que je dessine ? »\n\nUn temps.\n\nNao|« Le carnet noir. En mai. Dans le tiroir du meuble du salon. »\n\nRen|« …Vous l'avez ouvert. »\n\nNao|« Oui. »",
+    "Il ne dit rien pendant longtemps.\n\nNao|« Vous êtes en colère ? »\n\nRen|« Non. »\n\nNao|« Vous devriez. »\n\nRen|« Peut-être. »\n\nIl regarde le mur de quatre-vingt-dix centimètres.\n\nRen|« Vous avez vu la passerelle. »\n\nNao|« En bois lamellé. Double page. Il y a une date dans la marge et trois mots soulignés deux fois. »\n\nRen|« *Proposer à Père.* »\n\nNao|« Oui. »\n\nRen|« Je ne l'ai jamais proposée. »\n\nNao|« Je sais. Il n'y a rien après. »",
+    "Il s'assoit sur le carton *hiver*.\n\nRen|« C'était pour Tsuchiya. Il y a quatre ans. Un franchissement piéton au-dessus de la voie ferrée, quatre-vingt-onze mètres. Le projet était sorti en interne, ils cherchaient une proposition. »\n\nNao|« Et ? »\n\nRen|« Et j'ai travaillé dessus pendant sept semaines, la nuit. »\n\nNao|« Et vous ne l'avez pas donnée. »\n\nRen|« Non. »\n\nNao|« Pourquoi ? »\n\nIl regarde ses mains, celle qui a deux cicatrices maintenant.\n\nRen|« Parce que s'il avait dit non, j'aurais su que ça ne servait à rien. Et tant que je ne la donnais pas, ce n'était pas encore refusé. »",
+    "Elle s'assoit par terre, dos au mur, en face de lui.\n\nNao|« Qui a eu le marché ? »\n\nRen|« Un cabinet d'Osaka. »\n\nNao|« C'est bien ? »\n\nRen|« C'est un pont. Il tient. »\n\nNao|« Ren. »\n\nRen|« …C'est laid. »\n\nNao|« Voilà. »\n\nElle sourit.\n\nNao|« Mettez la table ici. »",
+    "La table arrive trois semaines plus tard. C'est une planche sur deux tréteaux, elle coûte onze mille yens, et il la monte lui-même un dimanche matin.\n\nLe premier soir, il y travaille jusqu'à minuit et demi.\n\nNao passe la tête vers vingt-trois heures.\n\nNao|« Vous faites quoi ? »\n\nRen|« Rien. »\n\nElle regarde par-dessus son épaule.\n\nC'est un croquis de quarante et un mètres carrés avec une vitrine, trois tables et un tableau électrique qu'on ne déplace pas.\n\nElle ne dit rien du tout et va se coucher."
+  ]
+_M7[40]["scenes"] = [
+    "*Avril, un an*\n\nIls ne le fêtent pas.\n\nIl n'y a rien à fêter — c'est la date d'un enregistrement en mairie, salle 2, dix-huit chaises et un radiateur qui claquait.\n\nMais le matin du 14, il y a une bouteille de thé d'orge posée devant sa tasse à elle, avec rien d'écrit dessus.\n\nElle la regarde pendant un moment.\n\nElle ne dit rien non plus.",
+    "*Ce qui a changé, sans que personne ne l'annonce*\n\nElle chante toujours faux mais elle ne s'arrête plus quand il rentre.\n\nIl met de la musique le soir sans qu'on lui demande, et une fois sur trois c'est elle qui choisit, et il fait une tête à chaque fois.\n\nIl y a deux tasses sur l'égouttoir, l'une à côté de l'autre.\n\nLe point sept est toujours sur le frigo. Il y a maintenant dix-neuf points. Le dix-neuvième dit *ne pas répondre au téléphone pendant les repas*, écrit au feutre noir, et en dessous, au stylo bille : *ça vaut aussi pour toi*.",
+    "*Cabinet, un mercredi*\n\nYui|« Tu tutoies ton mari ? »\n\nNao|« Pardon ? »\n\nYui|« Au téléphone tout à l'heure. Tu lui as dit *vous*. »\n\nNao|« …Ah. »\n\nYui|« Vous êtes ensemble depuis combien de temps ? »\n\nNao|« Yui. »\n\nYui|« C'est juste une question. »\n\nNao range trois dossiers.\n\nNao|« On a jamais changé. »\n\nYui|« Vous avez jamais changé depuis l'omiai ? »\n\nNao|« …Non. »\n\nYui|« C'est vraiment bizarre. »\n\nNao|« Je sais. »",
+    "*Le soir*\n\nElle essaie.\n\nNao|« Tu— »\n\nElle s'arrête net. Elle rougit jusqu'aux oreilles, ce qui ne lui arrive jamais.\n\nRen|« Quoi ? »\n\nNao|« Rien. »\n\nRen|« Vous avez dit *tu*. »\n\nNao|« NON. »\n\nRen|« Si. »\n\nNao|« C'était un accident. »\n\nRen|« D'accord. »\n\nIl retourne à sa vaisselle avec un sérieux absolu, et ses épaules tremblent légèrement pendant une trentaine de secondes.",
+    "*Le samedi, chez Mei*\n\nIl y a des cartons. Beaucoup de cartons.\n\nNao|« Tu déménages. »\n\nMei|« Je déménage. »\n\nNao|« Mei. »\n\nMei|« Je sais. »\n\nNao|« La dernière fois— »\n\nMei|« La dernière fois j'étais assise sur un muret à deux heures du matin avec un sac de sport et le maquillage qui coulait. »\n\nElle scotche un carton.\n\nMei|« Là il est onze heures du matin, j'ai un appartement en location depuis trois semaines, et Takumi m'aide à porter les cartons. »",
+    "Nao|« Il t'aide ? »\n\nMei|« Il est en bas avec la camionnette. »\n\nNao|« Mei. »\n\nMei|« C'est pas triste. Arrête de faire cette tête. »\n\nNao|« Je fais pas de tête. »\n\nMei|« Tu fais la tête que tu fais quand un patient te dit qu'il va bien. »\n\nElle s'assoit sur un carton.\n\nMei|« En juillet je suis partie parce que j'étais vidée. C'est pas une décision, ça. C'est une panne. »\n\nNao|« Et là ? »\n\nMei|« Là j'ai réfléchi pendant huit mois et j'ai décidé. C'est complètement différent et c'est beaucoup moins spectaculaire. »",
+    "Mei|« Tu sais ce qu'il m'a dit hier ? »\n\nNao|« Takumi ? »\n\nMei|« Il m'a dit *j'ai jamais su ce que tu voulais parce que j'ai jamais demandé*. »\n\nNao ne dit rien.\n\nMei|« Sept ans, Nao. Il a fallu que je parte pour qu'il pose la question. »\n\nNao|« Et ça change quelque chose ? »\n\nMei|« Non. »\n\nElle scotche un autre carton.\n\nMei|« Mais ça fait du bien que ce soit dit. »",
+    'Elles portent des cartons pendant deux heures.\n\nTakumi est là, il est gentil, il fait des blagues moyennes, il porte tout ce qui est lourd. À un moment il demande à Nao comment va son mari et il le demande sincèrement.\n\nÀ quinze heures, il repart avec la camionnette vide.\n\nMei le regarde partir depuis la fenêtre du deuxième.\n\nMei|« Bon. »\n\nNao|« Bon. »\n\nMei|« On va boire. »\n\nNao|« On va boire. »',
+    "*Le bar du sous-sol, 19h*\n\nOnze places au comptoir, une carte plastifiée qui n'a pas changé depuis 2016.\n\nMei|« Tu te souviens de la dernière fois ici ? »\n\nNao|« Mai. Tu m'as dit qu'il était une porte de sécurité incendie. »\n\nMei|« C'était vrai. »\n\nNao|« C'était vrai. »\n\nMei|« Il l'est plus ? »\n\nNao réfléchit sérieusement.\n\nNao|« Il l'est encore. Mais il a mis une poignée. »\n\nMei recrache une partie de sa bière.",
+    "À vingt-trois heures, Yui les rejoint parce que Mei l'a invitée sans prévenir personne.\n\nYui|« JE SAVAIS QUE VOUS BUVIEZ SANS MOI. »\n\nMei|« On buvait sans toi. »\n\nYui|« Ça fait quatre mois que je sais pour Nao et j'ai rien dit à PERSONNE. »\n\nNao|« Quatre— »\n\nYui|« Décembre. Tu as souri à une fiche de lombalgie. »\n\nMei|« Elle est bonne. »\n\nYui|« Je suis très bonne. »\n\nNao pose le front sur le comptoir."
+  ]
+_M7[41]["scenes"] = [
+    "*Fin avril, 20h40*\n\nIl rentre avec une enveloppe du groupe qu'il pose sur la table sans la commenter, ce qui est déjà une information.\n\nNao|« C'est quoi ? »\n\nRen|« La direction technique. »\n\nNao|« Septembre dernier ? »\n\nRen|« Ils l'ont repoussée à septembre prochain. Maintenant c'est signé. »\n\nNao|« Et ? »\n\nRen|« Et il y a un poste de coordination de site à Kitagawa. Terrain. Vingt mois. »",
+    'Elle repose sa fourchette.\n\nNao|« Kitagawa. »\n\nRen|« Une heure quarante. »\n\nNao|« Par jour ? »\n\nRen|« Aller. »\n\nNao|« Donc trois heures vingt. »\n\nRen|« Il y a un logement de chantier. »\n\nUn silence.\n\nNao|« Vous dormiriez là-bas. »\n\nRen|« La semaine. »',
+    "Elle se lève et va poser son assiette dans l'évier alors qu'elle n'a pas fini.\n\nNao|« Vous le voulez ? »\n\nRen|« Oui. »\n\nIl l'a dit sans hésiter, ce qui ne lui est arrivé à peu près quatre fois en un an.\n\nNao|« Depuis quand ? »\n\nRen|« Depuis qu'ils me l'ont proposé, il y a onze jours. »\n\nNao|« Onze jours. »\n\nRen|« Oui. »\n\nNao|« Vous avez attendu onze jours. »\n\nRen|« Je voulais savoir ce que j'en pensais avant de vous le dire. »",
+    "Nao|« Et le cabinet ? »\n\nRen|« Quoi, le cabinet ? »\n\nNao|« Le mien. Celui que je signe en juin. Celui qui est ici. »\n\nRen|« Il est ici. »\n\nNao|« Donc vous partez et je reste. »\n\nRen|« La semaine. »\n\nNao|« Ne dites pas *la semaine* comme si c'était un détail. »\n\nElle s'appuie contre l'évier.\n\nNao|« Vous vous rendez compte de ce que vous êtes en train de me dire ? On a mis un an à réussir à s'embrasser dans une entrée et vous voulez partir à cent kilomètres. »",
+    "Ren|« Ce n'est pas contre vous. »\n\nNao|« Je sais que c'est pas contre moi ! Ce serait beaucoup plus simple si c'était contre moi ! »\n\nElle inspire.\n\nNao|« Vous savez ce qui est en train de se passer ? »\n\nRen|« Non. »\n\nNao|« Vous êtes en train de faire exactement ce qu'il faut. Vous m'avez dit ce que vous vouliez à voix haute. C'est la chose que je vous réclame depuis un an. Et je suis en train de le détester. »\n\nSilence dans la cuisine.",
+    "Ren|« Alors je refuse. »\n\nNao|« NON. »\n\nRen|« …Quoi ? »\n\nNao|« Non. Vous ne dites pas ça. »\n\nRen|« Vous venez de— »\n\nNao|« Je viens de dire que je détestais ça. J'ai pas dit *renonce*. Si vous renoncez maintenant parce que j'ai crié, dans six ans vous serez à un bureau avec une baie vitrée et vous me regarderez d'une certaine façon et je saurai. »\n\nElle se retourne.\n\nNao|« Votre mère m'a raconté 1998. Je vous le rappelle. »",
+    "Ren|« Ce n'est pas la même chose. »\n\nNao|« C'est exactement la même chose dans l'autre sens. »\n\nIl ne trouve rien à répondre.\n\nNao|« Alors non, vous ne refusez pas pour me faire plaisir, et je ne dis pas *vas-y c'est génial* pour vous faire plaisir. »\n\nRen|« Alors on fait quoi ? »\n\nNao|« Je sais pas. »\n\nRen|« C'est la première fois que je vous entends dire ça. »\n\nNao|« C'est la première fois que c'est vrai. »"
+  ]
+_M7[42]["scenes"] = [
+    "*Mai, résidence Kirishima, déjeuner de famille*\n\nQuatorze personnes. C'est le premier grand repas depuis le Nouvel An, et le premier auquel Ichiro n'assiste pas — il ne se déplace plus depuis février.\n\nSae a mis Nao à côté d'elle, ce qui n'est pas un hasard.\n\nSae|« Vous avez bonne mine. »\n\nNao|« Merci. »\n\nSae|« Vous savez ce que ça veut dire, ça ? »\n\nNao|« Que j'ai bonne mine ? »\n\nSae|« Que quelqu'un s'occupe de vous. »\n\nElle resert du thé à quelqu'un d'autre avant que Nao ait pu répondre.",
+    "Shigeru attend le dessert.\n\nIl attend toujours le dessert, parce qu'à ce moment-là tout le monde est détendu et que personne ne s'attend à rien.\n\nShigeru|« Ren. Kitagawa. »\n\nLe bruit des couverts diminue d'à peu près trente pour cent.\n\nRen|« Oui. »\n\nShigeru|« Tu peux m'expliquer ? »\n\nRen|« Il y a une reprise en sous-œuvre sur trois bâtiments et personne n'a l'antériorité du dossier. »\n\nShigeru|« Ce n'est pas ce que je demande. »",
+    "Shigeru|« Je te demande pourquoi un homme de vingt-sept ans, à qui on offre la direction technique du groupe, demande à aller mettre des bottes sur un chantier de province. »\n\nRen|« Parce que c'est mon métier. »\n\nShigeru|« Ton métier c'est de diriger. »\n\nRen|« Non. »\n\nUn silence très net.\n\nShigeru|« Pardon ? »\n\nRen|« Mon métier c'est le calcul de structure. Diriger, c'est ce qu'on attend de moi. Ce n'est pas la même chose. »",
+    "Shigeru repose sa tasse.\n\nShigeru|« Tu sais ce que ton grand-père faisait à vingt-sept ans ? »\n\nRen|« Oui. »\n\nShigeru|« Et moi ? »\n\nRen|« Oui. »\n\nShigeru|« Alors tu comprends que ce que tu demandes est un recul. »\n\nRen ne répond pas.\n\nShigeru|« Le problème avec toi, Ren, c'est que tu n'as jamais rien voulu. Ton frère au moins voulait quelque chose, même si c'était idiot. Toi tu attends. Tu attends depuis dix ans et maintenant tu veux des bottes. »\n\nIl rit, un peu, pour que ce soit acceptable devant quatorze personnes.\n\nShigeru|« Tu n'as jamais rien voulu de ta vie. »",
+    "Nao se lève.\n\nCe n'est pas prémédité. Elle est debout avant d'avoir décidé de l'être, une serviette encore à la main, et quatorze personnes se taisent en même temps.\n\nNao|« Ce n'est pas vrai. »\n\nShigeru|« Pardon ? »\n\nNao|« Ce que vous venez de dire n'est pas vrai. »",
+    {"si": "carnet_lu", "texte": "Nao|« Il y a quatre ans, il a passé sept semaines de nuit sur un franchissement piéton de quatre-vingt-onze mètres au-dessus de la voie ferrée de Tsuchiya. Bois lamellé. Il a redessiné le nœud d'appui onze fois. »\n\nShigeru ne dit rien.\n\nNao|« Il ne vous l'a jamais montré. Vous savez pourquoi ? Parce que tant qu'il ne vous le montrait pas, ce n'était pas encore refusé. »\n\nSae a posé sa fourchette.\n\nNao|« Alors non. Il n'a pas *jamais rien voulu*. Il a voulu des choses pendant dix ans dans un carnet noir en se disant que ça ne servirait à rien. »"},
+    {"sauf": "carnet_lu", "texte": "Nao|« Il a passé des nuits entières sur un projet qu'il ne vous a jamais montré. »\n\nShigeru ne dit rien.\n\nNao|« Je ne sais pas lequel. Je ne sais pas ce qu'il y avait dessus. Il ne me l'a jamais dit à moi non plus. »\n\nSae a posé sa fourchette.\n\nNao|« Mais je sais reconnaître quelqu'un qui rentre à minuit et demi et qui referme son cahier quand j'entre dans la pièce. Alors non. Il n'a pas *jamais rien voulu*. Il a arrêté de le dire à voix haute. »"},
+    'Un cousin tousse. Personne ne bouge.\n\nShigeru|« Vous êtes très bien renseignée. »\n\nNao|« Je vis avec lui. »\n\nShigeru|« Depuis un an. »\n\nNao|« Depuis un an. »\n\nElle repose la serviette sur la table.\n\nNao|« Vous, ça fait vingt-sept ans. »',
+    "Elle se rassoit.\n\nLe silence dure encore quatre secondes, puis Sae dit quelque chose sur le gâteau et deux personnes répondent trop fort, et le repas repart.\n\nRen n'a pas bougé de tout l'échange. Il n'a pas essayé de l'arrêter. Il n'a pas essayé de la couvrir.\n\nIl regarde sa femme comme s'il ne l'avait jamais vue.",
+    "Au bout de la table, dans le fauteuil qu'on a fait apporter pour lui — parce qu'il est venu, finalement, pour deux heures, contre l'avis de tout le monde — un très vieil homme n'a pas dit un mot depuis le début du repas.\n\nIchiro regarde Nao.\n\nPuis il regarde son fils.\n\nPuis il regarde son petit-fils, qui regarde sa femme.\n\nEt il ferme les yeux un moment, comme quelqu'un qui vient de comprendre quelque chose de très simple avec beaucoup de retard.",
+    {"si": "carnet_lu", "texte": "*Dans la voiture, 17h*\n\nIl ne démarre pas.\n\nRen|« Tsuchiya. »\n\nNao|« Oui. »\n\nRen|« Quatre-vingt-onze mètres. »\n\nNao|« C'était écrit dans la marge. »\n\nRen|« Onze fois le nœud d'appui. »\n\nNao|« J'ai compté les dessins. »\n\nIl regarde le pare-brise pendant un long moment.\n\nRen|« Vous avez compté les dessins. »\n\nNao|« Il y a un an. »\n\nRen|« Et vous vous en souvenez encore. »\n\nNao|« Ren. »\n\nIl démarre sans finir sa phrase, et il conduit huit kilomètres sans rien dire, et à un feu il pose sa main sur la sienne sur le levier de vitesse et il ne l'enlève pas jusqu'à la maison."},
+    {"sauf": "carnet_lu", "texte": "*Dans la voiture, 17h*\n\nIl ne démarre pas.\n\nRen|« Vous ne saviez pas de quoi vous parliez. »\n\nNao|« Non. »\n\nRen|« Vous l'avez dit quand même. »\n\nNao|« J'ai dit ce que je savais. Que vous rentrez à minuit et demi. Que vous refermez le cahier quand j'entre. Ça me suffisait. »\n\nIl regarde le pare-brise pendant un long moment.\n\nRen|« Il s'appelle Tsuchiya. »\n\nNao|« Quoi ? »\n\nRen|« Le projet. Une passerelle. Quatre-vingt-onze mètres. »\n\nElle ne bouge plus, parce que c'est la première fois en quatorze mois qu'il donne quelque chose sans qu'on ait eu à aller le chercher.\n\nNao|« Vous me la montrerez ? »\n\nRen|« …Oui. »\n\nIl démarre sans finir sa phrase, et il conduit huit kilomètres sans rien dire, et à un feu il pose sa main sur la sienne sur le levier de vitesse et il ne l'enlève pas jusqu'à la maison."}
+  ]
+_M7[41]["choix"] = {
+    'question': 'Vingt mois. Cent kilomètres. Un cabinet qui ouvre en juin.',
+    'decisif': True,
+    'options': [
+      (
+        'elle_cede',
+        '1️⃣',
+        "Elle dit d'y aller, et referme le sujet"
+      ),
+      (
+        'il_cede',
+        '2️⃣',
+        'Il refuse le poste'
+      ),
+      (
+        'tenu',
+        '3️⃣',
+        'Aucun des deux ne cède — ils cherchent'
+      )
+    ],
+    'suites': {
+      'elle_cede': {
+        'pose': [
+          'nao_a_cede'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': -4
+          }
+        },
+        'texte': "Nao|« Vas-y. »\n\nRen|« Nao— »\n\nNao|« Vas-y, c'est bien, tu en as envie depuis quatre ans, et je ne vais pas être la femme qui empêche. »\n\nRen|« Ce n'est pas— »\n\nNao|« Le sujet est clos. »\n\nElle le dit d'un ton qu'elle réserve d'habitude aux patients qui veulent reprendre le sport trop tôt.\n\nIl accepte le poste le lundi.\n\nEt pendant les six semaines qui suivent, chaque fois que Kitagawa est mentionné, Nao change de sujet en quatre secondes, et il le remarque, et il ne dit rien parce qu'elle a dit que le sujet était clos.\n\nLe point sept ne sert à rien si l'un des deux décrète la fin d'une conversation."
+      },
+      'il_cede': {
+        'pose': [
+          'ren_a_cede'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': 4
+          }
+        },
+        'texte': "Il refuse le poste le lundi.\n\nIl ne le lui dit pas. Elle l'apprend par Haru, au téléphone, dix jours plus tard.\n\nNao|« Tu as refusé. »\n\nRen|« Oui. »\n\nNao|« Pourquoi tu me l'as pas dit ? »\n\nRen|« Parce que vous m'auriez dit d'accepter. »\n\nNao|« ÉVIDEMMENT que je t'aurais dit d'accepter. »\n\nRen|« Voilà. »\n\nIls se disputent quarante minutes, ce qui est un record.\n\nÀ la fin, il dit une chose qui la fait taire :\n\nRen|« J'ai eu vingt-six ans de choses que je n'ai pas choisies. Celle-là, je la choisis. Vous n'avez pas le droit de me l'enlever aussi. »\n\nElle n'a rien à répondre à ça, et ça reste entre eux comme une écharde pendant des semaines : il a raison, et il a quand même décidé seul."
+      },
+      'tenu': {
+        'pose': [
+          'desaccord_tenu'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': 8
+          }
+        },
+        'texte': "Ils ne règlent rien ce soir-là.\n\nNi le lendemain. Ni le surlendemain.\n\nIls en reparlent six fois en trois semaines, à des heures absurdes, dans la cuisine, dans la voiture, une fois à minuit dans le couloir.\n\nNao|« Vingt mois. »\n\nRen|« Vingt mois. »\n\nNao|« Et après ? »\n\nRen|« Après je ne sais pas. »\n\nNao|« Ce n'est pas une réponse. »\n\nRen|« Non. Mais c'est la vraie. »\n\nCe qu'ils finissent par trouver n'est élégant pour personne : il prend le poste en négociant trois jours sur site et deux au siège. Il perd une partie de ce qu'il voulait. Elle ouvre son cabinet en sachant qu'elle dînera seule deux soirs par semaine.\n\nNao|« C'est nul comme solution. »\n\nRen|« Oui. »\n\nNao|« Personne n'a gagné. »\n\nRen|« Non. »\n\nElle pose la tête contre son épaule dans le couloir, à minuit vingt.\n\nNao|« Mais on l'a trouvée à deux. »\n\nRen|« Oui. »"
+      }
+    }
+  }
+del _M7
+
+
+# ── ARC VIII : épisodes 44 à 49 (se choisir) + fins ──
+_M8 = CHRONIQUE_SAISONS["maries_malgre_nous"]
+_M8["episodes"][43]["scenes"] = [
+    "*Fin mai, un jeudi, 17h50*\n\nRen|« Vous faites quelque chose ce soir ? »\n\nNao|« Non. »\n\nRen|« Vous venez ? »\n\nNao|« Où ? »\n\nRen|« Chez mon grand-père. »\n\nElle repose le dossier qu'elle tenait.\n\nNao|« C'est jeudi. »\n\nRen|« Oui. »\n\nNao|« Vous y allez seul depuis six ans. »\n\nRen|« Sept, maintenant. »\n\nNao|« Ren. »\n\nRen|« Vous venez ou pas ? »",
+    "Ils s'arrêtent à la boutique près de la gare.\n\nRen|« Six. »\n\nLa vendeuse|« Les mêmes ? »\n\nRen|« Les mêmes. »\n\nElle les emballe sans qu'il ait rien précisé.\n\nNao|« Elle vous connaît. »\n\nRen|« Sept ans. »\n\nNao|« Elle sait votre prénom ? »\n\nRen|« Non. »\n\nNao|« Sept ans et elle sait pas votre prénom. »\n\nRen|« Elle sait les dorayaki. C'est suffisant. »",
+    "La maison est de l'autre côté de la rivière. Les haies sont taillées. La femme de ménage part à dix-huit heures. Il arrive à dix-huit heures cinq.\n\nNao|« C'est pour ça, le jeudi. »\n\nRen|« …Pardon ? »\n\nNao|« Elle part à six heures et vous arrivez à six heures cinq. Vous venez le jeudi pour être seul avec lui. »\n\nIl met la clé dans la serrure et ne répond pas, ce qui est une réponse.",
+    "Ichiro est dans son fauteuil. Il a maigri depuis le déjeuner de mai. Sa respiration prend maintenant la moitié de chaque silence.\n\nIl voit Nao entrer derrière son petit-fils.\n\nIl ne dit rien pendant environ quatre secondes.\n\nIchiro|« Ah. »\n\nRen|« Elle avait fini tôt. »\n\nIchiro|« Bien sûr. »\n\nNao|« Bonsoir, Ichiro-san. »\n\nIchiro|« Asseyez-vous. Pas là, c'est celui qui grince. »",
+    "Il parle du merle pendant huit minutes.\n\nNao écoute avec un sérieux absolu. Elle pose deux questions — sur la plume blanche, et sur ce que mange un merle en mai — et Ichiro répond aux deux avec un plaisir manifeste.\n\nRen regarde ça depuis l'autre fauteuil sans rien dire.\n\nIchiro|« Vous vous intéressez aux oiseaux ? »\n\nNao|« Pas du tout. »\n\nIchiro|« Ah. »\n\nNao|« Mais vous, oui. »\n\nLe vieil homme rit, ce qui déclenche une quinte, ce qui dure trop longtemps.",
+    "Quand ça se calme, il essuie ses yeux avec un mouchoir en tissu.\n\nIchiro|« Mon fils m'a appelé. Après le déjeuner. »\n\nRen se redresse.\n\nIchiro|« Il était très en colère. »\n\nNao|« Je suis désolée. »\n\nIchiro|« Ne le soyez pas. »\n\nIl replie son mouchoir en quatre.\n\nIchiro|« Il m'a dit *elle m'a parlé devant quatorze personnes*. Il l'a dit trois fois. Et à la troisième j'ai compris qu'il n'était pas en colère du tout. »\n\nRen|« Il était quoi ? »\n\nIchiro|« Sonné. »",
+    "Ichiro|« Personne ne lui a jamais parlé comme ça. Pas sa femme. Pas ses cadres. Pas moi. »\n\nIl regarde Nao.\n\nIchiro|« Vous savez ce qu'il m'a demandé, à la fin ? Il m'a demandé si c'était vrai, pour le pont. »\n\nRen ne bouge plus.\n\nIchiro|« Je lui ai dit que je ne savais pas. Parce que je ne savais pas. »\n\nIl tourne la tête vers son petit-fils.\n\nIchiro|« Sept ans, tous les jeudis, et je ne savais pas. »",
+    "Ren|« Ce n'est rien. »\n\nIchiro|« Ren. »\n\nRen|« C'était il y a quatre ans. »\n\nIchiro|« Ren. »\n\nIl ne hausse pas la voix. Il répète le prénom exactement au même rythme, comme il a répété *on va les laisser parler tous les deux* au Kanoya il y a quatorze mois.\n\nIchiro|« Est-ce que tu me le montreras un jour ? »\n\nLong silence.\n\nRen|« …Oui. »\n\nIchiro|« Quand ? »\n\nRen|« Je ne sais pas. »\n\nIchiro|« Mets une date. »\n\nRen|« Grand-père— »\n\nIchiro|« Mets une date, Ren. Je n'ai pas beaucoup de jeudis. »",
+    "Ren met une date.\n\nIl dit *le 12 juin*, et il le dit d'une voix qui n'est pas tout à fait la sienne, et Ichiro hoche la tête une fois et ne revient plus dessus de la soirée.\n\nIls restent jusqu'à vingt heures.\n\nIchiro mange trois dorayaki qu'il n'a pas le droit de manger. Nao ne dit rien. Ren non plus.",
+    "Au moment de partir, Ichiro retient Nao par le poignet.\n\nIl a une main très légère et très froide.\n\nIchiro|« Vous vous souvenez de ce que je vous ai dit dans votre salle de repos ? »\n\nNao|« Avec le calendrier de 2022. »\n\nIchiro|« J'avais dit que vous ne le laisseriez pas tranquille. »\n\nNao|« Vous aviez dit ça. »\n\nIchiro|« J'avais raison. »\n\nIl lâche son poignet.\n\nIchiro|« Ça m'arrive. »",
+    "*Dans la voiture*\n\nElle attend qu'il ait fait deux kilomètres.\n\nNao|« Le 12 juin. »\n\nRen|« Oui. »\n\nNao|« Vous allez le faire ? »\n\nRen|« J'ai dit une date. »\n\nNao|« Ce n'est pas la même chose. »\n\nIl ne répond pas pendant un kilomètre.\n\nRen|« Vous viendrez ? »\n\nNao|« Vous voulez que je vienne ? »\n\nRen|« Oui. »\n\nNao|« Alors je viendrai. »"
+  ]
+_M8["episodes"][44]["scenes"] = [
+    "*Début juin, siège Kirishima, 18h20*\n\nElle passe le chercher parce qu'ils dînent chez Mei et que c'est sur la route.\n\nL'accueil la connaît maintenant. On la fait monter sans appeler.",
+    "La porte du bureau de Shigeru est ouverte. Ren est dedans. Aya aussi.\n\nNao s'arrête à six mètres.\n\nShigeru|« Vous avez sorti le dossier Sakurai. »\n\nAya|« J'ai sorti le dossier des contrats annulés de 2023 pour l'audit. Il y en a quatorze. »\n\nShigeru|« Il y en a treize qui ne posent aucun problème. »\n\nAya|« C'est exact. »\n\nShigeru|« Alors pourquoi celui-là est sur mon bureau ? »\n\nAya|« Parce que l'audit externe va poser la question de la clause 9. »",
+    "Ren|« Père. »\n\nShigeru|« Toi tu te tais. »\n\nAya|« Kirishima-san, avec tout le respect, l'audit va— »\n\nShigeru|« L'audit ne verra rien du tout parce que le contrat n'a jamais été signé. »\n\nAya|« Le projet est archivé. »\n\nShigeru|« Alors désarchivez-le. »\n\nUn silence.\n\nAya|« Non. »",
+    "Shigeru se lève.\n\nShigeru|« Pardon ? »\n\nAya|« Je ne détruirai pas une pièce d'archive. Ni pour vous, ni pour personne. »\n\nShigeru|« Vous savez à qui vous parlez ? »\n\nAya|« Oui. »\n\nElle ne bouge pas d'un centimètre.\n\nAya|« J'ai déposé une demande de mutation lundi. Filiale de Fukuoka. Elle prend effet au 1er août. »\n\nShigeru|« …Quoi ? »\n\nAya|« Vous l'auriez su vendredi. Ça m'arrange que ce soit maintenant. »",
+    "Shigeru|« C'est du chantage. »\n\nAya|« Non. C'est un départ. »\n\nElle pose une chemise sur le bureau.\n\nAya|« Le dossier est complet et il reste où il est. Bonne soirée. »\n\nElle se retourne pour sortir.\n\nElle voit Nao dans le couloir.\n\nElles se regardent une seconde et demie. Aya incline très légèrement la tête, exactement comme en juin dernier dans la véranda, et elle passe.",
+    "Ren|« Elle a raison. »\n\nShigeru|« Tais-toi. »\n\nRen|« La clause 9 était rédigée par le juridique sur votre instruction. C'est daté. »\n\nShigeru|« TAIS-TOI. »\n\nEt là il crie. Pour la première fois, il crie, et ça résonne dans un bureau avec une baie vitrée sur trois côtés.\n\nShigeru|« Tu as annulé ce contrat sans délégation. Tu as engagé le groupe. N'importe qui d'autre aurait été mis dehors la semaine suivante. »\n\nRen|« Je sais. »\n\nShigeru|« Tu sais ce que ça m'a coûté de couvrir ça ? »\n\nRen|« Vous ne l'avez pas couvert. On a passé un accord. »",
+    "Shigeru|« UN ACCORD. »\n\nIl fait deux pas.\n\nShigeru|« Je t'ai donné exactement ce que tu voulais. Le groupe n'a plus jamais approché cette imprimerie. Pas un appel, pas une lettre, rien, en deux ans. J'ai tenu ma part jusqu'à la virgule. »\n\nRen|« Oui. »\n\nShigeru|« Et toi tu avais une seule chose à faire. »\n\nRen|« Je l'ai faite. »\n\nShigeru|« TU N'AS RIEN DIT PENDANT DEUX ANS ET MAINTENANT MA BELLE-FILLE ME PARLE DE PONTS DEVANT QUATORZE PERSONNES ET MA DIRECTRICE DU DÉVELOPPEMENT ME PARLE DE CLAUSE 9 — »\n\nIl s'arrête net.",
+    "Parce qu'il vient de voir la porte.\n\nParce qu'il vient de voir qui est derrière.\n\nNao est dans l'encadrement. Elle n'a pas bougé depuis trente secondes.\n\nPersonne ne dit rien pendant très, très longtemps.",
+    "Nao|« Répétez. »\n\nShigeru|« Nao— »\n\nNao|« Répétez la phrase. *Je t'ai donné exactement ce que tu voulais.* »\n\nShigeru regarde son fils. Son fils regarde le sol.\n\nNao|« Qu'est-ce qu'il voulait ? »\n\nSilence.\n\nNao|« Qu'est-ce qu'il a échangé, Shigeru-san ? »",
+    "Shigeru|« Il a demandé que le groupe n'approche plus jamais l'imprimerie de votre père. »\n\nNao|« Et en échange ? »\n\nShigeru|« En échange il ne parlait de la clause à personne. »\n\nNao|« À personne. »\n\nShigeru|« À personne. »\n\nNao|« Et s'il parlait ? »\n\nShigeru ne répond pas.\n\nNao|« S'il parlait, l'accord tombait. »\n\nShigeru|« …Oui. »\n\nNao|« Donc s'il m'avait tout dit, votre groupe redevenait libre de revenir sur l'atelier de mon père. »\n\nUn temps très long.\n\nShigeru|« Techniquement. »\n\nNao|« Ne dites pas *techniquement*. »",
+    "Elle se tourne vers Ren.\n\nNao|« Depuis quand ? »\n\nRen|« Deux ans et trois mois. »\n\nNao|« Vous portez ça depuis deux ans et trois mois. »\n\nRen|« Oui. »\n\nNao|« Et en septembre, dans le couloir, quand je vous ai demandé de ne pas me poser la question suivante — »\n\nRen|« C'était ça. »\n\nNao|« C'était ça. »\n\nElle recule d'un pas.",
+    "Shigeru|« Nao, ce n'est pas— »\n\nNao|« Vous, taisez-vous. »\n\nElle ne crie pas. C'est pire.\n\nNao|« Vous avez rédigé une clause pour vider l'atelier de mon père. Votre fils l'a arrêtée. Et pour prix vous lui avez pris deux ans de silence, et vous avez regardé un homme de vingt-quatre ans se faire détester par une famille entière sans lever le petit doigt. »\n\nShigeru|« Je protégeais l'entreprise. »\n\nNao|« Vous protégiez votre nom. »\n\nElle prend son sac.\n\nNao|« Vous avez perdu un fils il y a dix ans et vous n'avez jamais compris pourquoi. Je vais vous le dire, moi : c'est parce que dans cette famille, aimer quelqu'un et lui prendre quelque chose, c'est le même geste. »\n\nElle sort."
+  ]
+_M8["episodes"][45]["scenes"] = [
+    "*Le parking, 19h05*\n\nElle marche vite. Il la rattrape à la troisième rangée.\n\nRen|« Nao. »\n\nNao|« Non. »\n\nRen|« Montez, je vais— »\n\nNao|« NON. »\n\nElle se retourne d'un coup au milieu du parking.\n\nNao|« Deux ans et trois mois. »\n\nRen|« Oui. »\n\nNao|« Et il a fallu que je l'apprenne en écoutant votre père hurler dans un couloir. »",
+    "Ren|« Je ne pouvais pas. »\n\nNao|« Vous ne pouviez pas me dire *j'ai passé un accord* ? »\n\nRen|« Je vous l'ai dit. En septembre. »\n\nNao|« Vous m'avez dit qu'il y avait un accord, pas qu'il était encore actif ! Pas que l'atelier de mon père tenait à votre silence en ce moment même, aujourd'hui, cette semaine ! »\n\nRen|« C'est la même chose. »\n\nNao|« CE N'EST PAS LA MÊME CHOSE. »",
+    "Elle marche vers la sortie du parking. Il suit.\n\nNao|« Vous savez ce que ça veut dire ? Ça veut dire que depuis mars dernier je vis avec quelqu'un qui porte le sort de ma famille dans sa poche et qui me laisse discuter des courses. »\n\nRen|« Vous préféreriez le porter ? »\n\nNao|« OUI. »\n\nElle s'arrête.\n\nNao|« Oui, je préférerais. C'est mon père. C'est ma maison. C'est moi qui suis caution du prêt. C'est MON poids et vous me l'avez confisqué. »",
+    "Ren|« Pour vous protéger. »\n\nNao|« JE SAIS. »\n\nElle a la voix qui casse et elle déteste ça.\n\nNao|« Je sais que c'était pour me protéger. Ma mère est partie pour nous protéger. Mon père l'a empêchée de revenir pour nous protéger. Votre père a arrêté les lettres de votre frère pour vous protéger. Vous avez fermé votre gueule pendant deux ans pour me protéger. »\n\nElle rit une fois, très mal.\n\nNao|« Vous êtes tous formidables. »",
+    'Ils sont sortis du parking. Il fait dix-neuf degrés, il est sept heures et quart, et il y a du monde sur le trottoir qui les regarde poliment.\n\nRen|« Montez dans la voiture. »\n\nNao|« Non. »\n\nRen|« Il y a quarante minutes de marche. »\n\nNao|« Quarante-cinq. »\n\nRen|« Nao. »\n\nNao|« Je marche. »\n\nElle part.'
+  ]
+_M8["episodes"][46]["scenes"] = [
+    "*Le 12 juin*\n\nLa date tient.\n\nRen avait dit *le 12 juin* dans un salon, un jeudi de mai, d'une voix qui n'était pas tout à fait la sienne, et le 12 juin arrive comme arrivent les dates : sans prévenir, un jeudi.",
+    "Sauf que ce n'est pas seulement eux.\n\nQuand ils arrivent à dix-huit heures cinq, il y a quatre paires de chaussures dans l'entrée.\n\nNao|« Il y a du monde. »\n\nRen s'arrête au milieu du couloir.\n\nRen|« …Oui. »",
+    "Dans le salon : Shigeru, debout près de la fenêtre. Sae, assise, très droite. Kaito, qui est revenu de Singapour depuis mardi et qui n'a prévenu personne sauf son grand-père.\n\nEt Tetsuo, en costume, sur le fauteuil qui grince, avec Sota debout derrière lui.\n\nNao s'arrête net.\n\nNao|« Papa ? »\n\nTetsuo|« On m'a écrit. »\n\nNao|« Qui ça, on ? »\n\nTetsuo|« Le vieux monsieur. »",
+    "Ichiro est dans son fauteuil. Il a une couverture sur les genoux en juin.\n\nIchiro|« Asseyez-vous, tout le monde. Ça va être long et je ne peux plus parler longtemps. »\n\nPersonne ne discute.\n\nRen|« Grand-père, qu'est-ce que— »\n\nIchiro|« Toi tu t'assois aussi. »",
+    "Ichiro|« Je vais commencer par une chose que je n'ai jamais dite. »\n\nIl prend le temps de respirer.\n\nIchiro|« Il y a quatorze mois, j'ai décidé du mariage de deux personnes qui ne me l'avaient pas demandé. »\n\nSae|« Père— »\n\nIchiro|« Sae, laisse-moi finir, je n'ai pas le souffle pour deux tours. »",
+    "Ichiro|« J'avais mes raisons. Elles me paraissaient bonnes. J'avais vu partir un petit-fils et j'en regardais un deuxième s'éteindre proprement, sans faire de bruit, comme on éteint une pièce en sortant. »\n\nIl regarde Kaito.\n\nIchiro|« Et j'avais vu une jeune femme se lever dans un restaurant pour défendre un serveur qu'elle ne connaissait pas. »\n\nNao ne bouge plus.\n\nIchiro|« Je me suis dit : celle-là ne le laissera pas s'éteindre. »",
+    "Ichiro|« J'avais raison. »\n\nIl tousse. Ça dure. Kaito se lève à moitié ; Ichiro lève une main et il se rassoit.\n\nIchiro|« J'avais raison, et c'est exactement le problème. »\n\nNao|« Je ne comprends pas. »\n\nIchiro|« Vous allez comprendre. »",
+    "Ichiro|« Le mois dernier, ma belle-fille par alliance s'est levée à ma table et a dit à mon fils qu'il ne connaissait pas son propre enfant. »\n\nShigeru regarde le sol.\n\nIchiro|« Et pendant qu'elle parlait, j'ai regardé Ren. Il ne l'a pas arrêtée. Il ne l'a pas couverte. Il l'a regardée. »\n\nIl replie sa couverture d'un centimètre.\n\nIchiro|« Et je me suis dit : voilà. C'est fait. »\n\nIl lève les yeux.\n\nIchiro|« Et tout de suite après, je me suis dit : et comment veux-tu qu'ils le sachent, imbécile. »",
+    "Ichiro|« Ils sont mariés parce que je l'ai décidé. Tout ce qu'ils font depuis quatorze mois, ils le font dans une pièce dont j'ai fermé la porte. »\n\nIl regarde Nao, puis Ren.\n\nIchiro|« Vous ne pouvez pas savoir si vous vous êtes choisis. Personne ne peut le savoir dans une pièce fermée. Moi non plus. »\n\nIl tend la main vers la table basse. Sae lui passe une chemise cartonnée.\n\nIchiro|« Alors j'ouvre la porte. »",
+    "Ichiro|« Sakurai-san. »\n\nTetsuo|« …Oui ? »\n\nIchiro|« La caution de votre fille sur votre prêt. Je l'ai fait reprendre. »\n\nTetsuo|« Pardon ? »\n\nIchiro|« À titre personnel. Ce n'est pas le groupe, c'est moi. Le dossier est passé mardi. Votre fille n'est plus engagée. »\n\nNao|« Vous n'aviez pas le droit de— »\n\nIchiro|« Non. Je n'avais pas le droit. J'ai encore décidé pour vous. »\n\nIl pose la chemise sur ses genoux.\n\nIchiro|« C'est la dernière fois. Et c'est dans ce sens-là, cette fois. »",
+    "Ichiro|« Shigeru. »\n\nShigeru|« Père. »\n\nIchiro|« Répète devant eux ce que tu m'as dit lundi. »\n\nUn très long silence.\n\nShigeru|« …Si Ren et Nao mettent fin à ce mariage, l'entreprise ne demandera rien à personne. Ni à eux, ni à la famille Sakurai. Ren garde son poste. Le prêt est indépendant du groupe. »\n\nIchiro|« Et ? »\n\nShigeru|« …Et l'accord de 2023 est annulé. »\n\nRen relève la tête d'un coup.",
+    "Shigeru|« Le groupe n'approchera jamais l'imprimerie Sakurai. C'est acté par écrit, c'est daté, et ça ne dépend plus du silence de personne. »\n\nIl regarde son fils pour la première fois depuis le début.\n\nShigeru|« Tu peux dire ce que tu veux. À qui tu veux. »\n\nRen ne répond pas. Il a le visage de quelqu'un à qui on vient de retirer quelque chose qu'il portait depuis si longtemps qu'il en avait perdu le poids.",
+    "Tetsuo|« Je peux poser une question ? »\n\nIchiro|« Oui. »\n\nTetsuo|« De quel accord vous parlez ? »\n\nPersonne ne répond pendant trois secondes.\n\nPuis Ren se lève.\n\nRen|« Sakurai-san. Il y a deux ans, le contrat que vous deviez signer contenait une clause de rachat progressif. En trois ans, l'imprimerie ne vous aurait plus appartenu. »\n\nTetsuo|« …Quoi ? »\n\nRen|« Je l'ai lue le vendredi soir. J'ai monté une autre version tout le week-end. Elle a été refusée le lundi matin. Alors j'ai annulé. »\n\nIl ne regarde pas son père en disant ça.\n\nRen|« Et je n'avais pas le droit de vous le dire. Jusqu'à aujourd'hui. »",
+    "Tetsuo ne dit rien pendant très longtemps.\n\nIl a les mains sur les genoux, dans un costume qu'il n'a mis que trois fois en quinze ans.\n\nTetsuo|« J'ai plastifié cette lettre. »\n\nRen|« Je sais. »\n\nTetsuo|« Je l'ai sortie devant vous. Chez moi. En juillet. »\n\nRen|« Je sais. »\n\nTetsuo|« Et vous m'avez parlé de la came du margeur. »\n\nRen|« Oui. »\n\nLe vieil imprimeur se frotte le visage avec les deux mains.\n\nTetsuo|« Vous êtes venu réparer ma presse deux samedis. »\n\nRen|« …Oui. »\n\nTetsuo|« Bon sang. »",
+    "Sota, debout derrière le fauteuil de son père, dit la seule chose que personne n'avait prévue.\n\nSota|« Donc en fait ma sœur s'est mariée à cause d'un truc que vous avez fait pour nous sauver. »\n\nRen|« …Oui. »\n\nSota|« C'est le truc le plus con que j'aie jamais entendu. »\n\nKaito|« Bienvenue dans la famille. »\n\nC'est la première phrase de Kaito de toute la soirée, et deux personnes rient trop fort parce qu'elles en avaient besoin.",
+    "Ichiro reprend la parole quand ça se calme. Il est très fatigué maintenant.\n\nIchiro|« Voilà. Il n'y a plus rien. »\n\nIl regarde les deux.\n\nIchiro|« Plus de prêt, plus d'accord, plus de dette, plus de famille à ménager. Si vous vous séparez demain, personne ici ne perdra un yen ni une nuit de sommeil. Je m'en porte garant devant tout le monde. »\n\nPersonne ne dit rien.\n\nIchiro|« Vous êtes libres. »\n\nIl ferme les yeux.\n\nIchiro|« Enfin. »",
+    "Ils ne montrent pas le pont ce soir-là.\n\nLe carnet reste dans la sacoche de Ren, posée contre le pied du fauteuil, et personne n'y pense sauf lui.\n\nIls partent à vingt et une heures. Sur le perron, Kaito rattrape son frère et lui met une main sur l'épaule pendant environ deux secondes, ce qui, entre eux, est un discours entier.\n\nTetsuo, dans la rue, s'arrête devant Ren.\n\nIl ouvre la bouche. Il la referme.\n\nIl lui serre la main, une fois, très fort, et il monte dans sa voiture."
+  ]
+_M8["episodes"][47]["scenes"] = [
+    "*Jour 1*\n\nIls ne parlent pas de la soirée.\n\nIls parlent des courses, du planning de la semaine, d'un patient de Nao qui a annulé, d'une réunion à Kitagawa.\n\nÀ vingt-deux heures, chacun se couche.\n\nIls dorment dans la même pièce, chacun de son côté, et il y a entre eux une distance qu'aucun des deux n'a décidée.",
+    "*Jour 2*\n\nC'est Nao qui craque en premier, et à sa manière : elle range.\n\nElle range l'armoire de la salle de bain. Elle range le placard de l'entrée. Elle vide le vide-poche.\n\nIl y a vingt-trois élastiques à cheveux dedans.\n\nElle les regarde longtemps. Elle les remet tous.",
+    "*Jour 2, 21h*\n\nNao|« Vous avez pensé à quoi, hier ? »\n\nRen|« À rien. »\n\nNao|« Ren. »\n\nRen|« À beaucoup de choses. »\n\nNao|« Lesquelles ? »\n\nIl repose son crayon.\n\nRen|« Que je n'ai plus de raison. »\n\nNao|« De raison de quoi ? »\n\nRen|« De rester. »\n\nElle sent quelque chose se retourner dans sa poitrine.\n\nRen|« Ce n'est pas ce que je veux dire. »\n\nNao|« C'est ce que vous avez dit. »\n\nRen|« Je sais. »",
+    "*Jour 3, cabinet, 12h40*\n\nYui|« Tu as l'air d'un cadavre. »\n\nNao|« Merci. »\n\nYui|« Un joli cadavre. »\n\nNao|« Yui. »\n\nYui|« Il s'est passé un truc. »\n\nNao|« Il s'est passé que plus personne ne nous oblige à rien. »\n\nYui met environ quatre secondes.\n\nYui|« …Ah. C'est terrible. »\n\nNao|« Pourquoi tu dis ça ? »\n\nYui|« Parce que tant qu'on vous obligeait, tu pouvais faire semblant que tu restais pour ça. »",
+    "*Jour 3, 19h, chez Mei*\n\nMei|« Il t'a dit qu'il partait ? »\n\nNao|« Non. »\n\nMei|« Il a fait des cartons ? »\n\nNao|« Non. »\n\nMei|« Il a changé quoi que ce soit ? »\n\nNao|« Non. »\n\nMei|« Alors c'est quoi le problème ? »\n\nNao|« Le problème c'est qu'il est resté parce qu'il est resté. Pas parce qu'il a décidé. »\n\nMei|« Nao. »\n\nNao|« Un an et trois mois, Mei. Il a jamais eu à choisir. Moi non plus. On s'est jamais rien demandé. Tout ce qu'on a, c'est ce qui a poussé tout seul dans un appartement où on nous avait mis. »",
+    "Mei|« Et alors ? »\n\nNao|« Comment ça, et alors ? »\n\nMei|« Tu crois que les autres choisissent ? »\n\nElle sert deux verres.\n\nMei|« J'ai choisi Takumi. J'avais dix-huit ans, il était drôle, il portait une veste verte. Voilà mon grand choix libre et éclairé. Sept ans. »\n\nNao|« C'est pas pareil. »\n\nMei|« Non. C'est pire. »\n\nElle pousse un verre vers elle.\n\nMei|« Toi tu as passé quatorze mois à regarder quelqu'un tous les jours avant de te demander si tu voulais de lui. C'est l'inverse de tout le monde et franchement c'est beaucoup plus solide. »",
+    "*Jour 4, 20h10*\n\nIl rentre à vingt heures dix. Comme tous les jours depuis quatorze mois.\n\nElle est dans la cuisine.\n\nIl y a deux assiettes sur le plan de travail.\n\nElle ne les a pas sorties par habitude. Elle les a sorties à dix-neuf heures quarante en se disant qu'elle ne savait pas s'il rentrerait, et elle les a sorties quand même, et elle est restée à les regarder pendant une demi-heure.",
+    "Il voit les deux assiettes.\n\nIl ne dit rien. Il enlève ses chaussures, il pose sa sacoche, il enlève sa veste.\n\nPuis il pose quelque chose sur la table.\n\nC'est une clé.\n\nNao|« Qu'est-ce que c'est ? »\n\nRen|« Le local. »\n\nNao|« …Quoi ? »\n\nRen|« Vous avez signé le bail lundi. L'agence m'a appelé jeudi parce que vous aviez mis mon numéro comme contact secondaire en avril et que vous avez oublié de le changer. Ils avaient les clés depuis mardi. »",
+    "Elle regarde la clé sur la table.\n\nNao|« Vous êtes allé les chercher. »\n\nRen|« Oui. »\n\nNao|« Quand ? »\n\nRen|« Ce soir. C'est pour ça que je suis en retard. »\n\nNao|« Vous êtes à l'heure. »\n\nRen|« Je suis parti quarante minutes plus tôt. »\n\nElle prend la clé. Elle est froide et neuve et il y a encore l'étiquette du serrurier dessus.",
+    "Nao|« Vous auriez pu me le dire. »\n\nRen|« Je viens de le dire. »\n\nElle relève les yeux.\n\nNao|« Après. »\n\nRen|« Après. »\n\nIls restent chacun d'un côté de la table de huit avec ses six chaises.\n\nNao|« Il faut qu'on parle. »\n\nRen|« Oui. »\n\nNao|« Pas ce soir. »\n\nRen|« Non. »\n\nNao|« Demain. »\n\nRen|« Demain. »\n\nElle sert dans les deux assiettes."
+  ]
+_M8["episodes"][48]["scenes"] = [
+    "*Le lendemain, samedi*\n\nIl ne court pas. Elle ne dort pas jusqu'à neuf heures.\n\nIls sont tous les deux réveillés à six heures et aucun des deux ne bouge pendant quarante minutes, chacun sachant parfaitement que l'autre ne dort pas.",
+    "À sept heures, ils sont dans la cuisine.\n\nIl fait du café. Il en boit deux gorgées. Il repose la tasse.\n\nNao|« Vous ne l'avez pas finie. »\n\nRen|« Non. »\n\nNao|« Vous la finissiez, depuis février. »\n\nRen|« Oui. »\n\nNao|« Et là non. »\n\nRen|« Là non. »\n\nIl regarde la tasse.\n\nRen|« J'ai peur. »\n\nC'est la première fois de sa vie qu'il dit ces deux mots dans cet ordre.",
+    "Nao|« De quoi ? »\n\nRen|« Que vous soyez restée parce qu'il n'y avait pas d'autre solution. »\n\nNao|« …Vous croyez ça ? »\n\nRen|« Je l'ai cru pendant quatorze mois. C'était même le plus probable. »\n\nNao|« Et maintenant ? »\n\nRen|« Maintenant il n'y a plus rien pour vous obliger, et vous êtes encore là, et je n'arrive pas à savoir si c'est parce que vous voulez rester ou parce que partir demande de faire des cartons. »",
+    "Elle pose sa bouteille.\n\nNao|« Vous voulez que je vous dise quelque chose ou vous voulez que je reste ? »\n\nIl relève la tête.\n\nC'est la question qu'elle lui a posée en janvier, à cette même table, à une heure du matin, le soir où il avait appris pour les cinq lettres.\n\nIl avait répondu *restez*.\n\nRen|« …Dites-moi quelque chose. »\n\nNao|« Vous êtes sûr ? »\n\nRen|« Non. »",
+    "Nao|« Bon. »\n\nElle prend une inspiration qui dure trop longtemps, exactement comme en décembre quand elle a dit *je veux ouvrir mon cabinet*.\n\nNao|« Le 14 avril de l'année dernière, j'ai signé un papier dans une salle de mairie avec dix-huit chaises. Je ne vous connaissais pas. Vous êtes arrivé en retard à notre omiai et vous m'avez dit que je jugeais trop vite, et vous aviez raison, et je vous ai détesté pour ça pendant sept mois. »\n\nRen|« Nao— »\n\nNao|« Laissez-moi finir, j'ai préparé. »\n\nRen|« …Vous avez préparé ? »\n\nNao|« J'ai préparé cette nuit entre trois heures et cinq heures. »",
+    "Nao|« Voilà ce que je sais. »\n\nElle compte sur ses doigts, ce qui est ridicule, et elle le fait quand même.\n\nNao|« Vous rentrez à vingt heures dix. Vous ramassez mes élastiques, il y en a vingt-trois dans le vide-poche et un dans votre veste depuis décembre — oui je l'ai vu, en février, je n'ai rien dit. »\n\nRen ouvre la bouche. Elle continue.\n\nNao|« Vous achetez du thé d'orge en hiver. Vous êtes descendu chercher une mandarine qui avait fait six étages. Vous avez réparé la presse de mon père deux samedis sans le dire et vous avez payé cent quatre-vingt mille yens une pièce que vous ne verrez jamais tourner. »",
+    "Nao|« Vous avez dit à mon frère de ne pas devenir architecte pour me rembourser. Vous êtes venu à deux heures du matin relever un monsieur de soixante-dix-huit ans que vous ne connaissiez pas et vous avez rebranché une lampe sans le dire à personne. »\n\nSa voix commence à ne plus être tout à fait stable.\n\nNao|« Vous avez porté pendant deux ans un truc qui protégeait ma famille en acceptant que je vous prenne pour un salaud. »\n\nRen|« Ce n'était pas— »\n\nNao|« Je n'ai pas fini. »",
+    "Nao|« Et hier soir, un homme de quatre-vingt-cinq ans a dit devant nos deux familles que plus personne ne nous obligeait à rien. »\n\nElle pose les mains à plat sur la table.\n\nNao|« Vous savez ce que j'ai pensé ? »\n\nRen|« Non. »\n\nNao|« J'ai pensé : bien. »\n\nUn silence.\n\nNao|« J'ai pensé *bien*, parce que ça veut dire que ce que je vais dire maintenant, personne ne me l'a demandé. »",
+    "Elle fait le tour de la table.\n\nNao|« Je ne suis pas restée. »\n\nRen|« …Pardon ? »\n\nNao|« *Rester*, c'est ce qu'on fait quand on ne bouge pas. Je n'ai pas *pas bougé*, Ren. »\n\nElle est à cinquante centimètres. Puis à vingt.\n\nNao|« Je te choisis. Là. Ce matin. À sept heures dix, dans une cuisine, sans que personne ne nous regarde et sans que personne n'y gagne quoi que ce soit. »\n\nElle a dit *te*.\n\nElle s'en rend compte à peu près une seconde après lui.",
+    "Il ne dit rien pendant très longtemps.\n\nPuis il fait la seule chose qu'il n'a jamais faite en quatorze mois : il prend sa main en premier.\n\nPas pour la conduire quelque part. Pas pour l'aider à se relever. Pas pour stabiliser un saladier.\n\nJuste sa main, dans la sienne, sans aucune raison technique.",
+    "Ren|« Le 14 avril, dans la salle 2, l'employé a demandé si l'union était conclue librement. »\n\nNao|« Je m'en souviens. »\n\nRen|« On a répondu oui tous les deux. »\n\nNao|« On a menti tous les deux. »\n\nRen|« Oui. »\n\nIl resserre les doigts.\n\nRen|« Je voudrais qu'on le redise. »\n\nNao|« Qu'on redise quoi ? »\n\nRen|« Oui. »\n\nIl la regarde.\n\nRen|« Cette fois pour de vrai. Devant qui vous voulez, où vous voulez, quand vous voulez. Ou devant personne. Ça m'est égal. Mais je voudrais qu'on le redise une fois en le pensant. »"
+  ]
+_M8["episodes"][45]["choix"] = {
+    'question': "Elle marche vers l'est. Il est debout à côté d'une voiture qu'il ne démarre pas.",
+    'decisif': True,
+    'options': [
+      (
+        'contenue',
+        '1️⃣',
+        "Elle contient. Il y a des mots qu'on ne dit pas."
+      ),
+      (
+        'totale',
+        '2️⃣',
+        'Elle dit tout. Vraiment tout.'
+      ),
+      (
+        'rupture',
+        '3️⃣',
+        'Elle dit la chose qui ne se reprend pas.'
+      )
+    ],
+    'suites': {
+      'contenue': {
+        'pose': [
+          'dispute_contenue'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': -5
+          }
+        },
+        'texte': "Il ne prend pas la voiture.\n\nIl marche derrière elle à une vingtaine de mètres, pendant quarante-cinq minutes, sans essayer de la rattraper une seule fois.\n\nElle le sait. Elle le vérifie deux fois dans le reflet d'une vitrine.\n\nAu troisième kilomètre elle ralentit sans s'en rendre compte. Il ne réduit pas la distance pour autant.\n\nArrivée en bas de l'immeuble, elle se retourne.\n\nNao|« Vous avez fait tout le trajet à pied. »\n\nRen|« Oui. »\n\nNao|« Pourquoi vous n'avez pas pris la voiture ? »\n\nRen|« Parce que vous marchiez. »\n\nElle ferme les yeux une seconde.\n\nNao|« Je ne vous pardonne pas ce soir. »\n\nRen|« D'accord. »\n\nNao|« Peut-être pas cette semaine. »\n\nRen|« D'accord. »\n\nIls montent les sept étages ensemble sans se parler."
+      },
+      'totale': {
+        'pose': [
+          'dispute_totale'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': -15
+          }
+        },
+        'texte': "Elle se retourne au bout de trente mètres.\n\nNao|« Vous savez ce que vous avez fait, en vrai ? »\n\nRen|« Nao— »\n\nNao|« Vous avez acheté la sécurité de ma famille avec votre silence, et ensuite vous êtes venu à un omiai vous asseoir en face de moi avec onze minutes de retard. »\n\nRen|« Oui. »\n\nNao|« Vous saviez que j'étais là à cause de vous. »\n\nRen|« Oui. »\n\nNao|« Et vous m'avez dit que je jugeais trop vite. »\n\nIl ne répond pas.\n\nNao|« Je vais vous dire ce qui me rend malade. Ce n'est pas la clause. Ce n'est même pas les deux ans. C'est que pendant quatorze mois vous m'avez regardée croire que j'avais choisi de vous détester, alors que vous saviez que je n'avais jamais eu les éléments. »\n\nRen|« …Oui. »\n\nNao|« Vous m'avez laissée avoir tort exprès. »\n\nElle repart.\n\nIl marche derrière elle à vingt mètres pendant quarante-cinq minutes.\n\nIls montent les sept étages sans se parler, et cette nuit-là, pour la première fois depuis mars, elle dort dans la petite chambre qui est devenue un bureau, sur le canapé-lit, sans rien dire à personne."
+      },
+      'rupture': {
+        'pose': [
+          'route_fracture'
+        ],
+        'grave_si_sous': {
+          'ren': {
+            'confiance': 60
+          }
+        },
+        'grave_pose': [
+          'rupture_grave'
+        ],
+        'relation': {
+          'ren': {
+            'confiance': -40
+          }
+        },
+        'texte': "Elle se retourne.\n\nNao|« Je vais vous dire une chose et après on rentre. »\n\nRen|« D'accord. »\n\nNao|« Je n'ai jamais choisi une seule chose de cette histoire. »\n\nRen|« Nao. »\n\nNao|« Pas une. Le contrat, je l'ai pas choisi. L'hypothèque, je l'ai pas choisie. La lettre sur la table de la cuisine, je l'ai pas choisie. Le mariage, je l'ai pas choisi. »\n\nElle a la voix parfaitement stable, ce qui est bien pire que si elle criait.\n\nNao|« Et maintenant je découvre que même vous détester, je l'ai pas choisi. Vous l'aviez décidé avant que je vous rencontre. »\n\nRen|« Ce n'est pas— »\n\nNao|« Alors dites-moi. Dans tout ça. Qu'est-ce que j'ai décidé, moi ? »\n\nIl ouvre la bouche.\n\nNao|« Ne répondez pas *le mardi*. »\n\nIl referme la bouche.\n\nNao|« Voilà. »\n\nElle marche jusqu'à l'appartement. Il ne la suit pas — elle lui a dit de ne pas la suivre, et pour une fois dans sa vie il obéit à ce qu'on lui demande, ce qui est exactement la mauvaise fois.\n\nElle rentre seule.\n\nIl rentre à minuit vingt.\n\nLa porte du fond est fermée."
+      }
+    }
+  }
+_M8["endings"]['se_choisir']["texte"] = "*Six mois plus tard, un dimanche de décembre*\n\nCe n'est pas une cérémonie. Il faut être précis là-dessus, parce que Sae a essayé pendant trois semaines d'en faire une et qu'elle a perdu.\n\nC'est un déjeuner.\n\nIl y a onze personnes dans le cabinet de kinésithérapie de Nao Sakurai, quarante et un mètres carrés, ouvert depuis septembre, tables poussées contre le mur et sol neuf qui n'est plus vert.\n\nMei a apporté trop d'alcool. Yui a apporté un gâteau qu'elle a fait elle-même et qui est un désastre. Haru est venu avec sa femme et six mois de cernes de quelqu'un qui a monté son entreprise et qui est heureux. Kaito est rentré pour quatre jours. Sota est en première année et il porte une chemise pour la première fois depuis le mariage.\n\nTetsuo a imprimé les cartons d'invitation sur la Heidelberg. Onze exemplaires. Le margeur n'a pas déraillé une seule fois.\n\nIchiro est dans un fauteuil qu'on a fait porter par deux personnes. Il a quatre-vingt-cinq ans, il ne finit plus ses phrases, et il regarde tout le monde avec une attention féroce.\n\nShigeru est venu. Il est resté debout près de la porte pendant une heure. Puis il s'est assis. Puis, vers quinze heures, il a demandé à son fils de lui montrer quelque chose, et Ren est allé chercher un carnet noir dans sa sacoche.\n\nIls sont restés penchés dessus dix-huit minutes. Personne ne les a interrompus. À la fin, Shigeru a dit *quatre-vingt-onze mètres, c'est long pour du lamellé* et Ren a répondu *pas avec un appui central*, et ils se sont disputés techniquement pendant vingt minutes, ce qui, dans cette famille, est une déclaration d'amour.\n\nIl n'y a pas de robe. Nao porte quelque chose qu'elle a choisi elle-même, ce qui n'était jamais arrivé.\n\nÀ un moment, quelqu'un demande à quel moment ils se sont mariés pour de vrai. Mei répond *un mardi* avec la bouche pleine. Personne ne comprend. Nao s'étrangle dans son verre.\n\nIls prennent une photo à la fin. Ce n'est pas le photographe de la mairie, c'est Yui, avec un téléphone, et elle coupe le pied de Haru.\n\nIl n'y a pas vingt centimètres entre eux.\n\nSur le mur de l'entrée du cabinet, plus tard, il y aura les deux photos encadrées côte à côte. Celle d'avril, où deux inconnus regardent chacun un point différent. Et celle-là.\n\nLes patients demandent souvent laquelle est la vraie.\n\nNao répond toujours la même chose.\n\n*Les deux.*"
+_M8["endings"]['recommencer']["texte"] = "*Ils divorcent en septembre.*\n\nProprement, en trois rendez-vous, avec une employée de mairie qui n'est pas la même qu'en avril et qui ne pose aucune question.\n\nIl n'y a pas de scène. C'est ça, le plus dur — il n'y a rien à raconter. Deux personnes qui s'aiment probablement et qui n'arrivent pas à savoir si c'est vrai ou si c'est l'appartement.\n\nElle garde le cabinet. Il prend Kitagawa à plein temps.\n\nIls continuent de se voir. Maladroitement, sans nom pour ça. Un déjeuner en novembre. Un message pour l'anniversaire de Sota. Une fois, en février, elle l'appelle à minuit parce qu'un patient est mort et qu'elle ne sait pas à qui le dire, et il reste au téléphone une heure et quart sans presque parler.\n\nMei dit que c'est ridicule. Yui dit que c'est romantique. Sota dit qu'ils sont les deux personnes les plus stupides qu'il connaisse, et il a dix-huit ans, donc il a le droit.\n\n*Un an plus tard, en mars.*\n\nElle est chez elle un samedi matin. Il sonne.\n\nIl tient un café dans une main — le sien, qu'il ne finira pas — et dans l'autre une canette de thé d'orge glacé.\n\nEn mars. Par sept degrés.\n\nIl ne dit rien à ce sujet. Il tend la canette.\n\nNao|« Il fait sept degrés. »\n\nRen|« Je sais. »\n\nNao|« Vous en avez acheté quand même. »\n\nRen|« Vous en buvez toute l'année. »\n\nElle reste dans l'embrasure avec une canette froide dans la main et un an entier derrière elle.\n\nNao|« Vous voulez entrer ? »\n\nRen|« Oui. »\n\nC'est la seule fin où ils se choisissent complètement libres.\n\nElle coûte un an."
+_M8["endings"]['confortable']["texte"] = "*Cinq ans plus tard, un dimanche matin.*\n\nIls sont toujours mariés.\n\nÇa se passe bien. Il faut le dire clairement : ça se passe vraiment bien.\n\nElle a son cabinet, quatre praticiens maintenant, et Yui est devenue excellente. Il a fini par accepter la direction technique et il est bon, et il va sur le terrain trois fois par mois, ce qui est un arrangement dont personne n'a jamais discuté à voix haute.\n\nIls ne se disputent presque jamais. Ils sont gentils l'un avec l'autre. Ils connaissent par cœur les horaires, les habitudes, les silences.\n\nIl ramasse toujours ses élastiques.\n\nElle chante toujours faux dans la cuisine.\n\nCe dimanche-là, il fait beau. Elle lit sur le canapé. Il est à la table avec un plan.\n\nÀ un moment, elle lève les yeux et le regarde travailler pendant peut-être trente secondes, et elle a très envie de dire quelque chose.\n\nElle ne le dit pas.\n\nCe n'est pas grave. Ils ont le temps. Ils ont toute la vie.\n\nIl lève les yeux à son tour, une seconde après qu'elle a rebaissé les siens, et il la regarde lire, et il a très envie de dire quelque chose.\n\nIl ne le dit pas.\n\nIls déjeunent. Ils rangent. La journée passe, très douce.\n\nSur le plan de travail, il reste une tasse de café à moitié pleine que personne ne finira."
+_M8["endings"]['chacun']["texte"] = "*Ils se séparent en juillet.*\n\nSans drame. Sans faute. Deux personnes correctes qui rangent un appartement de trois pièces en se répartissant des cartons.\n\nCe qui reste dans les mémoires, c'est le calme.\n\nElle ouvre son cabinet en septembre. Ça marche. Elle prend une deuxième praticienne en janvier, une troisième deux ans après. Elle est bonne, elle l'a toujours été, et pour la première fois de sa vie elle n'est responsable de personne d'autre.\n\nSota entre à l'école. Il paye sa deuxième année lui-même, avec un boulot qu'il déteste et une fierté insupportable.\n\nTetsuo vend l'atelier à cinquante-neuf ans, à un jeune type de Nagoya qui veut faire de la typographie. Il garde la Heidelberg dans le contrat. Il vient la faire tourner deux fois par semaine.\n\nRen part à Kitagawa. Puis à Sendai. Puis sur un franchissement piéton de quatre-vingt-onze mètres qui n'est pas Tsuchiya mais qui lui ressemble un peu.\n\nIl a quarante ans quand on lui demande pour la première fois s'il a été marié. Il répond oui, une fois, un an, et il ne développe pas — ce qui, chez lui, n'a jamais rien voulu dire de particulier.\n\nIls vont mieux tous les deux. Honnêtement mieux.\n\nChaque année, le 14 avril, l'un des deux envoie un message à l'autre.\n\nCe n'est jamais long. Une phrase, parfois trois mots. Une année ce n'est qu'une photo d'un rayon de supérette avec une bouteille de thé d'orge en hiver.\n\nL'autre répond toujours.\n\nAucun des deux n'a jamais expliqué pourquoi ils font ça, et aucun des deux n'a jamais arrêté."
+_M8["endings"]['trop_tard']["texte"] = "*Elle part avant le 12 juin.*\n\nElle ne dit pas au revoir dans une scène. Elle prend quatre jours, elle fait trois cartons, et le vendredi il rentre à vingt heures dix dans un appartement où les élastiques ne traînent plus.\n\nSur le plan de travail, il reste une tasse qui n'est pas la sienne.\n\nIl la lave. Il la range. Il ne la jette pas.\n\nIl est certain d'avoir bien fait. C'est le pire.\n\nIl se le répète pendant des mois avec une conviction totale : il l'a protégée, il a tenu l'accord, l'atelier existe, elle a son cabinet, personne n'a rien perdu.\n\nIl accepte la direction technique en septembre. Il est très bon. Il rentre à vingt-deux heures.\n\n*Deux ans plus tard.*\n\nC'est un mardi, ce qui n'a aucune importance.\n\nIl est dans la cuisine à minuit, il range quelque chose qui est déjà rangé, et il tombe sur un élastique à cheveux au fond d'un tiroir.\n\nIl le regarde pendant très longtemps.\n\nEt il comprend, à vingt-neuf ans, dans une cuisine, deux ans trop tard, qu'il n'y a jamais eu qu'une seule chose à faire, et que c'était de parler.\n\nIl ne l'appelle pas.\n\nIl remet l'élastique dans le tiroir et il éteint la lumière."
+_M8["epilogue"] = 'Sur le mur du cabinet, la photo de la mairie de la salle 2.\n\nDix-huit personnes, un radiateur qui claquait, un employé qui faisait ça huit fois par jour.\n\n*Vous confirmez tous les deux que cette union est conclue librement ?*\n\nIls avaient répondu oui.\n\nIl aura fallu quatorze mois, une presse de 1974, vingt-trois élastiques à cheveux, une mandarine tombée de six étages et un très vieil homme qui ouvre une porte, pour que ce soit vrai.'
+del _M8
+
+# ============================================================
+#  🎀 CE QU'ON VOIT DE MOI — concept #1
+# ============================================================
+CHRONIQUE_SAISONS["ce_quon_voit"] = {
+ "titre": "CE QU'ON VOIT DE MOI",
+ "genre": "🎀 Lycée",
+ "accroche": "Elle est vue par tout le monde et connue par personne. "
+             "Lui a été vu une fois, et ça a duré un an.",
+ "duree": "une année scolaire, d'avril à mars",
+ "casting": {
+   "hina":    ("🎀", "Hina", "17 ans · déléguée, présidente du club de littérature. "
+                             "Connaît le prénom de tout le monde."),
+   "itsuki":  ("📓", "Itsuki", "17 ans · assis au fond, part avant la sonnerie. "
+                               "Écrit tous les jours, ne montre rien."),
+   "rika":    ("🍓", "Rika", "17 ans · meilleure amie de Hina depuis le collège."),
+   "tsubaki": ("🎭", "Tsubaki", "14 ans · la sœur d'Itsuki. Parle pour deux."),
+   "nanami":  ("🖤", "Nanami", "17 ans · juge tout à voix haute, et a souvent raison."),
+   "ko":      ("🎧", "Kō", "17 ans · le drôle de la bande. A redoublé, n'en parle jamais."),
+ },
+ "personnages": {
+   "hina":   {"nom": "Hina", "age": 17, "role": "protagoniste",
+              "veut": "pouvoir dire je ne veux pas", "craint": "qu'on voie la répétition",
+              "hors_romance": "le club · sa candidature en lettres · Rika"},
+   "itsuki": {"nom": "Itsuki", "age": 17, "role": "protagoniste",
+              "veut": "écrire sans être regardé", "craint": "être vu pour la mauvaise raison",
+              "hors_romance": "Tsubaki · l'imprimerie du samedi · le cahier"},
+   "rika":   {"nom": "Rika", "age": 17, "role": "secondaire",
+              "veut": "ne plus être la deuxième dans toutes les pièces"},
+   "nanami": {"nom": "Nanami", "age": 17, "role": "secondaire"},
+   "ko":     {"nom": "Kō", "age": 17, "role": "secondaire"},
+   "jun":    {"nom": "Jun", "age": 17, "role": "secondaire"},
+   "tsubaki":{"nom": "Tsubaki", "age": 14, "role": "famille"},
+   "goro":   {"nom": "Gorō", "age": 48, "role": "famille"},
+   "reiko":  {"nom": "Reiko", "age": 45, "role": "famille"},
+   "aoki":   {"nom": "M. Aoki", "age": 50, "role": "secondaire"},
+ },
+ "arcs": {
+   "principal": {"nom": "Hina & Itsuki", "episodes": list(range(1, 43))},
+   "acte1": {"nom": "I — On ne se voit pas", "episodes": list(range(1, 7))},
+   "acte2": {"nom": "II — Le club", "episodes": list(range(7, 15))},
+   "acte3": {"nom": "III — Ce que j'ai lu", "episodes": list(range(15, 22))},
+   "acte4": {"nom": "IV — Deux performances", "episodes": list(range(22, 30))},
+   "acte5": {"nom": "V — Démissionner", "episodes": list(range(30, 36))},
+   "acte6": {"nom": "VI — Être vu", "episodes": list(range(36, 43))},
+   "rika":    {"nom": "Rika", "episodes": [3, 12, 24, 33, 41]},
+   "tsubaki": {"nom": "Tsubaki", "episodes": [10, 19, 28, 37]},
+   "nanami":  {"nom": "Nanami", "episodes": [8, 22, 29, 38]},
+   "ko":      {"nom": "Kō", "episodes": [13, 26, 35]},
+   "jun":     {"nom": "Jun", "episodes": [6, 17, 30]},
+   "reiko":   {"nom": "Reiko", "episodes": [5, 16, 32, 39]},
+   "goro":    {"nom": "Gorō", "episodes": [19, 28, 42]},
+   "candidature": {"nom": "La candidature de Hina", "episodes": [16, 32, 39, 42]},
+   "cahier":  {"nom": "Le cahier d'Itsuki", "episodes": [10, 25, 36, 42]},
+ },
+ "pose_runtime": ["rupture_grave"],
+ "ending_defaut": "chacun_sa_fac",
+ "endings": {
+  "sortir_du_regard": {"nom": "🎀 On sort du regard des autres", "route": "sortir_du_regard",
+    "exige": ["baiser"], "interdit": ["rupture_grave"],
+    "rel_min": {"itsuki": {"confiance": 72}}, "poids": 2, "texte": ""},
+  "internat": {"nom": "🌱 Elle change de lycée", "route": "internat",
+    "exige": ["baiser"], "interdit": ["rupture_grave"], "poids": 1, "texte": ""},
+  "amis": {"nom": "🤝 On reste amis, pour de vrai", "route": "amis",
+    "exige": [], "interdit": ["baiser", "rupture_grave"],
+    "rel_min": {"itsuki": {"confiance": 38}}, "poids": 1, "texte": ""},
+  "chacun_sa_fac": {"nom": "🚪 Chacun sa fac", "route": "chacun_sa_fac",
+    "exige": [], "interdit": ["baiser"],
+    "rel_max": {"itsuki": {"confiance": 37}}, "poids": 0, "texte": ""},
+ },
+ "episodes": [],
+ "epilogue": "",
+}
+
+def _cqv(num, titre, ton, arcs, fonction, choix=None):
+    e = {"titre": titre, "ton": ton, "arcs": arcs, "fonction": fonction, "scenes": []}
+    if choix: e["choix"] = choix
+    if num == 42: e["finale"] = True
+    return e
+
+def _ch(opts, suites, dec=False):
+    return {"question": "", "decisif": dec,
+            "options": [(k, e, "") for k, e in opts], "suites": suites}
+
+CHRONIQUE_SAISONS["ce_quon_voit"]["episodes"] = [
+ _cqv(1, "Trois cent quatre élèves", "calme", ["acte1","principal"],
+   "Les deux mondes. Elle connaît 304 prénoms. Il connaît 3 itinéraires."),
+ _cqv(2, "Le détour", "calme", ["acte1","principal"],
+   "Écho 3 posé : il évite le hall. Elle le remarque sans comprendre."),
+ _cqv(3, "Quatre minutes avant", "calme", ["acte1","rika","principal"],
+   "Écho 1 posé : le carnet de phrases, aux toilettes, avant une réunion."),
+ _cqv(4, "Le ticket", "calme", ["acte1","principal"],
+   "Premier contact réel. Écho 5 posé : elle ne déjeune pas.",
+   _ch([("ramasse","1️⃣"),("discret","2️⃣")],
+       {"ramasse":{"texte":"","pose":["ticket_public"],"relation":{"itsuki":{"confiance":-3}}},
+        "discret":{"texte":"","pose":["ticket_discret"],"relation":{"itsuki":{"confiance":5}}}})),
+ _cqv(5, "Ça va ?", "calme", ["acte1","reiko","principal"],
+   "Écho 4 posé. Et le premier appel de sa mère."),
+ _cqv(6, "Jun", "calme", ["acte1","jun","principal"],
+   "Il n'était pas invisible : juste pas cherché. Quelqu'un lui parle depuis deux ans."),
+ _cqv(7, "Conseil de discipline", "tension", ["acte2","principal","nanami"],
+   "Une punition administrative l'envoie au club. Elle peut le défendre ou non.",
+   _ch([("defend","1️⃣"),("laisse","2️⃣")],
+       {"defend":{"texte":"","pose":["elle_a_defendu"],"relation":{"itsuki":{"confiance":-4}}},
+        "laisse":{"texte":"","pose":["elle_a_laisse"],"relation":{"itsuki":{"confiance":6}}}})),
+ _cqv(8, "Le local", "calme", ["acte2","nanami","principal"],
+   "Six personnes dans huit mètres carrés. Nanami dit tout haut ce que la bande pense."),
+ _cqv(9, "Le recueil", "calme", ["acte2","principal"],
+   "Écho 2 posé : elle cite le texte devant lui sans savoir."),
+ _cqv(10, "Tsubaki", "calme", ["acte2","tsubaki","cahier"],
+   "La sœur. Le cahier semé. Ce qu'il fait tous les soirs à dix-neuf heures."),
+ _cqv(11, "Pourquoi ce club", "calme", ["acte2","principal"],
+   "Elle peut lui dire la vraie raison, ou la version officielle.",
+   _ch([("vraie","1️⃣"),("officielle","2️⃣")],
+       {"vraie":{"texte":"","pose":["raison_dite"],"relation":{"itsuki":{"confiance":8}}},
+        "officielle":{"texte":"","pose":["raison_tue"]}})),
+ _cqv(12, "Rika", "calme", ["acte2","rika"],
+   "Dix ans d'amitié, et la première fois qu'elle compte les fois où elle passe après."),
+ _cqv(13, "Kō", "calme", ["acte2","ko","principal"],
+   "Kō parle à Itsuki normalement, sans que ce soit un geste. Personne ne le relève."),
+ _cqv(14, "La fin du trimestre", "calme", ["acte2","principal"],
+   "Il devrait partir du club. Il reste. Il ne dit pas pourquoi."),
+ _cqv(15, "Les initiales", "climax", ["acte3","principal"],
+   "Elle relit le recueil. Il n'y a que deux lettres. Route majeure.",
+   _ch([("cherche","1️⃣"),("laisse","2️⃣")],
+       {"cherche":{"texte":"","pose":["route_enquete"]},
+        "laisse":{"texte":"","pose":["route_regard"],"relation":{"itsuki":{"confiance":6}}}}, True)),
+ _cqv(16, "Lettres modernes", "calme", ["acte3","reiko","candidature"],
+   "Le dossier de candidature qu'elle n'a montré à personne."),
+ _cqv(17, "Ce que Jun savait", "tension", ["acte3","jun","principal"],
+   "Jun sait depuis deux ans. Il n'a jamais eu de raison de le dire."),
+ _cqv(18, "Elle sait", "climax", ["acte3","principal"],
+   "Écho 2 : il voit le recueil dans ses mains. Route majeure.",
+   _ch([("dit","1️⃣"),("attend","2️⃣")],
+       {"dit":{"texte":"","pose":["elle_a_dit"],"relation":{"itsuki":{"confiance":4}}},
+        "attend":{"texte":"","pose":["elle_a_attendu"],"relation":{"itsuki":{"confiance":-8}}}}, True)),
+ _cqv(19, "Gorō", "calme", ["acte3","goro","tsubaki"],
+   "Le père a lu le texte une fois. Il n'en a plus jamais parlé. Ce n'est pas de l'indifférence."),
+ _cqv(20, "Ça va ?", "climax", ["acte3","principal"],
+   "Écho 4 : elle demande, il ne répond pas. Sa colère."),
+ _cqv(21, "Ce que tu as construit", "climax", ["acte3","principal"],
+   "La révélation aggrave. Ce qu'elle aime chez elle vient de son pire souvenir.",
+   _ch([("insiste","1️⃣"),("recule","2️⃣")],
+       {"insiste":{"texte":"","pose":["insiste"],"relation":{"itsuki":{"confiance":5}}},
+        "recule":{"texte":"","pose":["recule"],"relation":{"itsuki":{"confiance":-10}}}}, True)),
+ _cqv(22, "Elle ne mange pas", "calme", ["acte4","principal","nanami"],
+   "Écho 5 : il le voit. Personne d'autre ne l'a vu en trois ans."),
+ _cqv(23, "Le carnet", "tension", ["acte4","principal"],
+   "Écho 1 : il le trouve. Il ne l'ouvre pas tout de suite."),
+ _cqv(24, "Dix ans", "climax", ["acte4","rika"],
+   "Rika dit ce qu'elle garde depuis la seconde.",
+   _ch([("encaisse","1️⃣"),("repond","2️⃣")],
+       {"encaisse":{"texte":"","pose":["rika_encaisse"]},
+        "repond":{"texte":"","pose":["rika_repondu"]}})),
+ _cqv(25, "Ce qu'il écrit", "calme", ["acte4","cahier","principal"],
+   "Le cahier, enfin. Pas montré : aperçu."),
+ _cqv(26, "Le hall", "calme", ["acte4","ko","principal"],
+   "Écho 3 : il traverse. Kō ne fait aucun commentaire, ce qui est le commentaire."),
+ _cqv(27, "Le rendre", "tension", ["acte4","principal"],
+   "Le carnet. Elle peut assumer ou nier.",
+   _ch([("assume","1️⃣"),("nie","2️⃣")],
+       {"assume":{"texte":"","pose":["carnet_assume"],"relation":{"itsuki":{"confiance":12}}},
+        "nie":{"texte":"","pose":["carnet_nie"],"relation":{"itsuki":{"confiance":-6}}}})),
+ _cqv(28, "Le samedi", "calme", ["acte4","tsubaki","goro"],
+   "L'imprimerie. Tsubaki. Ce qu'il paie avec son salaire."),
+ _cqv(29, "Nanami", "climax", ["acte4","nanami","principal"],
+   "La phrase la plus dure de la saison, et elle a raison."),
+ _cqv(30, "Le premier mandat", "tension", ["acte5","jun","principal"],
+   "Elle lâche quelque chose. Ça coûte immédiatement."),
+ _cqv(31, "Combien", "climax", ["acte5","principal"],
+   "Jusqu'où elle va.",
+   _ch([("tout","1️⃣"),("un","2️⃣"),("rien","3️⃣")],
+       {"tout":{"texte":"","pose":["demission_totale"],"relation":{"itsuki":{"confiance":14}}},
+        "un":{"texte":"","pose":["demission_partielle"],"relation":{"itsuki":{"confiance":6}}},
+        "rien":{"texte":"","pose":["demission_aucune"],"relation":{"itsuki":{"confiance":-8}}}}, True)),
+ _cqv(32, "Reiko", "climax", ["acte5","reiko","candidature"],
+   "Sa mère apprend. Ce n'est pas une méchante, et c'est pire."),
+ _cqv(33, "Rika, après", "calme", ["acte5","rika"],
+   "Payoff de l'ép.24. Ce qui se répare et ce qui ne se répare pas."),
+ _cqv(34, "La salle des délégués", "climax", ["acte5","principal"],
+   "Après la démission. Carrefour majeur.",
+   _ch([("elle","1️⃣"),("lui","2️⃣"),("personne","3️⃣")],
+       {"elle":{"texte":"","pose":["baiser","elle_a_ose"],"marque":{"type":"baiser"},
+                "relation":{"itsuki":{"confiance":22}}},
+        "lui":{"texte":"","pose":["baiser","il_a_ose"],"marque":{"type":"baiser"},
+               "relation":{"itsuki":{"confiance":18}}},
+        "personne":{"texte":"","pose":["route_distance","occasion_manquee"],
+                    "ferme":["sortir_du_regard","internat"],
+                    "relation":{"itsuki":{"confiance":-15}},
+                    "plafond":{"itsuki":{"confiance":65}}}}, True)),
+ _cqv(35, "Le lendemain, au lycée", "calme", ["acte5","ko","principal"],
+   "Être ensemble dans un endroit où tout se voit."),
+ _cqv(36, "Le cahier ouvert", "calme", ["acte6","cahier","principal"],
+   "Il montre. Pas tout : une page."),
+ _cqv(37, "Deux repas", "calme", ["acte6","tsubaki","principal"],
+   "Écho 5 : il apporte deux repas sans commentaire."),
+ _cqv(38, "Ça va ?", "calme", ["acte6","nanami","principal"],
+   "Écho 4 : il demande le premier."),
+ _cqv(39, "Le dossier", "climax", ["acte6","reiko","candidature"],
+   "Elle le dit à sa mère ou pas. Détermine la fin.",
+   _ch([("dit","1️⃣"),("tait","2️⃣")],
+       {"dit":{"texte":"","pose":["mere_sait"],"relation":{"itsuki":{"confiance":10}}},
+        "tait":{"texte":"","pose":["mere_ignore"],"relation":{"itsuki":{"confiance":-4}}}}, True)),
+ _cqv(40, "Une phrase préparée", "calme", ["acte6","principal"],
+   "Écho 1 : elle utilise le carnet pour dire quelque chose de vrai."),
+ _cqv(41, "Le hall, à deux", "tension", ["acte6","rika","principal"],
+   "Écho 3 refermé."),
+ _cqv(42, "Ce qu'on voit de moi", "climax", ["acte6","principal","goro"],
+   "Écho 2 refermé : il en écrit un autre."),
+]
+
+
+# ── #1 ARC I : épisodes 1 à 6 ──
+_C1 = CHRONIQUE_SAISONS["ce_quon_voit"]["episodes"]
+_C1[0]["scenes"] = [
+    "*Lycée Seiran, avril, 8h05*\n\nIl y a trois cent quatre élèves au lycée Seiran.\n\nHina Serizawa en connaît trois cent quatre.\n\nPas les visages — les prénoms. Elle a mis deux ans. Elle a une méthode : les listes de classe au mois d'avril, les trombinoscopes du conseil, et une révision le dimanche soir avant de dormir.",
+    "Personne ne sait qu'elle révise.\n\nCe que les gens voient, c'est une fille qui traverse le hall à huit heures cinq et qui dit *bonjour Miyata*, *ta cheville ça va ?*, *félicitations pour le concours*, sans ralentir, à sept personnes différentes en vingt-deux mètres.\n\nIls trouvent ça naturel.\n\nC'est le mot qu'ils emploient. *Naturel.*",
+    "Rika l'attend au pied de l'escalier B, comme tous les matins depuis la seconde.\n\nRika|« T'as le conseil à midi. »\n\nHina|« Je sais. »\n\nRika|« Et le club à cinq heures. »\n\nHina|« Je sais. »\n\nRika|« Et Aoki veut te voir avant. »\n\nHina|« Ça je savais pas. »\n\nRika|« Voilà, c'est pour ça que j'existe. »\n\nElles montent. Rika parle d'une série. Hina répond aux bons endroits.",
+    "*Salle 2-B, 8h20*\n\nIl y a trente-six places dans la classe.\n\nItsuki Amano occupe la trente-quatrième — fond, rangée près de la fenêtre, deuxième en partant du mur.\n\nIl l'a choisie en avril de l'an dernier pour trois raisons : elle est hors du champ de vision du professeur qui écrit au tableau, elle est à quatre pas de la porte arrière, et le radiateur en dessous chauffe mal, ce qui décourage les gens de s'asseoir devant lui.",
+    "Ce que les gens voient d'Itsuki Amano, c'est un garçon qui ne lève jamais la main.\n\nCe qu'ils ne voient pas, c'est qu'il écrit dans la marge de son cahier de mathématiques pendant que le professeur explique les suites géométriques, et que ce qu'il écrit n'a rien à voir avec les suites géométriques.\n\nIl écrit :\n\n*La fille du premier rang a dit bonjour à sept personnes ce matin. Elle a regardé la troisième une demi-seconde de trop, comme quelqu'un qui vérifie que ça a marché.*",
+    "*Cantine, 12h40*\n\nHina déjeune avec cinq personnes. C'est le nombre stable depuis la première.\n\nRika à sa gauche. Kō en face, qui raconte un truc en imitant trois voix différentes. Nanami à côté de Kō, qui écoute en ayant l'air de trouver ça moyen. Deux autres du conseil.\n\nKo|« Et là il dit — attends — il dit *mais monsieur, c'est pas moi qui ai amené le poisson*. »\n\nNanami|« Ce n'est pas drôle. »\n\nKo|« C'est très drôle. »\n\nNanami|« Tu l'as racontée trois fois. »\n\nKo|« Elle s'améliore. »\n\nHina rit au bon moment. Elle a un plateau devant elle. Elle a mangé le riz et rien d'autre.",
+    "*Même heure, escalier de secours*\n\nItsuki mange un onigiri en quatre minutes, assis sur la troisième marche, dehors, avec un cahier ouvert sur les genoux.\n\nIl y a du bruit dans le bâtiment. Le bruit de trois cents personnes qui mangent en même temps.\n\nIl aime bien l'entendre de l'extérieur.",
+    "*15h50, conseil des délégués*\n\nOrdre du jour : budget du festival, réfection du local de musique, une réclamation sur la température des salles côté nord.\n\nHina préside. Elle préside bien. Elle donne la parole dans un ordre qui n'existe nulle part sur le papier mais qui fait que personne ne s'énerve.\n\nM. Aoki, au fond, corrige des copies et ne dit rien.\n\nÀ dix-sept heures moins dix, quelqu'un lève la main sur un point qui n'est pas à l'ordre du jour.",
+    "Eleve|« Il y a le problème du fond de classe. »\n\nHina|« C'est-à-dire ? »\n\nEleve|« Les gens qui participent pas. Genre pour le festival, on a des classes où il y a trois personnes qui font tout. »\n\nHina|« Vous avez des noms ? »\n\nEleve|« En 2-B il y en a au moins deux. »\n\nNanami, qui est déléguée de 2-B, ne dit rien du tout et regarde ses ongles.",
+    "Hina|« On ne va pas faire une liste. »\n\nEleve|« Mais— »\n\nHina|« On ne va pas faire une liste, parce que dans deux jours la liste sera affichée quelque part par quelqu'un qui trouvera ça amusant, et après ce sera notre problème et pas le vôtre. »\n\nSilence.\n\nHina|« Point suivant. »\n\nAu fond, M. Aoki lève les yeux de ses copies pendant environ deux secondes.",
+    '*17h10, local du club de littérature*\n\nHuit mètres carrés. Une table, six chaises, trois étagères, une fenêtre qui donne sur le parking des professeurs.\n\nIl y a quatre membres. Il y en avait un quand Hina a relancé le club il y a deux ans.\n\nElle range les étagères. Elle les range tous les mardis. Elles sont rangées tous les mardis.',
+    "Rika passe la tête.\n\nRika|« Tu rentres ? »\n\nHina|« Dans dix minutes. »\n\nRika|« Tu as dit ça mardi dernier et t'es sortie à sept heures. »\n\nHina|« Cette fois c'est vrai. »\n\nRika|« Mm. »\n\nElle s'en va. Hina reste jusqu'à dix-huit heures quarante.",
+    "*18h45, portail*\n\nIls sortent en même temps sans se voir.\n\nElle prend à droite, vers l'arrêt de bus, avec quatre personnes qui l'ont attendue.\n\nIl prend à gauche, vers rien, seul, quarante minutes à pied parce que le bus coûte deux cent dix yens et qu'il y a deux personnes à nourrir chez lui.\n\nTrois cent quatre élèves.\n\nElle en connaît trois cent quatre.\n\nElle ne sait absolument rien de lui."
+  ]
+_C1[1]["scenes"] = [
+    "*Avril, deuxième semaine*\n\nIl y a trois façons d'aller de la salle 2-B au laboratoire de sciences.\n\nLa première passe par le hall central. C'est la plus courte : quatre-vingt-dix secondes.\n\nLa deuxième passe par le couloir du premier et l'escalier C. Deux minutes vingt.\n\nLa troisième sort par la cour, longe le gymnase et rentre par la porte de service. Trois minutes dix, et il faut mouiller ses chaussures quand il pleut.",
+    "Itsuki prend la deuxième.\n\nIl prend la troisième les jours où il y a une exposition dans le hall, un stand de club, ou une réunion qui déborde — c'est-à-dire environ un jour sur quatre.\n\nIl ne s'en cache pas. Personne ne le remarque. Ce sont deux choses différentes.",
+    "*Mercredi, 10h15*\n\nHina traverse le hall avec un carton de programmes du festival. Le carton est trop lourd et mal équilibré.\n\nElle le pose deux fois. La deuxième fois, elle voit passer quelqu'un par la porte de la cour, à vingt mètres, qui va dans la même direction qu'elle par un chemin qui fait deux fois la distance.\n\nElle ne connaît pas son visage de loin. Elle sait juste que c'est un garçon de deuxième année.\n\nElle reprend le carton.",
+    "*Jeudi*\n\nElle regarde.\n\nCe n'est pas une décision — c'est ce qu'elle fait de toute façon, tout le temps, avec tout le monde. Elle a une méthode et la méthode tourne en fond même quand elle ne l'allume pas.\n\nJeudi, il y a le stand du club de calligraphie dans le hall.\n\nIl passe par la cour.",
+    "*Vendredi*\n\nPas de stand. Hall vide.\n\nIl passe par le hall, à quatorze heures deux, en marchant vite, les mains dans les poches, sans regarder personne.\n\nQuatre-vingt-dix secondes.\n\nHina, adossée à la rambarde du premier étage avec un dossier qu'elle ne lit pas, note quelque chose qu'elle ne saurait pas formuler.",
+    "*Vendredi, 17h, local du club*\n\nHina|« Amano. »\n\nRika|« Qui ? »\n\nHina|« Amano Itsuki. Deuxième année, classe B. »\n\nRika|« Connais pas. »\n\nHina|« Il est dans ta classe de LV2. »\n\nRika|« …Ah bon ? »\n\nHina|« Depuis septembre. »\n\nRika réfléchit sincèrement pendant plusieurs secondes.\n\nRika|« Le grand, au fond ? »\n\nHina|« Voilà. »\n\nRika|« Il est comment ? »\n\nHina|« Je sais pas. »\n\nRika|« Ah. »\n\nRika|« C'est bizarre, ça. »\n\nHina|« Quoi ? »\n\nRika|« Que tu saches pas. »",
+    "*Chez les Amano, 19h*\n\nTsubaki|« Tu as mis quoi dedans. »\n\nItsuki|« Du chou. »\n\nTsubaki|« Il y a autre chose. »\n\nItsuki|« Du chou et des carottes. »\n\nTsubaki|« Il y a un truc *vert clair*. »\n\nItsuki|« C'est le chou. »\n\nTsubaki|« Le chou c'est vert foncé. »\n\nItsuki|« Il y a deux sortes de chou. »\n\nTsubaki|« Depuis quand ? »\n\nItsuki|« Depuis toujours. Mange. »\n\nElle mange. Elle mange tout, d'ailleurs, en continuant de protester, ce qu'elle fait tous les soirs depuis qu'elle a onze ans.",
+    "Le père rentre à vingt-deux heures dix. Il est parti mardi matin, il repart dimanche.\n\nGoro|« Vous avez mangé ? »\n\nItsuki|« Oui. »\n\nGoro|« Il en reste ? »\n\nItsuki|« Dans la casserole. »\n\nGoro|« Merci. »\n\nIl mange debout, devant l'évier, comme toujours. Il ne s'assoit jamais quand il rentre tard. Personne n'a jamais su pourquoi et personne ne demande.",
+    "Plus tard, dans sa chambre, Itsuki écrit.\n\nIl écrit tous les soirs entre vingt-deux heures et minuit environ. Pas un journal — il déteste les journaux. Des choses vues.\n\nCe soir il écrit :\n\n*Elle était au premier étage à quatorze heures et elle ne lisait pas son dossier. Je ne sais pas ce qu'elle regardait. Je sais qu'elle ne tournait aucune page.*\n\nPuis il ferme le cahier et le range dans le tiroir du bas, sous les copies de l'an dernier."
+  ]
+_C1[2]["scenes"] = [
+    "*Fin avril, mardi, 11h56*\n\nLe conseil est à midi.\n\nÀ onze heures cinquante-six, Hina est dans les toilettes du premier étage, dernière cabine, porte fermée, assise sur l'abattant rabattu, un carnet ouvert sur les genoux.",
+    "Le carnet fait onze centimètres sur sept. Couverture grise. Il tient dans la poche intérieure de sa veste d'uniforme, ce qui n'est pas un hasard : elle a choisi ce modèle-là pour ça.\n\nSur la page de gauche :\n\n*Budget festival — position : accepter la coupe de 8 % mais demander le report sur l'an prochain. Formule : « Je préfère qu'on décide maintenant plutôt qu'en septembre. »*\n\n*Si Miyata bloque : « Tu as une meilleure idée ? » (le laisser répondre, il n'en a pas)*\n\n*Ne pas dire « c'est compliqué ».*",
+    "Sur la page de droite, une colonne plus courte :\n\n*Kaneda — grand-père hospitalisé, demander lundi*\n*Sasaki — a raté le concours, NE PAS en parler*\n*Rika — anniversaire de sa mère le 6*\n\nElle relit les deux pages une fois. Elle referme le carnet. Elle le remet dans la poche intérieure.\n\nElle tire la chasse alors qu'elle n'a rien fait, parce que quelqu'un est entré, et elle sort en se lavant les mains, et elle sourit à la fille du lavabo dont elle sait qu'elle s'appelle Ueda.",
+    "*Le conseil, 12h*\n\nElle accepte la coupe de huit pour cent en demandant le report sur l'an prochain.\n\nMiyata bloque.\n\nHina|« Tu as une meilleure idée ? »\n\nIl n'en a pas.\n\nÇa dure vingt minutes au lieu de cinquante. Tout le monde sort content.\n\nAoki|« Serizawa. »\n\nHina|« Oui monsieur ? »\n\nAoki|« Vous êtes très efficace. »\n\nHina|« Merci. »\n\nAoki|« Ce n'était pas exactement un compliment. »\n\nIl ramasse ses copies et s'en va avant qu'elle ait pu répondre.",
+    "*17h, local du club*\n\nRika|« Le 6 c'est l'anniversaire de ma mère. »\n\nHina|« Je sais. »\n\nRika|« Comment tu te souviens toujours de ça ? »\n\nHina|« Je sais pas. Je retiens. »\n\nRika|« C'est un truc de dingue. »\n\nHina range une étagère rangée.\n\nRika|« Ma propre sœur s'en souvient pas. »\n\nHina|« Ta sœur a neuf ans. »\n\nRika|« Ma sœur a *quatorze* ans. »\n\nHina|« …Ah. »\n\nUn silence de deux secondes, très court, presque rien.\n\nRika|« Tu vois, ça, tu le savais pas. »\n\nElle le dit en riant. Elle le dit vraiment en riant.",
+    '*19h20, appartement Serizawa*\n\nQuatorzième étage. Grand. Silencieux. Une femme de ménage passe le mardi et le vendredi.\n\nIl y a un mot sur le plan de travail :\n\n*Dîner client jeudi, tenue bleue. R.*\n\nHina lit le mot. Elle ouvre le frigo. Elle le referme.\n\nElle sort son carnet et écrit, à la dernière page :\n\n*Jeudi — bleu.*'
+  ]
+_C1[3]["scenes"] = [
+    "*Début mai, cantine, 12h50*\n\nLe ticket de cantine tombe entre la caisse et le distributeur de plateaux, et il tombe du mauvais côté — celui où il faut se baisser devant vingt personnes.\n\nIl n'appartient pas à Itsuki. Il appartient à un garçon de première année qui ne s'en rend pas compte et qui s'éloigne.",
+    "Itsuki le voit.\n\nIl calcule, en environ une seconde et demie : se baisser, ramasser, rattraper le garçon, lui rendre. Quatre gestes visibles, dans la file, à l'heure de pointe.\n\nIl évalue le coût. Il l'évalue toujours.\n\nIl se baisse quand même.",
+    "Sauf que quelqu'un d'autre s'est baissé en même temps.\n\nLeurs mains arrivent sur le ticket à peu près au même moment. Elle l'a d'un millimètre.\n\nIls se relèvent tous les deux.\n\nHina|« Pardon. »\n\nItsuki|« C'est rien. »\n\nElle a le ticket. Il a les mains vides.",
+    "Elle regarde le nom écrit au dos.\n\nHina|« Katayama. Première année, classe C. »\n\nItsuki|« …Comment vous savez ça ? »\n\nHina|« C'est écrit dessus. »\n\nItsuki|« La classe n'est pas écrite dessus. »\n\nElle relève les yeux.\n\nC'est la première fois en deux ans qu'ils se regardent en face.",
+    "Hina|« Vous alliez le ramasser. »\n\nItsuki|« Oui. »\n\nHina|« Pourquoi vous avez attendu ? »\n\nItsuki|« Je n'ai pas attendu. »\n\nHina|« Vous avez attendu à peu près une seconde et demie. »\n\nIl ne répond pas.\n\nVingt personnes derrière eux dans la file commencent à trouver le temps long."
+  ]
+_C1[4]["scenes"] = [
+    "*Mi-mai, mardi, 17h40*\n\nLe local du club a une fenêtre qui donne sur le parking des professeurs, et l'un des battants ferme mal depuis février.\n\nHina l'a signalé deux fois.\n\nCe mardi-là, en arrivant, elle trouve le battant réparé. Une cale en bois, taillée à la bonne épaisseur, glissée dans la charnière.\n\nPersonne n'a rien dit à personne.",
+    "*Mercredi, couloir du premier, 14h*\n\nHina|« C'est vous ? »\n\nItsuki|« Pardon ? »\n\nHina|« La fenêtre du local de littérature. »\n\nItsuki|« Je ne vois pas de quoi vous parlez. »\n\nHina|« Il y a une cale en bois. Taillée. »\n\nItsuki|« Ah. »\n\nHina|« C'est vous. »\n\nItsuki|« Je dois y aller. »\n\nIl y va.",
+    "*Jeudi, 8h10*\n\nElle le rattrape près des casiers.\n\nHina|« Ça va ? »\n\nIl s'arrête. Il met un temps anormalement long à répondre à une question anormalement banale.\n\nItsuki|« Oui. »\n\nHina|« D'accord. »\n\nItsuki|« …Et vous ? »\n\nHina|« Ça va. »\n\nIls restent une seconde de plus que nécessaire devant une rangée de casiers.\n\nPuis chacun part de son côté.",
+    "*Jeudi, 19h30, hôtel Kaiyō, salon Sakura*\n\nTenue bleue.\n\nIl y a quarante personnes, un buffet, et un partenaire coréen qui vient de faire une plaisanterie que trois personnes ont comprise.\n\nReiko|« Et voici Hina. »\n\nC'est la phrase. Elle l'entend depuis ses huit ans. *Et voici Hina.*\n\nHina|« Enchantée. »",
+    "Le partenaire lui demande ce qu'elle veut faire.\n\nC'est la question qu'ils posent tous, et Hina a une réponse depuis trois ans, qu'elle donne avec une inclinaison de tête calibrée.\n\nHina|« Je ne me suis pas encore décidée. J'aime beaucoup de choses. »\n\nLe partenaire|« C'est de son âge ! »\n\nReiko|« Elle a du temps. »\n\nReiko sourit et pose une main sur son épaule à elle, deux secondes, et retire la main, et se retourne vers quelqu'un d'autre.\n\nSur son téléphone, dans son sac, il y a un dossier de candidature en lettres modernes commencé en février.",
+    "*23h10, appartement*\n\nReiko|« Tu as été parfaite. »\n\nHina|« Merci. »\n\nReiko|« Le monsieur au foulard était insupportable. »\n\nHina|« Il était insupportable. »\n\nReiko|« Tu as vu que je ne l'ai pas resservi ? »\n\nHina|« J'ai vu. »\n\nSa mère rit. C'est un vrai rire, court, complice, et c'est le meilleur moment de la soirée pour les deux.\n\nReiko|« Bonne nuit. »\n\nHina|« Bonne nuit. »\n\nElle enlève le bleu. Elle le suspend. Elle sort son carnet et écrit :\n\n*Foulard = insupportable. (accord de maman — réutilisable)*"
+  ]
+_C1[5]["scenes"] = [
+    "*Fin mai, salle d'arts plastiques, 16h*\n\nJun dessine tous les mercredis de seize heures à dix-huit heures dans une salle où il est censé y avoir un club et où il n'y a que lui.\n\nItsuki y passe depuis la seconde.\n\nPas tous les mercredis. Un sur deux, à peu près. Il s'assoit sur la table du fond, il écrit, Jun dessine, et ils ne se parlent pas beaucoup.",
+    "Jun|« T'as changé de stylo. »\n\nItsuki|« L'autre bavait. »\n\nJun|« Celui-là est mieux. »\n\nItsuki|« Il est mieux. »\n\nVingt minutes de silence.\n\nJun|« Serizawa t'a parlé. »\n\nItsuki lève la tête.\n\nItsuki|« Comment tu sais ça ? »\n\nJun|« Aux casiers. Jeudi. J'étais deux rangées derrière. »\n\nItsuki|« Tu m'as pas dit bonjour. »\n\nJun|« Tu avais l'air occupé. »",
+    "Itsuki|« Elle m'a demandé si ça allait. »\n\nJun|« Et ? »\n\nItsuki|« J'ai dit oui. »\n\nJun|« C'est vrai ? »\n\nItsuki|« Quoi ? »\n\nJun|« Que ça va. »\n\nItsuki|« …Oui. »\n\nJun continue de dessiner.\n\nJun|« D'accord. »\n\nC'est la totalité de la conversation. Elle a duré une minute quarante. C'est la plus longue qu'ils aient eue ce trimestre et aucun des deux ne trouve ça anormal.",
+    "*Vendredi, 12h30, cantine*\n\nHina|« Kō. Tu connais Amano ? »\n\nKo|« Amano ? »\n\nHina|« Deuxième année B. »\n\nKo|« Le grand ? Ouais. »\n\nHina|« Tu le connais ? »\n\nKo|« Je sais qui c'est. »\n\nHina|« C'est pas pareil. »\n\nKo|« Non. »\n\nIl attaque son riz.\n\nKo|« Personne le connaît, en vrai. »\n\nNanami|« Jun le connaît. »\n\nTout le monde se tourne vers Nanami.\n\nNanami|« Quoi ? Ils sont ensemble en arts plastiques depuis la seconde. »\n\nHina|« …Depuis la seconde ? »\n\nNanami|« Deux ans. »\n\nElle boit son thé.\n\nNanami|« Ça t'étonne parce que tu croyais que personne ne le connaissait. Mais en fait c'est juste toi qui le connaissais pas. »\n\nKo|« Ouh. »\n\nNanami|« C'est pas méchant. »\n\nHina|« Non. »\n\nHina|« Non, c'est pas méchant. »",
+    "*Le soir, cahier d'Itsuki*\n\n*Trois personnes m'ont parlé cette semaine : Jun, mon père, ma sœur.*\n\n*Quatre avec elle.*\n\n*C'est une augmentation de trente-trois pour cent et je n'aime pas du tout ça.*"
+  ]
+_C1[3]["choix"] = {
+    'question': "Elle a le ticket. Katayama est à douze mètres, de dos, et il n'a rien vu.",
+    'decisif': False,
+    'options': [
+      (
+        'ramasse',
+        '1️⃣',
+        'Elle le rattrape et le lui rend devant tout le monde'
+      ),
+      (
+        'discret',
+        '2️⃣',
+        'Elle le glisse dans son sac ouvert en passant'
+      )
+    ],
+    'suites': {
+      'ramasse': {
+        'pose': [
+          'ticket_public'
+        ],
+        'relation': {
+          'itsuki': {
+            'confiance': -3
+          }
+        },
+        'texte': "Hina|« KATAYAMA ! »\n\nToute la file se retourne. Katayama aussi.\n\nHina|« Tu as fait tomber ça. »\n\nIl revient sur douze mètres, rouge jusqu'aux oreilles, en s'excusant trois fois auprès de personnes qui ne lui ont rien demandé.\n\nKatayama|« Merci, merci, désolé. »\n\nHina|« Il n'y a pas de quoi. »\n\nElle se retourne vers Itsuki avec un sourire.\n\nIl n'est plus là.\n\n*Le soir, dans son cahier :*\n\n*Elle a crié son nom dans une file de quarante personnes pour lui rendre un ticket à deux cents yens. Il a dit merci trois fois. Elle a trouvé que c'était bien.*\n\n*Ce n'était pas mal. C'était juste très cher pour lui.*"
+      },
+      'discret': {
+        'pose': [
+          'ticket_discret'
+        ],
+        'relation': {
+          'itsuki': {
+            'confiance': 5
+          }
+        },
+        'texte': "Elle ne l'appelle pas.\n\nElle prend son plateau, elle remonte la file en s'excusant, et en dépassant Katayama elle laisse tomber le ticket dans son sac entrouvert sans ralentir.\n\nIl ne s'aperçoit de rien. Il ne s'apercevra jamais de rien.\n\nQuand elle revient à sa place, Itsuki n'est plus là.\n\nMais il l'a vue faire, depuis la porte, pendant les trois secondes qu'il a mises à sortir.\n\n*Le soir, dans son cahier :*\n\n*Elle a fait un détour de neuf mètres pour ne pas qu'il ait à dire merci.*\n\n*Je ne comprends pas cette personne.*"
+      }
+    }
+  }
+del _C1
+
+
+# ── #1 ARC II : épisodes 7 à 14 ──
+_C1B = CHRONIQUE_SAISONS["ce_quon_voit"]["episodes"]
+_C1B[6]["scenes"] = [
+    "*Début juin, salle des professeurs, 16h20*\n\nLe règlement du lycée Seiran prévoit que tout élève de deuxième année doit appartenir à un club.\n\nLe règlement le prévoit depuis 1987. Personne ne l'applique.\n\nSauf cette année, parce que l'inspection académique passe en octobre et que le proviseur adjoint a décidé que les effectifs de clubs seraient conformes.",
+    "Aoki|« Amano Itsuki. »\n\nItsuki|« Oui monsieur. »\n\nAoki|« Vous n'êtes inscrit nulle part depuis deux ans. »\n\nItsuki|« Non monsieur. »\n\nAoki|« Il y a une raison ? »\n\nItsuki|« Je travaille le samedi. »\n\nAoki|« Les clubs sont en semaine. »\n\nItsuki|« Je rentre à dix-neuf heures dix. J'ai une sœur de quatorze ans. »\n\nAoki repose son stylo.\n\nAoki|« Ça, ce n'est pas dans le dossier. »\n\nItsuki|« Non monsieur. »",
+    "*Conseil des délégués, le lendemain, 12h*\n\nPoint six : conformité des effectifs de clubs.\n\nIl y a une liste de onze noms projetée au tableau. C'est exactement la liste que Hina avait refusée en avril, sauf qu'elle vient de l'administration et que personne ne peut la refuser.\n\nOnzième ligne : *AMANO Itsuki — 2-B — aucun club*.\n\nLe proviseur adjoint attend des propositions d'affectation.",
+    "Miyata|« Il y a de la place au club de sciences. »\n\nUn délégué|« Et au tennis de table. »\n\nNanami|« Amano ne fera pas de tennis de table. »\n\nLe proviseur|« Pourquoi ? »\n\nNanami|« Parce qu'il ne fera pas de tennis de table. »\n\nLe proviseur|« Ce n'est pas un argument. »\n\nNanami|« C'est le seul que j'ai. »\n\nHina n'a rien dit depuis le début du point six."
+  ]
+_C1B[7]["scenes"] = [
+    "*Mardi 17h05, local du club de littérature*\n\nHuit mètres carrés. Une table pour six. Il y a quatre membres, un cinquième depuis lundi, et Nanami qui n'est pas membre et qui vient quand même.\n\nLes quatre : Hina, Rika, une première année qui s'appelle Momo et qui n'a jamais parlé, et un garçon de terminale qui vient pour le CV.\n\nLe cinquième est assis à la place la plus éloignée de la porte, ce qui est contre-intuitif, et personne ne lui demande pourquoi.",
+    "Rika|« Bon. On fait quoi. »\n\nHina|« Le recueil de fin d'année. »\n\nRika|« On le fait chaque année. »\n\nHina|« C'est pour ça qu'on le fait cette année aussi. »\n\nLe terminale|« Moi je peux pas écrire, j'ai les concours. »\n\nHina|« Tu as dit ça en septembre. »\n\nLe terminale|« C'était vrai en septembre aussi. »\n\nMomo, la première année, lève un demi-doigt et le rebaisse.",
+    "Nanami est adossée à l'étagère, les bras croisés.\n\nNanami|« Vous savez ce que ce club est en train de devenir ? »\n\nRika|« Vas-y, on t'écoute. »\n\nNanami|« Une salle où Serizawa range des livres pendant que quatre personnes regardent leur téléphone. »\n\nRika|« C'est charmant. »\n\nNanami|« C'est exact. »\n\nHina|« Tu n'es même pas inscrite. »\n\nNanami|« Justement. Je vois mieux. »",
+    "Le terminale part à dix-sept heures trente. Momo à dix-sept heures quarante.\n\nIl reste Hina qui range, Rika qui ne range pas, Nanami qui n'a pas bougé de l'étagère, et Itsuki à la place la plus éloignée de la porte.\n\nNanami|« Amano. »\n\nItsuki|« Oui. »\n\nNanami|« Tu es là parce qu'on t'a mis là. »\n\nItsuki|« Oui. »\n\nNanami|« Tu vas venir combien de fois ? »\n\nItsuki|« Le règlement demande une présence effective. »\n\nNanami|« Ce n'est pas la question. »\n\nItsuki|« Je sais. »\n\nIl ne répond pas à la question. Nanami hoche la tête comme si c'était une réponse acceptable, et pour elle ça l'est.",
+    "*18h20*\n\nIl ne reste que deux personnes.\n\nHina range l'étagère du haut. Itsuki n'est pas parti et ne sait plus très bien pourquoi.\n\nHina|« Vous pouvez y aller. »\n\nItsuki|« Je sais. »\n\nHina|« Vous avez une sœur. »\n\nIl se lève brusquement.\n\nItsuki|« Qui vous a dit ça ? »\n\nHina|« Aoki. Il l'a dit devant le conseil pour justifier la dérogation. »\n\nItsuki|« …Ah. »\n\nHina|« Il ne l'a pas fait exprès. Il vous défendait. »\n\nItsuki|« Je sais. »\n\nIl prend son sac.\n\nItsuki|« C'est toujours pour défendre. »"
+  ]
+_C1B[8]["scenes"] = [
+    "*Mi-juin, mardi, 17h15*\n\nIl y a une étagère, dans le local, où sont rangés les recueils de fin d'année du club. Un par an depuis 1994. Trente-et-un volumes agrafés, tirés à quarante exemplaires, dont la moitié n'ont jamais été ouverts.",
+    "Hina|« On va reprendre le format de 2018. »\n\nRika|« Pourquoi 2018 ? »\n\nHina|« Parce qu'il est bien. »\n\nElle sort le volume. Elle l'ouvre à une page qu'elle trouve sans chercher, ce qui n'échappe pas à Itsuki, assis à la place la plus éloignée de la porte.\n\nHina|« Il y a un texte là-dedans qui fait quatre pages et qui est meilleur que tout ce qu'on a publié en trente ans. »",
+    "Rika|« Encore celui-là. »\n\nHina|« Encore. »\n\nRika|« Elle le sort à chaque fois. »\n\nMomo, la première année, lève un demi-doigt.\n\nMomo|« …C'est quoi ? »\n\nHina|« Un texte de troisième année de collège. Le concours interne est ouvert aux collégiens du secteur, ils publient le premier prix dans le recueil du lycée. »\n\nMomo|« Ça parle de quoi ? »\n\nHina|« D'une femme malade. »\n\nPersonne ne regarde le fond de la pièce.",
+    "Hina|« Il n'y a pas le mot *hôpital* une seule fois. Pas une. Sur quatre pages. »\n\nRika|« Et alors ? »\n\nHina|« Alors quelqu'un de quatorze ans a compris qu'on n'a pas besoin de le dire. »\n\nElle tourne une page.\n\nHina|« Il y a une phrase, à la fin de la troisième page. Sur les chaussures. »\n\nRika|« Ah non, elle va la lire. »\n\nHina|« Je vais la lire. »\n\nRika|« Elle la lit à chaque fois. »",
+    "Elle lit une phrase à voix haute.\n\nElle la lit bien, sans effet, en baissant un peu la voix comme font les gens qui aiment vraiment quelque chose.\n\nMomo ne dit rien.\n\nRika, qui l'a entendue quatorze fois, ne dit rien non plus.\n\nAu fond de la pièce, quelqu'un est en train de regarder très fixement la fenêtre réparée avec une cale en bois.",
+    "Hina|« C'est pour ça que j'ai relancé le club. »\n\nRika|« Tu as relancé le club parce que Aoki t'a demandé. »\n\nHina|« Aoki m'a demandé en mai. J'avais lu ça en mars. »\n\nRika|« …Ah bon ? »\n\nHina|« Oui. »\n\nRika|« Tu me l'as jamais dit. »\n\nHina|« Ce n'est pas très important. »\n\nElle referme le volume et le remet à sa place, deuxième étagère, entre 2017 et 2019.\n\nElle n'a pas dit le nom de l'auteur.\n\nIl n'y a pas de nom. Il y a deux lettres.",
+    "*18h40*\n\nIl est le dernier à sortir, ce qui ne lui était pas arrivé.\n\nIl s'arrête devant la deuxième étagère.\n\nIl regarde la tranche du volume de 2018 pendant à peu près dix secondes.\n\nIl ne le prend pas.\n\nIl éteint la lumière en sortant, ce que personne ne fait jamais, et Hina le remarque le lendemain matin sans comprendre pourquoi ça la dérange."
+  ]
+_C1B[9]["scenes"] = [
+    "*Samedi, imprimerie Kado, 8h*\n\nL'imprimerie Kado fait des faire-part, des menus, des cartes de visite et les programmes de trois écoles du secteur.\n\nItsuki y travaille le samedi de huit heures à dix-sept heures depuis quatorze mois. Massicot, pliage, mise sous pli, livraisons à vélo.\n\nNeuf mille yens la journée. Trente-six mille par mois.",
+    "Ce que ça paie :\n\nLe cours de théâtre de Tsubaki, mardi et jeudi, huit mille par mois.\n\nLes courses de la semaine quand le père est sur la route, ce qui est trois semaines sur quatre.\n\nEt une enveloppe dans le tiroir du haut, dont Tsubaki ne connaît pas l'existence, qui contient cent quatre-vingt mille yens et qui s'appelle, dans la tête d'Itsuki, *au cas où*.",
+    "*Le soir, 19h*\n\nTsubaki|« Y a un club de théâtre au lycée ? »\n\nItsuki|« Il y en a un. »\n\nTsubaki|« Il est bien ? »\n\nItsuki|« Je sais pas. »\n\nTsubaki|« Tu sais rien de ton lycée. »\n\nItsuki|« Je sais où sont les sorties. »\n\nTsubaki|« C'est *déprimant*. »\n\nElle pique un morceau dans la poêle avec les doigts. Il tape sur sa main sans regarder. Elle recommence.",
+    "Tsubaki|« Toi t'es dans quoi comme club ? »\n\nItsuki|« Littérature. »\n\nElle repose ses baguettes.\n\nTsubaki|« PARDON ? »\n\nItsuki|« C'est administratif. »\n\nTsubaki|« Tu es dans le club de LITTÉRATURE. »\n\nItsuki|« On m'a mis là. »\n\nTsubaki|« Tu écris tous les soirs depuis que t'as onze ans. »\n\nItsuki|« Ce n'est pas la même chose. »\n\nTsubaki|« En quoi c'est pas la même chose ? »\n\nItsuki|« Mange. »",
+    "*22h40, sa chambre*\n\nLe tiroir du bas contient : les copies de l'an dernier, un dictionnaire de poche, et sept cahiers.\n\nSept. Le premier date de la sixième. Le septième est à moitié plein.\n\nIl en manque un. Le troisième — celui de la troisième année de collège.\n\nIl ne l'a pas jeté. Il l'a mis ailleurs, dans un carton, en haut du placard de l'entrée, sous des vêtements d'hiver.\n\nIl ne l'a pas rouvert depuis trois ans et il sait exactement où il est."
+  ]
+_C1B[10]["scenes"] = [
+    "*Fin juin, mardi, 18h25*\n\nIls sont deux dans le local. Ça arrive maintenant une fois sur deux.\n\nIl ne part plus à dix-sept heures trente. Il part à dix-huit heures et demie, en même temps qu'elle, et ni l'un ni l'autre n'a jamais dit que c'était une habitude.",
+    "Itsuki|« Vous rangez une étagère rangée. »\n\nHina|« Elle n'est pas rangée. »\n\nItsuki|« Les volumes sont dans l'ordre chronologique et alignés au millimètre. »\n\nHina|« Il y a de la poussière. »\n\nItsuki|« Vous l'avez faite mardi dernier. »\n\nElle s'arrête, un volume à la main.\n\nHina|« Vous comptez ce que je fais ? »\n\nItsuki|« Non. »\n\nHina|« Vous venez de citer mardi dernier. »\n\nItsuki|« …Je remarque. »\n\nHina|« Ce n'est pas pareil ? »\n\nItsuki|« Non. »",
+    "Il ferme son sac. Il ne part pas.\n\nItsuki|« Je peux poser une question. »\n\nHina|« Allez-y. »\n\nItsuki|« Pourquoi vous avez relancé ce club ? »\n\nElle repose le volume.\n\nIl y a une réponse officielle. Elle la donne depuis deux ans, elle est dans le dossier de candidature, elle est même dans le carnet gris, page onze : *valoriser une activité en perte de vitesse — reconstruire un lien avec le concours du secteur*.\n\nElle l'a dite à Aoki, au proviseur, à sa mère, à quarante personnes.\n\nElle ne l'a jamais dite à quelqu'un qui l'écoutait vraiment."
+  ]
+_C1B[11]["scenes"] = [
+    "*Début juillet, samedi, 14h*\n\nRika a une sœur de quatorze ans qui s'appelle Momoko, une mère qui travaille en pharmacie et un père qui répare des climatiseurs.\n\nHina est venue chez elle onze fois depuis la seconde.\n\nRika est venue chez Hina trois fois, dont deux où la mère n'était pas là, dont une où elle a demandé si elle pouvait ouvrir le frigo et où Hina a hésité.",
+    "Rika|« Tiens. »\n\nElle lui envoie un paquet de biscuits à travers la chambre.\n\nRika|« Momoko a pris les autres. »\n\nHina|« Merci. »\n\nRika|« Bon. Alors. »\n\nHina|« Alors quoi ? »\n\nRika|« Amano. »\n\nHina|« Quoi Amano ? »\n\nRika|« Tu as posé quatre questions sur lui cette semaine. »\n\nHina|« J'ai pas— »\n\nRika|« Lundi à Kō. Mardi à moi. Mercredi à Nanami, ce qui était une très mauvaise idée. Vendredi à Aoki. »\n\nHina|« Tu comptes ? »\n\nRika|« Ben ouais. »",
+    "Hina|« Il est bizarre. »\n\nRika|« Il est pas bizarre. »\n\nHina|« Il est— »\n\nRika|« Il est normal, Hina. C'est juste que tu as l'habitude que les gens aient envie de te parler. »\n\nUn silence.\n\nRika|« Pardon. C'était pas gentil. »\n\nHina|« Non, c'est— »\n\nRika|« Si, c'était pas gentil. »\n\nElle ouvre son propre paquet de biscuits.\n\nRika|« Mais c'est vrai quand même. »",
+    "Elles regardent une série pendant une heure et demie. Elles parlent d'autre chose. C'est très bien.\n\nÀ dix-sept heures, Hina se lève.\n\nHina|« Je dois y aller. »\n\nRika|« Dîner client ? »\n\nHina|« Dîner client. »\n\nRika|« La bleue ou la grise ? »\n\nHina|« Comment tu— »\n\nRika|« Tu as deux tenues. »\n\nHina|« …La bleue. »\n\nRika|« Elle est mieux. »",
+    "Sur le palier, en enfilant ses chaussures, Hina dit quelque chose sans y penser.\n\nHina|« Tu viendras au recueil de fin d'année ? »\n\nRika|« Je viens tous les ans. »\n\nHina|« Je veux dire, tu écriras quelque chose ? »\n\nRika met du temps.\n\nRika|« Tu me l'as jamais demandé. »\n\nHina|« Bien sûr que si. »\n\nRika|« Non. »\n\nElle sourit.\n\nRika|« Tu as demandé à Momo la première année en avril. Tu as demandé à trois personnes de terminale. Tu as demandé à Amano hier. »\n\nElle referme la porte à moitié.\n\nRika|« Moi je range les chaises. »\n\nHina|« Rika— »\n\nRika|« À mardi ! »\n\nLa porte se ferme."
+  ]
+_C1B[12]["scenes"] = [
+    "*Mi-juillet, distributeur du deuxième étage, 12h55*\n\nLe distributeur du deuxième étage rend la monnaie une fois sur trois.\n\nTout le monde le sait. Tout le monde va au distributeur du rez-de-chaussée.\n\nItsuki va au distributeur du deuxième étage parce qu'il y a rarement quelqu'un et qu'il a fait le calcul : quarante yens perdus par semaine contre quatorze conversations évitées.",
+    'Ce midi-là il y a Kō.\n\nKo|« Il a bouffé ma pièce. »\n\nItsuki|« Il fait ça. »\n\nKo|« Tu le savais ? »\n\nItsuki|« Une fois sur trois. »\n\nKo|« ET TU DIS RIEN À PERSONNE ? »\n\nItsuki|« Il y en a un en bas. »\n\nKo|« Il y a la queue en bas. »\n\nItsuki|« Voilà. »\n\nKō le regarde. Puis il regarde le distributeur. Puis il rit.',
+    "Ko|« T'es un génie du mal. »\n\nItsuki|« C'est un distributeur. »\n\nKo|« C'est une *stratégie*. »\n\nIl tape deux fois sur le côté de la machine. Rien.\n\nKo|« Tu prends quoi ? »\n\nItsuki|« Le thé froid. »\n\nKo|« Tous les jours ? »\n\nItsuki|« Tous les jours. »\n\nKo|« Pourquoi ? »\n\nItsuki|« Il est à cent dix. »\n\nKo|« …Ah. »\n\nIl ne relance pas. Il ne fait pas de tête. Il achète un thé froid à cent dix et il boit à côté de lui pendant six minutes en parlant d'un match.",
+    "Kō raconte le match. Itsuki dit quatre phrases.\n\nÀ la fin, Kō part vers l'escalier.\n\nKo|« Amano. »\n\nItsuki|« Oui ? »\n\nKo|« Le mardi, au club, tu te mets où ? »\n\nItsuki|« Au fond. »\n\nKo|« Ouais, je me doutais. »\n\nIl descend deux marches et se retourne.\n\nKo|« Moi j'ai redoublé la seconde. »\n\nItsuki|« …D'accord. »\n\nKo|« Personne le sait. Enfin — tout le monde le sait, mais personne en parle. »\n\nItsuki|« C'est différent. »\n\nKo|« Ouais. »\n\nKo|« Voilà, c'était juste ça. »\n\nIl s'en va en sifflant faux.",
+    "*Le soir, cahier*\n\n*Kō Tachibana a bu un thé froid à cent dix yens qu'il n'aime pas pendant six minutes pour ne pas que j'aie l'air d'être seul devant un distributeur.*\n\n*Il n'a rien demandé.*\n\n*Je crois que c'est la chose la plus polie qu'on m'ait faite depuis trois ans.*"
+  ]
+_C1B[13]["scenes"] = [
+    "*Fin juillet, dernier mardi du trimestre*\n\nLe règlement est clair : la conformité des effectifs est constatée au 20 juillet. Après, plus personne ne vérifie rien jusqu'à l'inspection.\n\nTechniquement, à partir de mercredi, Itsuki Amano n'a plus aucune raison d'être dans une salle de huit mètres carrés le mardi à dix-sept heures.",
+    "Aoki passe la tête à dix-sept heures dix.\n\nAoki|« Amano. Vos papiers de club sont signés. »\n\nItsuki|« Merci monsieur. »\n\nAoki|« Vous êtes en règle jusqu'en mars. »\n\nItsuki|« Oui monsieur. »\n\nAoki|« La présence effective n'est plus contrôlée. »\n\nIl le dit à la pièce entière, en regardant le plafond, avec l'air de quelqu'un qui lit une notice de médicament.\n\nAoki|« Bonnes vacances. »\n\nIl s'en va.",
+    "Personne ne dit rien pendant un moment.\n\nRika|« Il vient de te dire que tu peux plus venir. »\n\nItsuki|« Il vient de dire que je ne suis pas obligé. »\n\nRika|« C'est pareil. »\n\nItsuki|« Non. »\n\nMomo lève un demi-doigt et le rebaisse.",
+    "*18h30*\n\nIls sont deux. Il est dix-huit heures trente.\n\nHina|« Vous n'êtes pas obligé de venir en septembre. »\n\nItsuki|« Je sais. »\n\nHina|« Aoki l'a dit assez fort. »\n\nItsuki|« Il l'a dit pour moi. Il pense que ça me soulage. »\n\nHina|« Et ça vous soulage ? »\n\nIl met son sac sur l'épaule.\n\nItsuki|« La cale de la fenêtre, elle va tenir jusqu'en octobre. Après il faudra la refaire, le bois va travailler avec l'humidité. »\n\nHina|« …D'accord. »\n\nItsuki|« Bonnes vacances. »\n\nIl sort.",
+    "Elle met quatre secondes à comprendre ce qu'il vient de dire.\n\nElle sort dans le couloir. Il est à quinze mètres.\n\nHina|« AMANO. »\n\nIl s'arrête sans se retourner.\n\nHina|« Vous venez de me dire que vous reviendrez en octobre. »\n\nItsuki|« J'ai parlé d'une cale. »\n\nHina|« Vous avez dit *il faudra la refaire*. »\n\nUn silence de couloir vide, à dix-huit heures trente-cinq, à la veille des vacances d'été.\n\nItsuki|« Quelqu'un devra la refaire. »\n\nIl repart.\n\nElle le laisse partir, et elle sourit toute seule dans un couloir, et elle est extrêmement agacée de sourire toute seule dans un couloir."
+  ]
+_C1B[6]["choix"] = {
+    'question': 'Elle a le club de littérature. Deux places libres. Et une raison de se taire.',
+    'decisif': False,
+    'options': [
+      (
+        'defend',
+        '1️⃣',
+        'Proposer sa place et argumenter pour lui'
+      ),
+      (
+        'laisse',
+        '2️⃣',
+        'Proposer sa place sans un mot de plus'
+      )
+    ],
+    'suites': {
+      'defend': {
+        'pose': [
+          'elle_a_defendu'
+        ],
+        'relation': {
+          'itsuki': {
+            'confiance': -4
+          }
+        },
+        'texte': "Hina|« Il y a deux places au club de littérature. »\n\nLe proviseur|« Serizawa ? »\n\nHina|« Amano écrit. »\n\nUn silence de trois secondes dans une salle de vingt personnes.\n\nMiyata|« Comment tu sais ça ? »\n\nHina|« Il écrit en cours. Dans les marges. Tout le temps. »\n\nNanami la regarde d'une façon très précise et ne dit rien.\n\nLe proviseur|« Va pour littérature. »\n\n*Le lendemain, couloir du premier.*\n\nItsuki|« Vous avez dit à vingt personnes que j'écrivais. »\n\nHina|« J'ai dit que— »\n\nItsuki|« Vingt personnes, madame la déléguée. »\n\nHina|« Je voulais éviter que vous vous retrouviez au tennis de table. »\n\nItsuki|« J'aurais fait du tennis de table. »\n\nHina|« Vous auriez détesté ça. »\n\nItsuki|« Oui. Et personne n'aurait rien su de moi. »\n\nIl repart.\n\nIl s'arrête à cinq mètres et revient.\n\nItsuki|« Vous ne m'avez pas demandé. »\n\nHina|« Je— »\n\nItsuki|« Vous avez décidé que c'était mieux. Vous faites ça avec tout le monde ou juste avec les gens que vous ne connaissez pas ? »"
+      },
+      'laisse': {
+        'pose': [
+          'elle_a_laisse'
+        ],
+        'relation': {
+          'itsuki': {
+            'confiance': 6
+          }
+        },
+        'texte': "Hina|« Il y a deux places au club de littérature. »\n\nLe proviseur|« Vous les prenez ? »\n\nHina|« Oui. »\n\nLe proviseur|« Vous ne demandez pas qui ? »\n\nHina|« Vous avez une liste. Prenez les deux premiers noms de la liste. »\n\nLe proviseur|« Ce n'est pas très pédagogique. »\n\nHina|« C'est vous qui avez fait la liste, monsieur. »\n\nNanami tousse dans son poing d'une façon parfaitement insincère.\n\n*Le lendemain, couloir du premier.*\n\nItsuki|« C'est vous qui avez pris les places. »\n\nHina|« Il y en avait deux. »\n\nItsuki|« Vous avez dit quoi sur moi ? »\n\nHina|« Rien. »\n\nItsuki|« Rien du tout ? »\n\nHina|« J'ai dit *prenez les deux premiers de la liste*. »\n\nIl la regarde pendant plusieurs secondes.\n\nItsuki|« Pourquoi ? »\n\nHina|« Parce que je ne sais rien de vous et que je n'avais rien à dire. »\n\nIl hoche la tête une fois et s'en va, et à la moitié du couloir il se rend compte qu'il n'est pas en colère, ce qui l'ennuie beaucoup."
+      }
+    }
+  }
+_C1B[10]["choix"] = {
+    'question': "Il attend. Il est dix-huit heures vingt-cinq et il n'y a personne d'autre.",
+    'decisif': False,
+    'options': [
+      (
+        'vraie',
+        '1️⃣',
+        'Lui dire la vraie raison'
+      ),
+      (
+        'officielle',
+        '2️⃣',
+        'Donner la version du dossier'
+      )
+    ],
+    'suites': {
+      'vraie': {
+        'pose': [
+          'raison_dite'
+        ],
+        'relation': {
+          'itsuki': {
+            'confiance': 8
+          }
+        },
+        'texte': "Hina|« À cause d'un texte. »\n\nItsuki|« …Pardon ? »\n\nHina|« En mars, il y a deux ans. J'attendais ma mère au lycée, elle avait trois heures de retard. J'ai pris un volume au hasard sur cette étagère parce qu'il n'y avait rien d'autre à faire. »\n\nElle regarde l'étagère.\n\nHina|« Je l'ai lu quatre fois de suite. Assise par terre dans ce couloir. »\n\nItsuki ne dit rien du tout.\n\nHina|« Et j'ai pensé : quelqu'un dans ce lycée a écrit ça, et le club qui l'a publié est en train de mourir, et ça n'a aucun sens. »\n\nElle hausse les épaules.\n\nHina|« Alors je l'ai relancé. C'est tout. »\n\nItsuki|« Vous n'avez jamais dit ça à personne. »\n\nHina|« Non. »\n\nItsuki|« Pourquoi ? »\n\nHina|« Parce que ça fait un peu bête. »\n\nItsuki|« …Non. »\n\nIl le dit trop vite, et il le sait, et il prend son sac.\n\nItsuki|« Bonne soirée. »"
+      },
+      'officielle': {
+        'pose': [
+          'raison_tue'
+        ],
+        'texte': "Hina|« Il y avait une activité en perte de vitesse et un lien à reconstruire avec le concours du secteur. Le club existait depuis 1994, c'était dommage. »\n\nElle l'a dit exactement comme elle le dit toujours.\n\nItsuki|« D'accord. »\n\nHina|« Voilà. »\n\nItsuki|« C'est la phrase du dossier. »\n\nHina|« …Pardon ? »\n\nItsuki|« *Valoriser une activité en perte de vitesse.* C'est écrit dans le bulletin d'établissement de l'an dernier, page quatre. »\n\nHina|« Vous lisez le bulletin d'établissement ? »\n\nItsuki|« Il y a peu de choses à lire dans une salle d'attente de secrétariat. »\n\nIl met son sac sur l'épaule.\n\nItsuki|« Ce n'était pas une question piège. Vous pouviez juste dire *je sais pas*. »\n\nIl sort.\n\nElle reste debout devant une étagère parfaitement rangée pendant beaucoup trop longtemps."
+      }
+    }
+  }
+del _C1B
+
+
+_XA3 = CHRONIQUE_SAISONS["ce_quon_voit"]["episodes"]
+_XA3[14]["scenes"] = [
+    "*Septembre, deuxième mardi, 17h30*\n\nLe local sent le renfermé de six semaines. Le battant de la fenêtre est toujours calé.\n\nIl est venu.\n\nPersonne n'a rien dit. Il est arrivé à dix-sept heures cinq, il s'est assis à la place la plus éloignée de la porte, et Rika a levé les sourcils à Hina d'une façon qui voulait dire beaucoup de choses.",
+    "*18h50, après le départ des autres*\n\nElle sort le volume de 2018. Elle le fait avec précaution, comme si le geste était nouveau, alors qu'elle l'a fait onze fois.\n\nLe texte occupe les pages 14 à 17.\n\nEn bas de la page 17, en corps huit, sous la dernière ligne :\n\n*Premier prix — concours du secteur, catégorie collège. I.A., 3e année.*\n\nDeux lettres et un point.",
+    "Hina|« Vous savez ce que je n'ai jamais fait ? »\n\nItsuki|« Non. »\n\nHina|« Chercher qui c'est. »\n\nElle tourne la page vers lui. Il ne la regarde pas.\n\nHina|« Deux ans. Onze relectures. Je n'ai jamais ouvert un annuaire, jamais demandé à Aoki, jamais rien. »\n\nItsuki|« Pourquoi ? »\n\nHina|« Je ne sais pas. »\n\nElle referme le volume à moitié.\n\nHina|« Si. Je sais. J'avais peur que ce soit quelqu'un de décevant. »",
+    "Itsuki|« Décevant comment ? »\n\nHina|« Quelqu'un qui l'aurait écrit par hasard. Qui dirait *ouais, j'sais plus, c'était pour le concours*. »\n\nElle repose le volume sur la table sans le ranger.\n\nHina|« Ce texte est la seule chose dans ce lycée que je trouve vraiment belle. Je préférais ne pas savoir plutôt que de me tromper. »\n\nItsuki ne répond rien pendant à peu près huit secondes.\n\nItsuki|« Et maintenant ? »\n\nHina|« Maintenant je ne sais pas. »"
+  ]
+_XA3[15]["scenes"] = [
+    "*Fin septembre, appartement Serizawa, 21h*\n\nLe dossier s'appelle *SERIZAWA_candidature.pdf*. Il est dans un sous-dossier qui s'appelle *cours*, ce qui est un mensonge de sept mois.\n\nUniversité Waseda, faculté des lettres, département de littérature japonaise.\n\nSélection sur dossier et entretien. Dépôt : 10 mars.",
+    "Il y a une section *lettre de motivation*, quatre cents mots, qu'elle a réécrite dix-neuf fois.\n\nLes dix-huit premières versions parlaient de *transmission*, de *rigueur analytique* et de *projet professionnel structuré*. Elle les a toutes supprimées.\n\nLa dix-neuvième commence par :\n\n*J'ai lu un texte de quatre pages quand j'avais quinze ans et je n'ai jamais compris comment quelqu'un avait fait ça.*\n\nElle n'a pas écrit la suite.",
+    "*22h10*\n\nReiko rentre. Elle pose ses clés. Elle enlève une chaussure, puis l'autre, en s'appuyant au mur, ce qu'elle ne fait que quand elle est très fatiguée.\n\nReiko|« Tu travailles ? »\n\nHina|« Des maths. »\n\nReiko|« Bon courage. »\n\nElle passe. Elle revient sur trois pas.\n\nReiko|« Le cabinet Ōmori cherche des stagiaires d'été pour les terminales. J'ai dit que tu serais intéressée. »\n\nHina|« …D'accord. »\n\nReiko|« Ce n'est rien, c'est deux semaines. Ça fait bien sur un dossier de commerce. »\n\nHina|« D'accord. »\n\nReiko|« Bonne nuit. »",
+    'Elle rouvre le fichier.\n\nElle relit sa première phrase.\n\nElle la sélectionne. Elle appuie sur *supprimer*.\n\nElle annule.\n\nElle la sélectionne encore.\n\nElle laisse.'
+  ]
+_XA3[16]["scenes"] = [
+    "*Début octobre, salle d'arts plastiques, mercredi 16h40*\n\nHina n'est jamais venue dans cette salle.\n\nElle y vient parce que Nanami a dit une phrase en juin et que cette phrase ne l'a pas lâchée : *c'est juste toi qui le connaissais pas*.\n\nJun ne lève pas la tête quand elle entre.",
+    "Jun|« Il n'est pas là le mercredi en octobre. »\n\nHina|« Pardon ? »\n\nJun|« Amano. C'est ce que vous venez chercher. »\n\nHina|« …Oui. »\n\nJun|« En octobre il fait des inventaires à l'imprimerie le mercredi. Ça dure trois semaines. »\n\nIl continue de dessiner.\n\nHina|« Vous savez ça. »\n\nJun|« Il me l'a dit. »\n\nHina|« Quand ? »\n\nJun|« L'an dernier. Et l'année d'avant. »",
+    "Elle s'assoit sur une table, ce qu'elle ne fait jamais.\n\nHina|« Vous êtes amis. »\n\nJun|« On se parle. »\n\nHina|« C'est pas pareil ? »\n\nJun|« Non. »\n\nIl change de crayon.\n\nJun|« Amis c'est quand on se cherche. Nous on est juste dans la même pièce depuis deux ans. »\n\nHina|« Ça fait beaucoup de mercredis. »\n\nJun|« Cent trente. »\n\nHina|« …Vous avez compté ? »\n\nJun|« Non. Deux ans, un mercredi sur deux, trente-cinq semaines. C'est du calcul. »",
+    "Hina|« Il vous a parlé de quoi, en deux ans ? »\n\nJun réfléchit vraiment. Ça prend du temps.\n\nJun|« De sa sœur. Des stylos. Du prix du bus. »\n\nHina|« C'est tout ? »\n\nJun|« C'est déjà beaucoup. »\n\nIl pose son crayon.\n\nJun|« Vous voulez savoir un truc ? La première fois qu'il est entré ici, en seconde, il a demandé s'il pouvait rester. Il a demandé. Personne demande avant d'entrer dans une salle vide. »\n\nHina ne dit rien.\n\nJun|« J'ai dit oui, et depuis il vient. C'est tout ce que j'ai fait. »",
+    "Elle est à la porte quand il ajoute quelque chose.\n\nJun|« Serizawa. »\n\nHina|« Oui ? »\n\nJun|« Vous savez ce qu'il y a de bizarre chez vous ? »\n\nHina|« …Allez-y. »\n\nJun|« Vous êtes venue jusqu'ici pour poser des questions sur lui à quelqu'un d'autre. »\n\nIl reprend son crayon.\n\nJun|« Il est là mardi. »"
+  ]
+_XA3[17]["scenes"] = [
+    {
+      'si': 'route_enquete',
+      'texte': "*Deuxième semaine d'octobre*\n\nDouze élèves du collège Kitami sont entrés à Seiran cette année-là.\n\nSur les douze, sept sont des filles.\n\nSur les cinq garçons, deux ont des initiales qui commencent par I. Ishida Ryō, terminale. Et un autre.\n\nElle a mis onze jours. Elle aurait pu mettre onze minutes en demandant à Aoki. Elle n'a pas demandé à Aoki, et elle sait très bien pourquoi : parce qu'Aoki aurait dit non, et qu'elle aurait dû s'arrêter."
+    },
+    {
+      'sauf': 'route_enquete',
+      'texte': "*Deuxième semaine d'octobre*\n\nElle ne cherche pas.\n\nElle y pense trois ou quatre fois par jour, ce qui est différent de chercher, et elle se le répète assez souvent pour que ce soit suspect.\n\nLe mardi, elle apporte le volume de 2018 au club sans raison. Elle le pose sur la table, à côté de son sac, ouvert à une autre page.\n\nCe n'est pas un piège. Elle ne sait pas ce que c'est."
+    },
+    "*Mardi 15 octobre, 18h20*\n\nLe volume est sur la table.\n\nIl le voit en se levant. Il le voit vraiment — pas la couverture, la tranche et l'année, et le fait qu'il soit ouvert.\n\nIl s'arrête au milieu du mouvement, à moitié debout, sac dans une main.\n\nÇa dure environ une seconde et demie.\n\nPersonne d'autre dans la pièce ne remarque quoi que ce soit, parce qu'il n'y a personne d'autre dans la pièce.",
+    "Hina|« Vous êtes blanc. »\n\nItsuki|« Non. »\n\nHina|« Vous êtes vraiment blanc. »\n\nItsuki|« J'ai pas déjeuné. »\n\nIl repose son sac. Il se rassoit. Il ne se rassoit jamais.\n\nHina regarde le volume. Puis lui. Puis le volume.\n\nEt elle comprend, avec une netteté physique, désagréable, comme quand on reconnaît une odeur."
+  ]
+_XA3[18]["scenes"] = [
+    "*Fin octobre, chez les Amano, samedi 20h*\n\nLe père est là. Il rentre le vendredi soir et repart le dimanche, une semaine sur quatre.\n\nCes samedis-là, ils mangent tous les trois. C'est le seul repas de la semaine où il y a trois assiettes.",
+    "Tsubaki|« Papa. Je peux faire l'option théâtre en seconde ? »\n\nGoro|« C'est quoi comme option ? »\n\nTsubaki|« Théâtre. »\n\nGoro|« Ça sert à quoi ? »\n\nTsubaki|« À faire du théâtre. »\n\nGoro|« Mm. »\n\nTsubaki|« C'est un *oui* ou un *mm* ? »\n\nGoro|« C'est un mm. »\n\nTsubaki|« Itsuki, dis quelque chose. »\n\nItsuki|« Elle est bonne. »\n\nGoro repose ses baguettes.\n\nGoro|« Ah bon ? »\n\nItsuki|« Je l'ai vue en juin. Elle est bonne. »\n\nGoro|« …Bon. Bah alors oui. »\n\nTsubaki regarde son frère avec une expression compliquée.",
+    "*22h30, après que Tsubaki est montée*\n\nLe père fait la vaisselle. Il la fait toujours quand il est là, très mal, en laissant du savon.\n\nGoro|« Ça va au lycée ? »\n\nItsuki|« Ça va. »\n\nGoro|« Tu es dans un club. »\n\nItsuki|« C'est administratif. »\n\nGoro|« Ta sœur dit que c'est littérature. »\n\nItsuki|« C'est littérature. »\n\nUn long silence, avec le bruit de l'eau.",
+    "Goro|« Tu écris encore ? »\n\nItsuki|« Non. »\n\nLe père continue de rincer la même assiette.\n\nGoro|« D'accord. »\n\nItsuki|« Pourquoi ? »\n\nGoro|« Pour rien. »\n\nIl pose l'assiette.\n\nGoro|« Il y a de la lumière sous ta porte jusqu'à minuit. »\n\nItsuki|« Je révise. »\n\nGoro|« D'accord. »",
+    "Il essuie ses mains. Il ne se retourne pas.\n\nGoro|« Je l'ai lu qu'une fois. Ce que tu avais écrit. »\n\nItsuki ne bouge plus du tout.\n\nGoro|« En 2022. Ils m'avaient envoyé le livre par la poste avec une lettre du proviseur. »\n\nItsuki|« Je sais. »\n\nGoro|« Je l'ai lu dans le camion. À l'aire de repos de Yokota. »\n\nIl plie le torchon en trois, ce qu'il ne fait jamais.\n\nGoro|« Et après j'ai pas pu redémarrer pendant quarante minutes. »",
+    "Itsuki|« Papa— »\n\nGoro|« C'est pour ça que j'en parle jamais. »\n\nIl accroche le torchon.\n\nGoro|« C'est pas parce que c'est pas bien. C'est parce que c'est trop exactement elle et que je conduis douze heures par jour. »\n\nIl monte se coucher.\n\nSur la troisième marche, sans se retourner :\n\nGoro|« Si tu écris encore, tu écris. Faut pas que ce soit à cause de moi que t'arrêtes. »"
+  ]
+_XA3[19]["scenes"] = [
+    '*Début novembre, couloir du premier, 8h10*\n\nIl ne vient plus au club.\n\nNi le mardi 22, ni le mardi 29. Deux mardis, ce qui est un fait et pas encore une information.\n\nLe troisième mardi, il ne vient pas non plus.',
+    "Elle le rattrape près des casiers, exactement au même endroit qu'en mai.\n\nHina|« Ça va ? »\n\nIl ne répond pas.\n\nIl ne dit pas *oui*. Il ne dit pas *non*. Il ne dit rien du tout et il continue de ranger ses affaires dans son casier avec une lenteur anormale.\n\nHina|« Amano. »\n\nItsuki|« Il faut que j'y aille. »\n\nHina|« Il est huit heures dix. »\n\nItsuki|« Oui. »",
+    "Elle se met entre lui et le couloir. Ce n'est pas prémédité et c'est très mal calculé.\n\nHina|« Vous n'êtes pas venu trois fois. »\n\nItsuki|« Je ne suis pas obligé. »\n\nHina|« Je sais que vous n'êtes pas obligé. »\n\nItsuki|« Alors il n'y a pas de problème. »\n\nHina|« Il y a la cale de la fenêtre. »\n\nIl s'arrête.\n\nHina|« Vous aviez dit qu'il faudrait la refaire en octobre. On est en novembre. »\n\nItsuki|« Quelqu'un la refera. »\n\nHina|« Personne ne l'a refaite. »",
+    "Il ferme son casier plus fort que nécessaire.\n\nItsuki|« Qu'est-ce que vous voulez, Serizawa ? »\n\nC'est la première fois qu'il dit son nom.\n\nHina|« Je veux savoir si ça va. »\n\nItsuki|« Pourquoi ? »\n\nHina|« Comment ça pourquoi ? »\n\nItsuki|« Vous demandez à trois cent quatre personnes si ça va. »\n\nHina|« Ce n'est pas— »\n\nItsuki|« Vous connaissez trois cent quatre prénoms et les dates d'anniversaire de la moitié. »\n\nHina|« Comment vous savez ça ? »\n\nItsuki|« Tout le monde le sait. »",
+    "Itsuki|« Alors quand vous me demandez si ça va, c'est la trois cent quatrième fois de la semaine, et je devrais être content, et je ne suis pas content, et j'aimerais bien passer. »\n\nElle ne bouge pas.\n\nHina|« Ce n'est pas pareil. »\n\nItsuki|« En quoi ? »\n\nElle ouvre la bouche.\n\nEt elle réalise, dans un couloir, à huit heures douze, qu'elle n'a aucune façon de le prouver.\n\nParce que c'est exactement ce qu'elle fait. Parce qu'elle a un carnet dans la poche intérieure de sa veste avec les anniversaires dedans. Parce que la phrase *ça va ?* est page quatre.\n\nElle se décale.\n\nIl passe."
+  ]
+_XA3[20]["scenes"] = [
+    "*Le même jour, 17h45, local du club*\n\nElle a envoyé un message à Rika pour annuler. Elle a annulé le conseil de seize heures. Elle est assise dans huit mètres carrés depuis une heure et quarante minutes.\n\nIl entre à dix-sept heures quarante-cinq.\n\nElle ne l'a pas prévenu. Il n'y avait aucune raison qu'il vienne.",
+    "Itsuki|« La cale. »\n\nIl a un morceau de bois dans la main. Taillé. Poncé.\n\nIl traverse la pièce, il ouvre la fenêtre, il change la cale, il referme. Ça prend quarante secondes.\n\nItsuki|« Voilà. »\n\nHina|« Amano. »\n\nItsuki|« Je m'en vais. »\n\nHina|« J'ai lu votre texte cent fois. »",
+    "Il s'arrête, la main sur la poignée.\n\nHina|« Je l'ai lu à quinze ans dans un couloir en attendant ma mère qui avait trois heures de retard. J'ai relancé un club mort à cause de ça. J'ai écrit une lettre de motivation qui commence par une phrase sur ce texte. »\n\nItsuki|« Arrêtez. »\n\nHina|« C'est la seule chose que j'aime vraiment dans ce lycée. »\n\nItsuki|« ARRÊTEZ. »",
+    "Il crie. C'est bref, ça sort mal, et ça lui coûte visiblement quelque chose.\n\nItsuki|« Vous savez ce que c'est, ce texte ? »\n\nHina|« Je— »\n\nItsuki|« C'est ma mère qui n'arrivait plus à monter l'escalier. C'est quatre pages écrites à quatorze ans en janvier parce que je ne pouvais rien faire d'autre. »\n\nIl pose la main sur la table, très à plat.\n\nItsuki|« Elle est morte en novembre. Le recueil est sorti en mars. Pendant un an, des gens que je n'avais jamais vus sont venus me dire que c'était beau. »",
+    "Itsuki|« Des profs. Des filles de terminale. Le proviseur, à une remise de prix, devant deux cents personnes. »\n\nIl retire sa main de la table.\n\nItsuki|« Ils étaient tous gentils. C'est ça le pire. Personne n'a été méchant une seule fois. »\n\nHina ne dit rien.\n\nItsuki|« Et pendant un an, je n'ai pas été un élève. J'ai été le garçon dont la mère. »\n\nIl regarde la fenêtre.\n\nItsuki|« Alors j'ai arrêté d'être quelqu'un. C'était la seule solution que j'ai trouvée et elle a très bien marché pendant trois ans. »",
+    "Il se retourne vers elle.\n\nItsuki|« Et vous, vous avez construit votre vie dessus. »\n\nHina|« Ce n'est pas— »\n\nItsuki|« Votre club. Votre dossier. Votre *seule chose que vous aimez*. »\n\nIl a la voix qui ne tient plus tout à fait.\n\nItsuki|« La pire année de ma vie est devenue le socle de la vôtre et vous trouvez ça beau. »\n\nUn silence de huit mètres carrés.\n\nItsuki|« Je ne sais pas quoi faire de ça. »"
+  ]
+_XA3[14]["choix"] = {
+    'question': 'Il y a un annuaire des anciens au secrétariat. Il y a Aoki. Il y a deux lettres.',
+    'decisif': True,
+    'options': [
+      (
+        'cherche',
+        '1️⃣',
+        'Chercher'
+      ),
+      (
+        'laisse',
+        '2️⃣',
+        'Laisser'
+      )
+    ],
+    'suites': {
+      'cherche': {
+        'pose': [
+          'route_enquete'
+        ],
+        'texte': "Elle commence le jeudi.\n\nLe secrétariat a les listes du concours du secteur — pas les copies, juste les palmarès, classés par année, dans un classeur bleu que personne ne demande jamais.\n\nIl lui faut trois passages de dix minutes entre deux cours pour arriver à l'année qui l'intéresse.\n\nLe palmarès donne les initiales et le collège d'origine. Collège Kitami.\n\nLe collège Kitami envoie douze élèves par an au lycée Seiran.\n\nElle a une liste. Elle a une méthode. Elle a toujours une méthode."
+      },
+      'laisse': {
+        'pose': [
+          'route_regard'
+        ],
+        'relation': {
+          'itsuki': {
+            'confiance': 6
+          }
+        },
+        'texte': "Elle remet le volume entre 2017 et 2019.\n\nHina|« Non. »\n\nItsuki|« Non ? »\n\nHina|« Si cette personne avait voulu qu'on la trouve, elle aurait mis son nom. »\n\nElle éteint la lampe de l'étagère.\n\nHina|« Il y a deux lettres. C'est un choix. Je ne vais pas passer par-dessus un choix que quelqu'un a fait à quatorze ans. »\n\nItsuki reste assis alors qu'elle a déjà pris son sac.\n\nItsuki|« Vous en avez envie, pourtant. »\n\nHina|« Énormément. »\n\nItsuki|« Et vous ne le faites pas. »\n\nHina|« Non. »\n\nIl met beaucoup de temps à se lever."
+      }
+    }
+  }
+_XA3[17]["choix"] = {
+    'question': 'Il est assis, il ne dit rien, et elle vient de comprendre.',
+    'decisif': True,
+    'options': [
+      (
+        'dit',
+        '1️⃣',
+        'Le dire tout de suite'
+      ),
+      (
+        'attend',
+        '2️⃣',
+        "Ne rien dire et attendre qu'il parle"
+      )
+    ],
+    'suites': {
+      'dit': {
+        'pose': [
+          'elle_a_dit'
+        ],
+        'relation': {
+          'itsuki': {
+            'confiance': 4
+          }
+        },
+        'texte': "Hina|« C'est vous. »\n\nIl ne bouge pas.\n\nHina|« I point A point. Amano Itsuki. »\n\nItsuki|« Rangez ça. »\n\nHina|« Amano— »\n\nItsuki|« Rangez ce livre. »\n\nElle le referme. Elle le remet sur l'étagère, entre 2017 et 2019, et le bruit du carton contre le bois est le seul bruit de la pièce.\n\nElle se retourne.\n\nHina|« C'est le plus beau texte que j'aie— »\n\nItsuki|« Ne dites pas ça. »\n\nHina|« Pourquoi ? »\n\nItsuki|« Parce que vous êtes la quarantième personne à me le dire et que les trente-neuf premières l'ont dit à un garçon de quatorze ans dont la mère était en train de mourir. »\n\nIl prend son sac.\n\nItsuki|« Bonne soirée. »"
+      },
+      'attend': {
+        'pose': [
+          'elle_a_attendu'
+        ],
+        'relation': {
+          'itsuki': {
+            'confiance': -8
+          }
+        },
+        'texte': "Elle ne dit rien.\n\nElle range le volume sans commentaire, elle éteint la lampe de l'étagère, elle prend son sac.\n\nHina|« On y va ? »\n\nItsuki|« …Oui. »\n\nIls descendent l'escalier B ensemble. Elle parle du recueil de fin d'année, des dates, de la maquette. Elle parle très bien, comme toujours.\n\nIl répond aux bons endroits.\n\nEt pendant les trois semaines qui suivent, elle continue de ne rien dire, et il continue de savoir qu'elle sait, et chacun des deux attend que l'autre commence.\n\nC'est la pire configuration possible et ils y restent dix-neuf jours."
+      }
+    }
+  }
+_XA3[20]["choix"] = {
+    'question': "Il est près de la porte. Il n'est pas encore parti.",
+    'decisif': True,
+    'options': [
+      (
+        'insiste',
+        '1️⃣',
+        'Ne pas le laisser sortir'
+      ),
+      (
+        'recule',
+        '2️⃣',
+        "S'excuser et le laisser partir"
+      )
+    ],
+    'suites': {
+      'insiste': {
+        'pose': [
+          'insiste'
+        ],
+        'relation': {
+          'itsuki': {
+            'confiance': 5
+          }
+        },
+        'texte': "Hina|« Non. »\n\nItsuki|« Pardon ? »\n\nHina|« Vous ne sortez pas maintenant. »\n\nItsuki|« Serizawa— »\n\nHina|« Vous avez raison sur tout et vous n'avez pas fini. »\n\nIl la regarde comme si elle avait parlé une autre langue.\n\nHina|« J'ai construit quelque chose sur votre pire année. C'est vrai. Je ne le savais pas et ça ne change rien, c'est vrai quand même. »\n\nElle ne bouge pas de sa chaise.\n\nHina|« Mais je ne vais pas m'excuser d'avoir trouvé ça beau, parce que ce serait mentir, et vous avez déjà quarante personnes qui vous ont menti gentiment. »\n\nItsuki|« Ce n'était pas des mensonges. »\n\nHina|« C'était pire. C'était vrai et ça vous a coûté un an. »\n\nIl s'appuie contre le mur à côté de la porte.\n\nIl ne sort pas.\n\nIls restent comme ça, à quatre mètres, sans se parler, pendant environ vingt minutes.\n\nÀ dix-huit heures quarante, il dit :\n\nItsuki|« Le bois va travailler avec l'humidité. Il faudra la refaire en février. »\n\nEt il s'en va."
+      },
+      'recule': {
+        'pose': [
+          'recule'
+        ],
+        'relation': {
+          'itsuki': {
+            'confiance': -10
+          }
+        },
+        'texte': "Hina|« Je suis désolée. »\n\nElle le dit vite, et bien, et c'est exactement le problème.\n\nHina|« Je n'aurais pas dû. Je ne savais pas. Je ne vous en reparlerai plus. »\n\nTrois phrases. Rythme parfait. Il y en a une version page six du carnet gris, sous l'intitulé *désamorcer*.\n\nItsuki l'entend.\n\nIl ne sait pas qu'il y a un carnet, mais il entend quelque chose de lisse là où il attendait quelque chose de cassé.\n\nItsuki|« …D'accord. »\n\nHina|« D'accord. »\n\nItsuki|« Bonne soirée. »\n\nIl sort.\n\nElle a désamorcé la situation en onze secondes.\n\nC'est ce qu'elle fait de mieux au monde et elle vient de s'en servir contre la seule personne à qui elle voulait dire quelque chose de vrai."
+      }
+    }
+  }
+del _XA3
+
+
+_XA4 = CHRONIQUE_SAISONS["ce_quon_voit"]["episodes"]
+_XA4[21]["scenes"] = [
+    "*Mi-novembre, cantine, 12h45*\n\nIl ne mange pas à la cantine. Il mange dans l'escalier de secours depuis deux ans, quatre minutes, un onigiri.\n\nCe jour-là il y a une réunion de sécurité dans l'escalier de secours, ce qui est une phrase absurde et qui est vraie, et il se retrouve à la cantine pour la première fois depuis mars.",
+    "Il prend le plateau le moins cher. Il s'assoit à la table du fond près de la sortie de service, celle où mangent trois premières années qui ne se parlent pas.\n\nDe là, on voit toute la salle.\n\nIl n'avait jamais regardé la cantine depuis l'intérieur.",
+    "Il la repère en dix secondes, parce que tout le monde la repère en dix secondes.\n\nCinq personnes autour d'elle. Kō qui raconte. Nanami qui trouve ça moyen. Rika à sa gauche, deux du conseil.\n\nIl regarde pendant vingt-cinq minutes.\n\nIl ne fait rien d'autre. C'est la seule chose qu'il sache faire vraiment bien.",
+    "Ce qu'il voit, en vingt-cinq minutes :\n\nElle rit onze fois. Neuf sont en décalage d'un quart de seconde sur le rire de Kō — elle rit parce que les autres rient, pas parce que c'est drôle. Les deux vrais sont sur des choses que Kō ne trouvait pas drôles.\n\nElle pose deux questions à Rika. Rika répond longuement. Elle relance.\n\nElle regarde son téléphone zéro fois.\n\nEt elle mange le riz. Uniquement le riz. Elle repousse le reste sur le bord du plateau et elle le fait très bien — le plateau a l'air commencé.",
+    "Elle se lève à treize heures dix.\n\nElle débarrasse. Elle passe devant la poubelle. Elle fait glisser le contenu du plateau d'un mouvement du poignet, sans regarder, sans ralentir, et elle continue en parlant à quelqu'un.\n\nPersonne à sa table n'a rien vu.\n\nIls sont cinq. Ils sont là tous les midis depuis deux ans.\n\nPersonne n'a rien vu.",
+    "*Le soir, cahier*\n\n*Elle mange le riz. Elle ne mange que le riz.*\n\n*Il y a cinq personnes autour d'elle tous les jours depuis la seconde.*\n\n*Je suis à quatorze mètres et je viens de le voir en un déjeuner.*\n\n*Ce n'est pas parce que je suis observateur. C'est parce que personne ne regarde.*"
+  ]
+_XA4[22]["scenes"] = [
+    "*Fin novembre, mardi, 18h35*\n\nElle est revenue au club. Lui aussi.\n\nIls ne se sont pas expliqués. Il est revenu le mardi suivant l'épisode de la cale, il s'est assis à sa place, et Rika a fait comme si de rien n'était avec une intensité remarquable.",
+    "Ce mardi-là, Hina sort en courant à dix-huit heures trente-cinq — sa mère l'appelle, il y a un dîner, elle a quarante minutes.\n\nElle enfile son manteau dans le couloir en tenant son téléphone à l'épaule.\n\nLa veste d'uniforme reste sur le dossier de la chaise.",
+    "Il la voit à dix-huit heures quarante.\n\nIl la prend pour la lui rapporter. C'est un geste de trois secondes.\n\nLe carnet gris tombe de la poche intérieure et atterrit ouvert, sur le sol, à ses pieds.",
+    'Onze centimètres sur sept. Couverture grise. Écriture serrée, très régulière.\n\nIl ne le ramasse pas tout de suite. Il le regarde ouvert par terre pendant environ quatre secondes.\n\nLa page de gauche est un tableau. Trois colonnes.\n\nLa page de droite est une liste de phrases.',
+    "Il le ramasse en le refermant. C'est ce qu'il fait, et il faut le préciser parce que ça compte : il le referme sans lire.\n\nPuis il reste debout dans un local vide avec un carnet gris dans la main.\n\nIl pourrait le poser sur la table. Il pourrait le remettre dans la veste et poser la veste sur la chaise et partir.\n\nIl le rouvre.",
+    "Page onze, colonne de droite :\n\n*Kaneda — grand-père hospitalisé, demander lundi*\n*Sasaki — a raté le concours, NE PAS en parler*\n*Momo — bégaie quand on l'interroge, ne jamais l'interroger en premier*\n\nPage quatorze :\n\n*Formules de secours — « Ça va ? » / « Tu as l'air fatigué » / « C'est quoi ce truc, montre »*\n*(les trois marchent presque toujours — la troisième est la meilleure)*\n\nPage dix-neuf, la dernière écrite :\n\n*Amano — ne pas demander si ça va.*",
+    "Il referme le carnet.\n\nIl s'assoit sur la table, ce qui ne lui ressemble pas.\n\nCe qu'il vient de comprendre n'est pas *elle est fausse*. C'est beaucoup moins confortable que ça.\n\nCe qu'il vient de comprendre, c'est qu'elle travaille.\n\nQue depuis deux ans, trois cent quatre personnes croient qu'elle est naturellement comme ça, et qu'elle passe ses dimanches soirs à réviser des prénoms, et que personne au monde ne le sait.",
+    "*Le soir, cahier*\n\n*Je pensais qu'elle était douée.*\n\n*Elle n'est pas douée. Elle s'entraîne.*\n\n*Page dix-neuf : « Amano — ne pas demander si ça va. »*\n\n*Elle m'a écouté.*\n\n*Personne n'écoute. Elle a écouté et elle l'a noté pour ne pas oublier.*"
+  ]
+_XA4[23]["scenes"] = [
+    '*Début décembre, festival culturel, samedi*\n\nLe festival mobilise trois cents élèves pendant deux jours. Hina coordonne depuis septembre. Il y a onze stands, quatre spectacles, un budget amputé de huit pour cent et un planning que six personnes ont approuvé.',
+    "Le stand du club de littérature vend le recueil de l'an dernier et des marque-pages faits main.\n\nRika tient le stand depuis huit heures du matin.\n\nHina passe à dix heures. Puis à midi. Puis à quinze heures. Trois minutes à chaque fois, un sourire, une question, elle repart.\n\nRika|« C'est bon, ça tourne. »\n\nHina|« Tu as mangé ? »\n\nRika|« Vas-y, ils t'attendent au gymnase. »",
+    "*17h40, remballage*\n\nIl reste Rika, Momo et Itsuki à plier des tables.\n\nHina arrive à dix-sept heures quarante avec deux cafés et un air d'excuse.\n\nHina|« Pardon, la remise des prix a débordé. »\n\nRika|« Y a plus rien à faire, on a fini. »\n\nHina|« J'ai apporté— »\n\nRika|« Ouais, j'ai vu. »\n\nElle prend le café. Elle le pose sans le boire.",
+    "Momo s'éclipse avec un carton. Itsuki reste, parce que la table qu'il tient est à moitié pliée et qu'il ne peut pas la lâcher.\n\nRika|« Tu es passée trois fois. »\n\nHina|« Je sais, j'étais— »\n\nRika|« Trois minutes le matin, trois minutes à midi, trois minutes à trois heures. Neuf minutes. »\n\nHina|« Rika. »\n\nRika|« Neuf minutes sur dix heures. »",
+    "Rika|« Et à chaque fois tu m'as demandé si ça allait, et à chaque fois je t'ai dit oui, et à chaque fois t'es repartie avant la deuxième phrase. »\n\nHina|« Il y avait— »\n\nRika|« Le gymnase, la remise des prix, le proviseur, je sais. Il y a toujours quelque chose et c'est toujours vrai. »\n\nElle plie une nappe très mal.\n\nRika|« Tu sais depuis combien de temps je fais ce stand ? »\n\nHina|« Trois ans. »\n\nRika|« Quatre. »",
+    "Rika|« Quatre ans, Hina. Et l'année dernière tu m'as remerciée dans le discours de clôture en disant *et merci à toute l'équipe*. »\n\nHina|« J'ai cité— »\n\nRika|« Tu as cité Momo. Nommément. Parce qu'elle était nouvelle et que tu as pensé que ça lui ferait plaisir. »\n\nUn silence de gymnase vide.\n\nRika|« Et ça lui a fait plaisir. C'était une super idée. »\n\nElle repose la nappe.\n\nRika|« C'est ça le problème. Tu fais tout bien. Tu penses à tout le monde. Et il y a une place, une seule, que personne d'autre ne peut occuper, et c'est celle de la personne qui ne t'a jamais quittée depuis la seconde, et personne ne s'occupe de celle-là. »"
+  ]
+_XA4[24]["scenes"] = [
+    "*Mi-décembre, mardi, 18h50*\n\nLe recueil de fin d'année se boucle le 20 janvier. Il y a six textes prévus. Il y en a deux.\n\nHina|« Momo a rendu. »\n\nItsuki|« Et l'autre ? »\n\nHina|« Moi. »\n\nItsuki|« Vous écrivez ? »\n\nHina|« Mal. »\n\nItsuki|« Ce n'est pas une réponse. »\n\nHina|« C'est la vraie. »",
+    "Il sort un cahier de son sac.\n\nPas le sien — un cahier de brouillon quelconque, à spirale, avec une couverture verte.\n\nItsuki|« J'ai recopié quelque chose. »\n\nHina|« Recopié ? »\n\nItsuki|« Je ne montre pas le cahier. Je recopie ce que je montre. »\n\nHina|« Vous avez recopié à la main pour ne pas montrer le cahier. »\n\nItsuki|« Oui. »\n\nHina|« Ça fait combien de pages ? »\n\nItsuki|« Deux. »\n\nHina|« Vous avez recopié deux pages à la main. »\n\nItsuki|« Vous voulez le lire ou vous voulez discuter de la méthode ? »",
+    "Ce n'est pas un texte sur sa mère.\n\nC'est un texte sur une machine à massicoter.\n\nDeux pages sur la façon dont on cale une rame de papier avant de couper, sur le bruit que ça fait, sur le fait qu'un bon coupeur reconnaît un mauvais calage à l'oreille avant de voir le résultat.\n\nIl n'y a pas un seul sentiment dans les deux pages.\n\nIl y en a partout.",
+    "Elle lit deux fois. La deuxième fois, elle lit beaucoup plus lentement.\n\nHina|« Il n'y a pas le mot *père* une seule fois. »\n\nItsuki|« Non. »\n\nHina|« Mais c'est sur lui. »\n\nItsuki ne répond pas.\n\nHina|« Vous faites toujours ça ? »\n\nItsuki|« Faire quoi ? »\n\nHina|« Écrire à côté. »\n\nIl met du temps.\n\nItsuki|« C'est la seule façon que je connaisse d'écrire dessus. »",
+    "Hina|« Vous le mettez dans le recueil ? »\n\nItsuki|« Non. »\n\nHina|« Amano. »\n\nItsuki|« Non. »\n\nHina|« Pourquoi vous me l'avez montré, alors ? »\n\nLong silence.\n\nItsuki|« Parce que vous m'aviez dit que je vous devais rien et que ce n'était pas vrai. »\n\nIl reprend le cahier vert.\n\nItsuki|« Vous connaissiez quatre pages de moi que je n'ai pas choisi de vous donner. Maintenant vous en connaissez deux que j'ai choisies. »\n\nIl le range.\n\nItsuki|« Ça remet un peu les choses d'aplomb. »"
+  ]
+_XA4[25]["scenes"] = [
+    "*Janvier, retour des vacances, 8h05*\n\nIl y a une exposition de calligraphie dans le hall du 8 au 20 janvier.\n\nCe qui veut dire : trois tables, douze panneaux, une trentaine de personnes en permanence, et un passage réduit à un mètre cinquante sur le côté gauche.\n\nC'est exactement le genre de configuration pour laquelle la troisième solution existe.",
+    "Le 8 janvier, il passe par la cour.\n\nLe 9 aussi.\n\nLe 10, il s'arrête à la porte de la cour, à sept heures cinquante-huit, et il reste là.\n\nIl n'y a personne pour le voir. C'est important : il n'y a personne.",
+    "Il fait demi-tour.\n\nIl traverse le hall.\n\nÇa dure quatre-vingt-dix secondes. Il croise vingt-six personnes. Aucune ne le regarde, parce qu'aucune ne le regardait jamais et que rien n'a changé de ce côté-là.\n\nIl arrive en 2-B à huit heures deux.",
+    "*12h50, distributeur du deuxième étage*\n\nKo|« T'es passé par le hall. »\n\nItsuki|« …Comment tu sais ça ? »\n\nKo|« J'étais devant le stand de calligraphie, je faisais semblant de m'intéresser à une exposition de calligraphie. »\n\nItsuki|« Pourquoi ? »\n\nKo|« Parce que Nanami m'a dit que si je continuais à dire que j'aimais pas l'art j'allais mourir inculte. »\n\nIl tape sur le distributeur. Rien.\n\nKo|« Bref. Tu es passé par le hall. »\n\nItsuki|« Oui. »\n\nKo|« Ok. »\n\nIl ne dit rien d'autre.\n\nIl achète un thé froid à cent dix yens qu'il n'aime pas et il parle d'un match pendant six minutes.",
+    "*Le soir, cahier*\n\n*Kō a vu et n'a rien dit.*\n\n*C'est la deuxième fois. Je commence à croire que ce n'est pas de la distraction.*"
+  ]
+_XA4[26]["scenes"] = [
+    "*Mi-janvier, mardi, 18h40*\n\nLe carnet gris est dans son sac à lui depuis sept semaines.\n\nIl n'a pas trouvé le moment. Il n'a pas cherché le moment. Il a vérifié quarante fois qu'il était toujours là, ce qui n'est pas la même chose que chercher un moment.",
+    "Elle range l'étagère.\n\nItsuki|« J'ai quelque chose à vous. »\n\nIl pose le carnet sur la table.\n\nElle se retourne. Elle voit. Sa main s'arrête à mi-hauteur d'une étagère.\n\nHina|« …Où vous l'avez trouvé. »\n\nItsuki|« Il est tombé de votre veste. Le 26 novembre. »\n\nHina|« Le 26 novembre. »\n\nItsuki|« Oui. »\n\nHina|« Ça fait sept semaines. »\n\nItsuki|« Oui. »",
+    "Elle ne le prend pas.\n\nHina|« Vous l'avez lu. »\n\nItsuki|« Oui. »\n\nHina|« Tout ? »\n\nItsuki|« Non. Trois pages. La onze, la quatorze, la dix-neuf. »\n\nElle sait exactement ce qu'il y a sur ces trois pages.\n\nElle a le choix, là, tout de suite, entre deux versions d'elle-même qu'elle a chacune très bien entraînées."
+  ]
+_XA4[27]["scenes"] = [
+    "*Fin janvier, samedi, imprimerie Kado, 16h*\n\nTsubaki vient à l'imprimerie une fois par mois environ. Elle prétend que c'est sur le chemin. Ce n'est pas sur le chemin.\n\nElle s'assoit sur une palette de papier et elle parle pendant que son frère plie.",
+    "Tsubaki|« J'ai eu l'option théâtre. »\n\nItsuki|« Je sais. »\n\nTsubaki|« Comment tu sais ? »\n\nItsuki|« La lettre est arrivée mardi. »\n\nTsubaki|« Tu ouvres mon courrier ? »\n\nItsuki|« Il y avait le tampon du collège et papa était sur la route. »\n\nTsubaki|« …Bon. »\n\nElle balance ses jambes contre la palette.\n\nTsubaki|« Ça coûte combien ? »\n\nItsuki|« Rien, c'est une option. »\n\nTsubaki|« Le matériel. Les sorties. Le stage de juillet. »\n\nItsuki|« Ce n'est pas ton problème. »\n\nTsubaki|« Itsuki. »\n\nItsuki|« Ce n'est pas ton problème. »",
+    "Elle se laisse glisser de la palette.\n\nTsubaki|« J'ai quatorze ans, pas six. »\n\nItsuki|« Je sais. »\n\nTsubaki|« Alors arrête de faire comme si je comptais pas. »\n\nIl pose la rame qu'il tenait.\n\nTsubaki|« Je sais que tu travailles le samedi. Je sais que le théâtre c'est huit mille par mois. Je sais compter, je suis en troisième. »\n\nItsuki|« Tsubaki— »\n\nTsubaki|« Et je sais que tu me le dis pas pour que je culpabilise pas, et c'est gentil, et ça marche pas du tout parce que je culpabilise quand même. »",
+    "Elle remonte sur la palette.\n\nTsubaki|« Tu fais comme papa. »\n\nItsuki|« Quoi ? »\n\nTsubaki|« Tu portes des trucs tout seul et tu penses que c'est pour nous protéger. »\n\nIl ne répond rien.\n\nTsubaki|« Maman faisait ça aussi. »\n\nItsuki|« Tu ne t'en souviens pas. »\n\nTsubaki|« Non. »\n\nElle regarde ses chaussures.\n\nTsubaki|« C'est toi qui me l'as dit. Quand j'avais neuf ans. Tu m'as dit *elle nous disait jamais quand elle avait mal*. »\n\nSilence de l'imprimerie, qui est un silence de ventilateurs.\n\nTsubaki|« Donc tu le sais. »",
+    "*Le soir, 22h50*\n\nIl ouvre le placard de l'entrée. Il monte sur une chaise. Il descend le carton du haut.\n\nSous les vêtements d'hiver, il y a un cahier de troisième année de collège.\n\nIl le sort. Il le pose sur la table de la cuisine.\n\nIl ne l'ouvre pas.\n\nIl le laisse là toute la nuit, et quand Tsubaki descend le lendemain matin elle le voit sur la table et elle ne dit rien du tout, ce qui, pour Tsubaki, est un exploit."
+  ]
+_XA4[28]["scenes"] = [
+    "*Début février, salle de permanence, 15h20*\n\nNanami n'est jamais venue chercher Hina nulle part.\n\nElle vient ce jour-là. Elle s'assoit en face d'elle, à la table de permanence, et elle attend que Hina finisse sa phrase avec quelqu'un d'autre.",
+    "Nanami|« J'ai deux choses. »\n\nHina|« D'accord. »\n\nNanami|« La première : Rika ne mange plus avec nous depuis le festival. Ça fait huit semaines. »\n\nHina|« Je sais. »\n\nNanami|« Elle mange avec les filles du club de musique. »\n\nHina|« Je sais. »\n\nNanami|« Tu lui as parlé ? »\n\nHina|« Deux fois. »\n\nNanami|« Et ? »\n\nHina|« Elle a dit que ça allait. »\n\nNanami|« Et tu l'as crue. »",
+    "Hina|« Qu'est-ce que tu veux que je fasse ? »\n\nNanami|« Rien. C'était juste la première chose. »\n\nElle pose ses coudes sur la table.\n\nNanami|« La deuxième c'est une question. »\n\nHina|« Vas-y. »\n\nNanami|« Tu aimes quoi ? »\n\nHina|« …Pardon ? »\n\nNanami|« Toi. Hina Serizawa. Tu aimes quoi. »",
+    "Hina|« J'aime la littérature. »\n\nNanami|« Non. »\n\nHina|« Pardon ? »\n\nNanami|« Tu aimes *un texte*. Ce n'est pas pareil. »\n\nHina|« Nanami— »\n\nNanami|« Quel est ton livre préféré ? »\n\nHina ouvre la bouche.\n\nNanami|« Sans réfléchir. »\n\nDeux secondes. Trois.\n\nNanami|« Voilà. »",
+    "Nanami|« C'est pas méchant. »\n\nHina|« Tu dis toujours ça. »\n\nNanami|« Parce que c'est toujours vrai. »\n\nElle se cale contre le dossier.\n\nNanami|« Je te regarde depuis la seconde. Tu es déléguée, présidente du club de littérature, coordinatrice du festival, membre du comité de liaison. Tu connais trois cent quatre prénoms. »\n\nHina|« Et alors ? »\n\nNanami|« Alors donne-moi une chose que tu fais et qui ne sert à personne d'autre que toi. »\n\nLe silence dure longtemps.\n\nHina|« Je peux pas répondre là comme ça. »\n\nNanami|« Non. »\n\nElle se lève.\n\nNanami|« Et ça fait deux ans que tu peux pas. »",
+    "*Le soir, appartement Serizawa, 22h*\n\nElle ouvre le fichier *SERIZAWA_candidature.pdf*.\n\nElle relit la première phrase.\n\n*J'ai lu un texte de quatre pages quand j'avais quinze ans et je n'ai jamais compris comment quelqu'un avait fait ça.*\n\nPuis elle prend le carnet gris et elle l'ouvre à la première page libre.\n\nElle écrit, pour la première fois en neuf ans, quelque chose qui n'est pas destiné à être dit à quelqu'un :\n\n*Nanami a demandé ce que j'aime. Je n'ai pas trouvé.*\n\n*Chercher.*"
+  ]
+_XA4[23]["choix"] = {
+    'question': 'Rika ne pleure pas. Elle plie des nappes. Itsuki tient une table à moitié pliée.',
+    'decisif': False,
+    'options': [
+      (
+        'encaisse',
+        '1️⃣',
+        'Encaisser sans se défendre'
+      ),
+      (
+        'repond',
+        '2️⃣',
+        'Répondre'
+      )
+    ],
+    'suites': {
+      'encaisse': {
+        'pose': [
+          'rika_encaisse'
+        ],
+        'texte': "Hina|« Tu as raison. »\n\nRika|« …Quoi ? »\n\nHina|« Tu as raison sur tout et je n'ai rien à répondre. »\n\nRika|« Nan mais tu peux pas juste— »\n\nHina|« Je peux pas juste quoi ? »\n\nRika|« Dire oui ! Tu peux pas juste dire oui, c'est insupportable ! »\n\nHina|« Qu'est-ce que tu veux que je dise ? »\n\nRika|« JE SAIS PAS. »\n\nElle jette la nappe sur la table.\n\nRika|« Je veux que tu te défendes mal, pour une fois. Je veux que tu dises un truc de travers. »\n\nElle attrape son sac.\n\nRika|« Là tu viens encore de faire ça parfaitement. »\n\nElle sort du gymnase.\n\nIl reste Hina, une table à moitié pliée, et un garçon qui la tient."
+      },
+      'repond': {
+        'pose': [
+          'rika_repondu'
+        ],
+        'texte': "Hina|« Tu aurais pu me le dire. »\n\nRika|« Pardon ? »\n\nHina|« En quatre ans. Une fois. *Hina, reste dix minutes.* »\n\nRika|« Je devrais avoir à demander ? »\n\nHina|« Oui ! Comme tout le monde ! »\n\nElle a haussé le ton, ce qui ne lui arrive jamais.\n\nHina|« Je fais ça toute la journée, Rika. Je devine. Je regarde les gens et je devine ce dont ils ont besoin et je le fais avant qu'ils demandent. »\n\nRika|« Ah, donc c'est ma faute. »\n\nHina|« Non ! »\n\nHina|« Mais c'est la seule personne pour qui je pensais ne pas avoir besoin de deviner. »\n\nSilence.\n\nRika|« …C'est nul, comme réponse. »\n\nHina|« Je sais. »\n\nRika|« C'est vraiment nul. »\n\nElle prend son sac. Elle s'arrête à la porte du gymnase.\n\nRika|« Mais c'est la première fois en quatre ans que tu me réponds de travers, alors bon. »\n\nElle sort.\n\nIl reste Hina, une table à moitié pliée, et un garçon qui la tient."
+      }
+    }
+  }
+_XA4[26]["choix"] = {
+    'question': "Le carnet est sur la table entre eux. Il n'a pas lâché son sac.",
+    'decisif': False,
+    'options': [
+      (
+        'assume',
+        '1️⃣',
+        "Dire ce que c'est"
+      ),
+      (
+        'nie',
+        '2️⃣',
+        'Le minimiser'
+      )
+    ],
+    'suites': {
+      'assume': {
+        'pose': [
+          'carnet_assume'
+        ],
+        'relation': {
+          'itsuki': {
+            'confiance': 12
+          }
+        },
+        'texte': "Hina|« Je l'ai depuis la seconde. »\n\nElle s'assoit. Elle ne prend toujours pas le carnet.\n\nHina|« C'est le quatrième. Les trois autres sont chez moi. »\n\nItsuki|« Il y en a quatre. »\n\nHina|« Il y en a quatre. »\n\nElle regarde la couverture grise.\n\nHina|« Ma mère m'a présentée à des clients pour la première fois quand j'avais huit ans. *Et voici Hina.* Il fallait dire bonjour, sourire, répondre à trois questions sans avoir l'air d'un enfant. »\n\nItsuki ne dit rien.\n\nHina|« La première fois, j'ai raté. J'ai dit que je m'ennuyais. Ma mère n'a pas crié, elle n'a rien dit du tout pendant tout le trajet du retour. »\n\nElle hausse les épaules.\n\nHina|« Alors la fois d'après, j'ai préparé. »\n\nHina|« Et depuis neuf ans, je prépare. »\n\nUn long silence dans huit mètres carrés.\n\nItsuki|« Page dix-neuf. »\n\nHina|« …Oui. »\n\nItsuki|« *Amano — ne pas demander si ça va.* »\n\nHina|« Oui. »\n\nItsuki|« Vous l'avez écrit quand ? »\n\nHina|« Le soir même. Dans le bus. »\n\nIl pousse le carnet de deux centimètres vers elle.\n\nItsuki|« C'est la seule page qui n'est pas une technique. »\n\nHina|« …Pardon ? »\n\nItsuki|« Les autres pages, c'est pour que ça marche. Celle-là, c'est pour ne pas recommencer. Ce n'est pas la même chose. »"
+      },
+      'nie': {
+        'pose': [
+          'carnet_nie'
+        ],
+        'relation': {
+          'itsuki': {
+            'confiance': -6
+          }
+        },
+        'texte': "Hina|« C'est un pense-bête. »\n\nItsuki|« …D'accord. »\n\nHina|« Tout le monde a un pense-bête. »\n\nItsuki|« Sur trois cent quatre personnes ? »\n\nHina|« Je suis déléguée. »\n\nItsuki|« *Momo bégaie quand on l'interroge, ne jamais l'interroger en premier.* »\n\nHina|« C'est de l'attention. »\n\nItsuki|« Oui. »\n\nIl le dit sans ironie, ce qui est pire.\n\nItsuki|« C'est de l'attention. C'est même exactement ça. C'est pour ça que je ne comprends pas pourquoi vous êtes en train de me dire que c'est un pense-bête. »\n\nElle prend le carnet et le remet dans sa poche.\n\nHina|« Merci de me l'avoir rendu. »\n\nItsuki|« De rien. »\n\nIl met son sac sur l'épaule.\n\nItsuki|« Vous savez ce qui est bizarre ? »\n\nHina|« Non. »\n\nItsuki|« Je l'ai gardé sept semaines parce que je trouvais ça beau et que je ne savais pas comment le dire. »\n\nIl sort.\n\nLe carnet pèse onze centimètres sur sept dans une poche intérieure."
+      }
+    }
+  }
+del _XA4
+
+
+_XF = CHRONIQUE_SAISONS["ce_quon_voit"]
+_XF["episodes"][29]["scenes"] = [
+    "*Mi-février, salle d'arts plastiques, mercredi*\n\nHina y retourne. Cette fois elle ne pose aucune question sur Amano.\n\nJun|« Il est à l'imprimerie. »\n\nHina|« Je sais. »\n\nJun|« Alors ? »\n\nHina|« Je peux rester ? »\n\nIl met deux secondes.\n\nJun|« Oui. »",
+    "Elle reste une heure et dix minutes.\n\nElle ne fait rien. C'est la première fois depuis la seconde qu'elle passe une heure et dix minutes à ne rien faire dans un bâtiment scolaire.\n\nAu bout de quarante minutes :\n\nHina|« Comment on fait pour arrêter d'être délégué ? »\n\nJun|« On démissionne. »\n\nHina|« Il y a une procédure ? »\n\nJun|« On dit qu'on démissionne. »\n\nHina|« C'est tout ? »\n\nJun|« Je crois. »\n\nIl change de crayon.\n\nJun|« Personne l'a jamais fait, en même temps. »",
+    "*Le lendemain, comité de liaison, 12h30*\n\nLe comité de liaison compte neuf membres et se réunit six fois par an pour coordonner les clubs. Hina y siège depuis deux ans. Elle en assure le secrétariat depuis dix-huit mois parce que personne d'autre ne voulait.\n\nHina|« Je ne reprendrai pas le secrétariat au troisième trimestre. »\n\nUn délégué|« Ah. Qui le prend ? »\n\nHina|« Je ne sais pas. »\n\nUn délégué|« Il faut bien quelqu'un. »\n\nHina|« Oui. »\n\nSilence.\n\nUn délégué|« Mais tu proposes quoi ? »\n\nHina|« Rien. »",
+    "Ça dure onze minutes.\n\nOnze minutes pendant lesquelles neuf personnes cherchent une solution que Hina a fournie toute seule six fois par an pendant dix-huit mois.\n\nIls finissent par désigner un deuxième année qui n'a rien demandé et qui accepte parce que tout le monde le regarde.\n\nEn sortant, quelqu'un dit :\n\nUn délégué|« C'était bizarre, cette réunion. »\n\nNanami, qui n'est pas membre et qui était là quand même, ne dit rien du tout et regarde Hina d'une façon qui vaut un discours."
+  ]
+_XF["episodes"][30]["scenes"] = [
+    "*Fin février, bureau du proviseur adjoint, 16h*\n\nIl y a un formulaire. Il existe. Personne ne l'avait jamais sorti du classeur.\n\n*Demande de déchargement de fonction élective — motif.*\n\nLe proviseur|« Vous mettez quoi comme motif ? »\n\nHina|« Il faut un motif ? »\n\nLe proviseur|« Il y a une case. »\n\nHina|« Qu'est-ce que les gens mettent, d'habitude ? »\n\nLe proviseur|« Personne n'a jamais rempli ce formulaire, Serizawa. »",
+    "Elle regarde la case pendant un moment.\n\nSur le bureau, il y a trois mandats en cours : déléguée de classe, présidente du club de littérature, coordinatrice du festival culturel.\n\nLe proviseur|« Vous savez qu'on est en février. »\n\nHina|« Oui. »\n\nLe proviseur|« Le mandat de déléguée court jusqu'en mars. Il vous reste cinq semaines. »\n\nHina|« Je sais. »\n\nLe proviseur|« Alors vous pouvez très bien ne rien faire du tout et attendre cinq semaines. »\n\nHina|« Oui. »\n\nLe proviseur|« C'est ce que je vous conseille. »\n\nIl pose son stylo.\n\nLe proviseur|« Mais ce n'est pas ce que vous êtes venue faire. »"
+  ]
+_XF["episodes"][31]["scenes"] = [
+    "*Début mars, appartement Serizawa, 21h40*\n\nReiko rentre avec une enveloppe kraft.\n\nReiko|« Le cabinet Ōmori a envoyé la convention de stage. »\n\nHina|« Ah. »\n\nReiko|« Il faut la signer avant le 15. »\n\nElle la pose sur le plan de travail.\n\nReiko|« Il y a autre chose. »\n\nElle sort une deuxième feuille de son sac.\n\nReiko|« Le proviseur m'a appelée. »",
+    "Hina ne bouge pas.\n\nReiko|« Il voulait savoir si tout allait bien à la maison. »\n\nHina|« …Qu'est-ce que tu as répondu ? »\n\nReiko|« Que je ne savais pas de quoi il parlait. »\n\nElle enlève une chaussure, puis l'autre, en s'appuyant au mur.\n\nReiko|« Il a fini par me dire que tu avais démissionné. »\n\nHina|« Oui. »\n\nReiko|« En février. »\n\nHina|« Oui. »\n\nReiko|« Il y a trois semaines. »\n\nHina|« Oui. »",
+    "Reiko ne crie pas. Reiko ne crie jamais.\n\nReiko|« Explique-moi. »\n\nHina|« Je ne peux pas. »\n\nReiko|« Essaie. »\n\nHina|« Je ne sais pas ce que j'aime. »\n\nUn silence de cuisine ouverte au quatorzième étage.\n\nReiko|« C'est-à-dire ? »\n\nHina|« C'est-à-dire que si tu me demandais maintenant, là, une chose que je fais et qui ne sert à personne d'autre, je ne pourrais pas répondre. »\n\nReiko|« Tu as dix-sept ans. »\n\nHina|« Oui. »\n\nReiko|« Personne ne sait à dix-sept ans. »\n\nHina|« Toi tu savais. »",
+    "Ça, elle ne l'attendait pas.\n\nReiko|« …Pardon ? »\n\nHina|« Grand-mère m'a raconté. Tu as monté ta première boîte à vingt-trois ans avec un prêt à ton nom et personne derrière toi. »\n\nReiko|« C'était une autre époque. »\n\nHina|« Tu savais ce que tu voulais. »\n\nReiko|« Je savais ce que je ne voulais pas. Ce n'est pas pareil. »\n\nElle s'assoit sur un tabouret.\n\nReiko|« Je ne voulais pas de la vie de ma mère. C'est tout ce que j'avais comme projet à vingt-trois ans. »",
+    "Hina|« Maman. »\n\nReiko|« Oui. »\n\nHina|« Quand tu me présentes à tes clients. »\n\nReiko|« Oui. »\n\nHina|« Tu dis *et voici Hina*. »\n\nReiko|« C'est ton prénom. »\n\nHina|« Tu ne dis jamais ce que je fais. »\n\nUn temps.\n\nReiko|« Je ne sais pas ce que tu fais. »\n\nElle le dit sans se défendre, et c'est la chose la plus honnête qu'elle ait dite depuis des années, et ça leur fait mal à toutes les deux.",
+    "Reiko|« Tu veux faire quoi ? »\n\nC'est la première fois. Neuf ans.\n\nHina a la réponse dans un fichier PDF à onze mètres, dans une chambre, sous un dossier qui s'appelle *cours*.\n\nElle regarde sa mère.\n\nHina|« Je ne suis pas prête. »\n\nReiko|« D'accord. »\n\nReiko|« Tu me le diras quand tu seras prête ? »\n\nHina|« Oui. »\n\nReiko|« D'accord. »\n\nElle range la convention de stage dans le tiroir sans la faire signer."
+  ]
+_XF["episodes"][32]["scenes"] = [
+    "*Mars, salle de musique, 12h50*\n\nRika mange avec les filles du club de musique depuis douze semaines.\n\nHina arrive avec deux boîtes de bento et s'assoit sans demander, ce qui n'est pas du tout dans ses habitudes et ce qui interrompt trois conversations.",
+    'Rika|« …Salut. »\n\nHina|« Salut. »\n\nRika|« Tu fais quoi ? »\n\nHina|« Je déjeune. »\n\nRika|« Ici ? »\n\nHina|« Ici. »\n\nUne des filles du club de musique regarde les deux autres. Elles se lèvent toutes les trois avec un naturel remarquable et vont manger ailleurs.',
+    "Rika|« C'était très gênant. »\n\nHina|« Oui. »\n\nRika|« Tu vas dire quoi ? »\n\nHina|« Je sais pas. »\n\nRika|« Tu sais toujours. »\n\nHina|« Plus maintenant. »\n\nElle ouvre une des deux boîtes et la pousse vers Rika.\n\nHina|« J'ai démissionné de tout. »\n\nRika|« Je sais, tout le monde sait. »\n\nHina|« J'ai pas su te le dire. »\n\nRika|« Ça j'avais deviné. »",
+    "Rika ne touche pas la boîte.\n\nRika|« Tu veux que je te dise que c'est bon ? »\n\nHina|« Non. »\n\nRika|« Parce que c'est pas bon. »\n\nHina|« Je sais. »\n\nRika|« Douze semaines, Hina. »\n\nHina|« Je sais. »\n\nRika|« Et t'es venue aujourd'hui parce que t'as plus de réunions. »\n\nSilence.\n\nHina|« Oui. »\n\nRika|« Voilà. Ça au moins c'est honnête. »",
+    "Elle prend la boîte, finalement.\n\nRika|« Je te pardonne pas. »\n\nHina|« D'accord. »\n\nRika|« Genre vraiment pas. »\n\nHina|« D'accord. »\n\nRika|« Arrête de dire d'accord. »\n\nHina|« Qu'est-ce que tu veux que je dise ? »\n\nRika|« Rien. »\n\nElle mange trois bouchées.\n\nRika|« Tu reviens demain ? »\n\nHina|« Si tu veux. »\n\nRika|« Non. Pas *si je veux*. »\n\nHina|« …Je reviens demain. »\n\nRika|« Voilà. »",
+    "Elles mangent en silence pendant quatre minutes.\n\nRika|« Bon. Alors. Amano. »\n\nHina|« Rika. »\n\nRika|« Non mais franchement. »\n\nHina|« Il n'y a rien. »\n\nRika|« Tu as démissionné de trois mandats en février. »\n\nHina|« Ça n'a rien à voir. »\n\nRika|« Mm. »\n\nElle mâche.\n\nRika|« C'est bien, ce que t'as fait. Le truc des mandats. »\n\nHina|« Tu viens de dire que tu me pardonnais pas. »\n\nRika|« Les deux peuvent être vrais. »"
+  ]
+_XF["episodes"][33]["scenes"] = [
+    "*Mi-mars, salle des délégués, 17h30*\n\nLa salle des délégués fait douze mètres carrés. Une table ovale, huit chaises, un tableau blanc avec le planning du troisième trimestre.\n\nHina y a passé environ quatre cents heures en deux ans.\n\nCe soir, elle vide son casier. C'est le dernier acte administratif : rendre la clé.",
+    "Il y a peu de choses.\n\nUn pull qu'elle cherchait depuis novembre. Trois stylos. Un paquet de biscuits périmé. Un classeur de comptes rendus de dix-huit mois.\n\nEt, au fond, l'exemplaire du recueil 2018 qu'elle avait emprunté à la bibliothèque en octobre et jamais rendu.",
+    "Itsuki|« Vous êtes là. »\n\nElle se retourne. Il est dans l'encadrement.\n\nHina|« Comment vous saviez ? »\n\nItsuki|« Jun. »\n\nHina|« Jun ne sait pas que je suis ici. »\n\nItsuki|« Jun sait toujours tout et ne dit rien à personne. C'est une combinaison rare. »\n\nIl entre. Il regarde le carton posé sur la table ovale.\n\nItsuki|« C'est tout ? »\n\nHina|« Deux ans. »\n\nItsuki|« Il y a un pull. »\n\nHina|« Il y a un pull. »",
+    "Il prend le recueil sur le dessus du carton.\n\nIl le tient. Il ne l'ouvre pas.\n\nItsuki|« Vous l'avez gardé. »\n\nHina|« La bibliothécaire m'a relancée deux fois. »\n\nItsuki|« Et ? »\n\nHina|« J'ai dit que je l'avais perdu. »\n\nIl la regarde.\n\nItsuki|« Vous avez menti à la bibliothécaire. »\n\nHina|« J'ai menti à la bibliothécaire. »\n\nIl repose le volume dans le carton, très doucement, comme si c'était plus lourd que ça ne l'est.",
+    "Itsuki|« Pourquoi vous avez démissionné ? »\n\nHina|« Vous le savez. »\n\nItsuki|« Je veux vous l'entendre dire. »\n\nHina|« Parce que Nanami m'a demandé ce que j'aimais et que j'ai mis quatre secondes à ne pas répondre. »\n\nItsuki|« Et maintenant ? »\n\nHina|« Maintenant je ne suis plus rien du tout et c'est très bizarre. »\n\nElle s'appuie contre la table ovale.\n\nHina|« Il y a des gens qui ne me disent plus bonjour. Pas par méchanceté. Ils ne savent juste plus pourquoi ils me disaient bonjour. »",
+    "Itsuki|« Moi je sais. »\n\nHina|« Pardon ? »\n\nItsuki|« Pourquoi je vous dis bonjour. »\n\nIl pose son sac sur une chaise, ce qui veut dire qu'il ne repart pas dans les trente secondes.\n\nItsuki|« Le 26 novembre, page dix-neuf, vous aviez écrit *Amano — ne pas demander si ça va*. »\n\nHina|« Je sais ce que j'ai écrit. »\n\nItsuki|« Ce n'était pas une technique. »\n\nHina|« Non. »\n\nItsuki|« Il n'y a que celle-là. »\n\nHina|« Il n'y a que celle-là. »\n\nIl y a douze mètres carrés, une table ovale et un carton."
+  ]
+_XF["episodes"][34]["scenes"] = [
+    "*Le lendemain, 8h05*\n\nLe problème d'être vus, quand on a passé un an à ne pas l'être, c'est qu'il n'y a aucun protocole.\n\nIls arrivent par deux entrées différentes, comme toujours.\n\nIls se croisent dans le couloir du premier à huit heures huit.\n\nHina|« Bonjour. »\n\nItsuki|« Bonjour. »\n\nIls continuent chacun de leur côté et c'est catastrophique.",
+    "*12h50, distributeur du deuxième étage*\n\nKo|« Bon. »\n\nItsuki|« Bon quoi. »\n\nKo|« T'as souri ce matin. »\n\nItsuki|« Non. »\n\nKo|« En cours de géo. Vers dix heures. Tu regardais par la fenêtre et t'as souri. »\n\nItsuki|« Tu me regardes en cours de géo ? »\n\nKo|« Je m'ennuie en cours de géo. »\n\nIl tape sur le distributeur. Rien.\n\nKo|« C'est Serizawa ? »\n\nItsuki ne répond pas.\n\nKo|« Ok. »\n\nIl achète un thé froid à cent dix yens.\n\nKo|« Elle mange plus avec nous, elle mange avec Rika chez les musiciens. Si tu veux la voir à midi c'est là-bas. »\n\nItsuki|« Pourquoi tu me dis ça ? »\n\nKo|« Parce que tu allais mettre trois semaines à le trouver tout seul. »",
+    "*17h, local du club*\n\nMomo a rendu un deuxième texte. Il est meilleur que le premier.\n\nIls sont quatre : Momo, Rika — revenue, sans que personne ne commente —, Hina et Itsuki.\n\nRika|« Il manque deux textes pour le recueil. »\n\nHina|« Je sais. »\n\nRika|« La date c'est dans onze jours. »\n\nHina|« Je sais. »\n\nRika regarde Itsuki avec une insistance de bulldozer.\n\nItsuki|« Non. »\n\nRika|« J'ai rien dit. »\n\nItsuki|« Vous avez tourné la tête de neuf centimètres. »\n\nMomo, la première année, rit. C'est la première fois en un an qu'on entend Momo rire."
+  ]
+_XF["episodes"][35]["scenes"] = [
+    "*Fin mars, chez les Amano, samedi 15h*\n\nElle n'est jamais venue.\n\nL'appartement fait quarante-quatre mètres carrés, troisième étage sans ascenseur, et il y a un poster de théâtre dans l'entrée que Tsubaki a accroché de travers en janvier.",
+    "Tsubaki|« C'EST TOI. »\n\nHina|« …Bonjour. »\n\nTsubaki|« Je sais qui tu es. »\n\nItsuki|« Tsubaki. »\n\nTsubaki|« Tu es la fille du club. »\n\nHina|« Je suis la fille du club. »\n\nTsubaki|« Il t'a jamais décrite mais je t'ai reconnue. »\n\nItsuki|« Comment tu l'as reconnue si je ne l'ai jamais décrite ? »\n\nTsubaki|« Instinct. »\n\nElle disparaît dans la cuisine et revient avec trois verres, dont deux dépareillés.",
+    "Tsubaki reste quarante minutes. Elle raconte l'option théâtre, un professeur qui postillonne, une fille de sa classe qui est fausse mais gentille.\n\nElle demande à Hina ce qu'elle veut faire.\n\nHina|« Des lettres. »\n\nC'est la première fois qu'elle le dit à voix haute à quelqu'un.\n\nTsubaki|« Comme Itsuki. »\n\nItsuki|« Je ne fais pas de lettres. »\n\nTsubaki|« Tu écris tous les soirs depuis que t'as onze ans. »\n\nItsuki|« Tsubaki, va faire tes devoirs. »\n\nTsubaki|« On est samedi. »\n\nItsuki|« Va faire tes devoirs de lundi. »\n\nElle s'en va en riant beaucoup trop fort.",
+    "*16h20*\n\nIl sort le cahier du tiroir du bas.\n\nPas celui de troisième — celui-là est toujours sur une étagère de la cuisine depuis janvier, fermé, et personne n'y touche.\n\nLe septième. Celui de cette année.\n\nIl l'ouvre à une page qu'il a choisie et il pose le cahier sur la table, ouvert, et il va dans la cuisine pour ne pas être là pendant qu'elle lit.",
+    "Une page.\n\n*Elle mange le riz. Elle ne mange que le riz.*\n\n*Il y a cinq personnes autour d'elle tous les jours depuis la seconde.*\n\n*Je suis à quatorze mètres et je viens de le voir en un déjeuner.*\n\n*Ce n'est pas parce que je suis observateur. C'est parce que personne ne regarde.*\n\nElle lit trois fois.\n\nIl revient de la cuisine au bout de six minutes avec deux thés qu'il n'a pas faits parce qu'il n'a pas allumé la bouilloire.",
+    "Hina|« Depuis quand vous m'observez ? »\n\nItsuki|« Avril. »\n\nHina|« Avril de l'an dernier ? »\n\nItsuki|« Le premier mardi. »\n\nElle repose le cahier.\n\nHina|« Je vous ai parlé pour la première fois en mai. »\n\nItsuki|« Oui. »\n\nHina|« Donc pendant un mois vous m'avez— »\n\nItsuki|« Je regarde tout le monde. C'est ce que je fais depuis trois ans à la place d'exister. »\n\nIl pose les tasses vides sur la table.\n\nItsuki|« Sauf que les autres, j'arrête au bout de trois lignes. »"
+  ]
+_XF["episodes"][36]["scenes"] = [
+    "*Avril, nouvelle année scolaire, 12h45*\n\nTerminale. Nouvelles classes. Elle n'est déléguée de rien.\n\nLe premier jour, quatre personnes lui demandent si elle se représente. Elle dit non quatre fois. La quatrième, elle le dit bien : sans expliquer, sans s'excuser, sans proposer d'alternative.\n\nÇa lui prend trois secondes et ça lui coûte moins cher que la deuxième fois.",
+    "À midi, à la cantine, elle prend le plateau le moins cher et elle s'assoit à la table du fond, celle près de la sortie de service, où mangent trois premières années qui ne se parlent pas.\n\nIl arrive quatre minutes plus tard avec deux boîtes.\n\nItsuki|« Tenez. »\n\nHina|« C'est quoi ? »\n\nItsuki|« Du bento. »\n\nHina|« Vous avez fait deux bento. »\n\nItsuki|« J'en fais un tous les matins pour ma sœur. Ça ne coûte rien d'en faire deux. »\n\nHina|« Ça coûte du temps. »\n\nItsuki|« Onze minutes. »",
+    "Elle ouvre la boîte.\n\nIl y a du riz, et il y a autre chose que du riz, et il y a un rapport de quantité qui n'est pas laissé au hasard : à peu près un tiers de riz, deux tiers de reste.\n\nHina|« Vous avez calculé. »\n\nItsuki|« Non. »\n\nHina|« Amano. »\n\nItsuki|« …Un peu. »\n\nElle mange le reste avant le riz.\n\nIl ne fait aucun commentaire et ne la regarde pas manger, ce qui est le commentaire.",
+    "*Le soir, chez les Amano*\n\nTsubaki|« Y a deux boîtes en moins. »\n\nItsuki|« Il y en a une en moins. »\n\nTsubaki|« Il y en a deux. Celle du milieu et celle avec le couvercle bleu. »\n\nItsuki|« Tu comptes les boîtes ? »\n\nTsubaki|« Je compte tout, moi aussi. »\n\nElle s'assoit sur le plan de travail, ce qui est interdit.\n\nTsubaki|« Elle mange pas assez. »\n\nItsuki|« …Comment tu sais ça ? »\n\nTsubaki|« T'as fait deux tiers de garniture. Tu fais jamais deux tiers. »\n\nIl ne répond pas.\n\nTsubaki|« Descends du plan de travail c'est dégueulasse, tu vas dire. »\n\nItsuki|« Descends du plan de travail. »\n\nTsubaki|« Voilà. »"
+  ]
+_XF["episodes"][37]["scenes"] = [
+    "*Mai, cour, 12h40*\n\nNanami mange dehors depuis avril parce que la nouvelle classe l'ennuie.\n\nHina s'assoit à côté d'elle sur le muret sans demander.\n\nNanami|« Tiens. »\n\nHina|« Salut. »\n\nNanami|« Tu manges avec Amano d'habitude. »\n\nHina|« Il a un contrôle. »\n\nNanami|« Ah. »\n\nSilence de muret.",
+    "Hina|« J'ai une réponse. »\n\nNanami|« À quoi ? »\n\nHina|« À ta question. »\n\nNanami|« J'ai posé beaucoup de questions. »\n\nHina|« *Donne-moi une chose que tu fais et qui ne sert à personne d'autre.* »\n\nNanami se redresse un peu.\n\nNanami|« Ça fait quatorze mois. »\n\nHina|« Quinze. »\n\nNanami|« Vas-y. »",
+    "Hina|« J'écris. »\n\nNanami|« Tu écris quoi ? »\n\nHina|« Rien de bon. Vraiment rien de bon. »\n\nNanami|« Ce n'est pas la question. »\n\nHina|« Je sais. »\n\nElle regarde la cour.\n\nHina|« Depuis février. Une heure par jour, le soir, et personne ne le lira jamais, et c'est exactement le point. »\n\nNanami hoche la tête une fois.\n\nNanami|« Bon. »\n\nHina|« C'est tout ? »\n\nNanami|« Qu'est-ce que tu veux, une médaille ? »\n\nHina|« Un peu. »\n\nNanami|« Non. »",
+    "*Le même jour, 17h, couloir*\n\nItsuki|« Ça va ? »\n\nHina s'arrête.\n\nHina|« …Vous venez de me demander si ça va. »\n\nItsuki|« Oui. »\n\nHina|« Vous ne demandez jamais. »\n\nItsuki|« Non. »\n\nHina|« Pourquoi maintenant ? »\n\nIl hausse les épaules d'un centimètre.\n\nItsuki|« Vous êtes sortie de la cour à midi quarante-huit et vous êtes restée douze minutes dans les toilettes du premier. »\n\nHina|« Vous m'espionnez. »\n\nItsuki|« Je regarde. »\n\nElle met du temps.\n\nHina|« Ça va. »\n\nItsuki|« Vraiment ? »\n\nHina|« Non. »\n\nItsuki|« D'accord. »\n\nIl ne demande rien d'autre. Il marche à côté d'elle jusqu'au portail et ils ne parlent de rien pendant quatorze minutes."
+  ]
+_XF["episodes"][38]["scenes"] = [
+    "*Juin, appartement Serizawa, 20h*\n\nLe dossier est imprimé. Douze pages. Il est sur la table basse depuis quarante minutes et Hina tourne autour depuis quarante minutes.\n\nSa mère rentre à vingt heures dix. Elle enlève une chaussure, puis l'autre, en s'appuyant au mur.\n\nReiko|« Tu as dîné ? »\n\nHina|« Pas encore. »\n\nReiko|« Il y a du poulet. »\n\nElle voit le dossier sur la table basse. Elle ne dit rien.",
+    "Hina|« Tu m'as demandé quelque chose en mars. »\n\nReiko|« Je t'ai demandé beaucoup de choses en mars. »\n\nHina|« Tu m'as demandé ce que je voulais faire, et j'ai dit que je n'étais pas prête. »\n\nReiko s'arrête au milieu du salon avec une chaussure dans la main."
+  ]
+_XF["episodes"][39]["scenes"] = [
+    "*Septembre, terminale, local du club*\n\nLe recueil de fin d'année a besoin d'une préface. Il en a besoin depuis 1994. Personne ne l'a jamais écrite : il y a toujours eu une page de sommaire à la place.",
+    "Rika|« Écris-la. »\n\nHina|« Je préside plus rien. »\n\nRika|« Justement. »\n\nMomo|« …Moi je trouve que ce serait bien. »\n\nTout le monde se tourne vers Momo, qui devient écarlate et se cache derrière un classeur.\n\nRika|« Voilà, Momo a parlé, c'est un signe cosmique. »",
+    "*Le soir, 23h*\n\nElle sort le carnet gris.\n\nIl y en a cinq maintenant. Le cinquième est presque plein.\n\nElle cherche une page précise et elle la trouve tout de suite, parce qu'elle sait exactement où elle est :\n\n*Amano — ne pas demander si ça va.*\n\nElle regarde la ligne pendant un moment.",
+    "Puis elle tourne à la page suivante, et elle écrit la préface directement dans le carnet, ce qui est absurde parce qu'il faudra la recopier.\n\nElle fait quatre-vingt-onze mots.\n\nElle ne prépare rien. Elle ne fait aucun brouillon. Elle n'écrit pas *position* en marge, ni *si Rika bloque*, ni aucune formule de secours.\n\nC'est la première fois en dix ans que le carnet gris sert à dire quelque chose plutôt qu'à s'y préparer.",
+    "*Le mardi suivant, 17h20*\n\nRika la lit à voix haute au club, parce que Rika fait toujours ce genre de choses.\n\nÀ la fin, personne ne dit rien pendant trois secondes.\n\nMomo|« …C'est bien. »\n\nRika|« C'est très bien. »\n\nHina|« C'est court. »\n\nItsuki|« Non. »\n\nIl n'ajoute rien. Il dit juste *non*, une fois, avec une netteté qui clôt le sujet, et Rika lève les sourcils vers Momo d'une façon insupportable."
+  ]
+_XF["episodes"][40]["scenes"] = [
+    "*Octobre, 8h04*\n\nIl y a une exposition de calligraphie dans le hall du 8 au 20 octobre. C'est la même chaque année, aux mêmes dates, avec les mêmes douze panneaux.\n\nIls arrivent par la même entrée maintenant. C'est arrivé progressivement, sans que personne ne le décide, à partir de juin.",
+    "Hina|« Cour ou hall ? »\n\nItsuki|« Hall. »\n\nHina|« Vous êtes sûr ? »\n\nItsuki|« Il y a du monde. »\n\nHina|« Je sais. »\n\nItsuki|« Hall. »\n\nIls traversent.\n\nQuatre-vingt-dix secondes. Vingt-six personnes environ.\n\nSept d'entre elles disent bonjour à Hina, ce qui est beaucoup moins qu'avant et ce qui, statistiquement, correspond à peu près aux gens qui la connaissent.",
+    "Deux d'entre elles disent bonjour à Itsuki.\n\nKō, ce qui n'est pas une surprise.\n\nEt Momo, la première année devenue deuxième année, qui dit *bonjour Amano-senpai* d'une toute petite voix et qui accélère immédiatement.",
+    "Rika les attend au pied de l'escalier B.\n\nRika|« Vous êtes passés par le hall. »\n\nHina|« On est passés par le hall. »\n\nRika|« Il y a l'expo. »\n\nItsuki|« Il y a l'expo. »\n\nRika les regarde tous les deux.\n\nRika|« Bon. »\n\nElle monte l'escalier.\n\nRika|« Amano, la maquette du recueil, tu la fais quand ? »\n\nItsuki|« Ce week-end. »\n\nRika|« Ok. »\n\nC'est tout. C'est une conversation de trois personnes qui montent un escalier et personne ne trouve ça remarquable, ce qui est exactement ce qu'il fallait un an et demi pour obtenir."
+  ]
+_XF["episodes"][41]["scenes"] = [
+    "*Mars, deux ans après le premier mardi*\n\nLe recueil de fin d'année sort le 12 mars.\n\nIl fait soixante-huit pages, ce qui est le plus long depuis 2009. Il y a sept textes, une préface de quatre-vingt-onze mots et une maquette faite par quelqu'un qui travaille dans une imprimerie le samedi.",
+    '*Sommaire, page 2 :*\n\n*Préface — H. Serizawa*\n*Le couloir du nord — M. Ogata*\n*Quatre choses sur ma grand-mère — R. Hasegawa*\n*(...)*\n*Le massicot — I. Amano*',
+    "Le nom est écrit en entier.\n\nIl y a une discussion de vingt minutes avant, dans un local de huit mètres carrés.\n\nHina|« Vous pouvez mettre les initiales. »\n\nItsuki|« Non. »\n\nHina|« Vous avez le droit. »\n\nItsuki|« Je sais que j'ai le droit. »\n\nRika|« Il a dit non trois fois, Hina. »\n\nHina|« Je vérifie. »\n\nItsuki|« Vous avez vérifié quatre fois. »\n\nHina|« La quatrième était la bonne. »",
+    "*Le 12 mars, 17h, bibliothèque*\n\nLe dépôt légal interne veut qu'un exemplaire de chaque recueil aille à la bibliothèque, deuxième étagère, salle du fond.\n\nC'est Hina qui y va, parce que c'est elle qui y allait avant et que l'habitude est restée.\n\nIl l'accompagne.\n\nL'étagère contient trente-deux volumes maintenant. Entre 2017 et 2019, il y en a un qui a été emprunté onze fois par la même personne et rendu une fois avec un mensonge.",
+    "Elle glisse le nouveau volume à sa place, à droite, à la fin de la rangée.\n\nItsuki|« Voilà. »\n\nHina|« Voilà. »\n\nIl regarde la rangée entière, de 1994 à cette année.\n\nItsuki|« Il y en a un que je n'ai jamais rouvert. »\n\nHina|« Je sais. »\n\nItsuki|« Vous voulez que je le rouvre ? »\n\nHina|« Non. »\n\nItsuki|« Vraiment non ? »\n\nHina|« Vraiment. »\n\nElle recule d'un pas pour voir toute l'étagère.\n\nHina|« Il y a le vôtre à la page 14. Et le vôtre à la page 61. Ça suffit largement. »",
+    "*Le même soir, chez les Amano*\n\nLe cahier de troisième année de collège est toujours sur l'étagère de la cuisine. Il y est depuis quatorze mois. Personne ne l'a ouvert.\n\nGorō rentre le vendredi soir, comme une semaine sur quatre.\n\nIl voit le recueil sur la table.\n\nGoro|« C'est cette année ? »\n\nItsuki|« C'est cette année. »\n\nGoro|« Tu es dedans ? »\n\nItsuki|« Page 61. »",
+    "Il ne l'ouvre pas tout de suite.\n\nIl mange. Il fait la vaisselle très mal. Tsubaki monte à vingt-deux heures en annonçant qu'elle a un texte à apprendre.\n\nÀ vingt-deux heures quarante, le père s'assoit à la table de la cuisine, ce qu'il ne fait jamais quand il rentre tard, et il ouvre le recueil à la page soixante et un.\n\nIl lit deux pages sur une machine à massicoter.\n\nIl ne dit rien pendant environ quatre minutes.",
+    "Goro|« Il n'y a pas le mot *camion*. »\n\nItsuki|« Non. »\n\nGoro|« Pas une fois. »\n\nItsuki|« Non. »\n\nIl referme le volume et le repousse de dix centimètres.\n\nGoro|« C'est mieux que l'autre. »\n\nItsuki lève la tête.\n\nGoro|« L'autre c'était de la douleur. Ça, c'est du travail. »\n\nIl se lève.\n\nGoro|« Bonne nuit. »\n\nSur la troisième marche, sans se retourner :\n\nGoro|« Tu me diras quand il y aura le suivant. »"
+  ]
+_XF["episodes"][30]["choix"] = {
+    'question': "Trois mandats sur le bureau. Un formulaire que personne n'a jamais rempli.",
+    'decisif': True,
+    'options': [
+      (
+        'tout',
+        '1️⃣',
+        'Les trois'
+      ),
+      (
+        'un',
+        '2️⃣',
+        'Un seul'
+      ),
+      (
+        'rien',
+        '3️⃣',
+        'Aucun — attendre mars'
+      )
+    ],
+    'suites': {
+      'tout': {
+        'pose': [
+          'demission_totale'
+        ],
+        'relation': {
+          'itsuki': {
+            'confiance': 14
+          }
+        },
+        'texte': "Elle remplit trois formulaires.\n\nLe proviseur|« Vous êtes sûre ? »\n\nHina|« Non. »\n\nLe proviseur|« …C'est une réponse honnête. »\n\nHina|« C'est la seule que j'ai. »\n\nDans la case *motif*, elle écrit la même phrase trois fois :\n\n*Je ne sais pas ce que j'aime.*\n\nLe proviseur la lit. Il la relit. Il ne fait aucun commentaire, ce qui, de la part d'un homme qui commente tout, est un acte considérable.\n\n*Les jours suivants :*\n\nQuatre personnes lui demandent si elle est malade. Deux si elle déménage. Une, en première année, si c'est vrai qu'elle a été renvoyée.\n\nPersonne ne demande pourquoi."
+      },
+      'un': {
+        'pose': [
+          'demission_partielle'
+        ],
+        'relation': {
+          'itsuki': {
+            'confiance': 6
+          }
+        },
+        'texte': "Elle remplit un formulaire.\n\nCoordination du festival culturel. Le plus gros. Le plus visible. Celui qui représente deux cents heures par an.\n\nLe proviseur|« Vous gardez le club et la classe. »\n\nHina|« Oui. »\n\nLe proviseur|« Pourquoi celui-là ? »\n\nHina|« Parce que c'est le seul des trois que je n'ai jamais choisi. »\n\nIl note quelque chose.\n\nLe proviseur|« Vous avez choisi les deux autres ? »\n\nHina|« J'ai choisi le club. »\n\nLe proviseur|« Et la classe ? »\n\nHina|« …Non. »\n\nLe proviseur|« Vous voulez un troisième formulaire ? »\n\nHina|« Pas aujourd'hui. »\n\nC'est un demi-pas. C'est le premier de sa vie."
+      },
+      'rien': {
+        'pose': [
+          'demission_aucune'
+        ],
+        'relation': {
+          'itsuki': {
+            'confiance': -8
+          }
+        },
+        'texte': "Elle repose le stylo.\n\nHina|« Vous avez raison. C'est cinq semaines. »\n\nLe proviseur|« C'est cinq semaines. »\n\nHina|« Ce serait idiot de désorganiser trois structures pour cinq semaines. »\n\nLe proviseur|« Ce serait idiot. »\n\nElle se lève. Elle remercie. Elle sort.\n\nDans le couloir, elle a exactement la sensation qu'elle a en sortant d'un dîner client : celle d'avoir très bien fait quelque chose.\n\nEt le soir, dans le carnet gris, à la suite de *Nanami a demandé ce que j'aime*, elle écrit :\n\n*Je n'ai pas cherché.*"
+      }
+    }
+  }
+_XF["episodes"][33]["choix"] = {
+    'question': "Elle a un carton dans les bras. Il n'est pas reparti.",
+    'decisif': True,
+    'options': [
+      (
+        'elle',
+        '1️⃣',
+        "C'est elle"
+      ),
+      (
+        'lui',
+        '2️⃣',
+        "C'est lui"
+      ),
+      (
+        'personne',
+        '3️⃣',
+        'Personne'
+      )
+    ],
+    'suites': {
+      'elle': {
+        'pose': [
+          'baiser',
+          'elle_a_ose'
+        ],
+        'marque': {
+          'type': 'baiser'
+        },
+        'relation': {
+          'itsuki': {
+            'confiance': 22
+          }
+        },
+        'texte': "Elle pose le carton sur la table ovale.\n\nElle le pose mal. Le recueil glisse et tombe par terre, ouvert, quelque part vers la page 15.\n\nAucun des deux ne le ramasse.\n\nElle fait deux pas et elle l'embrasse, et elle n'a pas préparé une seule phrase pour ce moment, ce qui ne lui était pas arrivé depuis neuf ans.\n\nIl met environ une seconde à comprendre.\n\nPuis il pose une main dans son dos, très à plat, comme quelqu'un qui vérifie que quelque chose tient."
+      },
+      'lui': {
+        'pose': [
+          'baiser',
+          'il_a_ose'
+        ],
+        'marque': {
+          'type': 'baiser'
+        },
+        'relation': {
+          'itsuki': {
+            'confiance': 18
+          }
+        },
+        'texte': "Il traverse les douze mètres carrés.\n\nItsuki|« Je peux ? »\n\nHina|« …Vous demandez ? »\n\nItsuki|« Vous avez passé neuf ans à faire des choses que personne ne vous a demandées. »\n\nElle a le carton dans les bras et elle ne sait absolument pas quoi en faire.\n\nHina|« Oui. »\n\nIl prend le carton et le pose sur la table, ce qui est parfaitement logistique et parfaitement ridicule, et Hina rit, et il l'embrasse pendant qu'elle rit encore."
+      },
+      'personne': {
+        'pose': [
+          'route_distance',
+          'occasion_manquee'
+        ],
+        'ferme': [
+          'sortir_du_regard',
+          'internat'
+        ],
+        'relation': {
+          'itsuki': {
+            'confiance': -15
+          }
+        },
+        'plafond': {
+          'itsuki': {
+            'confiance': 65
+          }
+        },
+        'texte': "Itsuki|« Vous rendez la clé quand ? »\n\nHina|« …Demain matin. »\n\nItsuki|« Au secrétariat ou au proviseur ? »\n\nHina|« Secrétariat. »\n\nItsuki|« D'accord. »\n\nIl reprend son sac sur la chaise.\n\nItsuki|« Je vous laisse finir. »\n\nIl sort.\n\nElle finit de vider un casier dans une salle de douze mètres carrés.\n\nLe recueil est toujours sur le dessus du carton. Elle le prend. Elle l'ouvre à la page 15.\n\nElle le referme.\n\nLe lendemain, elle le rend à la bibliothèque en disant qu'elle l'avait retrouvé."
+      }
+    }
+  }
+_XF["episodes"][38]["choix"] = {
+    'question': 'Douze pages sur une table basse. Une femme debout avec une chaussure à la main.',
+    'decisif': True,
+    'options': [
+      (
+        'dit',
+        '1️⃣',
+        'Lui donner le dossier'
+      ),
+      (
+        'tait',
+        '2️⃣',
+        "Dire que ce n'est rien"
+      )
+    ],
+    'suites': {
+      'dit': {
+        'pose': [
+          'mere_sait'
+        ],
+        'relation': {
+          'itsuki': {
+            'confiance': 10
+          }
+        },
+        'texte': "Hina|« Je suis prête. »\n\nElle lui tend les douze pages.\n\nReiko pose sa chaussure. Elle prend le dossier. Elle s'assoit sur l'accoudoir du canapé, ce qu'elle ne fait jamais, et elle lit.\n\nÇa dure onze minutes. Elle ne saute aucune ligne.\n\nÀ la lettre de motivation, elle s'arrête sur la première phrase et la relit deux fois.\n\nReiko|« *J'ai lu un texte de quatre pages quand j'avais quinze ans et je n'ai jamais compris comment quelqu'un avait fait ça.* »\n\nHina|« Oui. »\n\nReiko|« C'est le texte du club. »\n\nHina|« …Comment tu sais ça ? »\n\nReiko|« Tu m'en as parlé. Il y a deux ans. Dans une voiture, en revenant d'un dîner. Tu avais parlé pendant vingt minutes. »\n\nElle repose le dossier.\n\nReiko|« C'est la seule fois en neuf ans où tu m'as parlé de quelque chose sans que je te pose de question. »\n\nHina ne dit rien.\n\nReiko|« Je m'en souviens très bien. »\n\nElle se lève. Elle va chercher le poulet.\n\nReiko|« Waseda a un entretien en mars. Il faudra le préparer. »\n\nHina|« Tu es d'accord ? »\n\nReiko|« Je n'ai pas dit ça. »\n\nElle sort deux assiettes.\n\nReiko|« J'ai dit qu'il faudrait le préparer. »"
+      },
+      'tait': {
+        'pose': [
+          'mere_ignore'
+        ],
+        'relation': {
+          'itsuki': {
+            'confiance': -4
+          }
+        },
+        'texte': "Hina|« C'est des maths. »\n\nReiko regarde le dossier de douze pages relié sur la table basse.\n\nReiko|« D'accord. »\n\nElle enlève sa deuxième chaussure.\n\nReiko|« Il y a du poulet. »\n\nElles dînent en parlant d'un fournisseur qui a livré en retard.\n\nLe dossier reste sur la table basse toute la soirée.\n\nLe lendemain matin il n'y est plus : Hina l'a remonté dans sa chambre à six heures.\n\nSa mère l'a vu. Sa mère ne dira rien.\n\nEt pendant les neuf mois qui suivent, il y aura entre elles une conversation qui n'aura pas lieu, et qui sera très polie, et qui aura exactement la forme des neuf années précédentes."
+      }
+    }
+  }
+_XF["endings"]['sortir_du_regard']["texte"] = "*Mars, dernier jour de terminale*\n\nIl y a trois cent onze élèves au lycée Seiran cette année.\n\nHina Serizawa en connaît une trentaine.\n\nC'est un choix. Elle a arrêté de réviser les listes en février de l'année dernière et elle a mis huit mois à ne plus culpabiliser.\n\nLes carnets gris sont dans un carton, chez elle, sur une étagère. Il y en a six. Le sixième n'a plus de colonne de gauche — plus de positions de repli, plus de formules de secours. Il n'y a que des choses vues.\n\nElle a l'entretien de Waseda le 19. Sa mère lui a fait répéter quatre fois. Deux de ces quatre fois, elle a arrêté au milieu en disant *non, ne dis pas ce qu'ils veulent entendre*.\n\nLe recueil de cette année fait soixante-douze pages.\n\nItsuki a rendu un texte au concours du secteur, catégorie lycée. Signé en entier. Il n'a rien gagné du tout — troisième accessit, une mention sur une liste — et il a trouvé ça formidable, parce que personne n'est venu lui dire que c'était beau.\n\nIls traversent le hall à huit heures cinq.\n\nIl y a une exposition de calligraphie, comme tous les ans, aux mêmes dates.\n\nQuatre-vingt-dix secondes.\n\nKō leur crie quelque chose depuis le stand. Rika les attend au pied de l'escalier B. Momo dit *bonjour senpai* d'une toute petite voix. Nanami ne dit rien du tout et lève un sourcil, ce qui chez Nanami est une démonstration d'affection.\n\nPersonne ne les regarde particulièrement.\n\nC'était exactement ça, le projet."
+_XF["endings"]['internat']["texte"] = "*Elle part en septembre.*\n\nUn internat préparatoire à Nagano, deux heures de train, un dossier qui double ses chances pour Waseda. Sa mère ne l'a pas poussée. Sa mère a même demandé trois fois si elle était sûre, ce qui, venant de Reiko Serizawa, était un déchirement.\n\nIls ont eu quatre mois.\n\nQuatre mois de hall traversé, de deux bento tous les matins, de mardis à dix-huit heures quarante dans huit mètres carrés.\n\nCe n'est pas une rupture. Personne ne rompt. Il n'y a même pas de conversation difficile — il y a un quai de gare en septembre et deux personnes de dix-huit ans qui ne savent pas comment on fait.\n\nItsuki|« Vous écrirez ? »\n\nHina|« Vous d'abord. »\n\nItsuki|« Pourquoi moi d'abord ? »\n\nHina|« Parce que vous écrivez mieux. »\n\nIl écrit le mardi suivant. Quatre pages sur un train qu'il n'a pas pris.\n\nElle répond le jeudi. Onze pages, dont neuf sont mauvaises, et elle les envoie quand même, ce qui est un progrès considérable.\n\nÇa dure. Ça dure même très longtemps.\n\nCe n'est pas la fin la plus heureuse. C'est la plus jeune : deux personnes qui s'aiment et qui n'ont pas encore l'âge de leur histoire, et qui le savent, et qui décident quand même d'attendre de l'avoir."
+_XF["endings"]['amis']["texte"] = "*Il ne se passe rien.*\n\nIl faut le dire comme ça, parce que c'est ce qui s'est passé : il ne se passe rien, et ce n'est pas un échec.\n\nElle a démissionné. Il a signé un texte. Aucun des deux n'aurait fait l'autre sans le premier.\n\nEn terminale, ils déjeunent à la table du fond près de la sortie de service, avec Rika, Momo, et Kō qui vient trois fois par semaine parce qu'il trouve que la table du fond a une meilleure ambiance.\n\nIl apporte deux bento. Il a arrêté de calculer les proportions vers janvier, parce qu'elle mange normalement maintenant, et il ne l'a jamais souligné.\n\nIl y a eu un moment, une fois, dans une salle des délégués en mars.\n\nIls n'en ont jamais parlé. Ni sur le coup, ni après.\n\nCe n'est pas un regret. C'est un fait, comme un couloir qu'on ne prend plus.\n\nLe dernier jour, elle lui donne un carnet gris.\n\nHina|« C'est le troisième. Celui de la seconde. »\n\nItsuki|« Pourquoi vous me le donnez ? »\n\nHina|« Parce que vous êtes la seule personne qui l'a lu et qui n'a pas eu peur. »\n\nIl l'a toujours."
+_XF["endings"]['chacun_sa_fac']["texte"] = "*Ils se croisent le 12 mars, devant la bibliothèque.*\n\nHina|« Bonjour. »\n\nItsuki|« Bonjour. »\n\nHina|« Tu déposes le recueil ? »\n\nItsuki|« Rika l'a déposé ce matin. »\n\nHina|« Ah. »\n\nItsuki|« Oui. »\n\nTrois secondes.\n\nHina|« Bon. Bonne chance pour les concours. »\n\nItsuki|« Toi aussi. »\n\nC'est tout.\n\nCe n'est pas triste et c'est bien le problème. Il n'y a pas eu de dispute, pas de trahison, pas de malentendu réparable. Il y a eu une année où deux personnes se sont vues à peu près trois cents fois et n'ont jamais franchi les derniers centimètres.\n\nElle entre à Waseda. Elle écrit une heure par jour et ne montre rien à personne, ce qui, quand on y pense, est exactement ce qu'il faisait.\n\nIl ne fait pas de lettres. Il entre en école technique, il est très bon, il continue d'écrire le soir.\n\nNeuf ans plus tard, dans une librairie de Shinjuku, elle prend un livre au hasard sur une table et lit quatre lignes sur une machine à massicoter.\n\nElle vérifie le nom sur la couverture.\n\nElle l'achète.\n\nElle n'écrit pas."
+_XF["epilogue"] = "Sur l'étagère de la bibliothèque du lycée Seiran, deuxième rangée, salle du fond, il y a trente-deux volumes agrafés que presque personne n'ouvre.\n\nDans celui de 2018, page 14, il y a quatre pages signées de deux lettres.\n\nIl aura fallu une cale en bois, un ticket de cantine, vingt-trois mercredis dans une salle d'arts plastiques et un carnet gris tombé d'une poche pour que quelqu'un écrive enfin son nom en entier."
+del _XF
+
+
+_XD = CHRONIQUE_SAISONS["ce_quon_voit"]["episodes"]
+_XD[15]["scenes"] = [
+    "*Fin septembre, appartement Serizawa, 21h*\n\nLe dossier s'appelle *SERIZAWA_candidature.pdf*. Il est dans un sous-dossier qui s'appelle *cours*, ce qui est un mensonge de sept mois.\n\nUniversité Waseda, faculté des lettres, département de littérature japonaise.\n\nSélection sur dossier et entretien. Dépôt : 10 mars.",
+    "Elle a commencé le dossier un mardi de février, à minuit vingt, après un dîner client où un homme lui avait demandé si elle ferait du commerce comme sa mère.\n\nElle avait répondu *je ne me suis pas encore décidée*, avec l'inclinaison de tête, et l'homme avait dit *c'est de son âge*, et sa mère avait dit *elle a du temps*.\n\nDans le taxi, elle avait sorti son téléphone et tapé *waseda lettres modernes admission* dans la barre de recherche.\n\nPuis elle avait effacé l'historique.",
+    "Ce qu'il y a dans le dossier, sept mois plus tard :\n\nLes relevés de notes, qui sont excellents et qui ne prouvent rien.\n\nLa liste des activités, qui fait onze lignes et qui l'écœure un peu plus chaque fois qu'elle la relit. *Déléguée de classe. Présidente du club de littérature. Coordinatrice du festival culturel. Secrétaire du comité de liaison.*\n\nQuatre titres. Aucun verbe.\n\nEt une lettre de motivation de quatre cents mots qui n'existe pas encore.",
+    "*22h40*\n\nElle ouvre la dix-neuvième version.\n\nLes dix-huit précédentes sont dans un sous-dossier qui s'appelle *vieux*. Elle les a toutes gardées, ce qui est absurde, et elle les relit parfois, ce qui est pire.\n\nLa version 12 commençait par *La littérature est un outil de compréhension du monde*.\n\nLa version 15 par *Depuis mon plus jeune âge*.\n\nLa version 17 par *Mon parcours associatif m'a appris*.\n\nElle les avait toutes montrées à quelqu'un dans sa tête — un jury, un professeur, sa mère — et elles étaient toutes très bien, et elles étaient toutes mortes.",
+    "La dix-neuvième commence par une phrase qu'elle a écrite en quatorze secondes, sans réfléchir, un soir où elle était trop fatiguée pour se surveiller.\n\n*J'ai lu un texte de quatre pages quand j'avais quinze ans et je n'ai jamais compris comment quelqu'un avait fait ça.*\n\nElle n'a pas écrit la suite depuis cinq semaines.\n\nCe n'est pas un blocage. Elle sait exactement ce qu'il faudrait mettre après : trois cents mots sur ce qu'elle a fait du club, sur le nombre de membres qui est passé de un à quatre, sur le recueil.\n\nLe problème, c'est que dès qu'elle écrit la deuxième phrase, la première redevient une accroche.",
+    "Il y a une section *lettre de motivation*, quatre cents mots, qu'elle a réécrite dix-neuf fois.\n\nLes dix-huit premières versions parlaient de *transmission*, de *rigueur analytique* et de *projet professionnel structuré*. Elle les a toutes supprimées.\n\nLa dix-neuvième commence par :\n\n*J'ai lu un texte de quatre pages quand j'avais quinze ans et je n'ai jamais compris comment quelqu'un avait fait ça.*\n\nElle n'a pas écrit la suite.",
+    "*22h10*\n\nReiko rentre. Elle pose ses clés. Elle enlève une chaussure, puis l'autre, en s'appuyant au mur, ce qu'elle ne fait que quand elle est très fatiguée.\n\nReiko|« Tu travailles ? »\n\nHina|« Des maths. »\n\nReiko|« Bon courage. »\n\nElle passe. Elle revient sur trois pas.\n\nReiko|« Le cabinet Ōmori cherche des stagiaires d'été pour les terminales. J'ai dit que tu serais intéressée. »\n\nHina|« …D'accord. »\n\nReiko|« Ce n'est rien, c'est deux semaines. Ça fait bien sur un dossier de commerce. »\n\nHina|« D'accord. »\n\nReiko|« Bonne nuit. »",
+    'Elle rouvre le fichier.\n\nElle relit sa première phrase.\n\nElle la sélectionne. Elle appuie sur *supprimer*.\n\nElle annule.\n\nElle la sélectionne encore.\n\nElle laisse.'
+  ]
+_XD[21]["scenes"] = [
+    "*Mi-novembre, cantine, 12h45*\n\nIl ne mange pas à la cantine. Il mange dans l'escalier de secours depuis deux ans, quatre minutes, un onigiri.\n\nCe jour-là il y a une réunion de sécurité dans l'escalier de secours, ce qui est une phrase absurde et qui est vraie, et il se retrouve à la cantine pour la première fois depuis mars.",
+    "Il prend le plateau le moins cher. Il s'assoit à la table du fond près de la sortie de service, celle où mangent trois premières années qui ne se parlent pas.\n\nDe là, on voit toute la salle.\n\nIl n'avait jamais regardé la cantine depuis l'intérieur.",
+    "À trois tables de là, quelqu'un s'assoit en face de lui sans demander.\n\nKo|« Tu manges à la cantine. »\n\nItsuki|« Il y a une réunion de sécurité dans l'escalier de secours. »\n\nKo|« Une réunion de sécurité dans l'escalier de secours. »\n\nItsuki|« Oui. »\n\nKo|« C'est le truc le plus japonais que j'aie entendu de l'année. »\n\nIl attaque son plateau.\n\nKo|« Tu regardes quelque chose. »\n\nItsuki|« Non. »\n\nKo|« Tu as la tête de quelqu'un qui regarde quelque chose. »\n\nItsuki|« Je mange. »\n\nKo|« Tu as pas touché ton plateau depuis huit minutes. »",
+    "Kō suit la direction du regard pendant environ une seconde et demie, ce qui est largement suffisant.\n\nKo|« Ah. »\n\nItsuki|« Ce n'est pas— »\n\nKo|« J'ai rien dit. »\n\nIl mange.\n\nKo|« Tu sais qu'elle mange que le riz ? »\n\nItsuki relève la tête d'un coup.\n\nItsuki|« …Tu le sais ? »\n\nKo|« Ben ouais. »\n\nItsuki|« Depuis quand ? »\n\nKo|« Chais pas. La seconde ? »",
+    "Itsuki|« Tu n'as jamais rien dit. »\n\nKo|« Pour dire quoi ? »\n\nItsuki|« *Mange.* »\n\nKo|« Ah non. »\n\nIl repose ses baguettes.\n\nKo|« Si je dis ça, elle mange une bouchée devant moi pour que je me taise et après elle mange plus rien pendant trois jours. »\n\nItsuki|« …Comment tu sais ça ? »\n\nKo|« Ma sœur. »\n\nIl hausse les épaules.\n\nKo|« Bref. C'est pas *dire* qui marche. »\n\nItsuki|« C'est quoi qui marche ? »\n\nKo|« J'en sais rien, moi. J'ai redoublé la seconde. »\n\nIl ramasse son plateau et s'en va.\n\nIl s'arrête à deux mètres.\n\nKo|« Mais si tu trouves, tu me dis. »",
+    "Il la repère en dix secondes, parce que tout le monde la repère en dix secondes.\n\nCinq personnes autour d'elle. Kō qui raconte. Nanami qui trouve ça moyen. Rika à sa gauche, deux du conseil.\n\nIl regarde pendant vingt-cinq minutes.\n\nIl ne fait rien d'autre. C'est la seule chose qu'il sache faire vraiment bien.",
+    "Ce qu'il voit, en vingt-cinq minutes :\n\nElle rit onze fois. Neuf sont en décalage d'un quart de seconde sur le rire de Kō — elle rit parce que les autres rient, pas parce que c'est drôle. Les deux vrais sont sur des choses que Kō ne trouvait pas drôles.\n\nElle pose deux questions à Rika. Rika répond longuement. Elle relance.\n\nElle regarde son téléphone zéro fois.\n\nEt elle mange le riz. Uniquement le riz. Elle repousse le reste sur le bord du plateau et elle le fait très bien — le plateau a l'air commencé.",
+    "Elle se lève à treize heures dix.\n\nElle débarrasse. Elle passe devant la poubelle. Elle fait glisser le contenu du plateau d'un mouvement du poignet, sans regarder, sans ralentir, et elle continue en parlant à quelqu'un.\n\nPersonne à sa table n'a rien vu.\n\nIls sont cinq. Ils sont là tous les midis depuis deux ans.\n\nPersonne n'a rien vu.",
+    "*Le soir, cahier*\n\n*Elle mange le riz. Elle ne mange que le riz.*\n\n*Il y a cinq personnes autour d'elle tous les jours depuis la seconde.*\n\n*Je suis à quatorze mètres et je viens de le voir en un déjeuner.*\n\n*Ce n'est pas parce que je suis observateur. C'est parce que personne ne regarde.*"
+  ]
+_XD[25]["scenes"] = [
+    "*Janvier, retour des vacances, 8h05*\n\nIl y a une exposition de calligraphie dans le hall du 8 au 20 janvier.\n\nCe qui veut dire : trois tables, douze panneaux, une trentaine de personnes en permanence, et un passage réduit à un mètre cinquante sur le côté gauche.\n\nC'est exactement le genre de configuration pour laquelle la troisième solution existe.",
+    "Le 8 janvier, il passe par la cour.\n\nLe 9 aussi.\n\nLe 10, il s'arrête à la porte de la cour, à sept heures cinquante-huit, et il reste là.\n\nIl n'y a personne pour le voir. C'est important : il n'y a personne.",
+    "Ce qu'il y a dans quatre-vingt-dix secondes de hall un 10 janvier à huit heures moins deux :\n\nTrois tables de calligraphie avec douze panneaux et une odeur d'encre qui n'a rien à voir avec celle de l'imprimerie — plus douce, plus sucrée.\n\nLe stand de l'association sportive qui vend des billets pour un tournoi.\n\nDeux professeurs qui parlent devant le panneau d'affichage et qui ne se poussent pas.\n\nEt vingt-six personnes qui vont dans les deux sens.",
+    "Il compte, parce qu'il compte toujours.\n\nSur les vingt-six, aucune ne le regarde.\n\nC'était exactement ce qu'il avait prévu, et il découvre, à peu près au milieu du hall, que ça ne le soulage pas du tout.\n\nIl s'était préparé à être vu. Il n'avait rien préparé pour l'autre possibilité.",
+    "Au niveau du troisième panneau, il ralentit.\n\nC'est un panneau de calligraphie ordinaire — quatre caractères, un cadre beige, une étiquette avec un nom de deuxième année qu'il ne connaît pas.\n\nIl n'y a strictement aucune raison de s'arrêter devant.\n\nIl s'arrête onze secondes.\n\nPuis il repart, et il arrive en 2-B à huit heures deux, et il s'assoit à la trente-quatrième place, et pendant tout le cours de mathématiques il n'écrit rien du tout dans la marge, ce qui ne lui était pas arrivé depuis deux ans.",
+    "Il fait demi-tour.\n\nIl traverse le hall.\n\nÇa dure quatre-vingt-dix secondes. Il croise vingt-six personnes. Aucune ne le regarde, parce qu'aucune ne le regardait jamais et que rien n'a changé de ce côté-là.\n\nIl arrive en 2-B à huit heures deux.",
+    "*12h50, distributeur du deuxième étage*\n\nKo|« T'es passé par le hall. »\n\nItsuki|« …Comment tu sais ça ? »\n\nKo|« J'étais devant le stand de calligraphie, je faisais semblant de m'intéresser à une exposition de calligraphie. »\n\nItsuki|« Pourquoi ? »\n\nKo|« Parce que Nanami m'a dit que si je continuais à dire que j'aimais pas l'art j'allais mourir inculte. »\n\nIl tape sur le distributeur. Rien.\n\nKo|« Bref. Tu es passé par le hall. »\n\nItsuki|« Oui. »\n\nKo|« Ok. »\n\nIl ne dit rien d'autre.\n\nIl achète un thé froid à cent dix yens qu'il n'aime pas et il parle d'un match pendant six minutes.",
+    "*Le soir, cahier*\n\n*Kō a vu et n'a rien dit.*\n\n*C'est la deuxième fois. Je commence à croire que ce n'est pas de la distraction.*"
+  ]
+_XD[29]["scenes"] = [
+    "*Mi-février, salle d'arts plastiques, mercredi*\n\nHina y retourne. Cette fois elle ne pose aucune question sur Amano.\n\nJun|« Il est à l'imprimerie. »\n\nHina|« Je sais. »\n\nJun|« Alors ? »\n\nHina|« Je peux rester ? »\n\nIl met deux secondes.\n\nJun|« Oui. »",
+    "Elle reste une heure et dix minutes.\n\nElle ne fait rien. C'est la première fois depuis la seconde qu'elle passe une heure et dix minutes à ne rien faire dans un bâtiment scolaire.\n\nAu bout de quarante minutes :\n\nHina|« Comment on fait pour arrêter d'être délégué ? »\n\nJun|« On démissionne. »\n\nHina|« Il y a une procédure ? »\n\nJun|« On dit qu'on démissionne. »\n\nHina|« C'est tout ? »\n\nJun|« Je crois. »\n\nIl change de crayon.\n\nJun|« Personne l'a jamais fait, en même temps. »",
+    "*Le lendemain, comité de liaison, 12h30*\n\nLe comité de liaison compte neuf membres et se réunit six fois par an pour coordonner les clubs. Hina y siège depuis deux ans. Elle en assure le secrétariat depuis dix-huit mois parce que personne d'autre ne voulait.\n\nHina|« Je ne reprendrai pas le secrétariat au troisième trimestre. »\n\nUn délégué|« Ah. Qui le prend ? »\n\nHina|« Je ne sais pas. »\n\nUn délégué|« Il faut bien quelqu'un. »\n\nHina|« Oui. »\n\nSilence.\n\nUn délégué|« Mais tu proposes quoi ? »\n\nHina|« Rien. »",
+    "*Les trois jours suivants*\n\nCe que ça coûte, concrètement :\n\nLe mardi, le compte rendu du comité n'est pas fait. Personne ne le remarque.\n\nLe mercredi, il n'est toujours pas fait. Un délégué envoie un message dans le groupe : *quelqu'un a le CR ?*\n\nLe jeudi, Hina reçoit quatre messages privés. Trois demandent où est le compte rendu. Le quatrième demande si elle va bien.\n\nElle répond au quatrième.",
+    "*Vendredi, 12h40*\n\nUn délégué|« Serizawa, le CR. »\n\nHina|« Ce n'est plus moi. »\n\nUn délégué|« Ouais mais Kanda sait pas faire. »\n\nHina|« Alors il faut lui montrer. »\n\nUn délégué|« Toi tu sais faire. »\n\nHina|« Oui. »\n\nElle ne bouge pas. Elle ne propose rien. Elle ne dit pas *je peux le faire cette fois*.\n\nC'est physiquement difficile. Elle a la phrase dans la bouche pendant environ quatre secondes.\n\nUn délégué|« …Bon. »\n\nIl s'en va, vaguement vexé, et le compte rendu sort le lundi suivant avec trois fautes et il est parfaitement utilisable.",
+    "*Le samedi, chez elle*\n\nElle a l'après-midi vide.\n\nC'est la première fois depuis la seconde et elle ne sait absolument pas quoi en faire. Elle range sa chambre pendant quarante minutes. Elle range une chambre rangée.\n\nPuis elle s'assoit à son bureau et elle ouvre un cahier neuf, acheté en novembre, jamais utilisé.\n\nElle écrit trois lignes. Elle les relit. Elles sont mauvaises.\n\nElle ne les barre pas.",
+    "Ça dure onze minutes.\n\nOnze minutes pendant lesquelles neuf personnes cherchent une solution que Hina a fournie toute seule six fois par an pendant dix-huit mois.\n\nIls finissent par désigner un deuxième année qui n'a rien demandé et qui accepte parce que tout le monde le regarde.\n\nEn sortant, quelqu'un dit :\n\nUn délégué|« C'était bizarre, cette réunion. »\n\nNanami, qui n'est pas membre et qui était là quand même, ne dit rien du tout et regarde Hina d'une façon qui vaut un discours."
+  ]
+_XD[34]["scenes"] = [
+    "*Le lendemain, 8h05*\n\nLe problème d'être vus, quand on a passé un an à ne pas l'être, c'est qu'il n'y a aucun protocole.\n\nIls arrivent par deux entrées différentes, comme toujours.\n\nIls se croisent dans le couloir du premier à huit heures huit.\n\nHina|« Bonjour. »\n\nItsuki|« Bonjour. »\n\nIls continuent chacun de leur côté et c'est catastrophique.",
+    "*Le problème du couloir*\n\nIl y a un endroit, entre l'escalier B et la salle 3-A, où leurs deux trajets se croisent tous les matins à huit heures huit.\n\nLundi : ils se disent bonjour et continuent. C'est atroce.\n\nMardi : elle ralentit, il ralentit, ils s'arrêtent tous les deux, ils ne trouvent rien à dire, ils repartent. C'est pire.\n\nMercredi : il fait un détour de quarante mètres pour arriver par l'autre côté et la croiser dans un couloir moins fréquenté.\n\nElle s'en rend compte le jeudi, parce qu'elle a fait exactement la même chose.",
+    "Hina|« Vous avez changé de chemin. »\n\nItsuki|« Oui. »\n\nHina|« Moi aussi. »\n\nItsuki|« Je sais. »\n\nHina|« Vous saviez ? »\n\nItsuki|« Depuis mardi. »\n\nIls sont dans un couloir du deuxième étage où il n'y a personne parce que les salles sont en travaux.\n\nHina|« C'est ridicule. »\n\nItsuki|« C'est très ridicule. »\n\nHina|« On a passé un an à se croiser dans un hall avec deux cents personnes. »\n\nItsuki|« Oui. »\n\nHina|« Et là on fait quarante mètres de détour chacun pour être seuls quatre secondes. »\n\nItsuki|« Oui. »",
+    "*Le lendemain, 8h08, escalier B*\n\nIls se croisent au même endroit qu'avant.\n\nIl y a trente personnes.\n\nItsuki|« Bonjour. »\n\nHina|« Bonjour. »\n\nIl lui prend son sac de sport — celui qui pèse quatre kilos à cause d'un classeur qu'elle transporte pour rien depuis novembre — et il le met sur son épaule sans commentaire, et ils montent l'escalier ensemble.\n\nSur trente personnes, deux remarquent.\n\nRika est l'une des deux, et elle ne dit rien du tout, ce qui lui coûte visiblement quelque chose de physique.",
+    "*12h50, distributeur du deuxième étage*\n\nKo|« Bon. »\n\nItsuki|« Bon quoi. »\n\nKo|« T'as souri ce matin. »\n\nItsuki|« Non. »\n\nKo|« En cours de géo. Vers dix heures. Tu regardais par la fenêtre et t'as souri. »\n\nItsuki|« Tu me regardes en cours de géo ? »\n\nKo|« Je m'ennuie en cours de géo. »\n\nIl tape sur le distributeur. Rien.\n\nKo|« C'est Serizawa ? »\n\nItsuki ne répond pas.\n\nKo|« Ok. »\n\nIl achète un thé froid à cent dix yens.\n\nKo|« Elle mange plus avec nous, elle mange avec Rika chez les musiciens. Si tu veux la voir à midi c'est là-bas. »\n\nItsuki|« Pourquoi tu me dis ça ? »\n\nKo|« Parce que tu allais mettre trois semaines à le trouver tout seul. »",
+    "*17h, local du club*\n\nMomo a rendu un deuxième texte. Il est meilleur que le premier.\n\nIls sont quatre : Momo, Rika — revenue, sans que personne ne commente —, Hina et Itsuki.\n\nRika|« Il manque deux textes pour le recueil. »\n\nHina|« Je sais. »\n\nRika|« La date c'est dans onze jours. »\n\nHina|« Je sais. »\n\nRika regarde Itsuki avec une insistance de bulldozer.\n\nItsuki|« Non. »\n\nRika|« J'ai rien dit. »\n\nItsuki|« Vous avez tourné la tête de neuf centimètres. »\n\nMomo, la première année, rit. C'est la première fois en un an qu'on entend Momo rire."
+  ]
+_XD[36]["scenes"] = [
+    "*Avril, nouvelle année scolaire, 12h45*\n\nTerminale. Nouvelles classes. Elle n'est déléguée de rien.\n\nLe premier jour, quatre personnes lui demandent si elle se représente. Elle dit non quatre fois. La quatrième, elle le dit bien : sans expliquer, sans s'excuser, sans proposer d'alternative.\n\nÇa lui prend trois secondes et ça lui coûte moins cher que la deuxième fois.",
+    "À midi, à la cantine, elle prend le plateau le moins cher et elle s'assoit à la table du fond, celle près de la sortie de service, où mangent trois premières années qui ne se parlent pas.\n\nIl arrive quatre minutes plus tard avec deux boîtes.\n\nItsuki|« Tenez. »\n\nHina|« C'est quoi ? »\n\nItsuki|« Du bento. »\n\nHina|« Vous avez fait deux bento. »\n\nItsuki|« J'en fais un tous les matins pour ma sœur. Ça ne coûte rien d'en faire deux. »\n\nHina|« Ça coûte du temps. »\n\nItsuki|« Onze minutes. »",
+    "Elle ouvre la boîte.\n\nIl y a du riz, et il y a autre chose que du riz, et il y a un rapport de quantité qui n'est pas laissé au hasard : à peu près un tiers de riz, deux tiers de reste.\n\nHina|« Vous avez calculé. »\n\nItsuki|« Non. »\n\nHina|« Amano. »\n\nItsuki|« …Un peu. »\n\nElle mange le reste avant le riz.\n\nIl ne fait aucun commentaire et ne la regarde pas manger, ce qui est le commentaire.",
+    "*Trois semaines plus tard*\n\nElle mange le reste avant le riz. Tous les jours.\n\nIl ne le commente jamais. Il a arrêté de la regarder manger vers le cinquième jour, quand il a compris que la regarder était une forme de surveillance.\n\nLe douzième jour, elle apporte quelque chose.\n\nHina|« Tenez. »\n\nItsuki|« Qu'est-ce que c'est ? »\n\nHina|« Une boîte. »\n\nItsuki|« Je vois que c'est une boîte. »\n\nHina|« Elle est vide. »",
+    "Itsuki|« …Vous m'apportez une boîte vide. »\n\nHina|« Vous en utilisez deux. Vous n'en avez que trois. Votre sœur en prend une. »\n\nItsuki|« Comment vous savez combien j'ai de boîtes. »\n\nHina|« Vous avez fait la vaisselle devant moi en mars. »\n\nIl regarde la boîte. Elle est neuve, elle a un couvercle vert, elle a coûté six cents yens.\n\nItsuki|« Vous avez acheté une boîte. »\n\nHina|« J'ai acheté une boîte. »\n\nItsuki|« Pourquoi ? »\n\nHina|« Parce que sinon vous en lavez une le soir et une le matin. »\n\nIl ne dit rien pendant environ six secondes.\n\nItsuki|« C'est la chose la plus précise qu'on m'ait donnée. »",
+    "*Le soir, chez les Amano*\n\nTsubaki|« Y a deux boîtes en moins. »\n\nItsuki|« Il y en a une en moins. »\n\nTsubaki|« Il y en a deux. Celle du milieu et celle avec le couvercle bleu. »\n\nItsuki|« Tu comptes les boîtes ? »\n\nTsubaki|« Je compte tout, moi aussi. »\n\nElle s'assoit sur le plan de travail, ce qui est interdit.\n\nTsubaki|« Elle mange pas assez. »\n\nItsuki|« …Comment tu sais ça ? »\n\nTsubaki|« T'as fait deux tiers de garniture. Tu fais jamais deux tiers. »\n\nIl ne répond pas.\n\nTsubaki|« Descends du plan de travail c'est dégueulasse, tu vas dire. »\n\nItsuki|« Descends du plan de travail. »\n\nTsubaki|« Voilà. »"
+  ]
+_XD[39]["scenes"] = [
+    "*Septembre, terminale, local du club*\n\nLe recueil de fin d'année a besoin d'une préface. Il en a besoin depuis 1994. Personne ne l'a jamais écrite : il y a toujours eu une page de sommaire à la place.",
+    "Rika|« Écris-la. »\n\nHina|« Je préside plus rien. »\n\nRika|« Justement. »\n\nMomo|« …Moi je trouve que ce serait bien. »\n\nTout le monde se tourne vers Momo, qui devient écarlate et se cache derrière un classeur.\n\nRika|« Voilà, Momo a parlé, c'est un signe cosmique. »",
+    "*Le soir, 23h*\n\nElle sort le carnet gris.\n\nIl y en a cinq maintenant. Le cinquième est presque plein.\n\nElle cherche une page précise et elle la trouve tout de suite, parce qu'elle sait exactement où elle est :\n\n*Amano — ne pas demander si ça va.*\n\nElle regarde la ligne pendant un moment.",
+    "Voilà ce qu'elle écrit.\n\n*Ce recueil existe depuis 1994. Il y a eu trente et une éditions et à peu près deux cents textes.*\n\n*La plupart n'ont jamais été lus. C'est vrai et ce n'est pas grave.*\n\n*Ce qui compte, c'est qu'il y ait une étagère, dans une salle du fond, où quelque chose écrit par quelqu'un de dix-sept ans reste posé assez longtemps pour que quelqu'un d'autre tombe dessus par hasard un jour où il attend sa mère.*\n\n*C'est tout ce qu'un recueil sert à faire.*\n\n*Le reste, c'est du papier.*",
+    "Elle relit.\n\nIl y a une chose qui la dérange et elle met dix minutes à trouver quoi : c'est la troisième phrase.\n\n*un jour où il attend sa mère.*\n\nC'est trop précis. N'importe qui la lira comme une généralité, sauf une personne.\n\nElle prend son stylo pour la corriger.\n\nElle ne la corrige pas.",
+    "Puis elle tourne à la page suivante, et elle écrit la préface directement dans le carnet, ce qui est absurde parce qu'il faudra la recopier.\n\nElle fait quatre-vingt-onze mots.\n\nElle ne prépare rien. Elle ne fait aucun brouillon. Elle n'écrit pas *position* en marge, ni *si Rika bloque*, ni aucune formule de secours.\n\nC'est la première fois en dix ans que le carnet gris sert à dire quelque chose plutôt qu'à s'y préparer.",
+    "*Le mardi suivant, 17h20*\n\nRika la lit à voix haute au club, parce que Rika fait toujours ce genre de choses.\n\nÀ la fin, personne ne dit rien pendant trois secondes.\n\nMomo|« …C'est bien. »\n\nRika|« C'est très bien. »\n\nHina|« C'est court. »\n\nItsuki|« Non. »\n\nIl n'ajoute rien. Il dit juste *non*, une fois, avec une netteté qui clôt le sujet, et Rika lève les sourcils vers Momo d'une façon insupportable."
+  ]
+_XD[40]["scenes"] = [
+    "*Octobre, 8h04*\n\nIl y a une exposition de calligraphie dans le hall du 8 au 20 octobre. C'est la même chaque année, aux mêmes dates, avec les mêmes douze panneaux.\n\nIls arrivent par la même entrée maintenant. C'est arrivé progressivement, sans que personne ne le décide, à partir de juin.",
+    "Ce qu'il fait pendant les quatre-vingt-dix secondes :\n\nIl ne compte pas.\n\nC'est nouveau. Il compte depuis trois ans — les personnes, les secondes, les itinéraires, les yens, le nombre de fois où quelqu'un lui parle dans une semaine.\n\nLà il ne compte rien. Il écoute quelqu'un lui raconter une histoire de photocopieuse en marchant à côté de lui.\n\nIl s'en aperçoit à la sortie du hall et ça lui fait un effet désagréable, comme quand on se réveille sans savoir quelle heure il est.",
+    "À mi-parcours, quelqu'un les arrête.\n\nC'est un professeur de sciences qui ne connaît ni l'un ni l'autre.\n\nLe prof|« Vous deux, vous êtes du club de littérature ? »\n\nHina|« Oui. »\n\nLe prof|« On m'a dit qu'il fallait vous voir pour le recueil. Ma classe de première voudrait proposer quelque chose. »\n\nHina|« Il faut voir avec lui. »\n\nLe professeur se tourne vers Itsuki.\n\nC'est une seconde entière.\n\nItsuki|« La maquette se ferme le 4. S'ils rendent avant le 4, ça passe. »\n\nLe prof|« Parfait. Vous vous appelez ? »\n\nItsuki|« Amano. »\n\nLe prof|« Merci Amano. »\n\nIl s'en va.",
+    "Ils font dix mètres sans rien dire.\n\nHina|« Vous avez donné votre nom. »\n\nItsuki|« Il l'a demandé. »\n\nHina|« Vous auriez pu dire *deuxième année B*. »\n\nItsuki|« …C'est vrai. »\n\nIls arrivent à l'escalier B.\n\nItsuki|« Ne faites pas cette tête. »\n\nHina|« Je fais pas de tête. »\n\nItsuki|« Vous faites une tête. »\n\nHina|« C'est ma tête normale. »\n\nItsuki|« Non. »",
+    "Hina|« Cour ou hall ? »\n\nItsuki|« Hall. »\n\nHina|« Vous êtes sûr ? »\n\nItsuki|« Il y a du monde. »\n\nHina|« Je sais. »\n\nItsuki|« Hall. »\n\nIls traversent.\n\nQuatre-vingt-dix secondes. Vingt-six personnes environ.\n\nSept d'entre elles disent bonjour à Hina, ce qui est beaucoup moins qu'avant et ce qui, statistiquement, correspond à peu près aux gens qui la connaissent.",
+    "Deux d'entre elles disent bonjour à Itsuki.\n\nKō, ce qui n'est pas une surprise.\n\nEt Momo, la première année devenue deuxième année, qui dit *bonjour Amano-senpai* d'une toute petite voix et qui accélère immédiatement.",
+    "Rika les attend au pied de l'escalier B.\n\nRika|« Vous êtes passés par le hall. »\n\nHina|« On est passés par le hall. »\n\nRika|« Il y a l'expo. »\n\nItsuki|« Il y a l'expo. »\n\nRika les regarde tous les deux.\n\nRika|« Bon. »\n\nElle monte l'escalier.\n\nRika|« Amano, la maquette du recueil, tu la fais quand ? »\n\nItsuki|« Ce week-end. »\n\nRika|« Ok. »\n\nC'est tout. C'est une conversation de trois personnes qui montent un escalier et personne ne trouve ça remarquable, ce qui est exactement ce qu'il fallait un an et demi pour obtenir."
+  ]
+del _XD
+
+
+_XE = CHRONIQUE_SAISONS["ce_quon_voit"]["episodes"]
+_XE[9]["scenes"] = [
+    "*Samedi, imprimerie Kado, 8h*\n\nL'imprimerie Kado fait des faire-part, des menus, des cartes de visite et les programmes de trois écoles du secteur.\n\nItsuki y travaille le samedi de huit heures à dix-sept heures depuis quatorze mois. Massicot, pliage, mise sous pli, livraisons à vélo.\n\nNeuf mille yens la journée. Trente-six mille par mois.",
+    "Ce que ça paie :\n\nLe cours de théâtre de Tsubaki, mardi et jeudi, huit mille par mois.\n\nLes courses de la semaine quand le père est sur la route, ce qui est trois semaines sur quatre.\n\nEt une enveloppe dans le tiroir du haut, dont Tsubaki ne connaît pas l'existence, qui contient cent quatre-vingt mille yens et qui s'appelle, dans la tête d'Itsuki, *au cas où*.",
+    "Tsubaki a une méthode pour obtenir des choses et cette méthode consiste à parler jusqu'à épuisement de l'adversaire.\n\nTsubaki|« Le cours de théâtre du mardi, il y a une sortie en avril. »\n\nItsuki|« Combien. »\n\nTsubaki|« C'est pas la question. »\n\nItsuki|« Combien, Tsubaki. »\n\nTsubaki|« Quatre mille. »\n\nItsuki|« D'accord. »\n\nTsubaki|« …D'accord ? »\n\nItsuki|« D'accord. »\n\nElle reste la bouche ouverte pendant deux secondes, parce qu'elle avait préparé onze arguments.",
+    "Tsubaki|« Tu vas pas demander ce que c'est comme sortie ? »\n\nItsuki|« C'est une sortie. »\n\nTsubaki|« C'est le théâtre national. »\n\nItsuki|« D'accord. »\n\nTsubaki|« ITSUKI. C'est le théâtre NATIONAL. »\n\nItsuki|« J'ai dit d'accord. »\n\nElle le regarde très fixement.\n\nTsubaki|« Tu vas travailler plus. »\n\nItsuki|« Non. »\n\nTsubaki|« Tu mens super mal. »\n\nItsuki|« Mange. »\n\nTsubaki|« Tu dis toujours *mange* quand tu veux pas répondre. »\n\nItsuki|« Mange. »",
+    "*Plus tard, 21h*\n\nElle fait ses devoirs sur la table basse, la télévision allumée sur rien.\n\nTsubaki|« Itsuki. »\n\nItsuki|« Mm. »\n\nTsubaki|« Tu te souviens de quelle couleur était son manteau ? »\n\nIl ne demande pas de qui elle parle. Elle ne dit jamais *maman*, elle dit *elle*, et parfois elle ne dit rien du tout et pose la question directement.\n\nItsuki|« Beige. Avec des boutons foncés. »\n\nTsubaki|« Ah. »\n\nElle continue son exercice.\n\nTsubaki|« Moi je me souvenais de gris. »\n\nItsuki|« Il y en avait un gris aussi. Plus vieux. »\n\nTsubaki|« Ah. »\n\nElle écrit trois lignes.\n\nTsubaki|« Donc j'avais pas complètement tort. »\n\nItsuki|« Non. »",
+    "*Le soir, 19h*\n\nTsubaki|« Y a un club de théâtre au lycée ? »\n\nItsuki|« Il y en a un. »\n\nTsubaki|« Il est bien ? »\n\nItsuki|« Je sais pas. »\n\nTsubaki|« Tu sais rien de ton lycée. »\n\nItsuki|« Je sais où sont les sorties. »\n\nTsubaki|« C'est *déprimant*. »\n\nElle pique un morceau dans la poêle avec les doigts. Il tape sur sa main sans regarder. Elle recommence.",
+    "Tsubaki|« Toi t'es dans quoi comme club ? »\n\nItsuki|« Littérature. »\n\nElle repose ses baguettes.\n\nTsubaki|« PARDON ? »\n\nItsuki|« C'est administratif. »\n\nTsubaki|« Tu es dans le club de LITTÉRATURE. »\n\nItsuki|« On m'a mis là. »\n\nTsubaki|« Tu écris tous les soirs depuis que t'as onze ans. »\n\nItsuki|« Ce n'est pas la même chose. »\n\nTsubaki|« En quoi c'est pas la même chose ? »\n\nItsuki|« Mange. »",
+    "*22h40, sa chambre*\n\nLe tiroir du bas contient : les copies de l'an dernier, un dictionnaire de poche, et sept cahiers.\n\nSept. Le premier date de la sixième. Le septième est à moitié plein.\n\nIl en manque un. Le troisième — celui de la troisième année de collège.\n\nIl ne l'a pas jeté. Il l'a mis ailleurs, dans un carton, en haut du placard de l'entrée, sous des vêtements d'hiver.\n\nIl ne l'a pas rouvert depuis trois ans et il sait exactement où il est."
+  ]
+_XE[19]["scenes"] = [
+    '*Début novembre, couloir du premier, 8h10*\n\nIl ne vient plus au club.\n\nNi le mardi 22, ni le mardi 29. Deux mardis, ce qui est un fait et pas encore une information.\n\nLe troisième mardi, il ne vient pas non plus.',
+    "Elle le rattrape près des casiers, exactement au même endroit qu'en mai.\n\nHina|« Ça va ? »\n\nIl ne répond pas.\n\nIl ne dit pas *oui*. Il ne dit pas *non*. Il ne dit rien du tout et il continue de ranger ses affaires dans son casier avec une lenteur anormale.\n\nHina|« Amano. »\n\nItsuki|« Il faut que j'y aille. »\n\nHina|« Il est huit heures dix. »\n\nItsuki|« Oui. »",
+    "Elle se met entre lui et le couloir. Ce n'est pas prémédité et c'est très mal calculé.\n\nHina|« Vous n'êtes pas venu trois fois. »\n\nItsuki|« Je ne suis pas obligé. »\n\nHina|« Je sais que vous n'êtes pas obligé. »\n\nItsuki|« Alors il n'y a pas de problème. »\n\nHina|« Il y a la cale de la fenêtre. »\n\nIl s'arrête.\n\nHina|« Vous aviez dit qu'il faudrait la refaire en octobre. On est en novembre. »\n\nItsuki|« Quelqu'un la refera. »\n\nHina|« Personne ne l'a refaite. »",
+    "Ce qu'il ne dit pas dans le couloir, et qu'il pense pendant les onze secondes où elle lui bloque le passage :\n\nQu'il n'est pas venu au club parce que le mardi précédent, en rentrant, il a ouvert le placard de l'entrée et regardé le carton du haut pendant quatre minutes sans le descendre.\n\nQue ça ne lui était pas arrivé depuis trois ans.\n\nEt qu'il sait exactement à cause de qui.",
+    "*Le même jour, 15h20, salle 2-B*\n\nIl ne prend aucune note de tout le cours de mathématiques.\n\nIl n'écrit rien dans la marge non plus.\n\nLe professeur l'interroge, ce qui n'arrive jamais, parce qu'il y a un ordre alphabétique et que ce jour-là l'ordre tombe sur lui.\n\nLe prof|« Amano. La raison de la suite. »\n\nItsuki|« …Pardon ? »\n\nLe prof|« La raison. »\n\nItsuki|« Je ne sais pas. »\n\nIl ne dit pas *je n'ai pas suivi*. Il dit *je ne sais pas*, ce qui est une phrase entière, à voix haute, devant trente-six personnes.\n\nTrois têtes se retournent.",
+    "*17h, salle d'arts plastiques*\n\nIl y va un jeudi, ce qui n'est pas son jour.\n\nJun ne relève pas.\n\nIls restent quarante minutes sans se parler. Itsuki n'écrit pas. Il regarde par la fenêtre.\n\nJun|« T'as pas ton cahier. »\n\nItsuki|« Non. »\n\nJun|« Depuis quand ? »\n\nItsuki|« Trois semaines. »\n\nJun change de crayon.\n\nJun|« C'est la première fois en deux ans. »\n\nItsuki|« Je sais. »\n\nJun|« Ok. »\n\nIl ne demande rien d'autre, et c'est exactement pour ça qu'Itsuki est venu un jeudi.",
+    "Il ferme son casier plus fort que nécessaire.\n\nItsuki|« Qu'est-ce que vous voulez, Serizawa ? »\n\nC'est la première fois qu'il dit son nom.\n\nHina|« Je veux savoir si ça va. »\n\nItsuki|« Pourquoi ? »\n\nHina|« Comment ça pourquoi ? »\n\nItsuki|« Vous demandez à trois cent quatre personnes si ça va. »\n\nHina|« Ce n'est pas— »\n\nItsuki|« Vous connaissez trois cent quatre prénoms et les dates d'anniversaire de la moitié. »\n\nHina|« Comment vous savez ça ? »\n\nItsuki|« Tout le monde le sait. »",
+    "Itsuki|« Alors quand vous me demandez si ça va, c'est la trois cent quatrième fois de la semaine, et je devrais être content, et je ne suis pas content, et j'aimerais bien passer. »\n\nElle ne bouge pas.\n\nHina|« Ce n'est pas pareil. »\n\nItsuki|« En quoi ? »\n\nElle ouvre la bouche.\n\nEt elle réalise, dans un couloir, à huit heures douze, qu'elle n'a aucune façon de le prouver.\n\nParce que c'est exactement ce qu'elle fait. Parce qu'elle a un carnet dans la poche intérieure de sa veste avec les anniversaires dedans. Parce que la phrase *ça va ?* est page quatre.\n\nElle se décale.\n\nIl passe."
+  ]
+_XE[24]["scenes"] = [
+    "*Mi-décembre, mardi, 18h50*\n\nLe recueil de fin d'année se boucle le 20 janvier. Il y a six textes prévus. Il y en a deux.\n\nHina|« Momo a rendu. »\n\nItsuki|« Et l'autre ? »\n\nHina|« Moi. »\n\nItsuki|« Vous écrivez ? »\n\nHina|« Mal. »\n\nItsuki|« Ce n'est pas une réponse. »\n\nHina|« C'est la vraie. »",
+    "Il sort un cahier de son sac.\n\nPas le sien — un cahier de brouillon quelconque, à spirale, avec une couverture verte.\n\nItsuki|« J'ai recopié quelque chose. »\n\nHina|« Recopié ? »\n\nItsuki|« Je ne montre pas le cahier. Je recopie ce que je montre. »\n\nHina|« Vous avez recopié à la main pour ne pas montrer le cahier. »\n\nItsuki|« Oui. »\n\nHina|« Ça fait combien de pages ? »\n\nItsuki|« Deux. »\n\nHina|« Vous avez recopié deux pages à la main. »\n\nItsuki|« Vous voulez le lire ou vous voulez discuter de la méthode ? »",
+    "Ce n'est pas un texte sur sa mère.\n\nC'est un texte sur une machine à massicoter.\n\nDeux pages sur la façon dont on cale une rame de papier avant de couper, sur le bruit que ça fait, sur le fait qu'un bon coupeur reconnaît un mauvais calage à l'oreille avant de voir le résultat.\n\nIl n'y a pas un seul sentiment dans les deux pages.\n\nIl y en a partout.",
+    "Elle repose les deux pages.\n\nHina|« Il y a une phrase, à la deuxième page. »\n\nItsuki|« Laquelle ? »\n\nHina|« *Un bon coupeur entend le mauvais calage avant de le voir.* »\n\nItsuki|« C'est technique. »\n\nHina|« C'est pas technique du tout. »\n\nItsuki|« C'est littéralement une information sur le massicot. »\n\nHina|« Amano. »\n\nIl ne répond pas.\n\nHina|« Qui est le bon coupeur ? »\n\nLong silence dans huit mètres carrés.\n\nItsuki|« Le patron. Monsieur Kado. Il a soixante-treize ans et il travaille de dos à la machine. »\n\nHina|« Et vous ? »\n\nItsuki|« Moi je regarde. »",
+    'Hina|« Vous écrivez depuis quand ? »\n\nItsuki|« Onze ans. »\n\nHina|« Tous les jours ? »\n\nItsuki|« Presque. »\n\nHina|« Ça fait combien de cahiers ? »\n\nIl hésite pour la première fois de la conversation.\n\nItsuki|« Sept. »\n\nHina|« Sept cahiers en six ans. »\n\nItsuki|« Oui. »\n\nHina|« Il en manque un. »\n\nIl se lève.',
+    "Itsuki|« Pourquoi vous dites ça ? »\n\nHina|« Parce que vous avez hésité avant de dire sept. »\n\nItsuki|« J'ai compté. »\n\nHina|« Vous ne comptez jamais devant les gens. Vous savez toujours avant. »\n\nIl remet le cahier vert dans son sac avec une lenteur inhabituelle.\n\nItsuki|« Il y en a huit. »\n\nHina|« Où est le huitième ? »\n\nItsuki|« Dans un carton, en haut d'un placard, sous des vêtements d'hiver. »\n\nIl met son sac sur l'épaule.\n\nItsuki|« Et ça, c'est la chose la plus personnelle que j'aie dite à quelqu'un depuis trois ans, alors je vais y aller maintenant. »\n\nIl sort.\n\nElle ne le retient pas, ce qui est le mieux qu'elle puisse faire.",
+    "Elle lit deux fois. La deuxième fois, elle lit beaucoup plus lentement.\n\nHina|« Il n'y a pas le mot *père* une seule fois. »\n\nItsuki|« Non. »\n\nHina|« Mais c'est sur lui. »\n\nItsuki ne répond pas.\n\nHina|« Vous faites toujours ça ? »\n\nItsuki|« Faire quoi ? »\n\nHina|« Écrire à côté. »\n\nIl met du temps.\n\nItsuki|« C'est la seule façon que je connaisse d'écrire dessus. »",
+    "Hina|« Vous le mettez dans le recueil ? »\n\nItsuki|« Non. »\n\nHina|« Amano. »\n\nItsuki|« Non. »\n\nHina|« Pourquoi vous me l'avez montré, alors ? »\n\nLong silence.\n\nItsuki|« Parce que vous m'aviez dit que je vous devais rien et que ce n'était pas vrai. »\n\nIl reprend le cahier vert.\n\nItsuki|« Vous connaissiez quatre pages de moi que je n'ai pas choisi de vous donner. Maintenant vous en connaissez deux que j'ai choisies. »\n\nIl le range.\n\nItsuki|« Ça remet un peu les choses d'aplomb. »"
+  ]
+_XE[32]["scenes"] = [
+    "*Mars, salle de musique, 12h50*\n\nRika mange avec les filles du club de musique depuis douze semaines.\n\nHina arrive avec deux boîtes de bento et s'assoit sans demander, ce qui n'est pas du tout dans ses habitudes et ce qui interrompt trois conversations.",
+    'Rika|« …Salut. »\n\nHina|« Salut. »\n\nRika|« Tu fais quoi ? »\n\nHina|« Je déjeune. »\n\nRika|« Ici ? »\n\nHina|« Ici. »\n\nUne des filles du club de musique regarde les deux autres. Elles se lèvent toutes les trois avec un naturel remarquable et vont manger ailleurs.',
+    "Rika|« C'était très gênant. »\n\nHina|« Oui. »\n\nRika|« Tu vas dire quoi ? »\n\nHina|« Je sais pas. »\n\nRika|« Tu sais toujours. »\n\nHina|« Plus maintenant. »\n\nElle ouvre une des deux boîtes et la pousse vers Rika.\n\nHina|« J'ai démissionné de tout. »\n\nRika|« Je sais, tout le monde sait. »\n\nHina|« J'ai pas su te le dire. »\n\nRika|« Ça j'avais deviné. »",
+    "Rika ne touche pas la boîte.\n\nRika|« Tu veux que je te dise que c'est bon ? »\n\nHina|« Non. »\n\nRika|« Parce que c'est pas bon. »\n\nHina|« Je sais. »\n\nRika|« Douze semaines, Hina. »\n\nHina|« Je sais. »\n\nRika|« Et t'es venue aujourd'hui parce que t'as plus de réunions. »\n\nSilence.\n\nHina|« Oui. »\n\nRika|« Voilà. Ça au moins c'est honnête. »",
+    "Rika|« Bon. Il faut que je te dise un truc et je vais le dire mal. »\n\nHina|« D'accord. »\n\nRika|« Pendant les douze semaines, j'ai pas été malheureuse. »\n\nHina|« …Ah. »\n\nRika|« C'est ça le truc chiant. J'ai été *bien*. »\n\nElle pique dans la boîte.\n\nRika|« Les filles du club de musique, elles savent que j'ai une sœur qui s'appelle Momoko. Elles savent que mon père répare des climatiseurs. Elles m'ont demandé. »\n\nHina ne dit rien du tout.\n\nRika|« Toi tu savais déjà. Tu sais tout depuis quatre ans. Mais tu me l'as jamais demandé, tu l'as juste retenu. »",
+    "Hina|« C'est pas la même chose ? »\n\nRika|« Non. »\n\nHina|« Pourquoi ? »\n\nRika|« Parce que quand quelqu'un te demande, tu existes pendant deux minutes. Quand quelqu'un retient, tu es une fiche. »\n\nElle dit ça sans méchanceté, en mangeant, et c'est bien pire.\n\nHina|« …D'accord. »\n\nRika|« Voilà. »\n\nUn silence de salle de musique.\n\nHina|« Ta sœur, elle est comment en ce moment ? »\n\nRika|« Sérieusement ? »\n\nHina|« Sérieusement. »\n\nRika|« Là tu le fais parce que je viens de te le dire. »\n\nHina|« Oui. »\n\nRika|« C'est nul. »\n\nHina|« Je sais. »\n\nRika|« …Elle est insupportable. Elle a une phase où elle répond à tout par *et alors*. »",
+    "Elles parlent de Momoko pendant onze minutes.\n\nC'est une conversation de rien du tout — une adolescente de quatorze ans qui répond *et alors*, une mère qui menace de couper le wifi, un père qui trouve ça drôle et qui se fait engueuler pour ça.\n\nHina ne retient rien. C'est volontaire. Elle a la main sur son sac deux fois pour prendre le carnet gris et elle ne le sort pas.\n\nÀ la sonnerie, Rika ramasse les boîtes.\n\nRika|« C'était bien. »\n\nHina|« C'était rien. »\n\nRika|« Ouais. C'est pour ça que c'était bien. »",
+    "Elle prend la boîte, finalement.\n\nRika|« Je te pardonne pas. »\n\nHina|« D'accord. »\n\nRika|« Genre vraiment pas. »\n\nHina|« D'accord. »\n\nRika|« Arrête de dire d'accord. »\n\nHina|« Qu'est-ce que tu veux que je dise ? »\n\nRika|« Rien. »\n\nElle mange trois bouchées.\n\nRika|« Tu reviens demain ? »\n\nHina|« Si tu veux. »\n\nRika|« Non. Pas *si je veux*. »\n\nHina|« …Je reviens demain. »\n\nRika|« Voilà. »",
+    "Elles mangent en silence pendant quatre minutes.\n\nRika|« Bon. Alors. Amano. »\n\nHina|« Rika. »\n\nRika|« Non mais franchement. »\n\nHina|« Il n'y a rien. »\n\nRika|« Tu as démissionné de trois mandats en février. »\n\nHina|« Ça n'a rien à voir. »\n\nRika|« Mm. »\n\nElle mâche.\n\nRika|« C'est bien, ce que t'as fait. Le truc des mandats. »\n\nHina|« Tu viens de dire que tu me pardonnais pas. »\n\nRika|« Les deux peuvent être vrais. »"
+  ]
+_XE[37]["scenes"] = [
+    "*Mai, cour, 12h40*\n\nNanami mange dehors depuis avril parce que la nouvelle classe l'ennuie.\n\nHina s'assoit à côté d'elle sur le muret sans demander.\n\nNanami|« Tiens. »\n\nHina|« Salut. »\n\nNanami|« Tu manges avec Amano d'habitude. »\n\nHina|« Il a un contrôle. »\n\nNanami|« Ah. »\n\nSilence de muret.",
+    "Hina|« J'ai une réponse. »\n\nNanami|« À quoi ? »\n\nHina|« À ta question. »\n\nNanami|« J'ai posé beaucoup de questions. »\n\nHina|« *Donne-moi une chose que tu fais et qui ne sert à personne d'autre.* »\n\nNanami se redresse un peu.\n\nNanami|« Ça fait quatorze mois. »\n\nHina|« Quinze. »\n\nNanami|« Vas-y. »",
+    "Hina|« J'écris. »\n\nNanami|« Tu écris quoi ? »\n\nHina|« Rien de bon. Vraiment rien de bon. »\n\nNanami|« Ce n'est pas la question. »\n\nHina|« Je sais. »\n\nElle regarde la cour.\n\nHina|« Depuis février. Une heure par jour, le soir, et personne ne le lira jamais, et c'est exactement le point. »\n\nNanami hoche la tête une fois.\n\nNanami|« Bon. »\n\nHina|« C'est tout ? »\n\nNanami|« Qu'est-ce que tu veux, une médaille ? »\n\nHina|« Un peu. »\n\nNanami|« Non. »",
+    "Ils marchent jusqu'au portail sans parler.\n\nAu portail, elle s'arrête.\n\nHina|« C'est Nanami. »\n\nItsuki|« Je sais. »\n\nHina|« Comment vous savez ? »\n\nItsuki|« Vous mangez dehors avec elle depuis avril et vous êtes rentrée à midi quarante-huit. »\n\nHina|« Elle m'a rien fait. »\n\nItsuki|« Je sais. »\n\nHina|« Elle m'a dit que c'était bien. Pour l'écriture. Enfin — elle a dit *bon*, ce qui chez elle est un discours. »\n\nItsuki|« Et alors ? »\n\nHina|« Alors j'ai attendu quinze mois pour un *bon*. »",
+    "Itsuki|« Vous vouliez quoi ? »\n\nHina|« Je sais pas. »\n\nItsuki|« Si. »\n\nElle donne un coup de pied dans rien.\n\nHina|« Je voulais qu'elle me dise que c'était bien. Pas *bon*. Bien. »\n\nItsuki|« Elle ne l'a pas lu. »\n\nHina|« Non. »\n\nItsuki|« Alors elle ne peut pas. »\n\nHina|« Je sais. »\n\nItsuki|« Et vous ne le montrerez à personne. »\n\nHina|« Non. »\n\nItsuki|« Alors personne ne vous le dira jamais. »\n\nIl le dit sans aucune dureté, comme un fait de physique.\n\nItsuki|« C'est le prix. Je le paie depuis onze ans. »",
+    "Hina|« Ça vous manque ? »\n\nItsuki|« Qu'on me dise que c'est bien ? »\n\nHina|« Oui. »\n\nIl met du temps.\n\nItsuki|« Non. Ce qui me manque, c'est qu'on me dise que c'est *raté*. »\n\nHina|« …Pardon ? »\n\nItsuki|« Personne ne m'a jamais dit qu'un truc que j'avais écrit était raté. Il y a eu quarante personnes pour dire que c'était beau et zéro pour dire *la troisième page traîne*. »\n\nIl regarde la rue.\n\nItsuki|« Du coup je ne sais toujours pas si je sais écrire. »\n\nHina|« Votre massicot traîne à la deuxième page. »\n\nIl se retourne d'un coup.\n\nHina|« Il y a un paragraphe sur les rames de cent vingt qui ne sert à rien. »\n\nIl la regarde pendant quatre secondes entières.\n\nItsuki|« …Vous avez raison. »\n\nHina|« Je sais. »\n\nIl sourit. Ça dure une demi-seconde et elle le voit.",
+    "*Le même jour, 17h, couloir*\n\nItsuki|« Ça va ? »\n\nHina s'arrête.\n\nHina|« …Vous venez de me demander si ça va. »\n\nItsuki|« Oui. »\n\nHina|« Vous ne demandez jamais. »\n\nItsuki|« Non. »\n\nHina|« Pourquoi maintenant ? »\n\nIl hausse les épaules d'un centimètre.\n\nItsuki|« Vous êtes sortie de la cour à midi quarante-huit et vous êtes restée douze minutes dans les toilettes du premier. »\n\nHina|« Vous m'espionnez. »\n\nItsuki|« Je regarde. »\n\nElle met du temps.\n\nHina|« Ça va. »\n\nItsuki|« Vraiment ? »\n\nHina|« Non. »\n\nItsuki|« D'accord. »\n\nIl ne demande rien d'autre. Il marche à côté d'elle jusqu'au portail et ils ne parlent de rien pendant quatorze minutes."
+  ]
+del _XE
+
+# ============================================================
+#  🧱 LA MAISON D'À CÔTÉ — concept #2
+# ============================================================
+CHRONIQUE_SAISONS["la_maison_da_cote"] = {
+ "titre": "LA MAISON D'À CÔTÉ",
+ "genre": "🧱 Voisinage",
+ "accroche": "Un mur d'un mètre soixante entre deux maisons. "
+             "Dix ans que personne n'a dit pourquoi.",
+ "duree": "un an, d'avril à avril",
+ "casting": {
+   "haruna": ("🧱", "Haruna", "17 ans · deuxième de quatre. Escalade le mur "
+                              "au lieu de faire le tour depuis qu'elle a douze ans."),
+   "yuma":   ("🌙", "Yuma", "17 ans · poli, effacé. Il ne transmet plus rien "
+                            "à personne depuis qu'il a sept ans."),
+   "hoshi":  ("⭐", "Hoshi", "13 ans · née après le mur. Elle demande pourquoi "
+                             "depuis qu'elle sait parler."),
+   "miki":   ("📦", "Miki", "21 ans · la sœur aînée, partie à Osaka. "
+                            "Ne répond plus depuis février."),
+   "masaru": ("🔨", "Masaru", "49 ans · menuisier. Il a monté le mur en trois jours."),
+   "kenji":  ("📄", "Kenji", "51 ans · comptable. Il n'est pas venu à un enterrement."),
+ },
+ "personnages": {
+   "haruna": {"nom": "Haruna", "age": 17, "role": "protagoniste",
+              "veut": "un BTS aménagement qu'elle n'a dit à personne",
+              "craint": "les silences", "hors_romance": "l'atelier · Miki · le BTS"},
+   "yuma":   {"nom": "Yuma", "age": 17, "role": "protagoniste",
+              "veut": "son permis de scooter", "craint": "transmettre",
+              "hors_romance": "l'astronomie · Hoshi · le permis"},
+   "hoshi":  {"nom": "Hoshi", "age": 13, "role": "famille"},
+   "miki":   {"nom": "Miki", "age": 21, "role": "secondaire",
+              "veut": "avouer qu'elle rate sa première année"},
+   "masaru": {"nom": "Masaru", "age": 49, "role": "famille"},
+   "kenji":  {"nom": "Kenji", "age": 51, "role": "famille"},
+   "yoko":   {"nom": "Yoko", "age": 47, "role": "famille"},
+   "emi":    {"nom": "Emi", "age": 49, "role": "famille"},
+   "aki":    {"nom": "Aki", "age": 17, "role": "secondaire"},
+   "toru":   {"nom": "Toru", "age": 17, "role": "secondaire"},
+   "riku":   {"nom": "Riku", "age": 8, "role": "famille"},
+   "kai":    {"nom": "Kai", "age": 8, "role": "famille"},
+ },
+ "arcs": {
+   "principal": {"nom": "Haruna & Yuma", "episodes": list(range(1, 41))},
+   "acte1": {"nom": "I — Le trou sous le mur", "episodes": list(range(1, 8))},
+   "acte2": {"nom": "II — Ce qu'on se passe", "episodes": list(range(8, 15))},
+   "acte3": {"nom": "III — Le messager", "episodes": list(range(15, 22))},
+   "acte4": {"nom": "IV — Deux maisons", "episodes": list(range(22, 29))},
+   "acte5": {"nom": "V — Le mur", "episodes": list(range(29, 35))},
+   "acte6": {"nom": "VI — D'à côté", "episodes": list(range(35, 41))},
+   "miki":   {"nom": "Miki", "episodes": [7, 16, 25, 34, 40]},
+   "hoshi":  {"nom": "Hoshi", "episodes": [11, 20, 30, 36]},
+   "peres":  {"nom": "Les deux pères", "episodes": [4, 19, 28, 33, 38]},
+   "meres":  {"nom": "Yoko & Emi", "episodes": [13, 23, 31]},
+   "jumeaux":{"nom": "Riku & Kai", "episodes": [6, 21, 36]},
+   "aki":    {"nom": "Aki", "episodes": [12, 18, 27, 37]},
+   "toru":   {"nom": "Toru", "episodes": [10, 24, 35]},
+   "bts":    {"nom": "Le BTS de Haruna", "episodes": [8, 26, 37, 40]},
+   "permis": {"nom": "Le permis de Yuma", "episodes": [14, 29, 39]},
+ },
+ "pose_runtime": ["rupture_grave"],
+ "ending_defaut": "voisins",
+ "endings": {
+  "le_mur_reste": {"nom": "🧱 Le mur reste, et ce n'est pas grave", "route": "le_mur_reste",
+    "exige": ["baiser"], "interdit": ["rupture_grave"],
+    "rel_min": {"yuma": {"confiance": 72}}, "poids": 2, "texte": ""},
+  "les_familles": {"nom": "🚪 Les familles se reparlent", "route": "les_familles",
+    "exige": ["baiser", "verite_dite"], "interdit": ["rupture_grave"],
+    "poids": 2, "texte": ""},
+  "ils_partent": {"nom": "🌾 Ils partent tous les deux", "route": "ils_partent",
+    "exige": ["baiser"], "interdit": ["rupture_grave"], "poids": 1, "texte": ""},
+  "voisins": {"nom": "🤝 Voisins", "route": "voisins",
+    "exige": [], "interdit": ["baiser"], "poids": 0, "texte": ""},
+ },
+ "episodes": [],
+ "epilogue": "",
+}
+
+def _lmc(num, titre, ton, arcs, fonction, choix=None):
+    e = {"titre": titre, "ton": ton, "arcs": arcs, "fonction": fonction, "scenes": []}
+    if choix: e["choix"] = choix
+    if num == 40: e["finale"] = True
+    return e
+
+def _c2(opts, suites, dec=False):
+    return {"question": "", "decisif": dec,
+            "options": [(k, e, "") for k, e in opts], "suites": suites}
+
+CHRONIQUE_SAISONS["la_maison_da_cote"]["episodes"] = [
+ _lmc(1, "Un mètre soixante", "calme", ["acte1","principal"],
+   "Les deux maisons. Le mur. Dix ans d'habitude. Aucun des deux ne le questionne."),
+ _lmc(2, "Par-dessus", "calme", ["acte1","principal"],
+   "Écho 1 posé : elle escalade, il fait le tour."),
+ _lmc(3, "La marche", "calme", ["acte1","principal"],
+   "Écho 5 posé : il lit sur le perron, dehors, même en avril."),
+ _lmc(4, "La gouttière", "calme", ["acte1","peres"],
+   "Écho 3 posé. Elle déborde depuis dix ans et personne ne la répare."),
+ _lmc(5, "Le ballon", "calme", ["acte1","jumeaux","principal"],
+   "Premier contact réel en dix ans.",
+   _c2([("dessus","1️⃣"),("sonner","2️⃣")],
+       {"dessus":{"texte":"","pose":["ballon_dessus"],"relation":{"yuma":{"confiance":3}}},
+        "sonner":{"texte":"","pose":["ballon_sonne"],"relation":{"yuma":{"confiance":-2}}}})),
+ _lmc(6, "Le trou", "calme", ["acte1","jumeaux"],
+   "Écho 4 posé : Riku et Kai creusent sous le mur."),
+ _lmc(7, "Miki ne répond pas", "calme", ["acte1","miki"],
+   "Février. Trois messages. Aucune réponse. Personne n'en parle."),
+ _lmc(8, "Ce qu'on se passe", "calme", ["acte2","principal","bts"],
+   "Un devoir de maths passe par-dessus le mur. Puis un autre."),
+ _lmc(9, "Dis à ton père", "tension", ["acte2","principal","peres"],
+   "Écho 2 posé. Elle dit la phrase sans savoir ce qu'elle déclenche.",
+   _c2([("insiste","1️⃣"),("laisse","2️⃣")],
+       {"insiste":{"texte":"","pose":["a_insiste"],"relation":{"yuma":{"confiance":-5}}},
+        "laisse":{"texte":"","pose":["a_laisse"],"relation":{"yuma":{"confiance":6}}}})),
+ _lmc(10, "Trois membres", "calme", ["acte2","toru"],
+   "Le club d'astronomie. Toru parle pour deux, ce qui arrange Yuma."),
+ _lmc(11, "Hoshi", "calme", ["acte2","hoshi","principal"],
+   "La petite sœur découvre. Elle demande pourquoi. Personne ne répond jamais."),
+ _lmc(12, "Aki", "calme", ["acte2","aki","principal"],
+   "La seule personne extérieure aux deux maisons.",
+   _c2([("dit","1️⃣"),("garde","2️⃣")],
+       {"dit":{"texte":"","pose":["aki_sait"],"relation":{"yuma":{"confiance":4}}},
+        "garde":{"texte":"","pose":["aki_ignore"]}})),
+ _lmc(13, "La nuit", "calme", ["acte2","meres"],
+   "Yoko rentre à six heures. Elle croise Emi. Depuis dix ans."),
+ _lmc(14, "Cent quatre-vingt-dix mille", "calme", ["acte2","permis"],
+   "Le permis de scooter. Ce que Yuma économise et pourquoi il n'en parle pas."),
+ _lmc(15, "Transmets-lui", "climax", ["acte3","principal","peres"],
+   "Elle lui demande de porter quelque chose. Route majeure.",
+   _c2([("demande","1️⃣"),("elle_y_va","2️⃣")],
+       {"demande":{"texte":"","pose":["route_messager"]},
+        "elle_y_va":{"texte":"","pose":["route_directe"],"relation":{"yuma":{"confiance":6}}}}, True)),
+ _lmc(16, "Osaka", "calme", ["acte3","miki"],
+   "Ce que fait vraiment Miki depuis février."),
+ _lmc(17, "Il escalade", "calme", ["acte3","principal"],
+   "Écho 1 : première fois en dix ans."),
+ _lmc(18, "Ce qu'Aki voit", "calme", ["acte3","aki","principal"],
+   "Quelqu'un d'extérieur nomme ce que les deux ne nomment pas."),
+ _lmc(19, "Sept ans", "climax", ["acte3","principal","peres"],
+   "Écho 2 : il explose. La raison a dix ans et il ne l'a jamais dite.",
+   _c2([("exige","1️⃣"),("attend","2️⃣")],
+       {"exige":{"texte":"","pose":["a_exige"],"relation":{"yuma":{"confiance":-8}}},
+        "attend":{"texte":"","pose":["a_attendu"],"relation":{"yuma":{"confiance":5}}}}, True)),
+ _lmc(20, "Ce que Hoshi n'a jamais vu", "calme", ["acte3","hoshi"],
+   "Née après. Aucun souvenir d'un jardin sans mur."),
+ _lmc(21, "Rebouché", "tension", ["acte3","jumeaux","peres"],
+   "Écho 4 : Masaru trouve le trou. Il le rebouche en une heure."),
+ _lmc(22, "La gouttière, la nuit", "calme", ["acte4","principal","peres"],
+   "Écho 3 : Yuma la répare à deux heures du matin. Elle le voit.",
+   _c2([("denonce","1️⃣"),("couvre","2️⃣")],
+       {"denonce":{"texte":"","pose":["gouttiere_dite"],"relation":{"yuma":{"confiance":-6}}},
+        "couvre":{"texte":"","pose":["gouttiere_couverte"],"relation":{"yuma":{"confiance":10}}}})),
+ _lmc(23, "Six heures du matin", "calme", ["acte4","meres"],
+   "Yoko parle à Emi depuis dix ans et n'en a jamais parlé à son mari."),
+ _lmc(24, "Deux marches", "calme", ["acte4","principal","toru"],
+   "Écho 5 : chacun sur son perron, de part et d'autre du mur."),
+ _lmc(25, "Trois appels", "tension", ["acte4","miki","principal"],
+   "Miki ne répond toujours pas.",
+   _c2([("insiste","1️⃣"),("lache","2️⃣")],
+       {"insiste":{"texte":"","pose":["miki_forcee"]},
+        "lache":{"texte":"","pose":["miki_laissee"],"relation":{"yuma":{"confiance":4}}}})),
+ _lmc(26, "Le dossier", "calme", ["acte4","bts","principal"],
+   "Le BTS qu'elle n'a dit à personne. Elle le dit à quelqu'un."),
+ _lmc(27, "Aki dit la chose", "tension", ["acte4","aki","principal"],
+   "Payoff de l'ép.12 selon la route."),
+ _lmc(28, "Le tiroir", "climax", ["acte4","peres","principal"],
+   "Une lettre datée de mai 2015, jamais envoyée.",
+   _c2([("lit","1️⃣"),("rend","2️⃣")],
+       {"lit":{"texte":"","pose":["lettre_lue"],"relation":{"yuma":{"confiance":-4}}},
+        "rend":{"texte":"","pose":["lettre_rendue"],"relation":{"yuma":{"confiance":12}}}}, True)),
+ _lmc(29, "L'examen", "climax", ["acte5","principal","permis"],
+   "Pourquoi Kenji n'est pas venu. La raison est ridicule et c'est le sujet."),
+ _lmc(30, "Hoshi demande encore", "tension", ["acte5","hoshi","peres"],
+   "Treize ans de la même question."),
+ _lmc(31, "Emi", "climax", ["acte5","meres"],
+   "Celle qui porte la culpabilité d'une brouille dont elle est la cause involontaire."),
+ _lmc(32, "Un soir d'août", "climax", ["acte5","principal"],
+   "Sur le mur. Carrefour majeur.",
+   _c2([("elle","1️⃣"),("lui","2️⃣"),("personne","3️⃣")],
+       {"elle":{"texte":"","pose":["baiser","elle_a_ose"],"marque":{"type":"baiser"},
+                "relation":{"yuma":{"confiance":22}}},
+        "lui":{"texte":"","pose":["baiser","il_a_ose"],"marque":{"type":"baiser"},
+               "relation":{"yuma":{"confiance":18}}},
+        "personne":{"texte":"","pose":["route_distance","occasion_manquee"],
+                    "ferme":["le_mur_reste","les_familles","ils_partent"],
+                    "relation":{"yuma":{"confiance":-15}},
+                    "plafond":{"yuma":{"confiance":65}}}}, True)),
+ _lmc(33, "Elle le dit elle-même", "climax", ["acte5","principal","peres"],
+   "Écho 2 refermé : elle dit la phrase à Kenji, en face."),
+ _lmc(34, "Miki rentre", "calme", ["acte5","miki","principal"],
+   "Payoff de l'ép.25. Ce qu'elle n'osait pas dire."),
+ _lmc(35, "Ce qu'on fait maintenant", "tension", ["acte6","principal","peres","toru"],
+   "Faire parler les pères, ou laisser.",
+   _c2([("provoque","1️⃣"),("laisse","2️⃣")],
+       {"provoque":{"texte":"","pose":["verite_dite"],"relation":{"yuma":{"confiance":8}}},
+        "laisse":{"texte":"","pose":["verite_tue"],"relation":{"yuma":{"confiance":-2}}}}, True)),
+ _lmc(36, "Un autre trou", "calme", ["acte6","hoshi","jumeaux"],
+   "Écho 4 refermé : Hoshi en creuse un, et personne ne la gronde."),
+ _lmc(37, "Le dossier, envoyé", "calme", ["acte6","bts","aki"],
+   "Le BTS. Ce que ça veut dire de partir à quarante minutes."),
+ _lmc(38, "Deux hommes et une gouttière", "climax", ["acte6","peres"],
+   "Écho 3 refermé."),
+ _lmc(39, "La même marche", "calme", ["acte6","principal","permis"],
+   "Écho 5 refermé.",
+   _c2([("tombe","1️⃣"),("reste","2️⃣"),("partent","3️⃣")],
+       {"tombe":{"texte":"","pose":["mur_tombe"]},
+        "reste":{"texte":"","pose":["mur_reste"]},
+        "partent":{"texte":"","pose":["ils_sen_vont"]}}, True)),
+ _lmc(40, "La maison d'à côté", "climax", ["acte6","principal","miki","bts"],
+   "Écho 1 refermé."),
+]
+
+
+_XC2A = CHRONIQUE_SAISONS["la_maison_da_cote"]["episodes"]
+_XC2A[0]["scenes"] = [
+    "*Quartier Fujimi, avril, 6h40*\n\nLe mur fait un mètre soixante.\n\nParpaings gris, sept rangées, un chaperon de ciment mal lissé sur le dessus. Il court sur onze mètres, du fond du jardin jusqu'à l'alignement des deux façades, et il s'arrête là — devant, il n'y a rien. Juste deux allées parallèles et deux portails.\n\nC'est la seule chose bizarre, quand on regarde bien. Un mur qui s'arrête.",
+    "Les deux maisons ont été construites la même année, par deux hommes qui s'étaient connus sur un chantier.\n\nElles sont identiques. Le même toit, la même avancée de porche, les mêmes fenêtres à petits carreaux en haut. Celle des Ozaki est plus abîmée parce qu'ils sont six ; celle des Tachibana a des volets repeints tous les quatre ans.\n\nVues de la rue, on dirait toujours une seule maison coupée en deux.",
+    "Haruna Ozaki a dix-sept ans et n'a jamais connu le jardin sans le mur.\n\nEnfin — si. Elle avait sept ans. Elle se souvient d'une haie basse, d'un passage entre deux buissons, et d'un trampoline qui était chez les voisins et sur lequel elle sautait tous les jours.\n\nElle ne se souvient pas de la fin du trampoline.\n\nC'est le problème des souvenirs de sept ans : on garde les objets et on perd les dates.",
+    "*6h50, cuisine des Ozaki*\n\nRiku|« C'EST MOI QUI AI LE BOL BLEU. »\n\nKai|« C'est moi. »\n\nRiku|« Maman. »\n\nYoko|« Il y a quatre bols. »\n\nRiku|« Y en a qu'un bleu. »\n\nYoko|« Alors il y en a un qui prend le vert. »\n\nRiku et Kai|« NON. »\n\nYoko a fini sa garde à six heures. Elle est rentrée à six heures vingt. Elle se couchera à huit heures et se relèvera à quatorze.\n\nHaruna prend le bol bleu et mange debout devant l'évier.",
+    "Riku|« C'EST HARUNA QUI L'A. »\n\nHaruna|« Voilà, problème réglé. »\n\nKai|« C'est pas juste. »\n\nHaruna|« Non. »\n\nRiku|« Papa ! »\n\nMasaru, depuis le couloir, sans s'arrêter :\n\nMasaru|« Réglez ça entre vous. »\n\nC'est sa réponse à tout depuis huit ans et elle n'a jamais fonctionné une seule fois.",
+    "*7h15, maison Tachibana*\n\nIl y a quatre personnes et deux salles de bain, ce qui fait qu'on ne se croise jamais.\n\nYuma Tachibana descend à sept heures quinze, comme tous les jours. Son père est déjà parti. Sa mère corrige des copies à la table.\n\nEmi|« Il y a du riz. »\n\nYuma|« Merci. »\n\nEmi|« Hoshi n'est pas levée. »\n\nYuma|« Je m'en occupe. »\n\nIl tape trois coups au plafond avec le manche du balai. Il y a un bruit de matelas au-dessus.\n\nC'est tout ce qui se dit chez les Tachibana entre sept heures et sept heures vingt-cinq.",
+    "*7h40, le portail*\n\nIls sortent à peu près en même temps. Ça arrive quatre matins sur cinq depuis trois ans.\n\nDeux allées parallèles. Deux mètres cinquante entre eux.\n\nElle tourne à gauche vers l'arrêt de bus. Il tourne à droite vers le raccourci du parc.\n\nIls vont dans le même lycée.",
+    "Ce qu'ils se disent, un matin sur deux, quand la synchronisation est parfaite :\n\nHaruna|« 'lut. »\n\nYuma|« Salut. »\n\nÇa dure environ une seconde et il n'y a jamais eu de troisième mot.",
+    "*Ce que chacun croit savoir sur l'autre*\n\nHaruna sait que Yuma Tachibana est poli, effacé, qu'il a une petite sœur qui parle beaucoup, et que son père a fait quelque chose de grave il y a dix ans.\n\nElle ne sait pas quoi. Elle a demandé trois fois entre huit et douze ans. La troisième fois, sa mère a dit *ce n'est pas ton affaire* d'une voix qui a fermé le sujet pour toujours.\n\nYuma sait que Haruna Ozaki est bruyante, qu'elle escalade le mur, qu'elle a des jumeaux de huit ans qui hurlent, et que son propre père a honte de quelque chose.\n\nIl n'a jamais demandé quoi.\n\nIl a des raisons de ne jamais demander."
+  ]
+_XC2A[1]["scenes"] = [
+    "*Samedi, 10h20*\n\nIl y a deux façons d'aller du jardin des Ozaki au jardin des Tachibana.\n\nLa première : sortir par le portail, marcher onze mètres sur le trottoir, ouvrir l'autre portail. Quarante secondes.\n\nLa deuxième : le mur.\n\nHaruna prend la deuxième depuis qu'elle a douze ans, uniquement pour récupérer des choses qui tombent, ce qui arrive environ une fois par mois.",
+    "Elle a une méthode. Un pied sur le bac à fleurs vide, un genou sur le chaperon, un rétablissement, et on est assis dessus en quatre secondes.\n\nElle s'est ouvert le genou en 2019 et elle a une cicatrice de trois centimètres qui prouve qu'elle a mis un an à trouver la méthode.\n\nDe là-haut, on voit les deux jardins en même temps.\n\nC'est le seul endroit du monde d'où on voit les deux jardins en même temps.",
+    "Ce samedi-là, c'est une chaussette.\n\nUne chaussette de Kai, blanche à rayures, portée par le vent depuis l'étendoir et atterrie dans les hortensias des Tachibana.\n\nHaruna monte, s'assoit, évalue la distance. Quatre mètres. Elle ne peut pas l'attraper d'ici.\n\nElle pourrait descendre de l'autre côté. Elle ne descend jamais de l'autre côté.",
+    "Yuma sort de la maison à ce moment-là avec un panier de linge.\n\nIl la voit assise sur le mur. Il ne sursaute pas, parce qu'elle est assise sur ce mur environ une fois par mois depuis cinq ans.\n\nIl regarde les hortensias. Il voit la chaussette.\n\nIl la ramasse. Il la lance. Elle l'attrape.\n\nHaruna|« Merci. »\n\nYuma|« De rien. »\n\nIl étend son linge. Elle redescend de son côté.\n\nDurée totale de l'échange : onze secondes. C'est le record de l'année.",
+    "*15h, l'atelier*\n\nL'atelier de Masaru Ozaki est au fond du jardin, sept mètres sur quatre, tôle et bois. Il fait des escaliers, des placards sur mesure, et une fois par an un meuble compliqué pour quelqu'un qui a de l'argent.\n\nHaruna y travaille le samedi depuis ses quinze ans. Ponçage, vernis, livraisons.\n\nMasaru|« Le grain de cent vingt. »\n\nHaruna|« Il est où ? »\n\nMasaru|« Où il est toujours. »\n\nHaruna|« Il est *jamais* où il est toujours. »\n\nMasaru|« Deuxième tiroir. »\n\nHaruna|« Il est pas dans le deuxième tiroir. »\n\nMasaru|« Alors troisième. »",
+    "Ils travaillent trois heures. C'est le moment de la semaine où ils se parlent le mieux, parce qu'ils ne se regardent pas.\n\nMasaru|« Tu as pensé à après ? »\n\nHaruna|« Après quoi ? »\n\nMasaru|« Le lycée. »\n\nHaruna|« C'est dans un an. »\n\nMasaru|« C'est dans onze mois. »\n\nElle ponce.\n\nHaruna|« Je sais pas. »\n\nCe n'est pas vrai. Elle a un onglet ouvert dans son téléphone depuis novembre : *BTS aménagement finition — dossier*.\n\nElle ne l'a dit à personne, pas même à Aki, et surtout pas à l'homme qui est en train de tenir la planche de l'autre côté.",
+    "*19h, dîner*\n\nSix personnes autour d'une table pour six.\n\nIl y a un bruit constant. Ce n'est pas une image : il y a mesurablement du bruit en permanence chez les Ozaki, et Haruna en produit une part importante, et elle en produit d'autant plus qu'il y a un silence à couvrir.\n\nYoko|« Miki a répondu ? »\n\nUn temps de rien du tout.\n\nHaruna|« Elle a dû avoir des partiels. »\n\nYoko|« En avril ? »\n\nHaruna|« Ils font des partiels tout le temps à la fac. »\n\nElle n'en sait absolument rien. Personne dans cette maison n'est allé à la fac.\n\nMasaru ne dit rien du tout et se ressert."
+  ]
+_XC2A[2]["scenes"] = [
+    "*Dimanche, 8h10*\n\nIl y a trois marches devant l'entrée des Tachibana.\n\nYuma s'assoit sur la deuxième depuis qu'il a onze ans, avec un livre, dehors, y compris en février avec une veste et une couverture, ce qui a fait dire trois fois à sa mère qu'il attraperait quelque chose.\n\nIl n'a jamais rien attrapé.",
+    "Pourquoi dehors : parce que dedans, il y a quatre personnes qui font quatre choses en silence dans quatre-vingt-douze mètres carrés, et que ce silence-là est plus bruyant que les jumeaux Ozaki.\n\nDehors, il y a la rue, un merle, la gouttière qui goutte, et les cris étouffés d'une famille de six de l'autre côté d'un mur.\n\nC'est reposant.",
+    "Hoshi sort à huit heures trente, en pyjama, avec une tartine.\n\nHoshi|« Tu lis quoi ? »\n\nYuma|« Un truc sur les étoiles. »\n\nHoshi|« Encore ? »\n\nYuma|« Encore. »\n\nHoshi|« Elles changent pas. »\n\nYuma|« Si. »\n\nHoshi|« Elles changent en combien de temps ? »\n\nYuma|« Quarante mille ans. »\n\nHoshi|« C'est pas *changer*, ça. »\n\nElle s'assoit sur la troisième marche avec sa tartine.\n\nHoshi|« Moi je trouve que c'est nul. »\n\nYuma|« Note. »",
+    "Hoshi a treize ans et une théorie : tout ce qui est lent est nul.\n\nElle parle beaucoup. Elle parle tellement que le reste de la famille a pris l'habitude de la laisser parler, ce qu'elle prend — à juste titre — pour de l'indifférence.\n\nHoshi|« Yuma. »\n\nYuma|« Mm. »\n\nHoshi|« Pourquoi y a un mur ? »\n\nIl tourne une page.\n\nYuma|« Je sais pas. »\n\nHoshi|« Tu dis toujours ça. »\n\nYuma|« Parce que je sais pas. »\n\nHoshi|« Papa dit ça aussi. Maman dit *c'est vieux*. Toi tu dis *je sais pas*. »\n\nElle mord dans sa tartine.\n\nHoshi|« Vous êtes tous très nuls. »",
+    "Elle rentre. Il reste.\n\nDe l'autre côté du mur, quelqu'un chante quelque chose faux en tapant sur quelque chose de métallique.\n\nIl lit trois pages sans en retenir une seule."
+  ]
+_XC2A[3]["scenes"] = [
+    "*La gouttière*\n\nElle est à l'angle des deux maisons.\n\nC'est une descente commune — elle a été posée en 2003 par les deux hommes en même temps, parce que les toitures se rejoignent et qu'il n'y avait aucune raison d'en mettre deux.\n\nElle est bouchée depuis 2016.",
+    "Ce que ça produit : quand il pleut fort, l'eau déborde à l'angle et tombe en nappe sur une bande de soixante centimètres, exactement à cheval sur les deux propriétés.\n\nCôté Ozaki, ça a creusé un trou dans la pelouse.\n\nCôté Tachibana, ça a taché le crépi sur deux mètres de haut.\n\nAucun des deux hommes n'a jamais rien fait, pour des raisons qui n'ont strictement rien à voir avec la plomberie.",
+    "*Lundi, il pleut*\n\nMasaru sort à sept heures, regarde le trou dans sa pelouse pendant quatre secondes, et rentre.\n\nIl fait ça depuis neuf ans. Sa femme a compté.\n\nYoko|« Tu pourrais la déboucher. »\n\nMasaru|« Elle est à moitié chez eux. »\n\nYoko|« Elle est à moitié chez nous aussi. »\n\nMasaru|« Voilà. »\n\nYoko|« *Voilà* c'est pas un raisonnement. »\n\nIl met ses chaussures.\n\nMasaru|« C'est le mien. »",
+    "*Même matin, côté Tachibana*\n\nKenji Tachibana regarde la tache sur le crépi depuis la fenêtre de la cuisine, en buvant son thé, pendant à peu près le même nombre de secondes.\n\nEmi|« Tu veux que j'appelle quelqu'un ? »\n\nKenji|« Pour quoi faire ? »\n\nEmi|« Pour la gouttière. »\n\nKenji|« Il faudrait passer de leur côté. »\n\nEmi|« Il faudrait sonner. »\n\nKenji repose sa tasse.\n\nKenji|« Je vais être en retard. »",
+    "Le soir, Haruna et Yuma rentrent à quatre minutes d'intervalle.\n\nIls passent tous les deux devant l'angle. Ils regardent tous les deux le trou et la tache.\n\nNi l'un ni l'autre ne s'arrête.\n\nC'est le paysage. On ne s'arrête pas devant le paysage."
+  ]
+_XC2A[4]["scenes"] = [
+    "*Fin avril, mercredi, 17h20*\n\nLe ballon est en mousse, orange, et il appartient à Riku, ce qui veut dire qu'il appartient aussi à Kai, ce qui est la source de quarante pour cent des conflits de la maison Ozaki.\n\nIl passe par-dessus le mur à dix-sept heures vingt.\n\nRiku|« HARUNA. »\n\nHaruna|« Quoi. »\n\nRiku|« Le ballon. »\n\nHaruna|« Et alors ? »\n\nRiku|« IL EST CHEZ LES AUTRES. »",
+    "*Les autres.*\n\nC'est comme ça qu'ils disent. Riku a huit ans. Il n'a jamais entendu personne prononcer le nom Tachibana à voix haute dans cette maison, et il a donc construit tout seul un vocabulaire de substitution.\n\nHaruna|« Va sonner. »\n\nRiku|« Non. »\n\nHaruna|« Pourquoi ? »\n\nRiku|« Papa a dit qu'il fallait pas. »\n\nHaruna s'arrête.\n\nHaruna|« Papa a dit ça quand ? »\n\nRiku|« Je sais plus. »\n\nKai|« En hiver. »\n\nRiku|« En hiver. »",
+    "Elle monte sur le mur.\n\nLe ballon est au milieu de la pelouse des Tachibana, parfaitement visible, à six mètres.\n\nYuma est sur sa marche avec un livre.\n\nIl l'a vue monter. Il ne bouge pas.\n\nIl attend, et elle comprend au bout de trois secondes qu'il attend qu'elle demande, et elle comprend au bout de quatre qu'il a raison d'attendre parce qu'elle n'a jamais demandé quoi que ce soit à cette maison de sa vie."
+  ]
+_XC2A[5]["scenes"] = [
+    "*Début mai, samedi, 14h*\n\nLe trou commence comme tous les projets de Riku et Kai : parce que c'est interdit et qu'il fait beau.\n\nL'endroit est bien choisi, ce qui prouve qu'ils y réfléchissent depuis plus longtemps que quiconque ne l'imagine : à l'extrémité du mur, derrière le cabanon, là où il y a un mètre de terre meuble parce que rien n'y pousse.",
+    "Ils creusent avec une truelle volée à l'atelier et une assiette en plastique.\n\nRiku|« Faut aller plus bas. »\n\nKai|« Y a des cailloux. »\n\nRiku|« Enlève-les. »\n\nKai|« Enlève-les toi. »\n\nRiku|« C'est mon idée. »\n\nKai|« C'est ma truelle. »\n\nRiku|« C'est la truelle de papa. »\n\nIls creusent trois heures.",
+    "Le résultat, à dix-sept heures, est un passage de quarante centimètres de large et vingt-cinq de haut sous les fondations du mur, qui n'en a pas vraiment, ce qui explique pourquoi c'était possible.\n\nOn y passe à plat ventre.\n\nKai passe le premier. Riku le suit.\n\nIls se retrouvent tous les deux dans le jardin des Tachibana, couverts de terre, à dix-sept heures dix, et ils réalisent en même temps qu'ils n'avaient aucun plan pour la suite.",
+    "Hoshi les trouve à dix-sept heures douze.\n\nHoshi|« Vous êtes qui ? »\n\nRiku|« On habite là. »\n\nHoshi|« Non. »\n\nRiku|« LÀ. »\n\nIl désigne le mur.\n\nHoshi|« Ah. »\n\nElle regarde le trou. Elle regarde les deux garçons de huit ans. Elle regarde le trou de nouveau.\n\nHoshi|« C'est vous qui avez fait ça ? »\n\nKai|« Oui. »\n\nHoshi|« En combien de temps ? »\n\nRiku|« Trois heures. »\n\nHoshi|« …Respect. »",
+    'Ce qui suit est la première conversation entre un enfant Ozaki et un enfant Tachibana depuis 2015.\n\nElle dure quarante minutes et porte successivement sur : les truelles, un jeu vidéo, la question de savoir si les hortensias sont comestibles, un professeur de mathématiques, et la vitesse à laquelle un ver de terre se déplace.\n\nAucun des trois ne mentionne le mur une seule fois.',
+    'À dix-huit heures, Hoshi rentre pour dîner.\n\nHoshi|« Vous revenez demain ? »\n\nRiku|« On peut ? »\n\nHoshi|« Bah ouais. »\n\nKai|« Faut pas le dire. »\n\nHoshi|« Pourquoi ? »\n\nRiku et Kai se regardent.\n\nRiku|« On sait pas. »\n\nHoshi hoche la tête très sérieusement.\n\nHoshi|« Ok. On le dit pas. »'
+  ]
+_XC2A[6]["scenes"] = [
+    "*Mi-mai, mardi, 22h40*\n\nLe dernier message que Miki Ozaki a envoyé à sa sœur date du 11 février.\n\n*ça va toi ?*\n\nHaruna a répondu le 11 février à 22h04. Elle a répondu trois paragraphes, avec quatre photos des jumeaux et une histoire à propos d'un client de l'atelier.\n\nIl n'y a rien après.",
+    "Ce qu'elle a envoyé depuis, dans l'ordre :\n\n*t'es vivante ?* (18 février)\n*miki* (26 février)\n*ok je m'inquiète pas mais je m'inquiète un peu* (9 mars)\n*joyeux anniversaire* (2 avril)\n*bon* (14 avril)\n\nTous les messages sont marqués *lu*.",
+    "*Le même soir, cuisine*\n\nYoko rentre à vingt-deux heures pour partir à vingt-trois. Entre les deux, elle mange debout.\n\nYoko|« Tu dors pas ? »\n\nHaruna|« Devoirs. »\n\nYoko|« Il est vingt-trois heures moins vingt. »\n\nHaruna|« Devoirs. »\n\nSa mère mange trois bouchées.\n\nYoko|« Elle a répondu ? »\n\nHaruna|« Non. »\n\nYoko|« Bon. »\n\nElle rince son assiette.\n\nYoko|« C'est la fac. Ils sont pris. »\n\nHaruna|« Ouais. »\n\nAucune des deux ne croit ça une seule seconde et elles le savent toutes les deux.",
+    "Ce que Haruna ne dit pas à sa mère, parce que ça la mettrait en morceaux :\n\nQue Miki a arrêté de répondre exactement quatre jours après avoir demandé, dans un message qu'elle a effacé depuis, *tu crois que papa serait déçu de moi si*.\n\nLe message s'arrêtait là. Il n'y avait pas de suite.\n\nHaruna avait répondu *si quoi ?*\n\nEt rien.",
+    "*23h10, le jardin*\n\nElle sort parce qu'elle n'arrive pas à dormir.\n\nIl fait quinze degrés. Il y a une lune correcte.\n\nDe l'autre côté du mur, il y a quelqu'un assis sur les marches du perron arrière avec une lampe frontale et un carnet, ce qui est objectivement ridicule.\n\nElle ne le voit pas. Elle voit une lueur.\n\nElle s'assoit sur le bac à fleurs vide de son côté, et ils restent chacun de leur côté d'un mètre soixante de parpaings pendant environ vingt minutes sans savoir que l'autre est là."
+  ]
+_XC2A[4]["choix"] = {
+    'question': 'Deux enfants de huit ans derrière elle. Un garçon avec un livre à six mètres.',
+    'decisif': False,
+    'options': [
+      (
+        'dessus',
+        '1️⃣',
+        'Lui demander de le renvoyer par-dessus'
+      ),
+      (
+        'sonner',
+        '2️⃣',
+        'Descendre et sonner à la porte'
+      )
+    ],
+    'suites': {
+      'dessus': {
+        'pose': [
+          'ballon_dessus'
+        ],
+        'relation': {
+          'yuma': {
+            'confiance': 3
+          }
+        },
+        'texte': "Haruna|« Tachibana ! »\n\nIl lève la tête.\n\nHaruna|« Le ballon. »\n\nIl pose son livre ouvert à l'envers sur la marche, ce qu'elle remarque parce que sa mère lui a interdit de faire ça toute sa vie.\n\nIl traverse le jardin, ramasse le ballon, revient sous le mur.\n\nYuma|« Recule. »\n\nHaruna|« Je suis sur un mur. »\n\nYuma|« Recule ta tête. »\n\nElle recule sa tête. Il le lance.\n\nIl le lance mal — trop haut, trop à gauche — et le ballon repart dans les hortensias de son propre côté.\n\nDeux secondes de silence total.\n\nHaruna|« C'était nul. »\n\nYuma|« Oui. »\n\nIl retourne le chercher.\n\nLe deuxième lancer est bon. Riku hurle de joie derrière le mur.\n\nHaruna|« Merci. »\n\nYuma|« De rien. »\n\nVingt-deux secondes. Nouveau record de l'année."
+      },
+      'sonner': {
+        'pose': [
+          'ballon_sonne'
+        ],
+        'relation': {
+          'yuma': {
+            'confiance': -2
+          }
+        },
+        'texte': "Elle redescend. Elle sort par le portail. Elle marche onze mètres. Elle sonne.\n\nÇa met sept secondes et c'est la première fois de sa vie.\n\nC'est Emi Tachibana qui ouvre.\n\nEmi|« …Oh. »\n\nHaruna|« Bonjour. Le ballon de mes frères est chez vous. »\n\nEmi|« Bien sûr. Bien sûr. Entre— »\n\nElle s'arrête au milieu du mot *entre*.\n\nEmi|« Je te le rapporte. Attends là. »\n\nElle laisse la porte entrouverte et traverse la maison. Haruna reste sur le paillasson.\n\nDe la porte entrouverte, elle voit un couloir, un escalier, et le dos de quelqu'un assis sur une marche du perron arrière avec un livre.\n\nEmi revient avec le ballon.\n\nEmi|« Voilà. »\n\nHaruna|« Merci. »\n\nEmi|« Ça va, chez vous ? »\n\nElle a dit ça trop vite, et trop fort, et Haruna comprend en un dixième de seconde que cette femme voulait poser cette question depuis longtemps.\n\nHaruna|« …Ça va. »\n\nEmi|« Bien. Bien. »\n\nElle referme la porte.\n\nLe soir, Haruna ne raconte à personne qu'elle a sonné."
+      }
+    }
+  }
+del _XC2A
+
+
+_XC2B = CHRONIQUE_SAISONS["la_maison_da_cote"]["episodes"]
+_XC2B[7]["scenes"] = [
+    "*Fin mai, jeudi, 21h*\n\nLe devoir de mathématiques porte sur les suites arithmético-géométriques et il est à rendre vendredi.\n\nHaruna a fait les quatre premières questions. La cinquième demande de démontrer quelque chose et elle a écrit *donc c'est vrai* en dessous, ce qui ne passera pas.",
+    "Elle sort dans le jardin à vingt et une heures parce qu'elle a besoin de hurler quelque chose et qu'on ne peut pas hurler dans une maison où deux enfants de huit ans dorment.\n\nIl y a une lueur de l'autre côté. Elle sait maintenant ce que c'est : une lampe frontale, un carnet, et un garçon assis sur des marches en mai à vingt et une heures.\n\nElle monte sur le bac à fleurs.",
+    "Haruna|« Tachibana. »\n\nUn temps.\n\nYuma|« …Oui ? »\n\nHaruna|« T'as fait le cinq ? »\n\nYuma|« Le cinq de quoi ? »\n\nHaruna|« Le devoir de maths. »\n\nYuma|« On n'est pas dans la même classe. »\n\nHaruna|« On a le même prof. »\n\nYuma|« …C'est vrai. »\n\nSilence de mur.\n\nYuma|« J'ai fait le cinq. »",
+    "Ce qui suit est techniquement absurde.\n\nElle lui explique l'énoncé à voix haute par-dessus un mètre soixante de parpaings. Il répond par-dessus le même mur. Aucun des deux ne voit l'autre.\n\nYuma|« Il faut poser une suite auxiliaire. »\n\nHaruna|« Une quoi ? »\n\nYuma|« Tu prends u moins la limite et tu montres que c'est géométrique. »\n\nHaruna|« Ça marche pas. »\n\nYuma|« Si. »\n\nHaruna|« J'ai essayé. »\n\nYuma|« Tu as essayé avec quelle limite ? »\n\nHaruna|« …Il faut une limite ? »",
+    "Ça dure vingt-cinq minutes.\n\nÀ un moment, elle escalade complètement le mur et s'assoit dessus, parce que crier des équations est fatigant.\n\nDe là-haut elle le voit pour la première fois depuis longtemps : assis sur la deuxième marche, une lampe frontale allumée sur le front, l'air parfaitement ridicule et parfaitement à l'aise.\n\nHaruna|« Pourquoi t'as ça sur la tête ? »\n\nYuma|« Pour lire. »\n\nHaruna|« Il y a une lumière dans la maison. »\n\nYuma|« Oui. »\n\nIl ne développe pas. Elle n'insiste pas.",
+    "Le vendredi, elle a le cinq.\n\nLe professeur écrit *bien vu* dans la marge, ce qui ne lui était jamais arrivé de sa vie, et elle passe la journée dans un état bizarre.\n\nLe vendredi soir, elle remonte sur le mur.\n\nHaruna|« J'ai eu le cinq. »\n\nYuma|« Bien. »\n\nHaruna|« Il a écrit *bien vu*. »\n\nYuma|« C'est bien. »\n\nHaruna|« Il écrit jamais rien. »\n\nYuma|« Alors c'est très bien. »\n\nElle reste assise sur le mur trois minutes de plus sans raison particulière.",
+    "*Ce qu'elle ne dit pas*\n\nQue sur son téléphone, l'onglet *BTS aménagement finition — dossier* est ouvert depuis novembre.\n\nQue les conditions d'admission demandent un dossier scolaire correct.\n\nEt qu'elle a compris en février, en le lisant à trois heures du matin, que *correct* ne voulait pas dire *ce qu'elle a*."
+  ]
+_XC2B[8]["scenes"] = [
+    "*Début juin, mardi, 18h40*\n\nIl pleut depuis onze heures. La gouttière déborde à l'angle depuis onze heures aussi.\n\nLe trou dans la pelouse des Ozaki a doublé.\n\nMasaru est sorti trois fois pour le regarder.",
+    "Haruna monte sur le mur avec un parapluie, ce qui est une manœuvre à trois mains qu'elle réussit quand même.\n\nHaruna|« Tachibana. »\n\nYuma|« Il pleut. »\n\nHaruna|« J'avais remarqué. »\n\nIl est sous l'avancée du porche, ce qui est sa version de *dehors quand il pleut*.\n\nHaruna|« La gouttière. »\n\nYuma|« Oui. »\n\nHaruna|« Elle est bouchée depuis dix ans. »\n\nYuma|« Neuf. »\n\nHaruna|« Tu comptes ? »\n\nYuma|« 2016. »",
+    "Haruna|« Ça fait un trou dans notre pelouse. »\n\nYuma|« Ça fait une tache sur notre mur. »\n\nHaruna|« C'est ridicule. »\n\nYuma|« Oui. »\n\nHaruna|« Mon père a une échelle et un furet. »\n\nYuma|« Je sais. »\n\nHaruna|« Comment tu sais ? »\n\nYuma|« Tout le quartier sait que ton père a tout. »\n\nElle rit, ce qui la surprend elle-même.",
+    "Et puis elle dit la phrase.\n\nElle la dit sans réfléchir, exactement du ton dont on dit *tu peux fermer la fenêtre*, et il n'y a aucun moyen qu'elle sache ce qu'elle vient de faire.\n\nHaruna|« Dis à ton père qu'on peut la faire ce week-end. »\n\nLe silence qui suit dure environ quatre secondes de trop.",
+    "Yuma|« Non. »\n\nHaruna|« …Non ? »\n\nYuma|« Non. »\n\nHaruna|« C'est une gouttière. »\n\nYuma|« Je sais ce que c'est. »\n\nHaruna|« Alors c'est quoi le problème ? »\n\nIl ne répond pas.\n\nIl ne dit pas *je ne peux pas*. Il ne dit pas *tu ne comprends pas*. Il reste assis sous l'avancée du porche et il ne dit strictement rien, ce qui est infiniment plus agaçant."
+  ]
+_XC2B[9]["scenes"] = [
+    "*Mi-juin, mercredi, 17h, salle 204*\n\nLe club d'astronomie du lycée Fujimi compte trois membres.\n\nIl en comptait onze en 2019, avant que le professeur référent ne parte à la retraite et que le nouveau n'accepte le poste *à condition de ne rien avoir à faire*.\n\nLes trois : Yuma, Toru, et une première année qui vient une fois sur trois et dont personne n'est certain du prénom.",
+    "Toru|« J'ai regardé les prévisions. »\n\nYuma|« Et ? »\n\nToru|« Couvert vendredi. »\n\nYuma|« Sur quel site ? »\n\nToru|« Le site normal. »\n\nYuma|« Le site normal se trompe une fois sur deux. »\n\nToru|« Le site normal est le site normal parce que c'est le site normal. »\n\nYuma sort son téléphone et ouvre un site qui n'est pas le site normal.",
+    "Toru Kishida parle. C'est ce qu'il fait. Il parle de la météo, d'un film, d'un professeur, de sa mère qui veut qu'il fasse médecine, d'une fille de sa classe, du prix des télescopes, et de nouveau de la météo.\n\nYuma répond une fois sur six.\n\nIls fonctionnent comme ça depuis la seconde et aucun des deux n'a jamais trouvé ça étrange.",
+    "Toru|« Tu dis rien. »\n\nYuma|« Je t'écoute. »\n\nToru|« Ouais mais tu dis rien. »\n\nYuma|« Tu veux que je dise quoi ? »\n\nToru|« Un truc. N'importe quoi. »\n\nYuma réfléchit sérieusement, ce qui est le problème.\n\nYuma|« Il y a une fille qui m'a demandé ce qu'était une conjonction. »\n\nToru pose son crayon.\n\nToru|« Développe. »\n\nYuma|« Non. »\n\nToru|« TU PEUX PAS DIRE ÇA ET T'ARRÊTER. »\n\nYuma|« Si. »",
+    "*Vendredi, 21h, terrain de sport*\n\nIl n'est pas couvert. Le site normal s'est trompé.\n\nIls sont deux avec un télescope de quatre-vingt mille yens que le lycée a acheté en 2011 et qu'ils sortent onze fois par an.\n\nToru|« Elle est où, là ? »\n\nYuma|« Trente degrés au-dessus de l'horizon ouest. »\n\nToru|« Je vois rien. »\n\nYuma|« Tu regardes l'est. »\n\nToru|« …Ah. »",
+    "Ils restent deux heures.\n\nÀ vingt-trois heures, en rangeant, Toru dit une chose qu'il n'a jamais dite en deux ans.\n\nToru|« T'es venu à toutes les séances. »\n\nYuma|« Oui. »\n\nToru|« Depuis la seconde. Toutes. »\n\nYuma|« Oui. »\n\nToru|« Y a personne qui vient à tout. »\n\nIl enroule un câble.\n\nToru|« Enfin. Merci, quoi. »\n\nYuma ne sait absolument pas quoi répondre à ça et ne répond rien, ce qui, chez lui, est presque une réponse."
+  ]
+_XC2B[10]["scenes"] = [
+    "*Fin juin, samedi, 15h*\n\nHoshi Tachibana passe par le trou depuis six semaines.\n\nElle a treize ans et une méthode : elle attend que son père soit parti, que sa mère corrige des copies, et elle traverse à plat ventre en quatre secondes.\n\nDe l'autre côté, il y a deux garçons de huit ans qui l'attendent comme on attend une divinité.",
+    "Riku|« Regarde ce qu'on a fait. »\n\nHoshi|« C'est quoi ? »\n\nKai|« Un tunnel. »\n\nHoshi|« C'est un trou. »\n\nRiku|« C'est un tunnel maintenant, on a mis une planche. »\n\nIl y a effectivement une planche. Elle est volée à l'atelier et elle vaut quatre mille yens.\n\nHoshi|« …Respect. »",
+    "Haruna les trouve à quinze heures vingt.\n\nElle sort de l'atelier avec un chiffon, elle voit trois enfants accroupis derrière le cabanon, et elle reconnaît immédiatement celle qui n'est pas de cette maison.\n\nHaruna|« …Oh. »\n\nHoshi se relève d'un bond.\n\nRiku|« C'EST PAS NOUS. »\n\nKai|« C'est nous. »\n\nRiku|« KAI. »",
+    "Haruna s'accroupit pour être à hauteur.\n\nHaruna|« Tu t'appelles Hoshi. »\n\nHoshi|« …Oui. »\n\nHaruna|« Tu passes par là depuis quand ? »\n\nHoshi|« Six semaines. »\n\nHaruna|« Tes parents savent ? »\n\nHoshi|« Non. »\n\nHaruna|« Ton frère ? »\n\nHoshi|« …Non. »\n\nElle réfléchit.\n\nHoshi|« Enfin je crois pas. »\n\nHaruna|« Il sait. »\n\nHoshi|« Comment tu sais qu'il sait ? »\n\nHaruna|« Parce qu'il sait tout et il dit rien. C'est ça son truc. »",
+    "Elle s'assoit sur le talus. Les trois enfants restent debout devant elle comme devant un tribunal.\n\nHaruna|« Je vais rien dire. »\n\nRiku|« OUI. »\n\nHaruna|« Mais. »\n\nRiku|« Non. »\n\nHaruna|« Mais la planche, vous la rendez. Elle vaut quatre mille yens. »\n\nKai|« Quatre mille ? »\n\nHaruna|« Quatre mille. »\n\nRiku|« On savait pas. »\n\nHaruna|« Maintenant vous savez. »",
+    "Hoshi ne part pas quand les jumeaux repartent jouer.\n\nHoshi|« Je peux poser une question ? »\n\nHaruna|« Vas-y. »\n\nHoshi|« Pourquoi y a un mur ? »\n\nHaruna ouvre la bouche.\n\nEt elle réalise, à dix-sept ans, accroupie derrière un cabanon, qu'elle n'a pas de réponse non plus.\n\nHaruna|« …Je sais pas. »\n\nHoshi|« Tout le monde dit ça. »\n\nHaruna|« Je sais. »\n\nHoshi|« Ça fait treize ans que tout le monde dit ça. »\n\nElle repasse par le trou."
+  ]
+_XC2B[11]["scenes"] = [
+    "*Début juillet, lycée, 12h40*\n\nAki Nomura connaît Haruna depuis la seconde et n'est jamais allée chez elle.\n\nCe n'est pas un secret ni une brouille : c'est juste que chez les Ozaki il y a six personnes, deux enfants de huit ans et un atelier, et que Haruna a toujours proposé d'aller ailleurs.",
+    "Aki|« Tu es bizarre depuis mai. »\n\nHaruna|« Je suis pas bizarre. »\n\nAki|« Tu regardes ton téléphone toutes les quatre minutes. »\n\nHaruna|« C'est Miki. »\n\nAki|« Elle répond toujours pas ? »\n\nHaruna|« Non. »\n\nAki|« Ça fait cinq mois. »\n\nHaruna|« Ça fait cinq mois. »\n\nAki mange trois bouchées.\n\nAki|« Et l'autre truc ? »\n\nHaruna|« Quel autre truc ? »\n\nAki|« Y a un autre truc. »",
+    "Il y a un autre truc.\n\nIl y a que depuis six semaines, elle sort dans le jardin à vingt et une heures presque tous les soirs, et que ce n'est pas pour prendre l'air."
+  ]
+_XC2B[12]["scenes"] = [
+    '*Mi-juillet, 5h50*\n\nYoko Ozaki termine sa garde à cinq heures quarante-cinq et rentre à pied parce que le premier bus est à six heures vingt et que la marche fait vingt minutes.\n\nElle arrive dans la rue Fujimi vers six heures dix.',
+    "Emi Tachibana part à six heures quinze le mardi et le jeudi, parce qu'elle a cours à sept heures quarante à quarante minutes de là.\n\nElles se croisent devant les deux portails deux matins par semaine.\n\nÇa fait dix ans.",
+    "Emi|« Bonjour. »\n\nYoko|« Bonjour. »\n\nEmi|« Nuit calme ? »\n\nYoko|« Deux admissions. Ça va. »\n\nEmi|« Vous avez l'air fatiguée. »\n\nYoko|« J'ai cinquante-quatre heures cette semaine. »\n\nEmi|« C'est trop. »\n\nYoko|« C'est l'été. »\n\nElles restent là deux minutes.",
+    "C'est tout ce qui existe entre les deux maisons depuis dix ans : deux femmes fatiguées, deux matins par semaine, sur un trottoir, entre six heures dix et six heures quinze.\n\nAucune des deux ne l'a jamais dit à son mari.\n\nCe n'est pas de la clandestinité. C'est juste qu'aucune des deux ne saurait comment amener le sujet après dix ans.",
+    "Emi|« Votre aînée, elle est à Osaka ? »\n\nYoko|« Deuxième année. »\n\nEmi|« Elle rentre cet été ? »\n\nUn temps.\n\nYoko|« Je ne sais pas. »\n\nEmi ne relance pas. Elle a été professeure principale pendant dix-neuf ans et elle sait reconnaître un *je ne sais pas* qui veut dire autre chose.\n\nEmi|« Si vous avez besoin d'un coup de main pour les petits en août, ils peuvent venir. »\n\nYoko|« …Chez vous ? »\n\nEmi|« Chez moi. »\n\nLes deux femmes se regardent.\n\nYoko|« Ce serait compliqué. »\n\nEmi|« Oui. »\n\nYoko|« Merci quand même. »\n\nEmi|« De rien. »\n\nElles se séparent. Elles recommenceront jeudi."
+  ]
+_XC2B[13]["scenes"] = [
+    "*Fin juillet, samedi, 16h*\n\nLe permis AM coûte trois cent cinquante euros de formation, ce qui n'est pas la question, parce que Yuma Tachibana ne veut pas un permis : il veut un scooter.\n\nUn scooter d'occasion correct, cinquante centimètres cubes, coûte cent quatre-vingt-dix mille yens dans le quartier.\n\nIl en a cent trente-quatre mille.",
+    "Il gagne l'argent en donnant des cours de maths à trois collégiens le week-end. Deux mille l'heure, six heures par semaine.\n\nIl a commencé en septembre dernier.\n\nPersonne ne sait pourquoi il veut un scooter.",
+    "*Ce que personne ne sait*\n\nL'université qu'il vise est à cinquante-cinq minutes de train et deux changements.\n\nEn scooter, c'est trente-cinq minutes directes.\n\nCinquante-cinq minutes contre trente-cinq, ça fait quarante minutes par jour, ce qui fait à peu près trois heures par semaine, ce qui fait qu'il pourrait rentrer dîner.\n\nIl n'a jamais formulé ça à voix haute. C'est resté à l'état de calcul.",
+    "*21h, le mur*\n\nHaruna|« Tu fais quoi le week-end ? »\n\nYuma|« Des cours. »\n\nHaruna|« Tu prends des cours ? »\n\nYuma|« J'en donne. »\n\nHaruna|« …Ah. »\n\nUn temps.\n\nHaruna|« Pour quoi faire ? »\n\nYuma|« Pour rien. »\n\nHaruna|« Personne travaille six heures par semaine pour rien. »\n\nYuma|« Comment tu sais que c'est six heures ? »\n\nHaruna|« Tu pars à neuf heures et tu rentres à midi, samedi et dimanche. Je vois le portail depuis l'atelier. »\n\nSilence de mur.",
+    "Yuma|« Un scooter. »\n\nHaruna|« Un scooter ? »\n\nYuma|« Un scooter. »\n\nHaruna|« Pour quoi faire ? »\n\nIl ne répond pas.\n\nHaruna|« Tachibana. Un scooter pour quoi faire. »\n\nYuma|« Pour aller quelque part. »\n\nHaruna|« C'est le principe d'un scooter, oui. »\n\nElle attend. Il ne développe pas.\n\nElle a maintenant une liste mentale de sujets sur lesquels Yuma Tachibana s'arrête net, et elle commence à trouver que la liste est longue.",
+    "Elle redescend de son côté vers vingt-deux heures.\n\nDepuis le bac à fleurs, elle dit une dernière chose sans le regarder.\n\nHaruna|« Moi c'est un BTS. »\n\nUn temps de l'autre côté.\n\nYuma|« …Quoi ? »\n\nHaruna|« Rien. »\n\nElle rentre.\n\nIl reste sur sa marche à peu près quarante minutes de plus que d'habitude."
+  ]
+_XC2B[8]["choix"] = {
+    'question': 'Il pleut. Il ne répond pas. Elle est assise sur un mur avec un parapluie.',
+    'decisif': False,
+    'options': [
+      (
+        'insiste',
+        '1️⃣',
+        'Insister'
+      ),
+      (
+        'laisse',
+        '2️⃣',
+        'Laisser tomber'
+      )
+    ],
+    'suites': {
+      'insiste': {
+        'pose': [
+          'a_insiste'
+        ],
+        'relation': {
+          'yuma': {
+            'confiance': -5
+          }
+        },
+        'texte': "Haruna|« C'est quoi ton problème ? »\n\nYuma|« Il n'y a pas de problème. »\n\nHaruna|« Tu viens de dire non à une gouttière. »\n\nYuma|« Oui. »\n\nHaruna|« Dis-lui, c'est tout. Six mots. *Papa, ils proposent de faire la gouttière.* »\n\nYuma se lève.\n\nYuma|« Ce n'est pas six mots. »\n\nHaruna|« C'est littéralement six mots, je viens de les compter. »\n\nYuma|« Bonne soirée, Ozaki. »\n\nIl rentre.\n\nElle reste sur un mur, sous la pluie, avec un parapluie et la nette impression d'avoir marché sur quelque chose qu'elle n'a pas vu."
+      },
+      'laisse': {
+        'pose': [
+          'a_laisse'
+        ],
+        'relation': {
+          'yuma': {
+            'confiance': 6
+          }
+        },
+        'texte': "Elle le regarde ne pas répondre pendant quatre secondes.\n\nPuis elle change complètement de sujet.\n\nHaruna|« Il paraît qu'il y a un truc au club d'astronomie mercredi. »\n\nYuma relève la tête, visiblement pris de court.\n\nYuma|« …Une observation. Vendredi. »\n\nHaruna|« C'est quoi ? »\n\nYuma|« Une conjonction. »\n\nHaruna|« C'est quoi une conjonction ? »\n\nIl met deux secondes à basculer, et quand il bascule il parle pendant six minutes d'affilée, ce qui ne lui arrive à peu près jamais.\n\nElle ne comprend pas la moitié. Elle ne l'interrompt pas une seule fois.\n\nÀ la fin :\n\nYuma|« Pardon. »\n\nHaruna|« De quoi ? »\n\nYuma|« J'ai parlé longtemps. »\n\nHaruna|« Ouais. C'était bien. »\n\nElle redescend de son côté.\n\nIl reste sous le porche encore vingt minutes."
+      }
+    }
+  }
+_XC2B[11]["choix"] = {
+    'question': 'Aki attend. Elle est la seule personne extérieure aux deux maisons.',
+    'decisif': False,
+    'options': [
+      (
+        'dit',
+        '1️⃣',
+        'Lui raconter'
+      ),
+      (
+        'garde',
+        '2️⃣',
+        'Garder ça'
+      )
+    ],
+    'suites': {
+      'dit': {
+        'pose': [
+          'aki_sait'
+        ],
+        'relation': {
+          'yuma': {
+            'confiance': 4
+          }
+        },
+        'texte': "Haruna|« Je parle au voisin. »\n\nAki|« Quel voisin ? »\n\nHaruna|« Le voisin. Tachibana. »\n\nAki repose ses baguettes très lentement.\n\nAki|« Le mur. »\n\nHaruna|« Le mur. »\n\nAki|« Le mur dont ton père parle pas depuis dix ans. »\n\nHaruna|« Le mur dont personne parle depuis dix ans. »\n\nAki|« Tu lui parles comment ? »\n\nHaruna|« Par-dessus. »\n\nAki|« Par-dessus le mur. »\n\nHaruna|« Par-dessus le mur. »\n\nAki met la tête dans ses mains.\n\nAki|« C'est le truc le plus romantique que j'aie entendu de ma vie et je trouve ça épouvantable. »\n\nHaruna|« C'est PAS romantique. »\n\nAki|« Vous vous parlez par-dessus un mur tous les soirs à vingt et une heures. »\n\nHaruna|« C'est des maths. »\n\nAki|« Depuis six semaines ? »\n\nHaruna|« …Il y a beaucoup de maths. »"
+      },
+      'garde': {
+        'pose': [
+          'aki_ignore'
+        ],
+        'texte': "Haruna|« Il y a pas d'autre truc. »\n\nAki|« Mm. »\n\nHaruna|« Vraiment. »\n\nAki|« D'accord. »\n\nElle n'insiste pas, ce qui est exactement ce qu'il ne fallait pas faire, parce que Haruna avait besoin qu'on insiste.\n\nElles parlent d'autre chose pendant vingt minutes.\n\nLe soir, Haruna sort dans le jardin à vingt et une heures.\n\nEt pour la première fois depuis six semaines, elle a la sensation désagréable de faire quelque chose en cachette, ce qui n'était pas le cas avant qu'elle décide de le cacher."
+      }
+    }
+  }
+del _XC2B
+
+
+_XC2C = CHRONIQUE_SAISONS["la_maison_da_cote"]["episodes"]
+_XC2C[14]["scenes"] = [
+    "*Début août, mardi, 19h20*\n\nL'atelier a une commande. Un escalier tournant pour une maison de Kamimachi, livraison le 20, et il manque une pièce de chêne de deux mètres quarante que le fournisseur n'aura pas avant le 25.",
+    "Masaru est dans l'atelier depuis quatorze heures. Il n'a pas mangé. Il recompte les mêmes chiffres sur le même papier depuis une heure.\n\nHaruna|« Papa. »\n\nMasaru|« Mm. »\n\nHaruna|« Tu as mangé ? »\n\nMasaru|« Mm. »\n\nHaruna|« C'est pas une réponse. »\n\nMasaru|« Il me faut deux mètres quarante de chêne avant vendredi. »\n\nHaruna|« Fujimoto en a. »\n\nMasaru|« Fujimoto est à Nagoya. »",
+    "Ce que Haruna sait et que son père ne sait pas :\n\nIl y a un tas de chêne dans le garage des Tachibana depuis 2014.\n\nKenji Tachibana avait acheté du bois pour faire une terrasse. Il ne l'a jamais faite. Le bois est là, sous une bâche, et il en reste sept ou huit planches de plus de deux mètres.\n\nElle le sait parce que Riku le lui a dit, parce que Hoshi le lui avait dit, parce que les enfants se disent tout.",
+    '*21h, le mur*\n\nHaruna|« Tu as du chêne dans ton garage. »\n\nYuma|« …Pardon ? »\n\nHaruna|« Sous une bâche. Depuis 2014. Des planches de deux mètres cinquante. »\n\nYuma|« Comment tu sais ça ? »\n\nHaruna|« Ta sœur. »\n\nYuma|« Ma sœur ne parle pas à ta famille. »\n\nHaruna|« Ta sœur passe sous le mur trois fois par semaine depuis juin. »\n\nLong silence.\n\nYuma|« …Je sais. »',
+    "Haruna|« Mon père a besoin de deux mètres quarante avant vendredi. »\n\nYuma|« Le bois de mon père n'est pas à vendre. »\n\nHaruna|« Il pourrit sous une bâche depuis onze ans. »\n\nYuma|« Il n'est pas à vendre. »\n\nHaruna|« Il paiera. Le prix normal. Plus. »\n\nYuma|« Ce n'est pas une question d'argent. »\n\nHaruna|« JE SAIS que c'est pas une question d'argent. »\n\nElle se rattrape. Elle baisse la voix.\n\nHaruna|« Il a soixante-huit heures. »"
+  ]
+_XC2C[15]["scenes"] = [
+    "*Mi-août, Osaka*\n\nCe que fait Miki Ozaki depuis février, en réalité :\n\nElle se lève à sept heures. Elle prend le train. Elle descend deux stations avant la fac. Elle marche jusqu'à un café où elle reste jusqu'à quinze heures.\n\nElle n'est pas allée en cours depuis le 15 février.",
+    "Pourquoi : parce qu'elle a raté deux partiels sur trois au premier semestre, qu'elle a arrêté d'aller au troisième, et qu'un jour de février elle n'a pas réussi à entrer dans le bâtiment.\n\nPas *elle n'a pas voulu*. Elle n'a pas réussi. Elle est restée devant les portes pendant vingt minutes et elle est repartie.\n\nLe lendemain c'était plus dur. Le surlendemain encore plus.",
+    "Elle a un travail depuis avril, en cuisine, dans un izakaya de Namba, seize heures par semaine.\n\nElle paie son loyer avec ça. Elle a arrêté de demander de l'argent à ses parents en mars, ce qui, chez les Ozaki, a été interprété comme une bonne nouvelle.",
+    "*Ce qu'il y a sur son téléphone*\n\nTrente-quatre messages de sa sœur depuis février. Tous lus.\n\nOnze brouillons de réponse. Tous effacés.\n\nLe plus long faisait quatre cents mots. Il commençait par *je vais te dire un truc et tu vas devoir pas le dire à papa*.\n\nElle l'a effacé le 3 avril à deux heures du matin.",
+    "*Le 14 août, 23h*\n\nElle tape :\n\n*coucou*\n\nElle regarde le mot pendant six minutes.\n\nElle l'efface.\n\nElle range son téléphone et va faire la vaisselle d'un izakaya jusqu'à une heure du matin."
+  ]
+_XC2C[16]["scenes"] = [
+    "*Fin août, mardi, 21h30*\n\nIl fait vingt-neuf degrés à vingt et une heures trente. C'est la troisième nuit tropicale d'affilée.\n\nHaruna est sur le mur depuis vingt minutes. Elle a apporté deux boissons froides, ce qui est nouveau, et elle en a posé une sur le chaperon du côté Tachibana, ce qui est encore plus nouveau.",
+    "Haruna|« Elle est pour toi. »\n\nYuma|« Pourquoi ? »\n\nHaruna|« Il fait vingt-neuf degrés. »\n\nYuma|« Ce n'est pas une raison. »\n\nHaruna|« C'est exactement une raison. »\n\nIl la prend.\n\nPour la prendre, il faut se mettre debout sous le mur et lever le bras au-dessus de sa tête, ce qui est humiliant.\n\nIl la prend quand même.",
+    "Haruna|« Tu sais que t'as l'air d'un chien qui quémande. »\n\nYuma|« Oui. »\n\nHaruna|« Tu pourrais monter. »\n\nYuma|« Non. »\n\nHaruna|« Pourquoi ? »\n\nYuma|« Parce que c'est ton mur. »\n\nElle s'arrête, la canette à mi-chemin.\n\nHaruna|« C'est pas mon mur. »\n\nYuma|« Ton père l'a construit. »\n\nSilence.\n\nHaruna|« …Ah bon ? »",
+    "Yuma|« Tu ne savais pas ? »\n\nHaruna|« Je savais qu'il y avait un mur. »\n\nYuma|« Ton père l'a monté en trois jours en mai 2015. Il a commencé un vendredi. »\n\nHaruna|« Comment tu sais ça ? »\n\nYuma|« Je l'ai regardé faire. »\n\nElle repose sa canette sur le chaperon.\n\nYuma|« J'avais sept ans. J'étais à la fenêtre du haut. Il a fait sept rangées et il n'a pas parlé pendant trois jours. »",
+    "Haruna ne dit rien pendant longtemps.\n\nHaruna|« Mon père a construit ce mur. »\n\nYuma|« Oui. »\n\nHaruna|« Et toi tu montes pas dessus parce que c'est le sien. »\n\nYuma|« Oui. »\n\nHaruna|« C'est le truc le plus con que j'aie entendu de l'été. »\n\nYuma|« Probablement. »",
+    "Elle descend de son côté.\n\nElle contourne. Elle sort par le portail, marche onze mètres, entre par l'autre portail sans sonner, traverse le jardin des Tachibana, et arrive devant lui.\n\nHaruna|« Voilà. Maintenant je suis chez toi et le monde s'est pas arrêté. »\n\nYuma la regarde depuis sa marche.\n\nHaruna|« Monte sur le mur. »\n\nYuma|« Ozaki— »\n\nHaruna|« Monte sur le foutu mur, Tachibana. »",
+    "Il met quatre minutes.\n\nIl n'a pas de méthode — il n'y a pas de bac à fleurs de son côté — alors il prend une chaise de jardin, ce qui est nettement moins élégant, et il se hisse mal.\n\nIl s'assoit sur le chaperon pour la première fois de sa vie.\n\nDe là-haut, on voit les deux jardins en même temps.\n\nYuma|« …Ah. »\n\nHaruna|« Voilà. »\n\nYuma|« Je ne savais pas qu'on voyait les deux. »\n\nHaruna|« Je sais. »\n\nIls restent là une heure et vingt minutes."
+  ]
+_XC2C[17]["scenes"] = [
+    '*Début septembre, lycée, 12h30*\n\nAki|« Il y a un truc que je comprends pas. »\n\nHaruna|« Vas-y. »\n\nAki|« Vous vous parlez tous les soirs depuis quatre mois. »\n\nHaruna|« À peu près. »\n\nAki|« Et au lycée vous vous dites rien. »\n\nHaruna|« On est pas dans la même classe. »\n\nAki|« Vous vous croisez tous les jours dans le couloir C. »\n\nHaruna|« …Ah bon ? »\n\nAki|« Tous les jours à dix heures cinq. »',
+    "Haruna réfléchit et se rend compte que c'est vrai.\n\nHaruna|« On se dit bonjour. »\n\nAki|« Vous vous dites *'lut*. »\n\nHaruna|« C'est bonjour. »\n\nAki|« Vous vous parlez une heure par soir et *'lut* le jour. »\n\nHaruna|« C'est pas pareil. »\n\nAki|« En quoi ? »\n\nHaruna ouvre la bouche.\n\nAki|« Voilà. »",
+    "Aki|« Je vais te dire ce que je vois, et après je me tais. »\n\nHaruna|« Vas-y. »\n\nAki|« Vous avez un endroit où vous êtes deux personnes normales. Un seul. Il est sur un mur, il est ouvert de vingt et une heures à vingt-trois heures, et il n'existe nulle part ailleurs. »\n\nElle mange une bouchée.\n\nAki|« Et vous protégez cet endroit-là comme des dingues. »\n\nHaruna|« On protège rien du tout. »\n\nAki|« Tu m'as rien dit pendant six semaines. »\n\nSilence de cantine.",
+    "Aki|« C'est pas un reproche. »\n\nHaruna|« Ça y ressemble. »\n\nAki|« Un peu. »\n\nElle repousse son plateau.\n\nAki|« Mais surtout je trouve ça flippant pour vous. »\n\nHaruna|« Pourquoi ? »\n\nAki|« Parce qu'un endroit qui existe que la nuit, ça tient pas. »"
+  ]
+_XC2C[18]["scenes"] = [
+    "*Mi-septembre, samedi, 18h*\n\nL'occasion est parfaitement anodine, ce qui est le pire.\n\nLe livreur du magasin de bricolage se trompe de maison. Il laisse quatre sacs de mortier de vingt-cinq kilos devant le portail des Tachibana au lieu de celui des Ozaki.\n\nCent kilos. Sur le trottoir de quelqu'un d'autre.",
+    "Yuma les trouve à dix-huit heures. Il lit l'étiquette. *M. OZAKI.*\n\nIl ne peut pas les porter seul — cent kilos, un par un, sur onze mètres, c'est faisable mais long.\n\nIl en porte un. Puis un deuxième.\n\nHaruna sort au troisième.",
+    "Haruna|« Qu'est-ce que tu fais ? »\n\nYuma|« Le livreur s'est trompé. »\n\nHaruna|« Repose ça, c'est vingt-cinq kilos. »\n\nYuma|« Je sais ce que c'est. »\n\nElle prend l'autre bout. Ils portent les deux derniers à deux.\n\nÀ dix-huit heures dix, les quatre sacs sont devant le bon portail et ils sont tous les deux en sueur sur un trottoir.",
+    "Et là, elle dit la phrase pour la deuxième fois de l'année.\n\nElle la dit exactement comme la première : sans y penser, du ton dont on dit *tu peux fermer la fenêtre*.\n\nHaruna|« Dis à ton père que mon père le remercie. »",
+    "Yuma pose le sac qu'il ne portait plus depuis dix secondes.\n\nYuma|« Non. »\n\nHaruna|« C'est une politesse. »\n\nYuma|« Non. »\n\nHaruna|« Tachibana, c'est *merci*. C'est le mot merci. »\n\nYuma|« JE NE PORTE PAS DE MESSAGES. »\n\nIl crie.\n\nIl crie dans une rue résidentielle un samedi à dix-huit heures onze, et un voisin trois maisons plus loin lève la tête.",
+    "Haruna|« …Quoi ? »\n\nYuma|« Je ne porte pas de messages. Je ne l'ai jamais fait. Je ne le ferai jamais. »\n\nHaruna|« C'est une phrase de six mots— »\n\nYuma|« J'AI FAIT ÇA PENDANT SIX MOIS. »\n\nIl a la voix qui casse. Il s'arrête net.",
+    "Il reprend beaucoup plus bas.\n\nYuma|« J'avais sept ans. »\n\nHaruna|« Yuma— »\n\nYuma|« *Dis à ton père que la gouttière déborde.* *Dis à ton père qu'on n'a pas de gouttière commune.* *Dis à ton père que si c'est comme ça.* »\n\nIl regarde le trottoir.\n\nYuma|« Une trentaine de fois. Par-dessus la haie. Ils m'attendaient dans leur cuisine et ils me demandaient ce que l'autre avait dit. »\n\nHaruna|« …Mon père a fait ça ? »\n\nYuma|« Les deux. Les deux ont fait ça. »",
+    "Yuma|« Et un jour j'ai compris qu'ils écoutaient pas la réponse. »\n\nHaruna ne dit rien.\n\nYuma|« Ils me demandaient ce qu'il avait dit, et pendant que je répondais ils regardaient ailleurs, et le lendemain ils me redonnaient exactement le même message. »\n\nIl ramasse le sac.\n\nYuma|« J'avais sept ans et je croyais que c'était mon travail. »"
+  ]
+_XC2C[19]["scenes"] = [
+    "*Fin septembre, mercredi, 16h*\n\nHoshi Tachibana a treize ans et une liste.\n\nElle l'a commencée à neuf ans dans un cahier à spirale. Elle s'appelle *CHOSES QUE PERSONNE VEUT DIRE* et elle contient onze entrées.",
+    "Les onze :\n\n*1. pourquoi y a un mur*\n*2. pourquoi papa dit rien quand on parle des voisins*\n*3. pourquoi maman change de sujet*\n*4. pourquoi Yuma dit je sais pas alors qu'il sait tout*\n*5. c'était quoi le trampoline*\n*(...)*\n*11. pourquoi personne trouve ça bizarre à part moi*",
+    "L'entrée numéro cinq est la plus ancienne.\n\nIl y a une photo, dans un album du salon, où on voit un trampoline dans un jardin. Hoshi a deux ans dessus. Il y a aussi une fille plus grande, floue, de dos.\n\nHoshi a demandé qui c'était à six ans.\n\nSa mère a dit *une amie*.\n\nElle a demandé où était le trampoline.\n\nSa mère a dit *il a été donné*.",
+    "*Le même mercredi, dans le jardin des Ozaki*\n\nHoshi|« C'était toi. »\n\nHaruna|« Quoi ? »\n\nHoshi|« Sur la photo. Le trampoline. »\n\nElle a apporté l'album. Elle l'a sorti de chez elle et passé sous le mur, ce qui a demandé une organisation considérable.\n\nHaruna regarde la photo pendant un long moment.",
+    "Haruna|« C'est moi. »\n\nHoshi|« Il était à qui, le trampoline ? »\n\nHaruna|« À vous. »\n\nHoshi|« Et tu sautais dessus ? »\n\nHaruna|« Tous les jours. »\n\nHoshi|« Tous les jours ? »\n\nHaruna|« Pendant genre quatre ans. »\n\nHoshi s'assoit dans l'herbe.\n\nHoshi|« Donc avant, on se voyait. »\n\nHaruna|« Avant, on se voyait. »\n\nHoshi|« Tous les jours. »\n\nHaruna|« Je crois. »",
+    "Hoshi|« Personne me l'a jamais dit. »\n\nHaruna|« Je sais. »\n\nHoshi|« J'ai demandé au moins cent fois. »\n\nHaruna|« Je sais. »\n\nHoshi|« Pourquoi personne le dit ? »\n\nEt Haruna, dix-sept ans, assise dans l'herbe avec un album photo emprunté chez les voisins, se rend compte d'une chose qui la glace un peu :\n\nCe n'est pas que les adultes refusent de répondre.\n\nC'est qu'à force, ils ont perdu la façon de commencer la phrase."
+  ]
+_XC2C[20]["scenes"] = [
+    "*Début octobre, samedi, 9h40*\n\nMasaru Ozaki sort chercher une bâche derrière le cabanon.\n\nIl n'est pas allé derrière le cabanon depuis le printemps. Il n'y a rien derrière le cabanon.\n\nIl trouve un trou de quarante centimètres sous son mur, consolidé avec une planche de chêne à quatre mille yens qui vient de son propre atelier.",
+    "Il ne crie pas.\n\nC'est ça qui est terrible : il ne crie jamais. Il rentre, il pose la bâche, il boit un verre d'eau, et il ressort avec une pelle et un seau de sable.\n\nIl rebouche le trou en cinquante minutes.\n\nIl tasse. Il remet la terre. Il replace deux pierres.\n\nQuand il a fini, il n'y a plus rien à voir.",
+    "*11h*\n\nRiku|« Papa. »\n\nMasaru|« Mm. »\n\nRiku|« Le trou. »\n\nMasaru|« Il n'y a plus de trou. »\n\nRiku|« Mais on— »\n\nMasaru|« Il n'y a plus de trou, Riku. »\n\nIl range la pelle.\n\nKai|« On peut plus voir Hoshi ? »\n\nLe prénom tombe dans le jardin comme un objet lourd.\n\nMasaru s'arrête, la pelle à mi-hauteur.\n\nMasaru|« …Qui ? »",
+    "Personne ne répond.\n\nRiku a huit ans et il vient de comprendre, à la façon dont son père a prononcé *qui*, qu'il a fait quelque chose de très grave sans savoir quoi.\n\nKai se met à pleurer, ce qui n'aide pas.\n\nMasaru|« Rentrez. »\n\nRiku|« Papa— »\n\nMasaru|« Rentrez. »",
+    "*14h, l'atelier*\n\nHaruna trouve son père en train de poncer une pièce qui n'a pas besoin d'être poncée.\n\nHaruna|« Tu as rebouché le trou. »\n\nMasaru|« Oui. »\n\nHaruna|« Ils avaient huit ans et ils creusaient un tunnel. »\n\nMasaru|« Il y avait un passage sous un mur. »\n\nHaruna|« C'est un trou de quarante centimètres. »\n\nMasaru|« Haruna. »\n\nHaruna|« Non mais franchement, papa. »",
+    "Il s'arrête de poncer.\n\nMasaru|« Tu veux dire quelque chose, dis-le. »\n\nHaruna|« Pourquoi il y a un mur ? »\n\nIl repose sa cale.\n\nMasaru|« C'est vieux. »\n\nHaruna|« Ça veut rien dire. »\n\nMasaru|« C'est vieux et ça ne te regarde pas. »\n\nHaruna|« J'ai dix-sept ans. »\n\nMasaru|« Justement. »\n\nHaruna|« *Justement* quoi ? »",
+    "Il ne répond pas.\n\nIl reprend sa cale et il ponce une pièce qui n'a pas besoin d'être poncée, et il ponce pendant quatre minutes sans lever la tête.\n\nHaruna reste debout dans l'atelier.\n\nHaruna|« Tu vas le dire un jour ? »\n\nMasaru|« Non. »\n\nC'est la première réponse claire qu'il donne sur le sujet depuis dix ans, et c'est celle-là."
+  ]
+_XC2C[14]["choix"] = {
+    'question': 'Sept planches sous une bâche. Un homme qui recompte les mêmes chiffres depuis une heure.',
+    'decisif': True,
+    'options': [
+      (
+        'demande',
+        '1️⃣',
+        'Lui demander de le proposer à son père'
+      ),
+      (
+        'elle_y_va',
+        '2️⃣',
+        'Aller sonner elle-même'
+      )
+    ],
+    'suites': {
+      'demande': {
+        'pose': [
+          'route_messager'
+        ],
+        'texte': "Haruna|« Demande-lui. »\n\nYuma|« Non. »\n\nHaruna|« C'est trois phrases. »\n\nYuma|« Non. »\n\nHaruna|« *Papa, le voisin cherche du chêne, tu en as, tu veux le vendre ?* »\n\nYuma|« Ozaki. »\n\nHaruna|« Quoi ? »\n\nYuma|« Tu me demandes de porter un message. »\n\nIl le dit d'une voix qu'elle ne lui a jamais entendue — pas fâchée, plate.\n\nHaruna|« …Oui ? »\n\nYuma|« Je ne fais pas ça. »\n\nHaruna|« Tu ne fais pas quoi ? »\n\nYuma|« Je ne porte pas de messages. »\n\nIl descend de la marche et rentre.\n\nElle reste sur le mur avec le mot *messages* qui ne veut rien dire du tout.\n\nLe lendemain, Masaru trouve son bois chez un menuisier de Sakae, à trois fois le prix, et il perd sa marge sur la commande.\n\nIl ne dit rien. Il ne dit jamais rien."
+      },
+      'elle_y_va': {
+        'pose': [
+          'route_directe'
+        ],
+        'relation': {
+          'yuma': {
+            'confiance': 6
+          }
+        },
+        'texte': "Haruna|« D'accord. »\n\nYuma|« …D'accord ? »\n\nHaruna|« Tu veux pas lui dire. D'accord. »\n\nElle redescend.\n\nYuma|« Ozaki. »\n\nHaruna|« Quoi ? »\n\nYuma|« Tu vas faire quoi ? »\n\nHaruna|« À ton avis ? »\n\n*21h40. Onze mètres de trottoir. Une sonnette.*\n\nC'est Kenji qui ouvre. Un homme de cinquante et un ans en chemise, avec des lunettes remontées sur le front.\n\nKenji|« …Oui ? »\n\nHaruna|« Bonsoir. Je suis Haruna Ozaki. »\n\nIl ne dit rien pendant deux secondes entières.\n\nHaruna|« Mon père a besoin de deux mètres quarante de chêne avant vendredi. Vous en avez sous une bâche dans le garage. Il paiera le prix du marché plus vingt pour cent. »\n\nKenji|« …Il vous envoie ? »\n\nHaruna|« Non. Il ne sait pas que je suis là. »\n\nUn très long silence sur un paillasson.\n\nKenji|« Attendez. »\n\nIl ferme la porte.\n\nIl la rouvre quarante secondes plus tard avec une clé de garage.\n\nKenji|« Prenez-en trois. Ne dites pas que ça vient de moi. »\n\nHaruna|« Il va bien voir que c'est du chêne. »\n\nKenji|« Dites que vous l'avez trouvé. »\n\nHaruna|« C'est ridicule. »\n\nKenji|« Oui. »\n\nIl le dit avec une fatigue de dix ans."
+      }
+    }
+  }
+_XC2C[18]["choix"] = {
+    'question': 'Quatre sacs de mortier sur un trottoir. Un voisin qui a levé la tête.',
+    'decisif': True,
+    'options': [
+      (
+        'exige',
+        '1️⃣',
+        'Exiger le reste maintenant'
+      ),
+      (
+        'attend',
+        '2️⃣',
+        'Ne rien demander de plus'
+      )
+    ],
+    'suites': {
+      'exige': {
+        'pose': [
+          'a_exige'
+        ],
+        'relation': {
+          'yuma': {
+            'confiance': -8
+          }
+        },
+        'texte': "Haruna|« Pourquoi ils faisaient ça ? »\n\nYuma|« Je ne sais pas. »\n\nHaruna|« Tu sais. »\n\nYuma|« Non. »\n\nHaruna|« Tu étais là, tu portais les messages, tu sais forcément— »\n\nYuma|« JE NE SAIS PAS POURQUOI IL Y A UN MUR. »\n\nDeuxième fois qu'il crie en quatre minutes. Deuxième fois de sa vie, peut-être.\n\nYuma|« Personne ne me l'a dit. J'ai porté trente messages sur un truc dont je ne connais pas la cause. »\n\nIl ramasse son sac.\n\nYuma|« Et toi non plus tu ne sais pas, et ça fait dix ans, et à un moment il va falloir que vous vous demandiez pourquoi vous ne demandez pas. »\n\nIl rentre chez lui.\n\nIl ne sort pas sur sa marche ce soir-là.\n\nNi le lendemain. Ni les six soirs suivants."
+      },
+      'attend': {
+        'pose': [
+          'a_attendu'
+        ],
+        'relation': {
+          'yuma': {
+            'confiance': 5
+          }
+        },
+        'texte': "Elle ne demande rien.\n\nElle a douze questions dans la bouche et elle n'en pose aucune.\n\nElle prend l'autre bout du dernier sac.\n\nHaruna|« On rentre celui-là. »\n\nYuma|« …Il est déjà devant le portail. »\n\nHaruna|« Il est devant. Il faut le mettre dans l'atelier. »\n\nIls portent vingt-cinq kilos sur douze mètres sans parler.\n\nDevant l'atelier, il pose son bout.\n\nYuma|« Tu ne demandes rien. »\n\nHaruna|« Non. »\n\nYuma|« Pourquoi ? »\n\nHaruna|« Parce que tout le monde t'a demandé de porter des trucs et personne t'a jamais demandé si ça allait. »\n\nIl reste debout devant un atelier pendant environ dix secondes.\n\nYuma|« Ça allait pas. »\n\nHaruna|« Je sais. »\n\nYuma|« Ça fait dix ans. »\n\nHaruna|« Je sais. »\n\nIl sort sur sa marche à vingt et une heures comme d'habitude.\n\nElle monte sur le mur.\n\nIls ne parlent de rien pendant une heure, ce qui est exactement ce qu'il fallait."
+      }
+    }
+  }
+del _XC2C
+
+
+_XC2D = CHRONIQUE_SAISONS["la_maison_da_cote"]["episodes"]
+_XC2D[21]["scenes"] = [
+    "*Mi-octobre, nuit du mardi au mercredi, 1h50*\n\nIl pleut depuis dix-huit heures. C'est la troisième grosse pluie du mois.\n\nLa gouttière déborde. Elle déborde depuis huit heures, ce qui veut dire que le trou dans la pelouse des Ozaki a la taille d'une bassine et que la tache sur le crépi des Tachibana est descendue de vingt centimètres.",
+    "Haruna se réveille à une heure cinquante parce que quelque chose racle contre le mur de sa chambre.\n\nElle met huit secondes à identifier le bruit : une échelle en aluminium qu'on appuie contre un mur.\n\nElle regarde par la fenêtre.",
+    "Il y a un garçon de dix-sept ans en imperméable, sur une échelle, à deux heures du matin, sous une pluie battante, en train de démonter le coude d'une descente de gouttière avec une lampe frontale.\n\nL'échelle est celle de son père.\n\nIl l'a prise dans l'atelier, qui n'est jamais fermé à clé, ce que tout le quartier sait.",
+    "Elle descend. Elle sort. Elle est trempée en quatre secondes.\n\nHaruna|« QU'EST-CE QUE TU FAIS. »\n\nYuma|« Chut. »\n\nHaruna|« IL EST DEUX HEURES DU MATIN. »\n\nYuma|« Chut, tu vas réveiller tout le monde. »\n\nHaruna|« TU ES SUR L'ÉCHELLE DE MON PÈRE. »\n\nYuma|« Oui. »\n\nHaruna|« À DEUX HEURES DU MATIN. »\n\nYuma|« Il y a douze centimètres de mousse et de feuilles dans le coude. Ça fait neuf ans. »",
+    "Elle tient l'échelle. Elle ne sait pas exactement à quel moment elle a décidé de tenir l'échelle.\n\nHaruna|« Tu fais ça pourquoi ? »\n\nYuma|« Parce qu'il pleut. »\n\nHaruna|« C'est pas une raison. »\n\nYuma|« C'est exactement une raison. »\n\nIl descend un paquet de matière noire dans un seau.\n\nYuma|« Et parce que je ne peux pas le dire, donc je le fais. »",
+    "Ça prend quarante minutes.\n\nÀ la fin, l'eau descend normalement pour la première fois depuis 2016. Le bruit change complètement — il y a un écoulement au lieu d'un déversement.\n\nIls restent tous les deux sous la pluie à écouter une gouttière fonctionner.\n\nHaruna|« C'est le bruit le plus satisfaisant de ma vie. »\n\nYuma|« Oui. »",
+    "Il remet l'échelle exactement où elle était, à l'endroit exact, contre le mur de l'atelier.\n\nHaruna|« Il va voir. »\n\nYuma|« Non. »\n\nHaruna|« Mon père voit tout dans son atelier. »\n\nYuma|« Il ne verra pas l'échelle. Il verra la gouttière. »\n\nIl se retourne au portail.\n\nYuma|« Et il ne dira rien. »"
+  ]
+_XC2D[22]["scenes"] = [
+    "*Fin octobre, jeudi, 6h12*\n\nIl fait sept degrés. Yoko rentre de garde. Emi part travailler.\n\nEmi|« Bonjour. »\n\nYoko|« Bonjour. »\n\nEmi|« La gouttière marche. »\n\nYoko|« J'ai vu. »\n\nEmi|« Vous savez qui ? »\n\nYoko|« Non. »\n\nEmi|« Moi non plus. »\n\nLes deux femmes se regardent sur un trottoir à six heures douze du matin.\n\nElles savent parfaitement toutes les deux.",
+    "Emi|« Yoko-san. »\n\nC'est la première fois en dix ans qu'elle utilise son prénom.\n\nYoko|« Oui ? »\n\nEmi|« Il faut qu'on parle. »\n\nYoko|« Il est six heures. »\n\nEmi|« Je sais. »\n\nYoko|« J'ai fait onze heures. »\n\nEmi|« Je sais. »\n\nElle serre son sac.\n\nEmi|« Ça fait dix ans que je dis *bonjour* et *vous avez l'air fatiguée* et je n'en peux plus. »",
+    "Elles vont au konbini du coin.\n\nC'est le seul endroit ouvert à six heures quinze et c'est le premier endroit où elles s'assoient ensemble depuis 2015.\n\nDeux cafés en gobelet. Une table près de la vitre. Emi arrivera en retard à son cours et elle s'en fiche complètement.",
+    "Emi|« Vos enfants se parlent. »\n\nYoko|« Je sais. »\n\nEmi|« Depuis combien de temps vous savez ? »\n\nYoko|« Juin. »\n\nEmi|« Vous n'avez rien dit à votre mari. »\n\nYoko|« Non. »\n\nEmi|« Moi non plus. »\n\nElle tourne son gobelet.\n\nEmi|« On a donc deux femmes de cinquante ans qui cachent à leurs maris que leurs enfants se parlent par-dessus un mur. »\n\nYoko|« Oui. »\n\nEmi|« C'est absurde. »\n\nYoko|« Complètement. »",
+    "Yoko|« Vous savez pourquoi, vous ? »\n\nEmi ne répond pas tout de suite.\n\nEmi|« Oui. »\n\nYoko repose son gobelet.\n\nYoko|« …Vous savez ? »\n\nEmi|« Je suis la seule qui sait tout. »\n\nYoko|« Alors dites-le-moi. »\n\nEmi|« Je ne peux pas. »\n\nYoko|« Emi-san. »\n\nEmi|« Ce n'est pas mon histoire à raconter. C'est celle de mon mari et je l'ai déjà assez abîmée comme ça. »",
+    "Yoko|« Vous l'avez abîmée ? »\n\nEmi|« Je suis la raison. »\n\nElle le dit très vite, comme on retire un pansement.\n\nEmi|« Je suis la raison pour laquelle il y a un mur, et je le sais depuis dix ans, et il ne me l'a jamais reproché une seule fois, ce qui est mille fois pire. »\n\nYoko|« Qu'est-ce que vous avez fait ? »\n\nEmi|« Rien. »\n\nElle rit, très mal.\n\nEmi|« C'est ça le pire. Je n'ai absolument rien fait du tout. »",
+    "Elle se lève.\n\nEmi|« Je vais être en retard. »\n\nYoko|« Emi-san. »\n\nEmi|« Yoko-san, si je vous le dis, vous allez le dire à votre mari, et votre mari va comprendre qu'il a monté un mur pour rien pendant dix ans. »\n\nElle prend son sac.\n\nEmi|« Et je ne sais pas ce que ça fait à un homme de cinquante ans, d'apprendre ça. »\n\nElle sort du konbini.\n\nYoko reste devant deux gobelets à six heures quarante du matin après onze heures de garde."
+  ]
+_XC2D[23]["scenes"] = [
+    "*Début novembre, dimanche, 15h*\n\nIl y a une chose qu'ils ont commencé à faire sans que personne ne le décide.\n\nChacun s'assoit sur les marches de son propre perron.\n\nDe part et d'autre du mur. À sept mètres l'un de l'autre. Ils ne se voient pas du tout.",
+    "Ça a commencé le 12 octobre parce qu'il faisait froid et que le mur, à cette période, est glacial.\n\nÇa continue parce que c'est bizarrement mieux.\n\nSans se voir, on dit d'autres choses.",
+    "Haruna|« Toru il est comment ? »\n\nYuma|« Bavard. »\n\nHaruna|« C'est ton ami ? »\n\nYuma|« …Oui. »\n\nHaruna|« Tu as hésité. »\n\nYuma|« J'ai réfléchi. »\n\nHaruna|« C'est pareil. »\n\nYuma|« Non. »\n\nIl tourne une page.\n\nYuma|« Il m'a dit merci en juillet. Pour être venu à toutes les séances. »\n\nHaruna|« Et ? »\n\nYuma|« Et j'ai rien répondu. »\n\nHaruna|« Pourquoi ? »\n\nYuma|« Je savais pas quoi dire. »\n\nHaruna|« *Merci à toi.* »\n\nYuma|« …Ah. »\n\nLong silence.\n\nYuma|« C'était il y a quatre mois. »\n\nHaruna|« Il est pas mort, tu peux encore le dire. »",
+    "Haruna|« Moi j'ai une amie qui s'appelle Aki. »\n\nYuma|« Je sais. »\n\nHaruna|« Comment tu sais ? »\n\nYuma|« Elle est dans mon cours d'anglais. »\n\nHaruna|« …Depuis quand ? »\n\nYuma|« Deux ans. »\n\nHaruna|« DEUX ANS ? »\n\nYuma|« Elle est assise trois rangs devant. »\n\nHaruna|« Elle sait qui tu es ? »\n\nYuma|« Non. »\n\nHaruna|« Comment tu peux être assis dans une salle avec quelqu'un pendant deux ans sans qu'il sache qui tu es ? »\n\nYuma|« C'est très facile. »",
+    "*17h30*\n\nHoshi sort et s'assoit sur la troisième marche à côté de son frère.\n\nHoshi|« Tu parles au mur. »\n\nYuma|« Non. »\n\nHoshi|« Tu parles tout seul en regardant le mur. »\n\nYuma|« Va faire tes devoirs. »\n\nHoshi|« C'est dimanche. »\n\nYuma|« Va faire tes devoirs de mardi. »\n\nDe l'autre côté, à sept mètres, quelqu'un rit assez fort pour qu'on l'entende.\n\nHoshi|« …AH. »\n\nYuma|« Hoshi. »\n\nHoshi|« JE SAVAIS. »\n\nYuma|« Hoshi. »\n\nHoshi|« Je dis rien ! »\n\nElle rentre en courant, ce qui, chez Hoshi, veut dire qu'elle va tenir environ quatre jours."
+  ]
+_XC2D[24]["scenes"] = [
+    "*Mi-novembre, mardi, 22h40*\n\nLe trente-cinquième message de Haruna à Miki date du 3 novembre.\n\n*je sais pas ce qui se passe mais c'est pas grave*\n\nLu à 23h12. Pas de réponse.",
+    "Ce soir-là, sur les marches, elle en parle pour la première fois.\n\nHaruna|« J'ai une sœur. »\n\nYuma|« Je sais. Miki. »\n\nHaruna|« Comment tu— »\n\nYuma|« Elle avait un vélo bleu et elle criait sur les jumeaux depuis la fenêtre. »\n\nHaruna|« C'est une description assez exacte de ma sœur. »\n\nUn temps.\n\nHaruna|« Elle répond plus depuis février. »",
+    "Yuma|« Elle est où ? »\n\nHaruna|« Osaka. Deuxième année. »\n\nYuma|« Elle a répondu quand la dernière fois ? »\n\nHaruna|« 11 février. »\n\nYuma|« Elle lit ? »\n\nHaruna|« Tout. Tous les messages. Marqués lus dans les deux minutes. »\n\nSilence de deux perrons.\n\nYuma|« Alors elle veut que tu écrives. »\n\nHaruna|« …Quoi ? »\n\nYuma|« Quelqu'un qui veut qu'on le laisse tranquille coupe les notifications. Elle lit dans les deux minutes depuis neuf mois. »",
+    "Haruna|« Alors pourquoi elle répond pas ? »\n\nYuma met du temps.\n\nYuma|« Parce que répondre, ça veut dire commencer par quelque chose. »\n\nHaruna|« C'est-à-dire ? »\n\nYuma|« Quand tu n'as pas répondu pendant neuf mois, tu ne peux plus dire *coucou*. Il faut expliquer neuf mois. »\n\nIl ferme son livre.\n\nYuma|« Et plus tu attends, plus c'est long à expliquer, donc plus tu attends. »",
+    "Haruna|« Tu parles d'elle ou de toi ? »\n\nUn silence assez long.\n\nYuma|« Des deux. »"
+  ]
+_XC2D[25]["scenes"] = [
+    "*Début décembre, samedi, 16h20*\n\nLa date limite de dépôt des dossiers post-bac est le 12 mars.\n\nLe BTS Aménagement finition de l'école de Sakae recrute vingt-quatre personnes sur trois cent dix candidatures.\n\nHaruna a l'onglet ouvert depuis treize mois.",
+    "Ce qu'il faut fournir : bulletins des deux dernières années, une lettre, et un dossier de travaux personnels — photos, croquis, réalisations.\n\nHaruna a des bulletins moyens.\n\nElle a aussi, dans un carton sous son lit, quatre ans de choses qu'elle a faites à l'atelier : deux tabourets, une boîte à outils, un porte-manteau mural en frêne, et un escabeau pliant qui fonctionne, qu'elle a dessiné elle-même à quinze ans.",
+    "Elle n'a jamais montré le carton à personne.\n\nPas à son père — surtout pas à son père. Parce que si elle le montre à son père, il faudra dire pourquoi, et si elle dit pourquoi, il faudra dire qu'elle part.\n\nL'école est à quarante minutes en train.\n\nCe n'est pas loin. C'est juste ailleurs.",
+    "*21h, les marches*\n\nHaruna|« Je vais te dire un truc et tu le répètes à personne. »\n\nYuma|« Je ne répète jamais rien à personne. »\n\nHaruna|« …C'est vrai. »\n\nElle prend son temps.\n\nHaruna|« BTS aménagement finition. Sakae. Vingt-quatre places. »\n\nYuma|« Depuis quand ? »\n\nHaruna|« Treize mois. »\n\nYuma|« Tu l'as dit à qui ? »\n\nHaruna|« À toi. »\n\nUn silence de sept mètres.",
+    "Yuma|« Tu as un dossier ? »\n\nHaruna|« J'ai un carton sous mon lit. »\n\nYuma|« Avec quoi dedans ? »\n\nHaruna|« Deux tabourets, une boîte, un porte-manteau, un escabeau. »\n\nYuma|« Tu as fait un escabeau ? »\n\nHaruna|« Il est pliant. »\n\nYuma|« Tu as fait un escabeau PLIANT ? »\n\nHaruna|« À quinze ans. »\n\nYuma|« Ozaki. »\n\nHaruna|« Quoi ? »\n\nYuma|« Ce n'est pas un carton sous un lit, ça. C'est un dossier. »",
+    "Haruna|« Il faut des photos. »\n\nYuma|« J'ai un appareil. »\n\nHaruna|« Tu as un appareil ? »\n\nYuma|« Pour le ciel. Il marche aussi pour les escabeaux. »\n\nElle ne dit rien pendant un moment.\n\nHaruna|« Pourquoi tu proposes ? »\n\nYuma|« Parce que tu as un escabeau pliant sous ton lit depuis deux ans et que personne ne l'a jamais vu. »\n\nIl se lève.\n\nYuma|« Ça m'énerve. »"
+  ]
+_XC2D[26]["scenes"] = [
+    {
+      'si': 'aki_sait',
+      'texte': "*Mi-décembre, lycée, 12h35*\n\nAki|« Bon. Six mois. »\n\nHaruna|« Six mois quoi ? »\n\nAki|« Six mois que tu me racontes ta vie de mur et j'ai jamais vu ce garçon. »\n\nHaruna|« Tu le vois tous les jours. »\n\nAki|« Je vois un garçon. Je vois pas *ce* garçon. »\n\nElle repousse son plateau.\n\nAki|« Je veux le voir. »\n\nHaruna|« C'est pas un animal de zoo. »\n\nAki|« Haruna. »\n\nHaruna|« Quoi ? »\n\nAki|« Tu as peur de quoi ? »"
+    },
+    {
+      'sauf': 'aki_sait',
+      'texte': "*Mi-décembre, lycée, 12h35*\n\nAki|« Je vais te dire un truc. »\n\nHaruna|« Vas-y. »\n\nAki|« Depuis juin tu me racontes plus rien. »\n\nHaruna|« Je te raconte des trucs. »\n\nAki|« Tu me racontes la météo, les jumeaux, et l'atelier. »\n\nHaruna|« C'est ma vie. »\n\nAki|« Non. »\n\nElle repousse son plateau.\n\nAki|« C'est ce qui reste de ta vie quand t'as enlevé le morceau que tu me caches. »\n\nHaruna|« Aki— »\n\nAki|« Je sais pas ce que c'est et je m'en fous. Mais je le sens depuis six mois et c'est chiant. »"
+    },
+    "Aki|« Tu as peur qu'on trouve ça bizarre. »\n\nHaruna|« C'est bizarre. »\n\nAki|« Un peu. »\n\nHaruna|« Nos pères se parlent pas depuis dix ans. »\n\nAki|« Ouais. »\n\nHaruna|« Et personne sait pourquoi. »\n\nAki|« Ouais. »\n\nHaruna|« Et lui il monte pas sur le mur parce que c'est le mur de mon père. »\n\nAki|« …Ok, ça c'est vraiment bizarre. »\n\nHaruna|« MERCI. »",
+    "Aki|« Mais tu sais ce qui est plus bizarre ? »\n\nHaruna|« Vas-y. »\n\nAki|« Que tu aies vingt conversations d'une heure avec quelqu'un et que tu lui dises *'lut* dans un couloir. »\n\nElle attaque son riz.\n\nAki|« Le mur, c'est vos pères. Le couloir, c'est vous. »",
+    "*Le même jour, 16h10, couloir C*\n\nElle le croise à dix heures cinq tous les jours depuis deux ans.\n\nCe jour-là, elle s'arrête.\n\nHaruna|« Tachibana. »\n\nIl s'arrête aussi, avec quatre personnes qui le contournent.\n\nYuma|« …Oui ? »\n\nHaruna|« Rien. »\n\nYuma|« D'accord. »\n\nHaruna|« Enfin — l'appareil. Samedi. »\n\nYuma|« Samedi. »\n\nHaruna|« Voilà. »\n\nYuma|« Voilà. »\n\nIls repartent chacun de leur côté.\n\nÇa a duré onze secondes en plein jour devant quarante personnes et c'est un événement considérable."
+  ]
+_XC2D[27]["scenes"] = [
+    "*Fin décembre, samedi, 14h*\n\nLe grand ménage de fin d'année chez les Tachibana concerne le grenier, le garage et le bureau, dans cet ordre, tous les 28 décembre depuis toujours.\n\nCette année, Kenji est à Nagoya pour un audit et rentre le 30.\n\nC'est Emi, Yuma et Hoshi.",
+    "Le bureau contient un secrétaire en bois sombre que le père de Kenji lui a laissé.\n\nIl a quatre tiroirs. Le troisième coince depuis des années.\n\nHoshi|« Il est bloqué. »\n\nEmi|« Laisse-le. »\n\nHoshi|« Il est bloqué par un truc. »\n\nEmi|« Hoshi, laisse-le. »\n\nHoshi tire le tiroir d'un coup sec.\n\nIl sort entièrement et son contenu tombe.",
+    "Il y a des papiers d'assurance de 2011, deux stylos morts, une montre arrêtée.\n\nEt une enveloppe.\n\nBlanche, format standard, fermée, avec deux mots écrits dessus à l'encre bleue :\n\n*Ozaki Masaru*\n\nEn bas à gauche, plus petit : *mai 2015*.",
+    "Emi la voit avant les enfants.\n\nElle ne bouge pas pendant quatre secondes.\n\nEmi|« Donne-moi ça. »\n\nHoshi|« C'est quoi ? »\n\nEmi|« Donne. »\n\nElle le dit d'une voix qu'aucun des deux enfants ne lui connaît, et Hoshi lâche l'enveloppe immédiatement.\n\nEmi la prend. Elle la retourne. Elle est cachetée.\n\nElle reste debout au milieu d'un bureau avec une lettre de dix ans dans les mains.",
+    "Emi|« Il ne l'a jamais envoyée. »\n\nYuma|« Maman ? »\n\nEmi|« Il l'a écrite et il ne l'a jamais envoyée. »\n\nHoshi|« C'est une lettre pour le voisin ? »\n\nEmi|« Oui. »\n\nHoshi|« De 2015 ? »\n\nEmi|« Oui. »\n\nHoshi|« C'est l'année du mur. »\n\nLes deux adultes de la pièce — parce qu'à cet instant Yuma est un adulte de la pièce — se rendent compte en même temps que la petite de treize ans a gardé la date.",
+    "Emi s'assoit sur la chaise du bureau.\n\nEmi|« Sortez, tous les deux. »\n\nHoshi|« Maman— »\n\nEmi|« Sortez. »\n\nHoshi sort. Yuma reste.\n\nEmi|« Yuma. »\n\nYuma|« Tu sais ce qu'il y a dedans. »\n\nEmi|« Oui. »\n\nYuma|« Depuis dix ans. »\n\nEmi|« Depuis dix ans. »\n\nIl ne bouge pas.\n\nYuma|« J'ai porté trente messages entre ces deux hommes quand j'avais sept ans. »\n\nEmi ferme les yeux.\n\nYuma|« Donc tu vas me la donner. »",
+    "Elle la lui donne.\n\nElle met environ une minute, et pendant cette minute elle ne dit rien, et quand elle la tend elle a les mains qui tremblent un peu.\n\nEmi|« Elle n'est pas à toi. »\n\nYuma|« Je sais. »\n\nEmi|« Elle n'est pas à moi non plus. »\n\nYuma|« Je sais. »\n\nIl la met dans sa poche intérieure.\n\n*Le soir, 21h, sur les marches, il ne sort pas.*\n\n*Le lendemain non plus.*\n\n*Le 30, il sort avec l'enveloppe.*"
+  ]
+_XC2D[21]["choix"] = {
+    'question': 'Il est deux heures quarante. La gouttière fonctionne. Personne ne sait pourquoi.',
+    'decisif': False,
+    'options': [
+      (
+        'denonce',
+        '1️⃣',
+        'Le dire à son père'
+      ),
+      (
+        'couvre',
+        '2️⃣',
+        'Ne rien dire'
+      )
+    ],
+    'suites': {
+      'denonce': {
+        'pose': [
+          'gouttiere_dite'
+        ],
+        'relation': {
+          'yuma': {
+            'confiance': -6
+          }
+        },
+        'texte': "*Le lendemain, 7h20*\n\nMasaru regarde l'angle des deux maisons depuis quatre minutes.\n\nHaruna|« C'est Yuma. »\n\nMasaru|« …Pardon ? »\n\nHaruna|« Le fils Tachibana. Il l'a débouchée cette nuit. À deux heures du matin, sous la pluie, avec ton échelle. »\n\nSon père ne dit rien pendant très longtemps.\n\nMasaru|« Avec mon échelle. »\n\nHaruna|« C'est ça que tu retiens ? »\n\nMasaru|« Non. »\n\nIl rentre.\n\nIl ne dit rien de la journée. Le soir, l'échelle est cadenassée.\n\n*Et le vendredi suivant, sur le mur :*\n\nYuma|« Tu lui as dit. »\n\nHaruna|« Oui. »\n\nYuma|« Je t'avais pas demandé de rien dire. »\n\nHaruna|« Non. »\n\nYuma|« Mais tu savais. »\n\nHaruna|« …Oui. »\n\nIl ne se fâche pas. Il descend de sa marche et il rentre, et c'est pire."
+      },
+      'couvre': {
+        'pose': [
+          'gouttiere_couverte'
+        ],
+        'relation': {
+          'yuma': {
+            'confiance': 10
+          }
+        },
+        'texte': "*Le lendemain, 7h20*\n\nMasaru sort. Il regarde l'angle des deux maisons.\n\nL'eau descend. Le trou dans la pelouse est plein mais il ne se remplit plus.\n\nIl regarde ça pendant quatre minutes entières.\n\nMasaru|« Haruna. »\n\nHaruna|« Mm ? »\n\nMasaru|« La gouttière. »\n\nHaruna|« Quoi la gouttière ? »\n\nMasaru|« Elle coule. »\n\nHaruna|« …Ah bon ? »\n\nElle boit son thé. Elle boit très mal son thé, avec une application suspecte.\n\nMasaru la regarde deux secondes de trop.\n\nMasaru|« Mm. »\n\nIl ne demande rien d'autre.\n\n*Trois jours plus tard*, elle trouve l'échelle rangée à sa place mais déplacée de quinze centimètres, et une brosse à gouttière neuve posée à côté, encore dans son emballage.\n\nPersonne n'en parle jamais."
+      }
+    }
+  }
+_XC2D[24]["choix"] = {
+    'question': 'Trente-cinq messages. Neuf mois. Tous lus dans les deux minutes.',
+    'decisif': False,
+    'options': [
+      (
+        'insiste',
+        '1️⃣',
+        "Envoyer quelque chose qui l'oblige à répondre"
+      ),
+      (
+        'lache',
+        '2️⃣',
+        "Lui écrire qu'elle n'a pas à répondre"
+      )
+    ],
+    'suites': {
+      'insiste': {
+        'pose': [
+          'miki_forcee'
+        ],
+        'texte': "*23h40*\n\n**Haruna** — *je prends le train samedi. j'arrive à osaka à 11h. je serai devant chez toi. si tu es pas là j'attends. si tu veux pas ouvrir j'attends quand même.*\n\nLu à 23h41.\n\n**Miki** — *non*\n\nPremier mot en neuf mois.\n\n**Haruna** — *alors réponds*\n\n**Miki** — *viens pas*\n\n**Haruna** — *alors réponds MIKI*\n\nTrois points de suspension qui apparaissent et disparaissent onze fois en quatre minutes.\n\n**Miki** — *je suis pas allée en cours depuis février*\n\nHaruna est assise sur les marches de son perron à minuit moins vingt et elle ne respire pas pendant environ six secondes.\n\n**Miki** — *voilà*\n\n**Miki** — *maintenant viens pas stp*"
+      },
+      'lache': {
+        'pose': [
+          'miki_laissee'
+        ],
+        'relation': {
+          'yuma': {
+            'confiance': 4
+          }
+        },
+        'texte': "*23h40*\n\n**Haruna** — *j'arrête de te demander de répondre*\n\n**Haruna** — *je vais continuer à écrire parce que j'ai envie. mais tu réponds pas si tu peux pas.*\n\n**Haruna** — *y a pas de dette*\n\nLu à 23h41.\n\nRien.\n\nElle continue. Deux ou trois messages par semaine, sur rien : les jumeaux, l'atelier, un client insupportable, la gouttière qui marche.\n\nElle ne pose plus une seule question pendant cinq semaines.\n\n*Le 22 décembre, 2h10 du matin :*\n\n**Miki** — *la gouttière marche vraiment ?*\n\nHaruna se réveille à sept heures avec ce message et elle pleure dans la salle de bain pendant onze minutes sans réveiller personne."
+      }
+    }
+  }
+_XC2D[27]["choix"] = {
+    'question': "Une enveloppe cachetée de mai 2015, adressée à Ozaki Masaru, dans la main d'un garçon de dix-sept ans.",
+    'decisif': True,
+    'options': [
+      (
+        'lit',
+        '1️⃣',
+        "L'ouvrir"
+      ),
+      (
+        'rend',
+        '2️⃣',
+        'La rendre fermée'
+      )
+    ],
+    'suites': {
+      'lit': {
+        'pose': [
+          'lettre_lue'
+        ],
+        'relation': {
+          'yuma': {
+            'confiance': -4
+          }
+        },
+        'texte': "Ils l'ouvrent sur le mur, à vingt et une heures quarante, avec une lampe frontale.\n\nC'est Haruna qui la décachette, parce qu'il n'y arrive pas.\n\nIl y a une page. Une seule. Écrite à la main, sans rature.\n\nElle commence par *Masaru,* et elle fait onze lignes.\n\nHaruna la lit à voix haute et elle s'arrête deux fois, pas parce que c'est émouvant — parce que ce n'est pas assez.\n\nIl y a une explication, un examen, un hôpital, une date. Il y a *je n'ai pas voulu ajouter quelque chose à ta semaine*. Il y a *j'aurais dû venir quand même*.\n\nIl n'y a pas *pardon*.\n\nHaruna|« C'est tout ? »\n\nYuma|« C'est tout. »\n\nHaruna|« Il y a onze lignes. »\n\nYuma|« Oui. »\n\nHaruna|« Onze lignes en dix ans. »\n\nElle repose la feuille sur le chaperon.\n\nHaruna|« Et maintenant on fait quoi ? On peut plus la recacheter. »\n\nYuma ne répond pas.\n\nC'est exactement le problème : ils ont maintenant une information qui ne leur appartient pas et qu'ils ne peuvent plus rendre."
+      },
+      'rend': {
+        'pose': [
+          'lettre_rendue'
+        ],
+        'relation': {
+          'yuma': {
+            'confiance': 12
+          }
+        },
+        'texte': "Il la sort de sa poche et il la pose sur le chaperon du mur sans l'ouvrir.\n\nYuma|« Regarde. »\n\nHaruna lit les deux mots à l'encre bleue.\n\nHaruna|« …C'est le nom de mon père. »\n\nYuma|« Mai 2015. »\n\nHaruna tend la main.\n\nYuma|« Non. »\n\nHaruna|« Yuma. »\n\nYuma|« Non. »\n\nHaruna|« Il y a dedans la réponse à une question que tu portes depuis que tu as sept ans. »\n\nYuma|« Je sais. »\n\nHaruna|« Alors ouvre-la. »\n\nYuma|« Non. »\n\nIl remet l'enveloppe dans sa poche.\n\nYuma|« J'ai passé six mois à porter les phrases de deux hommes qui ne les écoutaient pas. »\n\nIl descend du mur — parce qu'il monte sur le mur maintenant, depuis août.\n\nYuma|« Celle-là, il la portera lui-même. »\n\n*Le 31 décembre, il remet l'enveloppe dans le troisième tiroir du secrétaire, à l'endroit exact.*\n\n*Et il dit à sa mère qu'il l'a fait.*"
+      }
+    }
+  }
+del _XC2D
+
+
+_XC2E = CHRONIQUE_SAISONS["la_maison_da_cote"]["episodes"]
+_XC2E[28]["scenes"] = [
+    "*Mi-janvier, mardi, 21h*\n\nIl fait quatre degrés. Ils sont sur leurs marches respectives avec chacun une couverture, ce qui est objectivement ridicule et que ni l'un ni l'autre ne commente plus depuis novembre.",
+    "Yuma|« J'ai cent soixante-huit mille. »\n\nHaruna|« Sur cent quatre-vingt-dix. »\n\nYuma|« Sur cent quatre-vingt-dix. »\n\nHaruna|« Tu y es en avril. »\n\nYuma|« Mars, si je prends deux collégiens de plus. »\n\nHaruna|« Tu vas pas prendre deux collégiens de plus. »\n\nYuma|« Pourquoi ? »\n\nHaruna|« Parce que tu fais déjà six heures et que tu dors quatre heures par nuit. »\n\nYuma|« Cinq. »\n\nHaruna|« Quatre. Ta lumière s'éteint à deux heures et ta mère t'appelle à six et quart. »",
+    'Long silence de sept mètres.\n\nYuma|« Tu comptes mes heures de sommeil. »\n\nHaruna|« Je vois ta fenêtre depuis la mienne. »\n\nYuma|« Depuis combien de temps ? »\n\nHaruna|« Toujours. »\n\nIl ne relance pas. Elle ne développe pas.',
+    "Haruna|« Bon. Le scooter. »\n\nYuma|« Quoi le scooter. »\n\nHaruna|« Pour aller où ? »\n\nYuma|« Je te l'ai déjà dit. »\n\nHaruna|« Tu m'as dit *quelque part*. »\n\nYuma|« C'est vrai. »\n\nHaruna|« C'est pas une réponse. »\n\nUn temps.\n\nYuma|« Cinquante-cinq minutes de train, deux changements. Trente-cinq en scooter. »\n\nHaruna|« Pour aller à la fac. »\n\nYuma|« Pour aller à la fac. »\n\nHaruna|« Donc tu économises depuis un an et demi pour gagner vingt minutes. »\n\nYuma|« Quarante. Aller-retour. »",
+    "Haruna|« Yuma. »\n\nC'est peut-être la troisième fois qu'elle dit son prénom.\n\nHaruna|« Quarante minutes pour quoi ? »\n\nIl met beaucoup de temps.\n\nYuma|« Pour rentrer dîner. »\n\nElle ne dit rien.\n\nYuma|« Hoshi a treize ans. Mon père rentre à vingt heures trente. Ma mère corrige jusqu'à vingt-deux. »\n\nIl resserre sa couverture.\n\nYuma|« Si je prends le train, je rentre à vingt heures quinze et elle dîne seule à dix-neuf. »",
+    "Haruna|« Tu as calculé ça quand ? »\n\nYuma|« En septembre l'an dernier. »\n\nHaruna|« Tu l'as dit à qui ? »\n\nYuma|« À personne. »\n\nHaruna|« Même pas à ta mère ? »\n\nYuma|« Surtout pas à ma mère. »\n\nHaruna|« Pourquoi ? »\n\nYuma|« Parce qu'elle paierait. »\n\nIl regarde le jardin.\n\nYuma|« Et si elle paie, ça devient un cadeau. Et si c'est un cadeau, ça veut dire qu'il fallait le demander, et si il fallait le demander ça veut dire que personne n'y avait pensé. »\n\nIl souffle.\n\nYuma|« Je préfère que ce soit moi qui l'aie pensé. »"
+  ]
+_XC2E[29]["scenes"] = [
+    "*Fin janvier, dimanche, 11h, maison Tachibana*\n\nHoshi Tachibana a treize ans et demi et elle a décidé que ça suffisait.\n\nElle a préparé. Elle a un cahier, elle a une liste, et elle a choisi un dimanche parce que c'est le seul jour où son père ne peut pas dire qu'il est en retard.",
+    "Hoshi|« Papa. »\n\nKenji|« Mm. »\n\nHoshi|« Pourquoi il y a un mur ? »\n\nKenji tourne une page de son journal.\n\nKenji|« C'est vieux. »\n\nHoshi|« Ça veut rien dire. »\n\nKenji|« Hoshi. »\n\nHoshi|« *C'est vieux* ça veut rien dire du tout. Une chose vieille c'est pas une explication, c'est une date. »",
+    "Il repose son journal, ce qu'il ne fait jamais.\n\nKenji|« Où tu as appris à parler comme ça ? »\n\nHoshi|« Chez maman, elle est prof. »\n\nElle ouvre son cahier.\n\nHoshi|« J'ai une liste. »\n\nKenji|« Une liste. »\n\nHoshi|« *Choses que personne veut dire.* Onze entrées. Je l'ai commencée à neuf ans. »\n\nEmi, dans la cuisine, s'arrête de faire ce qu'elle faisait.",
+    "Hoshi|« Numéro un : pourquoi il y a un mur. Numéro deux : pourquoi tu dis rien quand on parle des voisins. Numéro trois : pourquoi maman change de sujet. Numéro cinq : c'était quoi le trampoline. »\n\nKenji|« Le trampoline ? »\n\nHoshi|« Il y a une photo. J'ai deux ans, il y a un trampoline, et il y a une fille de sept ans dessus qui s'appelle Haruna Ozaki. »\n\nKenji ne dit strictement rien.\n\nHoshi|« Donc avant, on se voyait tous les jours. »",
+    "Kenji|« Qui t'a dit ça ? »\n\nHoshi|« Elle. »\n\nKenji|« Tu lui as parlé ? »\n\nHoshi|« Je lui parle depuis juin. »\n\nIl se lève.\n\nKenji|« Comment ? »\n\nHoshi|« Il y avait un trou. »\n\nKenji|« Il y avait un— »\n\nHoshi|« Sous le mur. Les jumeaux l'ont creusé en mai. Leur père l'a rebouché en octobre. »\n\nElle referme son cahier.\n\nHoshi|« Voilà. Maintenant tu sais tout et moi je sais rien. »",
+    "Kenji reste debout au milieu du salon.\n\nKenji|« Hoshi, va dans ta chambre. »\n\nHoshi|« Non. »\n\nKenji|« Pardon ? »\n\nHoshi|« Non. Je vais pas dans ma chambre. Ça fait treize ans que je vais dans ma chambre. »\n\nElle a la voix qui monte et les yeux qui piquent et elle est furieuse de pleurer parce qu'elle avait préparé pour ne pas pleurer.\n\nHoshi|« Je suis née après. Je sais même pas ce que j'ai raté. »",
+    "Emi apparaît dans l'encadrement de la cuisine.\n\nEmi|« Kenji. »\n\nKenji|« Emi. »\n\nEmi|« Dis-lui. »\n\nKenji|« Non. »\n\nEmi|« Dis-lui ou je le dis. »\n\nLe silence qui suit dure environ six secondes et c'est le plus long silence de cette maison depuis dix ans.\n\nKenji|« Tu n'as pas à porter ça. »\n\nEmi|« Je le porte depuis dix ans. »\n\nIl prend son manteau et il sort marcher.\n\nIl rentre à quinze heures et il ne dit rien du tout."
+  ]
+_XC2E[30]["scenes"] = [
+    "*Début février, mercredi, 17h*\n\nEmi Tachibana a corrigé quarante-quatre copies et elle n'a rien vu de la quarante-troisième.\n\nElle attend Yuma dans le salon, ce qu'elle n'a jamais fait.",
+    "Emi|« Assieds-toi. »\n\nYuma|« …D'accord. »\n\nEmi|« Je vais te raconter quelque chose et tu ne vas pas m'interrompre, parce que si tu m'interromps je ne finirai pas. »\n\nIl s'assoit.",
+    "Emi|« En avril 2015, j'ai trouvé quelque chose. »\n\nElle a les mains posées à plat sur ses genoux.\n\nEmi|« Le médecin a dit que c'était probablement rien, et qu'il fallait vérifier, et qu'il y avait un rendez-vous le 14 mai à l'hôpital central. »\n\nYuma ne bouge pas.\n\nEmi|« Le 12 mai, le père de monsieur Ozaki est mort. »\n\nElle prend une respiration.\n\nEmi|« L'enterrement était le 14 mai à onze heures. Mon examen était le 14 mai à dix heures quarante. »",
+    "Emi|« Ton père a voulu annuler l'examen. »\n\nElle regarde ses mains.\n\nEmi|« C'est moi qui ai refusé. »\n\nYuma|« Maman— »\n\nEmi|« Tu as dit que tu n'interromprais pas. »\n\nIl se tait.\n\nEmi|« J'ai dit *tu vas à l'enterrement, j'y vais seule*. Il a dit non. On s'est disputés pendant deux jours. »\n\nElle sourit très mal.\n\nEmi|« Il a gagné. Il m'a accompagnée. »",
+    "Emi|« Il n'a rien dit à Masaru. »\n\nYuma|« Pourquoi ? »\n\nEmi|« Parce que Masaru enterrait son père. »\n\nElle hausse les épaules d'un centimètre.\n\nEmi|« Ton père s'est dit : je ne vais pas aller voir un homme qui enterre son père pour lui expliquer que ma femme passe une échographie. »\n\nYuma|« Il aurait pu le dire après. »\n\nEmi|« Oui. »\n\nYuma|« Le lendemain. La semaine d'après. »\n\nEmi|« Oui. »\n\nYuma|« Pourquoi il l'a pas fait ? »",
+    "Emi|« Parce que le résultat était bon. »\n\nSilence.\n\nEmi|« Le 16 mai, on a appris que ce n'était rien du tout. Un kyste. Rien.\n\nEt le 17 mai, il a fallu aller voir Masaru Ozaki et lui dire : *je ne suis pas venu à l'enterrement de ton père parce que ma femme avait un examen qui s'est révélé être rien.* »\n\nElle lève enfin les yeux.\n\nEmi|« Tu comprends ? »\n\nYuma|« …Non. »\n\nEmi|« Si le résultat avait été mauvais, il aurait pu le dire. Ça aurait été une raison. »\n\nElle appuie sur chaque mot.\n\nEmi|« Mais on ne peut pas rater l'enterrement du père de son meilleur ami pour rien. »",
+    "Yuma|« Et Masaru a attendu. »\n\nEmi|« Trois jours. »\n\nYuma|« Et après ? »\n\nEmi|« Après il a monté un mur. »\n\nElle se lève.\n\nEmi|« Et ton père a écrit une lettre. Onze lignes. Il ne l'a jamais envoyée. »\n\nYuma|« Je sais. Je l'ai remise dans le tiroir. »\n\nEmi s'arrête au milieu du salon.\n\nEmi|« …Tu l'as remise ? »\n\nYuma|« Fermée. »\n\nSa mère le regarde pendant environ dix secondes.\n\nEmi|« Tu es exactement comme lui et c'est ce qui me terrifie. »",
+    "Elle sort de la pièce et revient trois minutes plus tard.\n\nEmi|« Une dernière chose. »\n\nYuma|« Oui ? »\n\nEmi|« Tu avais sept ans. »\n\nYuma|« Je sais quel âge j'avais. »\n\nEmi|« Tu as porté des messages entre eux pendant six mois. »\n\nElle a la voix qui ne tient plus.\n\nEmi|« Et je t'ai laissé faire. Parce que tant que tu y allais, ils se parlaient encore un peu. »\n\nElle s'assoit sur l'accoudoir.\n\nEmi|« Je me suis servie de mon fils de sept ans comme d'un fil, et le jour où tu as arrêté j'ai été soulagée pour toi et paniquée pour eux, et j'ai rien dit du tout. »\n\nYuma ne répond rien pendant très longtemps.\n\nYuma|« C'était il y a dix ans. »\n\nEmi|« Oui. »\n\nYuma|« Tu peux le dire maintenant. »\n\nEmi|« …Dire quoi ? »\n\nYuma|« Pardon. »\n\nElle le dit."
+  ]
+_XC2E[31]["scenes"] = [
+    "*Février, samedi soir, 20h40*\n\nIl fait trois degrés et il n'y a aucune raison d'être dehors.\n\nIls sont sur le mur tous les deux, ce qui, à cette température, relève du problème médical.\n\nIl a apporté un thermos. Elle a apporté deux couvertures. Aucun des deux n'a prévenu l'autre, et ils ont donc un thermos et deux couvertures.",
+    "Haruna|« Raconte-moi encore. »\n\nYuma|« Je te l'ai dit trois fois. »\n\nHaruna|« Redis. »\n\nIl redit. L'examen. L'enterrement à onze heures. Le résultat le 16. La lettre de onze lignes.\n\nÀ la fin :\n\nHaruna|« C'est tout ? »\n\nYuma|« C'est tout. »\n\nHaruna|« Dix ans pour ça. »\n\nYuma|« Dix ans pour ça. »",
+    "Haruna|« Je vais te dire ce qui me rend folle. »\n\nYuma|« Vas-y. »\n\nHaruna|« C'est pas que ce soit petit. »\n\nElle serre sa couverture.\n\nHaruna|« C'est que si mon père l'avait su le 15, il aurait dit *ah, bon, d'accord*, et on aurait mangé chez vous le dimanche suivant. »\n\nYuma|« Oui. »\n\nHaruna|« Ça se réparait en une phrase. »\n\nYuma|« Le 15. »\n\nHaruna|« Quoi ? »\n\nYuma|« Ça se réparait en une phrase le 15. Le 20, c'était une conversation. En 2017, c'était un aveu. En 2025, c'est une humiliation. »",
+    "Ils restent silencieux un moment.\n\nHaruna|« Tu vas lui dire ? »\n\nYuma|« À qui ? »\n\nHaruna|« À ton père. Que tu sais. »\n\nYuma|« Non. »\n\nHaruna|« Pourquoi ? »\n\nYuma|« Parce qu'il n'a rien demandé. »\n\nHaruna|« Yuma, c'est ridicule— »\n\nYuma|« Je sais que c'est ridicule. »\n\nIl souffle sur ses mains.\n\nYuma|« C'est exactement le problème de cette rue. Tout le monde sait que c'est ridicule et personne ne bouge. »",
+    "Haruna|« Nous on bouge. »\n\nYuma|« Quoi ? »\n\nHaruna|« Nous deux. On bouge. On est assis sur le mur qu'ils ont construit et on se caille les fesses depuis huit mois. »\n\nYuma|« Ce n'est pas bouger, ça. C'est être assis. »\n\nHaruna|« C'est sur le mur. »\n\nYuma|« Oui. »\n\nHaruna|« Ils sont pas capables de passer devant. Nous on est dessus. »\n\nElle se tourne vers lui.\n\nHaruna|« Je trouve que c'est pas rien. »",
+    "Il la regarde.\n\nIl fait trois degrés, il est vingt et une heures dix, ils sont à quarante centimètres l'un de l'autre sur un chaperon de ciment mal lissé, et ça fait onze mois que ça dure."
+  ]
+_XC2E[32]["scenes"] = [
+    '*Fin février, dimanche, 10h*\n\nOnze mètres de trottoir.\n\nHaruna Ozaki les a faits deux fois dans sa vie : en avril pour un ballon, en août pour du chêne.\n\nLa troisième fois, elle les fait un dimanche matin à dix heures, sans avoir prévenu personne, et elle sonne.',
+    "C'est Kenji qui ouvre. Il est en pull, il a un journal à la main, et il met trois secondes à la reconnaître.\n\nKenji|« …Haruna-san. »\n\nHaruna|« Bonjour. »\n\nKenji|« Yuma n'est pas là, il donne un cours. »\n\nHaruna|« Je sais. C'est pour ça que je viens maintenant. »\n\nIl ne dit rien.\n\nHaruna|« Je peux entrer ? »\n\nKenji|« …Non. »\n\nHaruna|« D'accord. »\n\nElle ne bouge pas du paillasson.",
+    "Haruna|« Alors je vais le dire là. »\n\nKenji|« Haruna-san— »\n\nHaruna|« Le 14 mai 2015 votre femme avait un examen à dix heures quarante et l'enterrement de mon grand-père était à onze heures, et vous l'avez accompagnée, et le résultat était bon, et c'est pour ça que vous n'avez rien dit. »\n\nLe journal descend le long de sa jambe.\n\nKenji|« Qui vous a— »\n\nHaruna|« Votre femme à votre fils. Votre fils à moi. »",
+    "Kenji|« Yuma vous a raconté ça. »\n\nHaruna|« Oui. »\n\nKenji|« Il n'aurait pas dû. »\n\nHaruna|« Il a passé six mois de sa vie à sept ans à porter vos phrases par-dessus une haie. Vous croyez pas qu'il a payé le droit d'en dire une ? »\n\nUn très long silence sur un paillasson un dimanche matin.\n\nKenji|« …Si. »",
+    "Haruna|« Bon. »\n\nElle sort une feuille pliée en quatre de sa poche.\n\nHaruna|« Alors maintenant, la partie pour laquelle je suis venue. »\n\nKenji|« Qu'est-ce que c'est ? »\n\nHaruna|« Rien. C'est du papier. J'avais besoin d'un truc dans les mains. »\n\nElle la remet dans sa poche.\n\nHaruna|« Dites-le à mon père. »",
+    "Kenji|« Je ne peux pas. »\n\nHaruna|« Pourquoi ? »\n\nKenji|« Parce que ça fait dix ans. »\n\nHaruna|« C'est pas une raison, c'est une durée. »\n\nKenji|« Haruna-san. »\n\nHaruna|« Monsieur Tachibana, il a soixante-huit ans dans dix-neuf ans. »\n\nKenji|« Pardon ? »\n\nHaruna|« Mon père. Vous étiez amis pendant vingt ans. Il vous reste peut-être trente ans. Vous avez déjà cramé dix pour une échographie normale. »\n\nElle recule d'un pas sur le paillasson.\n\nHaruna|« C'est vraiment le calcul que vous voulez faire ? »",
+    "Elle repart.\n\nElle est à quatre mètres du portail quand il dit quelque chose.\n\nKenji|« Haruna-san. »\n\nElle se retourne.\n\nKenji|« Comment il va ? »\n\nElle met un moment à comprendre de qui il parle.\n\nHaruna|« …Il a mal au dos. Il travaille trop. Il a repris un apprenti en novembre et il est insupportable avec lui. »\n\nKenji hoche la tête.\n\nKenji|« Il était déjà insupportable avec les apprentis en 2004. »\n\nIl referme la porte.\n\nHaruna reste sur le trottoir avec la première information qu'un Tachibana ait donnée sur un Ozaki depuis dix ans."
+  ]
+_XC2E[33]["scenes"] = [
+    {
+      'si': 'miki_forcee',
+      'texte': '*Début mars, samedi, 11h10, gare de Fujimi*\n\nMiki Ozaki descend du train de onze heures dix avec un sac de sport et quatre mois de retard.\n\nElle a envoyé un message la veille : *je descends samedi. dis rien à personne.*\n\nHaruna est sur le quai depuis dix heures quarante.'
+    },
+    {
+      'sauf': 'miki_forcee',
+      'texte': "*Début mars, samedi, 11h10, gare de Fujimi*\n\nMiki Ozaki descend du train de onze heures dix avec un sac de sport et personne ne l'attend, parce qu'elle n'a prévenu personne.\n\nElle marche jusqu'à la rue Fujimi. Elle s'arrête à trente mètres de la maison.\n\nElle envoie un message : *je suis en bas.*\n\nHaruna sort en courant, pieds nus."
+    },
+    "Elles ne rentrent pas tout de suite.\n\nElles s'assoient sur le muret de la maison d'en face, celle des Kurata, qui sont partis en 2019 et dont personne n'a jamais racheté la maison.\n\nMiki|« Papa est là ? »\n\nHaruna|« Atelier. »\n\nMiki|« Maman ? »\n\nHaruna|« Elle dort, elle a fait la nuit. »\n\nMiki|« Les monstres ? »\n\nHaruna|« Foot. »\n\nMiki|« Donc il y a personne. »\n\nHaruna|« Il y a personne. »\n\nMiki|« Ok. »\n\nElle pose son sac par terre et elle se met à pleurer, ce qu'elle n'a pas fait depuis février.",
+    "Ça dure onze minutes.\n\nHaruna ne dit rien du tout. Elle a appris ça d'un garçon qui s'assoit sur des marches en hiver.\n\nQuand ça se calme :\n\nMiki|« J'ai pas été en cours depuis le 15 février. »\n\nHaruna|« Je sais. »\n\nMiki|« Le 15 février de l'année dernière. »\n\nUn temps.\n\nHaruna|« …Ah. »\n\nMiki|« Ouais. »\n\nHaruna|« Treize mois. »\n\nMiki|« Treize mois. »",
+    "Miki|« Je travaille dans un izakaya. Seize heures par semaine. Je paie mon loyer. »\n\nHaruna|« Tu as arrêté de demander de l'argent en mars. »\n\nMiki|« Ouais. »\n\nHaruna|« On a tous trouvé ça très bien. »\n\nMiki rit, très mal.\n\nMiki|« Ouais. »\n\nHaruna|« Pourquoi tu l'as pas dit ? »\n\nMiki|« Parce qu'au début c'était deux semaines. »\n\nElle regarde ses chaussures.\n\nMiki|« Et deux semaines c'est rien. Et un mois c'est rattrapable. Et à trois mois faut expliquer trois mois. Et à treize mois... »\n\nHaruna|« ...tu peux plus dire *coucou*. »\n\nMiki lève la tête d'un coup.\n\nMiki|« Comment tu sais ça ? »\n\nHaruna|« Quelqu'un me l'a expliqué. »",
+    "Miki|« Il faut le dire à papa. »\n\nHaruna|« Oui. »\n\nMiki|« Il va— »\n\nHaruna|« Il va rien dire du tout. »\n\nMiki|« Ouais. »\n\nHaruna|« Il va poncer un truc qui a pas besoin d'être poncé pendant deux heures. »\n\nMiki|« …Ouais. »\n\nElles restent sur le muret.\n\nMiki|« C'est la maison des dingues, ici. »\n\nHaruna|« Tu peux pas savoir à quel point. »",
+    "*15h, l'atelier*\n\nMiki lui dit.\n\nÇa prend quatre minutes et elle le dit très mal, en regardant l'établi.\n\nMasaru écoute jusqu'au bout sans l'interrompre une fois.\n\nPuis il repose sa cale à poncer.\n\nMasaru|« Tu as mangé ? »\n\nMiki|« …Quoi ? »\n\nMasaru|« Tu es descendue à onze heures. Il est trois heures. Tu as mangé ? »\n\nMiki|« Non. »\n\nMasaru|« Bon. »\n\nIl enlève son tablier.\n\nMasaru|« On mange, et après on regarde ce qu'on fait. »\n\nC'est tout ce qu'il dit sur treize mois d'absence, et c'est exactement ce qu'il fallait, et il ne le saura jamais."
+  ]
+_XC2E[31]["choix"] = {
+    'question': 'Trois degrés. Un thermos. Deux couvertures. Quarante centimètres.',
+    'decisif': True,
+    'options': [
+      (
+        'elle',
+        '1️⃣',
+        "C'est elle"
+      ),
+      (
+        'lui',
+        '2️⃣',
+        "C'est lui"
+      ),
+      (
+        'personne',
+        '3️⃣',
+        'Personne'
+      )
+    ],
+    'suites': {
+      'elle': {
+        'pose': [
+          'baiser',
+          'elle_a_ose'
+        ],
+        'marque': {
+          'type': 'baiser'
+        },
+        'relation': {
+          'yuma': {
+            'confiance': 22
+          }
+        },
+        'texte': "Elle se penche et elle l'embrasse, et elle manque de tomber du mauvais côté, ce qui gâche complètement le moment et le sauve entièrement.\n\nIl la rattrape par la manche.\n\nHaruna|« …Merci. »\n\nYuma|« De rien. »\n\nHaruna|« Je parlais pas de la manche. »\n\nYuma|« Je sais. »\n\nLe thermos se renverse et roule dans le jardin des Tachibana.\n\nAucun des deux ne descend le chercher avant vingt-trois heures."
+      },
+      'lui': {
+        'pose': [
+          'baiser',
+          'il_a_ose'
+        ],
+        'marque': {
+          'type': 'baiser'
+        },
+        'relation': {
+          'yuma': {
+            'confiance': 18
+          }
+        },
+        'texte': "Yuma|« Ozaki. »\n\nHaruna|« Tu m'appelles Ozaki depuis onze mois. »\n\nYuma|« Je sais. »\n\nHaruna|« C'est le nom de mon père. »\n\nYuma|« Je sais ça aussi. »\n\nIl pose le thermos sur le chaperon, avec précaution, parce que c'est quelqu'un qui pose les choses avec précaution.\n\nYuma|« Haruna. »\n\nEt il l'embrasse, sur un mur, à trois degrés, un samedi de février.\n\nLe thermos tombe quand même."
+      },
+      'personne': {
+        'pose': [
+          'route_distance',
+          'occasion_manquee'
+        ],
+        'ferme': [
+          'le_mur_reste',
+          'les_familles',
+          'ils_partent'
+        ],
+        'relation': {
+          'yuma': {
+            'confiance': -15
+          }
+        },
+        'plafond': {
+          'yuma': {
+            'confiance': 65
+          }
+        },
+        'texte': "Yuma|« Il fait trois degrés. »\n\nHaruna|« …Oui. »\n\nYuma|« On devrait rentrer. »\n\nHaruna|« Oui. »\n\nIls descendent chacun de son côté.\n\nElle range les couvertures. Il rince le thermos.\n\nLe lendemain, ils sont sur le mur à la même heure, et le surlendemain aussi, et ça continue exactement pareil pendant des mois.\n\nC'est ça le pire : il ne se passe rien du tout, et rien ne s'arrête non plus."
+      }
+    }
+  }
+del _XC2E
+
+
+_C2F = CHRONIQUE_SAISONS["la_maison_da_cote"]
+_C2F["episodes"][34]["scenes"] = [
+    "*Mi-mars, mercredi, 17h, salle 204*\n\nToru|« T'es bizarre depuis janvier. »\n\nYuma|« Non. »\n\nToru|« Tu réponds une fois sur trois maintenant. Avant c'était une fois sur six. »\n\nYuma|« …C'est mieux ? »\n\nToru|« C'est flippant. »\n\nIl range le télescope.\n\nToru|« Tu as une copine. »\n\nYuma|« Non. »\n\nToru|« Tu as un truc. »\n\nYuma|« J'ai un truc. »\n\nToru s'arrête net, une lentille à la main.\n\nToru|« TU VIENS DE RÉPONDRE. »",
+    "Yuma|« Toru. »\n\nToru|« Oui ? »\n\nYuma|« Merci. »\n\nToru|« …De quoi ? »\n\nYuma|« Tu m'as dit merci en juillet pour être venu à toutes les séances. Je n'ai rien répondu. »\n\nToru|« C'était il y a huit mois. »\n\nYuma|« Oui. »\n\nToru|« Tu as mis huit mois à dire merci. »\n\nYuma|« Oui. »\n\nToru repose la lentille.\n\nToru|« Tachibana, t'es la personne la plus lente que je connaisse et j'ai un grand-père de quatre-vingt-onze ans. »",
+    "*21h, sur le mur*\n\nHaruna|« Il faut décider. »\n\nYuma|« Décider quoi ? »\n\nHaruna|« Ce qu'on fait de tout ça. »\n\nYuma|« On ne fait rien. »\n\nHaruna|« Yuma. »\n\nYuma|« Ce n'est pas notre histoire. »\n\nHaruna|« C'est le jardin où j'ai grandi. »\n\nYuma|« Ce n'est quand même pas notre histoire. »\n\nElle serre sa couverture.\n\nHaruna|« Ta sœur a treize ans et une liste de onze questions. »",
+    "Yuma|« Je sais. »\n\nHaruna|« Mes frères appellent ta famille *les autres*. »\n\nYuma|« Je sais. »\n\nHaruna|« Ton père m'a demandé comment allait le mien et il a eu l'air d'un homme qui vient de boire de l'eau après trois jours. »\n\nYuma ne répond pas.\n\nHaruna|« Si on fait rien, dans dix ans Hoshi aura vingt-trois ans et elle dira *je sais pas* à quelqu'un qui lui demandera pourquoi il y a un mur. »"
+  ]
+_C2F["episodes"][35]["scenes"] = [
+    "*Fin mars, samedi, 15h*\n\nHoshi Tachibana creuse.\n\nElle a treize ans et demi, une truelle achetée avec son argent, et elle a choisi un endroit à quatre mètres de l'ancien : derrière le compost, où personne ne va.",
+    "Riku|« C'est pas au même endroit. »\n\nHoshi|« C'est fait exprès. »\n\nKai|« Pourquoi ? »\n\nHoshi|« Parce que si c'est au même endroit il regardera là. »\n\nRiku|« …T'es maligne. »\n\nHoshi|« Je sais. »",
+    'Ils creusent une heure et quarante minutes.\n\nLe résultat est moins bon que le premier — Hoshi est plus grande mais moins acharnée que deux garçons de huit ans en mai.\n\nHoshi|« Ça suffit. »\n\nKai|« On passe pas. »\n\nHoshi|« Toi tu passes. Moi je passe pas. »\n\nRiku|« Alors ça sert à rien. »\n\nHoshi|« Ça sert à ce que vous passiez. »',
+    "Masaru Ozaki trouve le deuxième trou le dimanche à onze heures.\n\nIl ne cherchait pas. Il allait chercher une bâche derrière le cabanon et il a fait quatre mètres de plus qu'il n'aurait dû.\n\nIl reste debout devant pendant longtemps.",
+    "Haruna le voit depuis la cuisine.\n\nElle sort, prête à se battre. Elle a préparé quatre phrases.\n\nElle n'en utilise aucune, parce que son père est accroupi.\n\nIl n'est pas en train de reboucher.\n\nIl est en train de retirer une pierre qui gênait le passage et de la poser sur le côté.",
+    "Haruna|« Papa. »\n\nMasaru|« Il y avait un caillou. »\n\nHaruna|« …D'accord. »\n\nMasaru|« Ils vont se faire mal. »\n\nIl se relève et il s'essuie les mains sur son pantalon.\n\nMasaru|« Et l'autre, là, elle est plus grande. Elle passera pas. »\n\nIl repart vers le cabanon.\n\nMasaru|« Faudrait élargir de dix centimètres. »\n\nIl ne se retourne pas, et Haruna reste debout au milieu du jardin sans aucune idée de ce qui vient de se passer."
+  ]
+_C2F["episodes"][36]["scenes"] = [
+    "*Début avril, samedi, 10h*\n\nLe carton est sorti de sous le lit pour la première fois en deux ans.\n\nIls l'ont porté dans l'atelier parce qu'il y a de la lumière du nord et un fond neutre, ce qui, selon Yuma, est ce qu'il faut.",
+    "Yuma|« Pose-le là. »\n\nHaruna|« Il est de travers. »\n\nYuma|« Il est bien. »\n\nHaruna|« Il est de TRAVERS, je vois qu'il est de travers. »\n\nYuma|« Un escabeau pliant photographié parfaitement droit a l'air d'un catalogue. »\n\nHaruna|« Et alors ? »\n\nYuma|« Alors on ne voit pas que quelqu'un l'a fait. »\n\nElle le laisse de travers.",
+    "Ils y passent quatre heures.\n\nDeux tabourets, une boîte à outils, un porte-manteau mural en frêne, un escabeau pliant conçu par une fille de quinze ans.\n\nAki arrive à quatorze heures avec des onigiri parce qu'elle a été convoquée et qu'elle a exigé de voir *le garçon du mur* en échange.",
+    "Aki|« Bonjour. »\n\nYuma|« Bonjour. »\n\nAki|« Tu es dans mon cours d'anglais. »\n\nYuma|« Oui. »\n\nAki|« Depuis deux ans. »\n\nYuma|« Oui. »\n\nAki|« Trois rangs derrière moi. »\n\nYuma|« Oui. »\n\nAki se tourne vers Haruna.\n\nAki|« C'est un fantôme. »\n\nHaruna|« Je sais. »\n\nAki|« C'est vraiment un fantôme. »",
+    "*16h, l'atelier*\n\nMasaru rentre chercher un outil.\n\nIl y a sa fille, une camarade qu'il connaît, et un garçon qu'il n'a pas vu de près depuis dix ans, en train de photographier un escabeau.\n\nLe silence dure environ quatre secondes.\n\nMasaru|« C'est quoi ? »\n\nHaruna|« Un dossier. »\n\nMasaru|« Pour ? »\n\nElle a la bouche sèche.\n\nHaruna|« BTS aménagement finition. Sakae. »",
+    "Il prend l'escabeau.\n\nIl le déplie. Il le replie. Il le redéplie. Il regarde la charnière pendant un temps qui paraît très long à tout le monde.\n\nMasaru|« Tu l'as fait quand ? »\n\nHaruna|« À quinze ans. »\n\nMasaru|« Avec quoi ? »\n\nHaruna|« Les chutes de la commande Nakagawa. »\n\nMasaru|« Les chutes de Nakagawa c'était du frêne à trois mille le mètre. »\n\nHaruna|« …Oui. »\n\nUn temps.\n\nMasaru|« Bon choix. »",
+    "Il repose l'escabeau exactement où il était, de travers.\n\nMasaru|« La charnière du bas, elle va lâcher dans deux ans. »\n\nHaruna|« Je sais. »\n\nMasaru|« Tu sais ? »\n\nHaruna|« J'ai mis du laiton et j'aurais dû mettre de l'acier. »\n\nIl hoche la tête.\n\nMasaru|« Mets ça dans ta lettre. »\n\nHaruna|« …Quoi ? »\n\nMasaru|« Ils vont te demander ce que tu referais différemment. Mets la charnière. »\n\nIl prend son outil et il ressort.\n\nAki, à voix très basse :\n\nAki|« C'était quoi, ça ? »\n\nHaruna|« Je crois que c'était un encouragement. »"
+  ]
+_C2F["episodes"][37]["scenes"] = [
+    {
+      'si': 'verite_dite',
+      'texte': "*Mi-avril, dimanche, 8h40*\n\nIl pleut depuis la nuit.\n\nLa gouttière fonctionne — elle fonctionne depuis octobre — mais le coude supérieur, celui qui est à cinq mètres, n'a jamais été touché.\n\nMasaru Ozaki sort avec son échelle à huit heures quarante.\n\nKenji Tachibana sort de chez lui à huit heures quarante-deux."
+    },
+    {
+      'sauf': 'verite_dite',
+      'texte': "*Mi-avril, dimanche, 8h40*\n\nIl pleut depuis la nuit.\n\nMasaru Ozaki sort avec son échelle à huit heures quarante pour le coude supérieur, celui à cinq mètres, qui n'a jamais été touché.\n\nIl l'appuie contre l'angle. L'angle est à cheval sur les deux propriétés.\n\nÀ huit heures quarante-deux, la porte des Tachibana s'ouvre.\n\nLes deux hommes se regardent pendant quatre secondes sous la pluie."
+    },
+    "Kenji|« Elle est trop courte. »\n\nMasaru|« …Quoi ? »\n\nKenji|« Ton échelle. Il te manque un mètre. »\n\nMasaru regarde son échelle. Il lui manque effectivement un mètre.\n\nMasaru|« Je me mets sur le dernier barreau. »\n\nKenji|« Tu as cinquante ans. »\n\nMasaru|« Quarante-neuf. »\n\nKenji|« Tu avais déjà dit ça en 2011 et tu es tombé. »\n\nMasaru|« J'ai pas *tombé*, j'ai glissé. »\n\nKenji rentre chez lui.",
+    "Il ressort quarante secondes plus tard avec une échelle télescopique de quatre mètres cinquante achetée en 2018.\n\nIl la pose contre l'angle, à côté de l'autre.\n\nKenji|« Tiens. »\n\nMasaru|« …Merci. »\n\nCe sont les deux premiers mots échangés directement entre eux depuis mai 2015.\n\nIl pleut. Il est huit heures quarante-six.",
+    "Ils y passent une heure et dix minutes.\n\nIls ne parlent pas beaucoup. Ils parlent de la gouttière : du diamètre, de la pente, du fait que le coude de 2003 était déjà mal posé à l'époque et que c'est de la faute du plombier.\n\nKenji|« Il s'appelait comment, déjà ? »\n\nMasaru|« Fukuhara. »\n\nKenji|« Fukuhara. »\n\nMasaru|« Il buvait. »\n\nKenji|« Il buvait beaucoup. »\n\nMasaru|« C'est pour ça que la pente est fausse. »\n\nKenji|« C'est pour ça que la pente est fausse. »",
+    "Rien d'autre n'est dit.\n\nPas un mot sur 2015. Pas un mot sur un enterrement, un examen, une lettre de onze lignes dans un tiroir.\n\nÀ neuf heures cinquante, la gouttière est propre sur toute sa longueur pour la première fois en vingt-deux ans.\n\nKenji replie son échelle télescopique.\n\nKenji|« Bon. »\n\nMasaru|« Bon. »\n\nKenji|« Je la laisse dans mon garage. »\n\nMasaru|« D'accord. »\n\nKenji|« Si t'en as besoin. »\n\nUn temps très long sous la pluie.\n\nMasaru|« …D'accord. »",
+    "Depuis la fenêtre du haut, une fille de dix-sept ans regarde deux hommes de cinquante ans ranger deux échelles.\n\nDepuis la fenêtre d'à côté, un garçon de dix-sept ans regarde la même chose.\n\nAucun des deux ne descend.\n\nIls ont compris tout seuls que ce n'est pas le moment d'être là."
+  ]
+_C2F["episodes"][38]["scenes"] = [
+    "*Fin avril, samedi, 19h30*\n\nIl a le scooter depuis onze jours.\n\nCent quatre-vingt-huit mille yens, d'occasion, gris, quarante-quatre mille kilomètres. Il a payé comptant avec une enveloppe qui contenait dix-neuf mois de cours de maths.",
+    "Hoshi|« Il est moche. »\n\nYuma|« Il roule. »\n\nHoshi|« Il est vraiment très moche. »\n\nYuma|« Monte. »\n\nHoshi|« …Je peux ? »\n\nYuma|« Cinq minutes. Tour du quartier. »\n\nElle met le casque de travers et elle hurle pendant tout le tour du quartier, et pendant les onze années qui suivront elle dira que c'était nul.",
+    "*21h, les marches*\n\nIls sont chacun sur son perron. Ils ne sont plus sur le mur depuis mars, parce qu'il a plu tout le mois et parce qu'ils ont pris l'habitude.\n\nHaruna|« J'ai envoyé le dossier. »\n\nYuma|« Quand ? »\n\nHaruna|« Jeudi. »\n\nYuma|« Tu l'as dit à ton père ? »\n\nHaruna|« Il a mis la charnière dans ma lettre. »\n\nYuma|« …Quoi ? »\n\nHaruna|« Il m'a fait écrire un paragraphe sur ce que je referais différemment. Trois soirs. Il a relu quatre fois. »\n\nUn long silence de sept mètres.\n\nYuma|« Ozaki. »\n\nHaruna|« Quoi ? »\n\nYuma|« C'est énorme. »\n\nHaruna|« Je sais. »",
+    "Haruna|« Sakae, c'est quarante minutes de train. »\n\nYuma|« Je sais. »\n\nHaruna|« Toi c'est cinquante-cinq. Trente-cinq en scooter. »\n\nYuma|« Je sais. »\n\nHaruna|« Dans l'autre direction. »\n\nYuma|« Je sais. »\n\nElle tire sur un fil de sa manche.\n\nHaruna|« Donc on serait à une heure et quart l'un de l'autre. »\n\nYuma|« Une heure dix. »\n\nHaruna|« Tu as calculé. »\n\nYuma|« Évidemment que j'ai calculé. »",
+    "Elle se lève.\n\nElle traverse son jardin. Elle sort par le portail, elle fait onze mètres de trottoir, elle entre par l'autre portail, et elle s'assoit sur la deuxième marche du perron des Tachibana, à côté de lui.\n\nLa même marche.\n\nHaruna|« Voilà. »\n\nYuma|« Voilà. »\n\nHaruna|« Ça fait un an que je fais le tour. »\n\nYuma|« Onze mois. »\n\nHaruna|« Ferme-la, Tachibana. »"
+  ]
+_C2F["episodes"][39]["scenes"] = [
+    "*Avril, un an après*\n\nIl y a des choses qui n'ont pas changé.\n\nRiku et Kai ont neuf ans et ils hurlent toujours pour un bol bleu. Yoko fait toujours cinquante heures. Masaru dit toujours *réglez ça entre vous*.\n\nKenji Tachibana lit toujours son journal le dimanche matin, et il ne s'est toujours pas excusé de mai 2015, et il ne le fera probablement jamais.",
+    "Et il y a des choses qui ont changé.\n\nIl y a une échelle télescopique dans le garage des Tachibana dont Masaru Ozaki se sert deux fois par an sans demander.\n\nIl y a un trou de cinquante centimètres derrière le compost, élargi de dix par un homme de quarante-neuf ans qui n'en a jamais parlé.\n\nIl y a Hoshi, quatorze ans, qui passe deux fois par semaine et qui a rayé l'entrée numéro cinq de sa liste.",
+    "*Le dimanche 20 avril, 11h*\n\nMiki est rentrée depuis mars. Elle a repris une inscription en septembre, dans une autre filière, dans une autre ville, et elle travaille toujours seize heures par semaine dans un izakaya.\n\nElle est dans le jardin avec les jumeaux.\n\nMiki|« C'est quoi ce trou ? »\n\nRiku|« C'est le tunnel. »\n\nMiki|« Depuis quand il y a un tunnel ? »\n\nKai|« Depuis mai. »\n\nMiki|« Mai de quand ? »\n\nRiku|« Mai. »\n\nMiki|« …Ok. »",
+    "Elle monte sur le mur.\n\nElle n'y est pas montée depuis qu'elle a dix-sept ans. Elle utilise le bac à fleurs, exactement comme sa sœur, avec la même méthode, parce que c'est elle qui l'a inventée en 2019.\n\nDe là-haut, on voit les deux jardins en même temps.\n\nMiki|« Ah oui. »\n\nElle avait oublié.",
+    "Il y a quelqu'un de l'autre côté sur les marches, avec un livre.\n\nMiki|« Tachibana. »\n\nYuma lève la tête.\n\nYuma|« …Ozaki. »\n\nMiki|« La grande. »\n\nYuma|« Je sais. Vous aviez un vélo bleu. »\n\nMiki|« J'ai toujours le vélo bleu. »\n\nElle s'assoit sur le chaperon.\n\nMiki|« Ma sœur dit que vous vous parlez tous les soirs depuis un an. »\n\nYuma|« À peu près. »\n\nMiki|« Par-dessus un mur. »\n\nYuma|« Au début. »",
+    "Miki|« Vous savez ce qui est dingue ? »\n\nYuma|« Non. »\n\nMiki|« Moi j'ai passé treize mois à pas répondre à des messages parce que j'arrivais pas à commencer une phrase. »\n\nElle balance ses jambes contre les parpaings.\n\nMiki|« Et vous, vous avez trouvé le seul endroit de cette rue où on peut parler à quelqu'un sans avoir à commencer. »\n\nYuma ne répond pas tout de suite.\n\nYuma|« Il faut quand même commencer. »\n\nMiki|« Ouais. »\n\nElle regarde les deux jardins.\n\nMiki|« Mais au moins on est assis. »",
+    "Haruna sort à onze heures vingt et trouve sa sœur assise sur le mur en train de parler au voisin.\n\nHaruna|« …Sérieusement ? »\n\nMiki|« Quoi ? »\n\nHaruna|« C'est mon mur. »\n\nMiki|« C'est le mur de papa. »\n\nHaruna|« C'est MON mur. »\n\nMiki|« Monte, y a de la place. »\n\nElle monte.\n\nElles sont deux sur un chaperon de ciment, et il y a un garçon sur des marches en face, et à trente mètres derrière, dans un atelier, un homme de quarante-neuf ans ponce une pièce qui n'a pas besoin d'être poncée en écoutant trois voix qu'il n'avait pas entendues ensemble depuis dix ans."
+  ]
+_C2F["episodes"][34]["choix"] = {
+    'question': 'Deux maisons. Deux hommes qui ne se parlent pas. Deux enfants sur un mur.',
+    'decisif': True,
+    'options': [
+      (
+        'provoque',
+        '1️⃣',
+        'Les forcer à se retrouver au même endroit'
+      ),
+      (
+        'laisse',
+        '2️⃣',
+        'Laisser les adultes régler leurs affaires'
+      )
+    ],
+    'suites': {
+      'provoque': {
+        'pose': [
+          'verite_dite'
+        ],
+        'relation': {
+          'yuma': {
+            'confiance': 8
+          }
+        },
+        'texte': "Ce qu'ils font est parfaitement stupide et parfaitement efficace.\n\nLe 22 mars, un samedi, à neuf heures du matin, Haruna dit à son père qu'il y a une fuite sur la descente de gouttière côté Tachibana et qu'elle a l'accord des voisins pour y accéder.\n\nC'est faux.\n\nAu même moment, Yuma dit à son père que monsieur Ozaki passe à neuf heures pour la gouttière et qu'il faut ouvrir le portail.\n\nC'est faux aussi.\n\nÀ neuf heures deux, deux hommes de cinquante ans se retrouvent devant un angle de mur, chacun persuadé que l'autre l'a demandé.\n\nIl n'y a personne d'autre. Les enfants sont partis à neuf heures une.\n\n*Ce qui se passe ensuite, personne ne le saura jamais exactement.*\n\nCe qu'on sait : ils sont restés dehors une heure quarante.\n\nCe qu'on sait aussi : à dix heures cinquante, Emi Tachibana a sorti deux cafés et les a posés sur le muret sans dire un mot, et aucun des deux hommes ne l'a remerciée, et les deux gobelets étaient vides à onze heures vingt.\n\nLe soir, Masaru mange en silence, ce qui est normal.\n\nMais il dit une chose, entre le riz et la soupe, à personne en particulier :\n\nMasaru|« Elle était bénigne. »\n\nYoko|« Quoi ? »\n\nMasaru|« Rien. »"
+      },
+      'laisse': {
+        'pose': [
+          'verite_tue'
+        ],
+        'relation': {
+          'yuma': {
+            'confiance': -2
+          }
+        },
+        'texte': "Haruna|« …D'accord. »\n\nYuma|« D'accord ? »\n\nHaruna|« Tu as raison. C'est pas notre histoire. »\n\nElle le dit et elle n'en pense pas un mot, et il l'entend.\n\nYuma|« Ozaki. »\n\nHaruna|« Non, vraiment. On a dix-sept ans. Ils ont cinquante ans. C'est leur mur. »\n\nElle descend de son côté.\n\nHaruna|« Bonne nuit. »\n\n*Les semaines qui suivent :*\n\nRien ne change. Absolument rien.\n\nHoshi demande encore une fois en avril et obtient encore *c'est vieux*.\n\nRiku, neuf ans en mai, dit *les autres* devant Yuma, qui ne relève pas.\n\nEt sur le mur, deux fois par semaine maintenant au lieu de six, il y a une conversation qui évite soigneusement un sujet."
+      }
+    }
+  }
+_C2F["episodes"][38]["choix"] = {
+    'question': 'Deux personnes sur la même marche. Un mur de onze mètres à quatre pas.',
+    'decisif': True,
+    'options': [
+      (
+        'tombe',
+        '1️⃣',
+        'Proposer de le démolir'
+      ),
+      (
+        'reste',
+        '2️⃣',
+        'Le laisser debout'
+      ),
+      (
+        'partent',
+        '3️⃣',
+        'Parler de partir'
+      )
+    ],
+    'suites': {
+      'tombe': {
+        'pose': [
+          'mur_tombe'
+        ],
+        'texte': "Haruna|« On pourrait le démolir. »\n\nYuma|« Le mur ? »\n\nHaruna|« Le mur. »\n\nYuma|« Ce n'est pas à nous. »\n\nHaruna|« Ils se parlent, maintenant. »\n\nYuma|« Ils se parlent de gouttières. »\n\nHaruna|« C'est un début. »\n\nIl réfléchit longtemps.\n\nYuma|« Il faut leur demander. »\n\nHaruna|« Ils diront non. »\n\nYuma|« Probablement. »\n\nHaruna|« Alors on demande quand même. »\n\nYuma|« Oui. »"
+      },
+      'reste': {
+        'pose': [
+          'mur_reste'
+        ],
+        'texte': "Yuma|« On pourrait le laisser. »\n\nHaruna|« Le mur ? »\n\nYuma|« Le mur. »\n\nHaruna|« Tu veux garder le mur. »\n\nYuma|« Je ne veux pas le garder. Je ne veux pas le démolir non plus. »\n\nIl regarde le jardin.\n\nYuma|« On s'est parlé pendant un an au-dessus. »\n\nHaruna|« Ouais. »\n\nYuma|« Ça compte. »\n\nElle réfléchit.\n\nHaruna|« Il est moche. »\n\nYuma|« Il est très moche. »\n\nHaruna|« On pourrait le peindre. »\n\nYuma|« …Ça oui. »"
+      },
+      'partent': {
+        'pose': [
+          'ils_sen_vont'
+        ],
+        'texte': "Haruna|« On s'en fout du mur. »\n\nYuma|« …Pardon ? »\n\nHaruna|« Le mur c'est leur truc. On part en septembre tous les deux. »\n\nYuma|« Dans deux directions différentes. »\n\nHaruna|« À une heure dix. »\n\nYuma|« À une heure dix. »\n\nElle pose la tête contre le montant du perron.\n\nHaruna|« C'est la première chose qu'on choisit nous-mêmes. »\n\nYuma|« Oui. »\n\nHaruna|« Tout le reste, c'est un mur que quelqu'un d'autre a monté. »\n\nYuma|« Oui. »\n\nHaruna|« Ils se débrouilleront. »"
+      }
+    }
+  }
+_C2F["endings"]['le_mur_reste']["texte"] = "*Deux ans plus tard*\n\nLe mur est toujours là.\n\nIl fait toujours un mètre soixante, sept rangées de parpaings, un chaperon mal lissé. Il s'arrête toujours à l'alignement des façades, ce qui est toujours bizarre quand on regarde depuis la rue.\n\nIl a été peint en septembre. Vert d'eau, côté Ozaki. Vert d'eau, côté Tachibana. C'est Hoshi qui a choisi la couleur et personne n'a osé contester.\n\nLes deux hommes ne sont pas redevenus amis.\n\nIl faut le dire clairement, parce que c'est ce qui compte : ils ne s'invitent pas, ils ne dînent pas ensemble, ils n'ont jamais parlé de mai 2015 une seule fois.\n\nIls se disent bonjour.\n\nIls se prêtent des outils. Ils font la gouttière ensemble deux fois par an, en octobre et en avril, sans que ce soit décidé. Une fois, en janvier, Masaru a déneigé les deux allées et Kenji a fait semblant de ne pas s'en apercevoir.\n\nC'est tout.\n\nEt c'est énorme, si on a passé dix ans à ne pas se regarder.\n\n*Le samedi soir*, il y a deux personnes assises sur le chaperon vert d'eau. Elle rentre de Sakae le vendredi. Il rentre en scooter le vendredi aussi, trente-cinq minutes, ce qui lui laisse le temps de dîner avec sa sœur.\n\nIls s'assoient sur le mur.\n\nIls pourraient s'asseoir dans un jardin. Ils pourraient s'asseoir dans une cuisine — les deux cuisines sont ouvertes maintenant, techniquement.\n\nIls s'assoient sur le mur.\n\nHaruna|« C'est ridicule. »\n\nYuma|« Complètement. »\n\nHaruna|« On a deux maisons. »\n\nYuma|« Oui. »\n\nHaruna|« Et on est assis sur des parpaings. »\n\nYuma|« Oui. »\n\nPersonne ne descend."
+_C2F["endings"]['les_familles']["texte"] = "*Le 3 mai, un samedi*\n\nKenji Tachibana envoie la lettre.\n\nIl ne la poste pas — il fait onze mètres de trottoir et il la met dans la boîte, ce qui prend quarante secondes et dix ans.\n\nElle fait onze lignes. Elle est datée de mai 2015. Il n'a rien changé, rien réécrit, rien ajouté : il a juste barré la date et écrit la nouvelle en dessous.\n\nMasaru la lit dans son atelier, debout, deux fois.\n\nPuis il sort, traverse onze mètres de trottoir, et sonne.\n\n*Ce qu'ils se disent, ce jour-là, personne ne le saura jamais.*\n\nCe qu'on sait : ça a duré deux heures vingt.\n\nCe qu'on sait aussi : à un moment, ils ont crié tous les deux, et Emi a fermé la fenêtre de la cuisine, et Yoko qui dormait après sa garde s'est réveillée et n'est pas descendue.\n\nLe mur tombe le dimanche 18 mai.\n\nIls sont six : les deux hommes, Yuma, Haruna, Miki, et un apprenti de l'atelier qui a été payé en bière. Trois heures et quarante minutes, une masse, un burin et une brouette.\n\nRiku et Kai ont voulu aider. On les a mis à la brouette.\n\nHoshi a filmé les onze premières minutes puis elle a rangé son téléphone parce qu'elle a compris qu'elle ne regarderait jamais la vidéo.\n\n*Ce qui suit est plus compliqué que prévu.*\n\nLes deux familles ne redeviennent pas ce qu'elles étaient. Il y a des silences aux repas communs. Il y a une fois, en juillet, où Masaru est parti au milieu d'un dîner sans expliquer.\n\nDix ans, ça ne se rattrape pas en un dimanche.\n\nMais il y a un jardin de trente-huit mètres de long au lieu de deux jardins de dix-neuf, et on ne peut plus faire semblant de ne pas voir quelqu'un.\n\nEn septembre, Kenji a acheté un trampoline d'occasion.\n\nIl l'a monté un dimanche, seul, sans rien dire à personne, exactement au milieu."
+_C2F["endings"]['ils_partent']["texte"] = "*Septembre*\n\nElle part à Sakae. Il part dans l'autre direction.\n\nUne heure dix de porte à porte, ce qui est absurde, et ce qui est exactement ce qu'ils ont choisi.\n\nLes deux maisons restent derrière avec leur mur.\n\nLes deux hommes se disent bonjour depuis avril — la gouttière, l'échelle télescopique — et ça n'ira pas plus loin, et ce n'est plus le problème de personne d'autre.\n\n*Ce qu'ils font, cette année-là :*\n\nIls se voient le week-end sur deux. Ils s'appellent le soir. Elle lui envoie des photos de chantiers-école ratés, il lui envoie des photos du ciel qui sont toutes identiques et qu'elle prétend distinguer.\n\nEn janvier, ils se disputent pour la première fois depuis deux ans — sur rien, sur un week-end annulé — et ça dure quatre jours, et c'est la première dispute de leur vie qui n'a rien à voir avec un mur.\n\nEn mars, elle rate un partiel et elle le lui dit le soir même, ce qui, dans cette famille, est une révolution.\n\n*Ce qui compte :*\n\nIls rentrent tous les deux à Fujimi une fois par mois.\n\nIls s'assoient sur le mur.\n\nEt à chaque fois, en montant, elle a la même pensée : que cette chose moche et grise a été le seul endroit du monde où deux personnes pouvaient se parler dans cette rue, et qu'ils sont les seuls à le savoir."
+_C2F["endings"]['voisins']["texte"] = "*Il ne se passe rien.*\n\nIl faut le dire comme ça.\n\nIls se parlent tous les soirs pendant encore un an et demi. Sur le mur d'avril à octobre, sur leurs marches respectives d'octobre à avril, à sept mètres, sans se voir.\n\nIls se disent tout. Vraiment tout — le BTS, le scooter, Miki, Hoshi, la liste des onze questions, une échographie de mai 2015 et un homme qui a monté sept rangées de parpaings en trois jours.\n\nIls ne franchissent jamais les quarante centimètres.\n\nCe n'est pas de la lâcheté. Ou alors c'en est, mais c'est la même que celle de leurs pères, et personne dans cette rue n'a jamais appris à commencer une phrase.\n\n*En avril, deux ans après le trou sous le mur :*\n\nHoshi a quinze ans. Elle passe encore par le trou, ce qui est devenu physiquement compliqué et qu'elle fait par principe.\n\nHoshi|« Vous êtes amis ? »\n\nHaruna|« …Quoi ? »\n\nHoshi|« Toi et mon frère. Vous êtes amis ? »\n\nHaruna ouvre la bouche.\n\nElle la referme.\n\nElle a dix-neuf ans, elle est en deuxième année de BTS, elle parle tous les soirs depuis deux ans et demi à un garçon qu'elle voit à travers un mur, et elle n'a aucun mot pour ça.\n\nHaruna|« Je sais pas. »\n\nHoshi la regarde longtemps.\n\nHoshi|« Vous dites tous ça dans cette rue. »\n\nElle repasse par le trou."
+_C2F["epilogue"] = "Le mur a été monté en trois jours, en mai 2015, par un homme qui avait attendu soixante-douze heures un mot qui n'est jamais venu.\n\nIl a fallu deux enfants de huit ans avec une truelle volée, une gouttière bouchée depuis neuf ans, une échelle trop courte d'un mètre et une adolescente de treize ans avec un cahier à spirale pour que quelqu'un, dans cette rue, apprenne enfin à commencer une phrase."
+del _C2F
+
+
+_DC2 = CHRONIQUE_SAISONS["la_maison_da_cote"]["episodes"]
+_DC2[15]["scenes"] = [
+    "*Mi-août, Osaka*\n\nCe que fait Miki Ozaki depuis février, en réalité :\n\nElle se lève à sept heures. Elle prend le train. Elle descend deux stations avant la fac. Elle marche jusqu'à un café où elle reste jusqu'à quinze heures.\n\nElle n'est pas allée en cours depuis le 15 février.",
+    "Pourquoi : parce qu'elle a raté deux partiels sur trois au premier semestre, qu'elle a arrêté d'aller au troisième, et qu'un jour de février elle n'a pas réussi à entrer dans le bâtiment.\n\nPas *elle n'a pas voulu*. Elle n'a pas réussi. Elle est restée devant les portes pendant vingt minutes et elle est repartie.\n\nLe lendemain c'était plus dur. Le surlendemain encore plus.",
+    "Elle a un travail depuis avril, en cuisine, dans un izakaya de Namba, seize heures par semaine.\n\nElle paie son loyer avec ça. Elle a arrêté de demander de l'argent à ses parents en mars, ce qui, chez les Ozaki, a été interprété comme une bonne nouvelle.",
+    "*Le 14 août, 19h, izakaya Kuroda, Namba*\n\nLa cuisine fait quatre mètres sur deux. Il y a le patron, un cuisinier, et Miki à la plonge et aux préparations froides.\n\nLe patron|« Ozaki. Les edamame. »\n\nMiki|« Oui. »\n\nLe patron|« Et après les concombres. »\n\nMiki|« Oui. »\n\nElle est bonne. C'est le problème.\n\nElle est rapide, elle ne casse rien, elle anticipe, et le patron lui a proposé quatre heures de plus par semaine en juin.",
+    "Ce qu'elle aime, ici :\n\nPersonne ne lui demande ce qu'elle fait de sa vie.\n\nLe cuisinier a cinquante-trois ans et deux divorces. Le patron a repris l'établissement de son beau-père et n'a jamais voulu de ce métier. La serveuse du samedi fait une thèse sur les mousses depuis onze ans.\n\nC'est un endroit où tout le monde a raté quelque chose, et où personne n'en parle, et où il faut sortir cent vingt couverts avant vingt-trois heures.",
+    "Le cuisinier|« Ozaki. »\n\nMiki|« Oui ? »\n\nLe cuisinier|« T'es à la fac ? »\n\nElle coupe un concombre.\n\nMiki|« Oui. »\n\nLe cuisinier|« En quoi ? »\n\nMiki|« Lettres. »\n\nLe cuisinier|« Ah. »\n\nIl retourne quelque chose sur la plancha.\n\nLe cuisinier|« C'est bien. »\n\nElle coupe le concombre suivant.\n\nC'est la première fois qu'elle le dit à voix haute depuis six mois, et c'est un mensonge, et le mensonge sort tout seul, et c'est ça qui lui fait peur en rentrant.",
+    "*Le même soir, 1h20, son appartement*\n\nVingt-deux mètres carrés. Un futon, une plaque, une penderie.\n\nSur le mur, il y a encore le planning des cours du premier semestre, punaisé en avril de l'année dernière.\n\nElle ne l'a jamais enlevé.\n\nElle ne le regarde plus non plus — c'est devenu du papier peint quelque part en mars.",
+    "*Ce qu'il y a sur son téléphone*\n\nTrente-quatre messages de sa sœur depuis février. Tous lus.\n\nOnze brouillons de réponse. Tous effacés.\n\nLe plus long faisait quatre cents mots. Il commençait par *je vais te dire un truc et tu vas devoir pas le dire à papa*.\n\nElle l'a effacé le 3 avril à deux heures du matin.",
+    "*Le 14 août, 23h*\n\nElle tape :\n\n*coucou*\n\nElle regarde le mot pendant six minutes.\n\nElle l'efface.\n\nElle range son téléphone et va faire la vaisselle d'un izakaya jusqu'à une heure du matin."
+  ]
+_DC2[17]["scenes"] = [
+    '*Début septembre, lycée, 12h30*\n\nAki|« Il y a un truc que je comprends pas. »\n\nHaruna|« Vas-y. »\n\nAki|« Vous vous parlez tous les soirs depuis quatre mois. »\n\nHaruna|« À peu près. »\n\nAki|« Et au lycée vous vous dites rien. »\n\nHaruna|« On est pas dans la même classe. »\n\nAki|« Vous vous croisez tous les jours dans le couloir C. »\n\nHaruna|« …Ah bon ? »\n\nAki|« Tous les jours à dix heures cinq. »',
+    "Haruna réfléchit et se rend compte que c'est vrai.\n\nHaruna|« On se dit bonjour. »\n\nAki|« Vous vous dites *'lut*. »\n\nHaruna|« C'est bonjour. »\n\nAki|« Vous vous parlez une heure par soir et *'lut* le jour. »\n\nHaruna|« C'est pas pareil. »\n\nAki|« En quoi ? »\n\nHaruna ouvre la bouche.\n\nAki|« Voilà. »",
+    "Aki|« Je vais te poser une question et tu réponds vite. »\n\nHaruna|« D'accord. »\n\nAki|« Il est comment ? »\n\nHaruna|« Comment ça comment ? »\n\nAki|« Décris-le. »\n\nHaruna|« Il est grand. »\n\nAki|« Ça c'est physique. »\n\nHaruna|« Il parle pas beaucoup. »\n\nAki|« Ça c'est ce que tout le monde dit de lui. »\n\nHaruna ouvre la bouche.\n\nAki|« Vite. »",
+    "Haruna|« Il répare des trucs la nuit pour pas avoir à demander la permission. »\n\nAki repose ses baguettes.\n\nAki|« …Voilà. »\n\nHaruna|« Quoi ? »\n\nAki|« Ça, personne d'autre le sait. »\n\nHaruna|« C'est pas un secret. »\n\nAki|« Si. »\n\nElle reprend ses baguettes.\n\nAki|« Y a trois cents personnes dans ce lycée qui pensent qu'il est timide. Toi tu viens de dire quelque chose de complètement différent en une phrase. »",
+    "Haruna|« Il est pas timide ? »\n\nAki|« Tu me le demandes à moi ? »\n\nHaruna|« …Non. Il est pas timide. »\n\nAki|« Il est quoi ? »\n\nHaruna réfléchit vraiment.\n\nHaruna|« Il a décidé que parler c'était dangereux. C'est pas pareil. »\n\nAki mange trois bouchées.\n\nAki|« Et toi t'as décidé quoi ? »\n\nHaruna|« Comment ça ? »\n\nAki|« Lui il a décidé de se taire. Toi t'as décidé de faire du bruit. »\n\nElle hausse les épaules.\n\nAki|« Vous êtes exactement le même problème dans les deux sens. »",
+    "Aki|« Je vais te dire ce que je vois, et après je me tais. »\n\nHaruna|« Vas-y. »\n\nAki|« Vous avez un endroit où vous êtes deux personnes normales. Un seul. Il est sur un mur, il est ouvert de vingt et une heures à vingt-trois heures, et il n'existe nulle part ailleurs. »\n\nElle mange une bouchée.\n\nAki|« Et vous protégez cet endroit-là comme des dingues. »\n\nHaruna|« On protège rien du tout. »\n\nAki|« Tu m'as rien dit pendant six semaines. »\n\nSilence de cantine.",
+    "Aki|« C'est pas un reproche. »\n\nHaruna|« Ça y ressemble. »\n\nAki|« Un peu. »\n\nElle repousse son plateau.\n\nAki|« Mais surtout je trouve ça flippant pour vous. »\n\nHaruna|« Pourquoi ? »\n\nAki|« Parce qu'un endroit qui existe que la nuit, ça tient pas. »"
+  ]
+_DC2[19]["scenes"] = [
+    "*Fin septembre, mercredi, 16h*\n\nHoshi Tachibana a treize ans et une liste.\n\nElle l'a commencée à neuf ans dans un cahier à spirale. Elle s'appelle *CHOSES QUE PERSONNE VEUT DIRE* et elle contient onze entrées.",
+    "Les onze :\n\n*1. pourquoi y a un mur*\n*2. pourquoi papa dit rien quand on parle des voisins*\n*3. pourquoi maman change de sujet*\n*4. pourquoi Yuma dit je sais pas alors qu'il sait tout*\n*5. c'était quoi le trampoline*\n*(...)*\n*11. pourquoi personne trouve ça bizarre à part moi*",
+    "L'entrée numéro cinq est la plus ancienne.\n\nIl y a une photo, dans un album du salon, où on voit un trampoline dans un jardin. Hoshi a deux ans dessus. Il y a aussi une fille plus grande, floue, de dos.\n\nHoshi a demandé qui c'était à six ans.\n\nSa mère a dit *une amie*.\n\nElle a demandé où était le trampoline.\n\nSa mère a dit *il a été donné*.",
+    "*Le même mercredi, dans le jardin des Ozaki*\n\nHoshi|« C'était toi. »\n\nHaruna|« Quoi ? »\n\nHoshi|« Sur la photo. Le trampoline. »\n\nElle a apporté l'album. Elle l'a sorti de chez elle et passé sous le mur, ce qui a demandé une organisation considérable.\n\nHaruna regarde la photo pendant un long moment.",
+    "Haruna|« C'est moi. »\n\nHoshi|« Il était à qui, le trampoline ? »\n\nHaruna|« À vous. »\n\nHoshi|« Et tu sautais dessus ? »\n\nHaruna|« Tous les jours. »\n\nHoshi|« Tous les jours ? »\n\nHaruna|« Pendant genre quatre ans. »\n\nHoshi s'assoit dans l'herbe.\n\nHoshi|« Donc avant, on se voyait. »\n\nHaruna|« Avant, on se voyait. »\n\nHoshi|« Tous les jours. »\n\nHaruna|« Je crois. »",
+    "Hoshi|« Je peux la garder ? »\n\nHaruna|« La photo ? »\n\nHoshi|« Ouais. »\n\nHaruna|« Elle est à toi, c'est ton album. »\n\nHoshi|« Non, je veux dire— »\n\nElle s'arrête.\n\nHoshi|« Je veux la mettre dans ma chambre. Genre au mur. »\n\nHaruna|« …Pourquoi ? »\n\nHoshi|« Pour que quand quelqu'un vient il la voie. »\n\nHaruna|« Il y a personne qui vient dans ta chambre. »\n\nHoshi|« Bah voilà. »",
+    "Elles restent dans l'herbe un moment.\n\nHoshi|« C'était comment ? »\n\nHaruna|« Le trampoline ? »\n\nHoshi|« Non. Avant. »\n\nHaruna essaie de se rappeler et se rend compte qu'elle a très peu de choses.\n\nHaruna|« Ta mère faisait des gâteaux au citron. »\n\nHoshi|« Elle en fait plus. »\n\nHaruna|« Ah. »\n\nHoshi|« Elle en a jamais fait de ma vie. »\n\nUn silence dans l'herbe.\n\nHaruna|« Il y avait un chien. »\n\nHoshi|« On a pas de chien. »\n\nHaruna|« Chez nous. Il s'appelait Mochi. Il passait chez vous par la haie et ton père le renvoyait avec une saucisse. »\n\nHoshi|« Mon père donnait des saucisses à un chien. »\n\nHaruna|« Tous les jours. »\n\nHoshi|« MON père. »\n\nHaruna|« Ton père. »",
+    "Hoshi ne dit rien pendant très longtemps.\n\nHoshi|« C'est bizarre. »\n\nHaruna|« Quoi ? »\n\nHoshi|« J'ai treize ans et je viens d'apprendre un truc sur mon père par la voisine. »\n\nElle referme l'album.\n\nHoshi|« Tu en as d'autres ? »\n\nHaruna|« Des trucs sur ton père ? »\n\nHoshi|« Ouais. »\n\nHaruna|« Deux ou trois. »\n\nHoshi|« Tu me les diras ? »\n\nHaruna|« Si tu veux. »\n\nHoshi|« Une par semaine. »\n\nHaruna|« …Pourquoi une par semaine ? »\n\nHoshi|« Pour que ça dure. »",
+    "Hoshi|« Personne me l'a jamais dit. »\n\nHaruna|« Je sais. »\n\nHoshi|« J'ai demandé au moins cent fois. »\n\nHaruna|« Je sais. »\n\nHoshi|« Pourquoi personne le dit ? »\n\nEt Haruna, dix-sept ans, assise dans l'herbe avec un album photo emprunté chez les voisins, se rend compte d'une chose qui la glace un peu :\n\nCe n'est pas que les adultes refusent de répondre.\n\nC'est qu'à force, ils ont perdu la façon de commencer la phrase."
+  ]
+_DC2[35]["scenes"] = [
+    "*Fin mars, samedi, 15h*\n\nHoshi Tachibana creuse.\n\nElle a treize ans et demi, une truelle achetée avec son argent, et elle a choisi un endroit à quatre mètres de l'ancien : derrière le compost, où personne ne va.",
+    "Riku|« C'est pas au même endroit. »\n\nHoshi|« C'est fait exprès. »\n\nKai|« Pourquoi ? »\n\nHoshi|« Parce que si c'est au même endroit il regardera là. »\n\nRiku|« …T'es maligne. »\n\nHoshi|« Je sais. »",
+    'Ils creusent une heure et quarante minutes.\n\nLe résultat est moins bon que le premier — Hoshi est plus grande mais moins acharnée que deux garçons de huit ans en mai.\n\nHoshi|« Ça suffit. »\n\nKai|« On passe pas. »\n\nHoshi|« Toi tu passes. Moi je passe pas. »\n\nRiku|« Alors ça sert à rien. »\n\nHoshi|« Ça sert à ce que vous passiez. »',
+    "Masaru Ozaki trouve le deuxième trou le dimanche à onze heures.\n\nIl ne cherchait pas. Il allait chercher une bâche derrière le cabanon et il a fait quatre mètres de plus qu'il n'aurait dû.\n\nIl reste debout devant pendant longtemps.",
+    "Haruna le voit depuis la cuisine.\n\nElle sort, prête à se battre. Elle a préparé quatre phrases.\n\nElle n'en utilise aucune, parce que son père est accroupi.\n\nIl n'est pas en train de reboucher.\n\nIl est en train de retirer une pierre qui gênait le passage et de la poser sur le côté.",
+    "*Le soir, 19h40*\n\nRiku|« Papa a bouché le trou ? »\n\nHaruna|« Non. »\n\nRiku|« Il l'a vu ? »\n\nHaruna|« Il l'a vu. »\n\nRiku|« Et il l'a pas bouché ? »\n\nHaruna|« Non. »\n\nRiku regarde son frère. Kai regarde son frère.\n\nKai|« Pourquoi ? »\n\nHaruna|« Je sais pas. »\n\nRiku|« Tu dis toujours ça. »\n\nHaruna|« …Ouais. »\n\nElle s'entend le dire et ça lui fait un effet désagréable.",
+    "*22h, l'atelier*\n\nIl y a de la lumière à vingt-deux heures, ce qui arrive quand une commande est en retard ou quand quelque chose ne va pas.\n\nIl n'y a pas de commande en retard.\n\nHaruna|« Papa. »\n\nMasaru|« Mm. »\n\nHaruna|« Tu l'as pas rebouché. »\n\nMasaru|« Non. »\n\nHaruna|« Pourquoi ? »\n\nIl ponce.\n\nMasaru|« La petite d'à côté. »\n\nHaruna|« Hoshi. »\n\nMasaru|« Hoshi. »\n\nC'est la première fois de sa vie qu'il prononce le prénom d'un enfant Tachibana.",
+    "Masaru|« Elle a quel âge ? »\n\nHaruna|« Treize et demi. »\n\nMasaru|« Treize. »\n\nIl pose sa cale.\n\nMasaru|« Elle est née en quelle année ? »\n\nHaruna|« …2012. »\n\nMasaru compte, ce qui prend deux secondes et qui prend visiblement plus que deux secondes.\n\nMasaru|« Elle avait trois ans. »\n\nHaruna|« Oui. »\n\nIl reprend sa cale et il ne dit plus rien du tout, et Haruna sort de l'atelier en comprenant qu'elle vient de le regarder faire un calcul qu'il n'avait jamais fait en dix ans.",
+    "Haruna|« Papa. »\n\nMasaru|« Il y avait un caillou. »\n\nHaruna|« …D'accord. »\n\nMasaru|« Ils vont se faire mal. »\n\nIl se relève et il s'essuie les mains sur son pantalon.\n\nMasaru|« Et l'autre, là, elle est plus grande. Elle passera pas. »\n\nIl repart vers le cabanon.\n\nMasaru|« Faudrait élargir de dix centimètres. »\n\nIl ne se retourne pas, et Haruna reste debout au milieu du jardin sans aucune idée de ce qui vient de se passer."
+  ]
+del _DC2
+
 CHRONIQUE_SAISONS["colocation"] = {
  "titre": "LA CHAMBRE D'À CÔTÉ",
  "genre": "🔥 Enemies to Lovers",
@@ -23079,6 +27017,23 @@ CHRO_VOIX = {
                   "Femme": "Une invitée", "Voix": "Au téléphone"},
   "colocation":  {"Daeun": "Da-eun", "Taeyang": "Tae-yang", "Jiho": "Ji-ho",
                   "Yerin": "Ye-rin", "Baek": "Chef Baek"},
+  "la_maison_da_cote": {
+    "Haruna": "Haruna", "Yuma": "Yuma", "Hoshi": "Hoshi", "Miki": "Miki",
+    "Masaru": "Masaru", "Kenji": "Kenji", "Yoko": "Yoko", "Emi": "Emi",
+    "Aki": "Aki", "Toru": "Toru", "Riku": "Riku", "Kai": "Kai",
+    "Voix": "Au téléphone", "Prof": "Le professeur"},
+  "ce_quon_voit": {
+    "Hina": "Hina", "Itsuki": "Itsuki", "Rika": "Rika", "Nanami": "Nanami",
+    "Ko": "Kō", "Jun": "Jun", "Tsubaki": "Tsubaki", "Goro": "Gorō",
+    "Reiko": "Reiko", "Aoki": "M. Aoki", "Voix": "Au téléphone",
+    "Eleve": "Un élève", "Prof": "Le professeur principal",
+    "Miyata": "Miyata", "Momo": "Momo", "Katayama": "Katayama"},
+  "maries_malgre_nous": {
+    "Nao": "Nao", "Ren": "Ren", "Sota": "Sota", "Mei": "Mei", "Yui": "Yui",
+    "Tetsuo": "Tetsuo", "Ichiro": "Ichiro", "Shigeru": "Shigeru", "Sae": "Sae",
+    "Haru": "Haru", "Aya": "Aya", "Kaito": "Kaito", "Hidaka": "Hidaka",
+    "Takumi": "Takumi", "Oda": "M. Oda", "Voix": "Au téléphone",
+    "Employe": "L'employé de mairie"},
 }
 
 def chro_voix(cle_perso):
@@ -23106,7 +27061,7 @@ def chro_rendu_dialogue(para, dernier):
     # Narration
     return p, None
 
-def chro_rendu_scene(texte, numero=None):
+def chro_rendu_scene(texte, numero=None, pov=None):
     """Transforme une scène en contenu Discord lisible sur mobile.
     Les dialogues respirent, les en-têtes de scène ressortent."""
     entete = chro_marqueur_scene(texte)
@@ -23114,6 +27069,9 @@ def chro_rendu_scene(texte, numero=None):
     if entete:
         corps = texte.lstrip().split("\n", 1)[1].lstrip() if "\n" in texte.lstrip() else ""
     lignes = []
+    if pov:
+        lignes.append(f"### ◈ Du côté de {chro_perso_nom(pov)}")
+        lignes.append("")
     if entete:
         lignes.append(f"### ◈ {entete}")
         lignes.append("")
@@ -23127,36 +27085,142 @@ def chro_rendu_scene(texte, numero=None):
     return "\n".join(lignes).rstrip()
 
 def chro_grouper_scenes(scenes, max_car=1700):
-    """Regroupe les scènes courtes pour éviter une avalanche d'embeds espacés.
-    Le découpage suit la narration : on ne coupe jamais au milieu d'une scène."""
-    paquets, courant = [], []
-    taille = 0
-    for sc in scenes:
-        n = len(sc)
-        # Une scène avec en-tête ouvre toujours un nouveau bloc
-        if courant and (taille + n > max_car or chro_marqueur_scene(sc)):
+    """Regroupe les scènes courtes. Une scène avec en-tête ou changement de POV
+    ouvre toujours un nouveau bloc. Accepte des textes ou des (texte, pov)."""
+    norm = [(x, None) if isinstance(x, str) else x for x in scenes]
+    paquets, courant, taille, pov_cur = [], [], 0, None
+    for texte, pov in norm:
+        n = len(texte)
+        if courant and (taille + n > max_car or chro_marqueur_scene(texte)
+                        or pov != pov_cur):
             paquets.append(courant)
             courant, taille = [], 0
-        courant.append(sc)
+        courant.append((texte, pov))
         taille += n
+        pov_cur = pov
     if courant:
         paquets.append(courant)
     return paquets
 
+
+# ============================================================
+#  📖 CHRONIQUE 2.0 — relations, empreintes, arcs
+# ============================================================
+# Outils INTERNES : rien n'est jamais affiché aux lecteurs.
+# Ils servent la cohérence ; la bible, les drapeaux et les empreintes
+# restent prioritaires pour déterminer où en est une relation.
+CHRO_REL_AXES = ("confiance", "proximite", "attirance", "rancune")
+
+def chro_rel_cle(perso):
+    return str(perso)
+
+def chro_relation(perso, axe=None):
+    """Valeur interne d'une relation. 0 par défaut."""
+    r = (CHRONIQUE.get("relations") or {}).get(chro_rel_cle(perso)) or {}
+    return r.get(axe, 0) if axe else dict(r)
+
+def chro_relation_maj(perso, deltas, episode=None):
+    """Fait évoluer une relation. Journalise pour pouvoir auditer la courbe."""
+    rels = CHRONIQUE.setdefault("relations", {})
+    r = rels.setdefault(chro_rel_cle(perso), {})
+    bouge = {}
+    for axe, d in (deltas or {}).items():
+        if axe not in CHRO_REL_AXES:
+            continue
+        avant = r.get(axe, 0)
+        r[axe] = max(0, min(100, avant + int(d)))
+        if r[axe] != avant:
+            bouge[axe] = r[axe] - avant
+    # Plafonds posés par une occasion manquée
+    for _a, _v in ((CHRONIQUE.get("plafonds") or {}).get(chro_rel_cle(perso)) or {}).items():
+        if r.get(_a, 0) > _v:
+            r[_a] = _v
+    if bouge:
+        CHRONIQUE.setdefault("rel_journal", []).append(
+            {"perso": chro_rel_cle(perso), "ep": episode or CHRONIQUE.get("episode"),
+             "d": bouge})
+        del CHRONIQUE["rel_journal"][200:]
+    return r
+
+def chro_marquer(type_, cible=None, episode=None):
+    """Pose une empreinte durable : un moment qui doit rester dans la relation."""
+    if not type_:
+        return None
+    m = {"type": type_, "cible": cible,
+         "ep": episode or CHRONIQUE.get("episode"), "t": time.time()}
+    CHRONIQUE.setdefault("marques", []).append(m)
+    return m
+
+def chro_a_marque(type_, cible=None):
+    """Cet événement a-t-il eu lieu ? Sert aux scènes conditionnelles."""
+    for m in (CHRONIQUE.get("marques") or []):
+        if m.get("type") == type_ and (cible is None or m.get("cible") == cible):
+            return m
+    return None
+
+def chro_arcs_episode(ep):
+    """Arcs d'un épisode. Accepte `arcs: [...]` et `arc: "..."` (compatibilité)."""
+    if not ep:
+        return []
+    a = ep.get("arcs")
+    if a:
+        return list(a) if isinstance(a, (list, tuple)) else [a]
+    un = ep.get("arc")
+    return [un] if un else []
+
+def chro_perso_nom(cle):
+    """Nom d'un personnage. Supporte l'ancien casting (tuple) et le nouveau (dict)."""
+    s = chro_saison() or {}
+    p = (s.get("personnages") or {}).get(cle)
+    if isinstance(p, dict):
+        return p.get("nom", cle)
+    cast = (s.get("casting") or {}).get(cle)
+    if isinstance(cast, dict):
+        return cast.get("nom", cle)
+    if isinstance(cast, (list, tuple)) and len(cast) > 1:
+        return cast[1]
+    return chro_voix(cle)
+
+def chro_delai_adaptatif(n_blocs):
+    """Un épisode long ne doit pas mettre une minute à se publier.
+    Plancher à 1,1 s : Discord accepte 5 messages / 5 s par salon."""
+    if n_blocs <= 3:
+        return 2.0
+    if n_blocs <= 6:
+        return 1.5
+    return 1.2
+
 def chro_scenes_visibles(ep):
-    """Filtre les scènes conditionnelles selon les drapeaux déjà posés."""
+    """Filtre les scènes conditionnelles. Rétrocompatible : une scène sans
+    condition passe toujours. Retourne des (texte, pov)."""
     out = []
     for sc in ep.get("scenes", []):
-        if isinstance(sc, dict):
-            si, sauf = sc.get("si"), sc.get("sauf")
-            if si and not chro_drapeau(si):
-                continue
-            if sauf and chro_drapeau(sauf):
-                continue
-            out.append(sc["texte"])
-        else:
-            out.append(sc)
+        if not isinstance(sc, dict):
+            out.append((sc, None))
+            continue
+        si, sauf = sc.get("si"), sc.get("sauf")
+        if si and not chro_drapeau(si):
+            continue
+        if sauf and chro_drapeau(sauf):
+            continue
+        # ── Chronique 2.0 : seuils de relation ──
+        rel = sc.get("rel")
+        if rel and chro_relation(rel[0], rel[1]) < rel[2]:
+            continue
+        rmax = sc.get("rel_max")
+        if rmax and chro_relation(rmax[0], rmax[1]) > rmax[2]:
+            continue
+        mq = sc.get("marque")
+        if mq and not chro_a_marque(mq if isinstance(mq, str) else mq[0],
+                                    None if isinstance(mq, str) else mq[1]):
+            continue
+        sans_mq = sc.get("sans_marque")
+        if sans_mq and chro_a_marque(sans_mq if isinstance(sans_mq, str) else sans_mq[0],
+                                     None if isinstance(sans_mq, str) else sans_mq[1]):
+            continue
+        out.append((sc["texte"], sc.get("pov")))
     return out
+
 
 def chro_enregistrer_choix(num_ep, cle, libelle):
     """Un choix validé est canonique. Aucun retour arrière."""
@@ -23180,6 +27244,18 @@ def chro_ending():
         if exige and not all(chro_drapeau(d) for d in exige):
             continue
         if any(chro_drapeau(d) for d in fin.get("interdit", [])):
+            continue
+        # ── Seuils de relation (Chronique 2.0) ──
+        _rate = False
+        for _p, _ax in (fin.get("rel_min") or {}).items():
+            for _a, _v in _ax.items():
+                if chro_relation(_p, _a) < _v:
+                    _rate = True
+        for _p, _ax in (fin.get("rel_max") or {}).items():
+            for _a, _v in _ax.items():
+                if chro_relation(_p, _a) > _v:
+                    _rate = True
+        if _rate:
             continue
         score = len(exige) * 10 + fin.get("poids", 0)
         if score_max is None or score > score_max:
@@ -23259,6 +27335,142 @@ def chro_verifier_invariants():
         anomalies.append("état VOTE sans message_id")
     return anomalies
 
+def chro_audit_saison(cle_saison=None):
+    """Audit ÉDITORIAL. Ne modifie rien, ne bloque rien : ce sont des ALERTES.
+    Seuls trois points sont traités comme de vrais défauts :
+    faux choix, événement fort sans suite, fin inatteignable."""
+    s = CHRONIQUE_SAISONS.get(cle_saison or CHRONIQUE.get("saison"))
+    if not s:
+        return None
+    eps = s["episodes"]
+    rap = {"titre": s["titre"], "episodes": len(eps),
+           "alertes": [], "defauts": [], "stats": {}}
+
+    # ── Volume et dialogue ──
+    mots_tot, details = 0, []
+    for i, ep in enumerate(eps, 1):
+        blocs = [x if isinstance(x, str) else x.get("texte", "") for x in ep["scenes"]]
+        txt = "\n\n".join(blocs)
+        mots = len(txt.split())
+        mots_tot += mots
+        paras = [p.strip() for p in txt.split("\n\n") if p.strip()]
+        dial = [p for p in paras if "|«" in p.split("\n")[0] or p.startswith("«")]
+        mots_d = sum(len(p.split()) for p in dial)
+        ratio = round(mots_d / mots * 100) if mots else 0
+        details.append({"ep": i, "titre": ep["titre"], "mots": mots,
+                        "repliques": len(dial), "ratio_dialogue": ratio,
+                        "ton": ep.get("ton"), "arcs": chro_arcs_episode(ep)})
+        if mots < 300:
+            rap["alertes"].append(f"ép.{i} très court ({mots} mots)")
+        if not dial:
+            rap["alertes"].append(f"ép.{i} sans aucune réplique")
+    rap["stats"]["mots"] = mots_tot
+    rap["stats"]["mots_moyen"] = mots_tot // max(1, len(eps))
+    rap["episodes_detail"] = details
+
+    # ── Rythme (alerte seulement) ──
+    tons = [e.get("ton") for e in eps]
+    suite = 0
+    for t in tons:
+        suite = suite + 1 if t == "tension" else 0
+        if suite >= 3:
+            rap["alertes"].append("3 épisodes de tension consécutifs")
+            break
+    n_calme = sum(1 for t in tons if t == "calme")
+    if any(tons):
+        rap["stats"]["part_calme"] = round(n_calme / len(eps) * 100)
+
+    # ── Présence des personnages ──
+    pres = {}
+    for i, ep in enumerate(eps, 1):
+        txt = "\n\n".join(x if isinstance(x, str) else x.get("texte", "")
+                          for x in ep["scenes"])
+        for p in txt.split("\n\n"):
+            tete = p.strip().split("|«")[0]
+            if "|«" in p and " " not in tete and len(tete) <= 20:
+                pres.setdefault(tete, []).append(i)
+    rap["stats"]["presence"] = {k: {"episodes": len(set(v)), "premiere": min(v)}
+                                for k, v in pres.items()}
+    for k, v in pres.items():
+        if min(v) > 5:
+            rap["alertes"].append(f"{k} n'apparaît qu'à partir de l'ép.{min(v)}")
+        trous = sorted(set(v))
+        for a, b in zip(trous, trous[1:]):
+            if b - a >= 8:
+                rap["alertes"].append(f"{k} absent des ép.{a+1} à {b-1}")
+                break
+
+    # ── DÉFAUT 1 : faux choix ──
+    for i, ep in enumerate(eps, 1):
+        ch = ep.get("choix")
+        if not ch:
+            continue
+        empreintes = {}
+        for cle, o in ch["suites"].items():
+            empreintes[cle] = (tuple(sorted(o.get("pose", []))),
+                               tuple(sorted(o.get("ferme", []))),
+                               tuple(sorted((o.get("relation") or {}).keys())),
+                               (o.get("marque") or {}).get("type"))
+        vus = {}
+        for cle, emp in empreintes.items():
+            if emp in vus:
+                rap["defauts"].append(
+                    f"ép.{i} : « {cle} » et « {vus[emp]} » produisent le même état")
+            vus[emp] = cle
+
+    # ── DÉFAUT 2 : empreinte jamais relue ──
+    posees, lues = set(), set()
+    for ep in eps:
+        for o in (ep.get("choix", {}).get("suites") or {}).values():
+            m = o.get("marque")
+            if m:
+                posees.add(m.get("type"))
+        for sc in ep["scenes"]:
+            if isinstance(sc, dict):
+                for k in ("marque", "sans_marque"):
+                    v = sc.get(k)
+                    if v:
+                        lues.add(v if isinstance(v, str) else v[0])
+    for f in s["endings"].values():
+        lues |= set(f.get("exige", [])) | set(f.get("interdit", []))
+    for m in posees - lues:
+        rap["defauts"].append(f"empreinte « {m} » posée mais jamais relue")
+
+    # ── DÉFAUT 3 : fins inatteignables ──
+    # On tient compte des drapeaux posés à l'exécution (grave_pose, marques,
+    # et ceux déclarés par la saison dans `pose_runtime`).
+    tous_dr = set(s.get("pose_runtime") or [])
+    for ep in eps:
+        for o in (ep.get("choix", {}).get("suites") or {}).values():
+            tous_dr |= set(o.get("pose", []))
+            tous_dr |= set(o.get("grave_pose", []))
+            _m = o.get("marque")
+            if _m:
+                tous_dr.add(_m.get("type"))
+    for k, f in s["endings"].items():
+        manq = set(f.get("exige", [])) - tous_dr
+        if manq:
+            rap["defauts"].append(f"fin « {f['nom']} » exige {sorted(manq)} — jamais posé")
+
+    # ── Effet papillon : écart pose → lecture ──
+    pose_ep = {}
+    for i, ep in enumerate(eps, 1):
+        for o in (ep.get("choix", {}).get("suites") or {}).values():
+            for d in o.get("pose", []):
+                pose_ep.setdefault(d, i)
+    ecarts = []
+    for i, ep in enumerate(eps, 1):
+        for sc in ep["scenes"]:
+            if isinstance(sc, dict):
+                for k in ("si", "sauf"):
+                    d = sc.get(k)
+                    if d in pose_ep:
+                        ecarts.append(i - pose_ep[d])
+    if ecarts:
+        rap["stats"]["papillon"] = {"min": min(ecarts), "max": max(ecarts),
+                                    "moyen": round(sum(ecarts) / len(ecarts), 1)}
+    return rap
+
 def chro_reset():
     CHRONIQUE.clear()
 
@@ -23270,6 +27482,18 @@ async def chro_reprendre_apres_restart():
         return None
     etat = CHRONIQUE.get("etat")
     info = {"etat": etat, "episode": CHRONIQUE.get("episode")}
+    # ── Résultat décidé mais non publié : on TERMINE la publication.
+    #    Le choix n'est jamais réappliqué : il est déjà dans l'historique. ──
+    if CHRONIQUE.get("resultat_a_publier"):
+        info["resultat_en_attente"] = CHRONIQUE["resultat_a_publier"]["episode"]
+        for g in bot.guilds:
+            if chro_salon(g):
+                try:
+                    if await chro_publier_resultat(g):
+                        info["resultat_publie"] = True
+                except Exception as e:
+                    print(f"[Chronique] reprise du résultat : {type(e).__name__}: {e}")
+                break
     if etat == "EPISODE":
         CHRONIQUE["etat"] = "ATTENTE"
         info["episode_interrompu"] = True
@@ -31163,81 +35387,101 @@ async def marcheacheter_cmd(ctx, *, perso: str = None):
         embed.set_thumbnail(url=c["image"])
     await ctx.send(embed=embed)
 
-# Tracking missions
-missions_progress = defaultdict(lambda: {"messages": 0, "rolls": 0, "daily": 0, "wins": 0, "quiz": 0, "claimed": False})
+# ── Missions journalières ──
+# claims : set des ids de missions déjà encaissées aujourd'hui (+ "bonus")
+def _missions_neuf():
+    return {"messages": 0, "rolls": 0, "daily": 0, "wins": 0, "quiz": 0,
+            "claims": [], "reset": 0}
+
+missions_progress = defaultdict(_missions_neuf)
+
+MISSIONS_DEF = [
+    {"id": "messages", "desc": "💬 Envoyer 20 messages",          "cible": 20, "coins": 100, "xp": 20},
+    {"id": "rolls",    "desc": "🎰 Faire 3 rolls gacha",           "cible": 3,  "coins": 150, "xp": 30},
+    {"id": "daily",    "desc": "💰 Utiliser .daily",               "cible": 1,  "coins": 80,  "xp": 15},
+    {"id": "quiz",     "desc": "🎯 Répondre juste au quiz 2x",     "cible": 2,  "coins": 120, "xp": 25},
+    {"id": "wins",     "desc": "⚔️ Gagner 1 combat (arène/quiz)",  "cible": 1,  "coins": 200, "xp": 50},
+]
+MISSIONS_BONUS = {"coins": 250, "xp": 50}
+
+def missions_reset_si_besoin(uid):
+    """Remet le compteur à zéro si 24 h se sont écoulées. Retourne l'état à jour."""
+    import time as _t
+    p = missions_progress[uid]
+    # compat : anciennes structures sans "claims"/"reset"
+    if "claims" not in p: p["claims"] = []
+    if "reset"  not in p: p["reset"]  = 0
+    p.pop("claimed", None)
+    now = _t.time()
+    if now - p["reset"] >= 86400:
+        for k in ("messages", "rolls", "daily", "wins", "quiz"):
+            p[k] = 0
+        p["claims"] = []
+        p["reset"]  = now
+    return p
 
 @bot.command(name="missions", aliases=["mission","quetes"])
 async def missions_cmd(ctx):
-    """Missions journalières avec récompenses — .missions"""
-    uid = str(ctx.author.id)
+    """Missions journalières — chaque mission se réclame indépendamment."""
     import time as _t
-    if not hasattr(bot, 'missions_data'):
-        bot.missions_data = {}
-    now = _t.time()
-    last = bot.missions_data.get(uid, {}).get("reset", 0)
-    
-    # Reset journalier
-    if now - last >= 86400:
-        # Reset le progrès
-        missions_progress[uid] = {"messages": 0, "rolls": 0, "daily": 0, "wins": 0, "quiz": 0, "claimed": False}
-        bot.missions_data[uid] = {"reset": now, "claimed": False}
-    
-    prog = missions_progress[uid]
-    
-    # Définir les missions du jour avec leur progression actuelle
-    missions = [
-        {"id": "messages", "desc": "💬 Envoyer 20 messages",        "cible": 20, "prog": prog["messages"], "reward_coins": 100, "reward_xp": 20},
-        {"id": "rolls",    "desc": "🎰 Faire 3 rolls gacha",         "cible": 3,  "prog": prog["rolls"],    "reward_coins": 150, "reward_xp": 30},
-        {"id": "daily",    "desc": "💰 Utiliser .daily",             "cible": 1,  "prog": prog["daily"],    "reward_coins": 80,  "reward_xp": 15},
-        {"id": "quiz",     "desc": "🎯 Répondre juste au quiz 2x",   "cible": 2,  "prog": prog["quiz"],     "reward_coins": 120, "reward_xp": 25},
-        {"id": "wins",     "desc": "⚔️ Gagner 1 combat (arène/quiz)", "cible": 1, "prog": prog["wins"],     "reward_coins": 200, "reward_xp": 50},
-    ]
-    
+    uid  = str(ctx.author.id)
+    p    = missions_reset_si_besoin(uid)
+    now  = _t.time()
+    restant = max(0, 86400 - (now - p["reset"]))
+
     embed = discord.Embed(
         title="📋 Missions Journalières",
-        description=f"**{ctx.author.display_name}** — Reset dans {int((86400 - (now - last)) / 3600)}h",
-        color=0x3498db
-    )
-    
-    total_coins_done = 0
-    total_xp_done = 0
-    nb_done = 0
-    
-    for m in missions:
-        bar_filled = int((min(m["prog"], m["cible"]) / m["cible"]) * 10)
-        bar = "█"*bar_filled + "░"*(10-bar_filled)
-        done = m["prog"] >= m["cible"]
-        status = "✅" if done else "⏳"
+        description=f"**{ctx.author.display_name}** — Reset dans "
+                    f"{int(restant // 3600)}h{int((restant % 3600) // 60):02d}",
+        color=0x3498db)
+
+    gagne_coins = gagne_xp = 0
+    nouvelles   = []
+    nb_finies   = 0
+
+    for m in MISSIONS_DEF:
+        prog = p.get(m["id"], 0)
+        fait = prog >= m["cible"]
+        deja = m["id"] in p["claims"]
+        if fait:
+            nb_finies += 1
+        # Encaissement : la mission est finie et jamais encaissée
+        if fait and not deja:
+            p["claims"].append(m["id"])
+            gagne_coins += m["coins"]
+            gagne_xp    += m["xp"]
+            nouvelles.append(m["desc"])
+        statut = "💰" if (fait and deja) else ("✅" if fait else "⏳")
+        rempli = int((min(prog, m["cible"]) / m["cible"]) * 10)
         embed.add_field(
-            name=f"{status} {m['desc']}",
-            value=f"`{bar}` **{min(m['prog'], m['cible'])}/{m['cible']}** — 🪙 +{m['reward_coins']} • ⭐ +{m['reward_xp']} XP",
-            inline=False
-        )
-        if done:
-            total_coins_done += m["reward_coins"]
-            total_xp_done += m["reward_xp"]
-            nb_done += 1
-    
-    # CRITIQUE: Distribuer les récompenses si pas déjà claimed
-    claimed = bot.missions_data.get(uid, {}).get("claimed", False)
-    if nb_done > 0 and not claimed:
-        # Récompenses bonus si toutes les missions sont faites
-        bonus_coins = 250 if nb_done == len(missions) else 0
-        bonus_xp = 50 if nb_done == len(missions) else 0
-        
-        economy_data[uid]["coins"] += total_coins_done + bonus_coins
-        xp_data[uid]["xp"] += total_xp_done + bonus_xp
-        bot.missions_data[uid]["claimed"] = True
-        
-        msg = f"💰 **+{total_coins_done} pièces** & **+{total_xp_done} XP** récupérés !"
-        if bonus_coins > 0:
-            msg += f"\n🎉 **BONUS TOUTES MISSIONS** : +{bonus_coins} pièces & +{bonus_xp} XP !"
-        embed.set_footer(text=msg)
-    elif claimed:
-        embed.set_footer(text=f"✅ Récompenses du jour déjà récupérées ({total_coins_done} pièces)")
+            name=f"{statut} {m['desc']}",
+            value=f"`{'█'*rempli}{'░'*(10-rempli)}` **{min(prog, m['cible'])}/{m['cible']}** "
+                  f"— 🪙 +{m['coins']} • ⭐ +{m['xp']} XP",
+            inline=False)
+
+    # Bonus « toutes les missions » — encaissable une seule fois
+    bonus = False
+    if nb_finies == len(MISSIONS_DEF) and "bonus" not in p["claims"]:
+        p["claims"].append("bonus")
+        gagne_coins += MISSIONS_BONUS["coins"]
+        gagne_xp    += MISSIONS_BONUS["xp"]
+        bonus = True
+
+    if gagne_coins or gagne_xp:
+        economy_data[uid]["coins"] += gagne_coins
+        xp_data[uid]["xp"]         += gagne_xp
+        save_all_data()
+        pied = f"💰 +{gagne_coins} pièces & +{gagne_xp} XP — {len(nouvelles)} mission(s) encaissée(s)"
+        if bonus:
+            pied += f"\n🎉 BONUS TOUTES MISSIONS : +{MISSIONS_BONUS['coins']} pièces & +{MISSIONS_BONUS['xp']} XP"
+        embed.set_footer(text=pied)
     else:
-        embed.set_footer(text="💡 Complète des missions pour gagner pièces et XP !")
-    
+        restantes = len(MISSIONS_DEF) - nb_finies
+        embed.set_footer(text=(
+            "✅ Tout est encaissé pour aujourd'hui — reviens demain !"
+            if restantes == 0 else
+            f"💡 Encore {restantes} mission(s) — reviens ici pour encaisser au fur et à mesure."))
+
     await ctx.send(embed=embed)
 
 # ============================================================
@@ -32904,6 +37148,7 @@ def save_all_data():
             "anniversaires": dict(anniversaire_data),
             "pets": pets_data,
             "achievements": {k: list(v) for k, v in achievements_data.items()},
+            "missions": {k: dict(v) for k, v in missions_progress.items()},
             "user_stats": {k: dict(v) for k, v in user_stats.items()},
             "arena_stats": {k: dict(v) for k, v in arena_stats.items()},
             "points_amelio": dict(points_amelio),
@@ -33007,6 +37252,12 @@ def load_all_data():
             pets_data.update(data.get("pets", {}))
             for k, v in data.get("achievements", {}).items():
                 achievements_data[k] = set(v)
+            for k, v in data.get("missions", {}).items():
+                base = _missions_neuf()
+                base.update(v)
+                base["claims"] = list(base.get("claims", []))
+                base.pop("claimed", None)
+                missions_progress[k] = base
             for k, v in data.get("user_stats", {}).items():
                 user_stats[k].update(v)
             for k, v in data.get("arena_stats", {}).items():
@@ -33196,6 +37447,29 @@ async def on_member_join(member):
         await channel.send(embed=embed)
     except Exception as e:
         print(f"[Bienvenue] Erreur envoi : {e}")
+
+    # ── Annonce communautaire dans le général ──
+    # Volontairement séparée : le salon d'arrivée reçoit la prophétie,
+    # le général reçoit une phrase courte qui invite les autres à réagir.
+    general = member.guild.get_channel(SALON_GENERAL_ID) if SALON_GENERAL_ID else None
+    if general and general.id != channel.id:
+        annonces = [
+            "{m} vient officiellement de rejoindre le QG. Soyez normaux pendant cinq minutes.",
+            "{m} est arrivé·e. Vous savez quoi faire — et pour une fois, faites-le bien.",
+            "Nouvelle arrivée : {m}. Je compte sur vous pour ne pas faire fuir celui-là.",
+            "{m} a passé la porte. Membre n°{n}. Accueillez, je surveille.",
+            "{m} nous rejoint. Quelqu'un lui explique les règles du frigo, s'il vous plaît.",
+            "{m} vient d'arriver au QG. Vous avez cinq minutes pour faire bonne impression.",
+            "Il y a maintenant {n} personnes ici, dont {m} depuis exactement trente secondes.",
+            "{m} débarque. Je note tout, alors soyez charmants.",
+            "{m} a rejoint le QG. Les présentations sont ouvertes.",
+            "Arrivée de {m}. Membre n°{n}. Le QG s'agrandit, mon travail aussi.",
+        ]
+        texte = random.choice(annonces).replace("{m}", member.mention).replace("{n}", str(n))
+        try:
+            await general.send(texte)
+        except Exception as e:
+            print(f"[Bienvenue/général] Erreur envoi : {e}")
 
 @bot.event
 async def on_member_remove(member):
@@ -33491,6 +37765,10 @@ async def on_ready():
             print(f"[Chronique] ⚠️ incohérence corrigée : {_a}")
         _ch = await chro_reprendre_apres_restart()
         if _ch:
+            if _ch.get("resultat_publie"):
+                print(f"[Chronique] ✅ résultat de l'épisode "
+                      f"{_ch.get('resultat_en_attente')} publié après redémarrage "
+                      f"(choix non réappliqué)")
             if _ch.get("vote_restaure"):
                 print(f"[Chronique] ✅ vote de l'épisode {_ch.get('episode')} restauré "
                       f"({_ch.get('votes')} vote(s) conservé(s))")
