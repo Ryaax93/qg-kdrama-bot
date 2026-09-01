@@ -6070,7 +6070,7 @@ async def planning_cmd(ctx):
     embed.add_field(
         name="🎪 Events manuels (admin)",
         value=(
-            "⚡ Question Éclair • 🎤 Débat • 👑 Roi de la Colline • 🍀 Loterie\n"
+            "⚡ Défis Éclair • ⚡ Réflexe • 🎤 Débat • 🍀 Loterie\n"
             "⚔️ Invasion • 🎰 Nuit Casino • et plus...\n"
             "*Lancés par les admins avec `.lancerevent <nom>`*"
         ),
@@ -6299,7 +6299,7 @@ async def run_heure_maudite(channel, guild):
         description="Quelque chose se prépare au QG... personne ne sait quoi. 🌑",
         color=0xe74c3c))
     await asyncio.sleep(5)
-    await random.choice([run_question_eclair, run_roi_colline, run_debat])(channel, guild)
+    await random.choice([run_defi_eclair, run_reflexe, run_debat])(channel, guild)
 
 # ============================================================
 #  🎪 SALONS TEMPORAIRES D'EVENT — évitent de polluer les discussions
@@ -7063,23 +7063,6 @@ async def run_debat(channel, guild, duree=3600):
     await cible.send(embed=concl)
     if salon: await close_event_channel(salon, 300)
 
-
-async def run_roi_colline(channel, guild):
-    """👑 Roi de la Colline — défis en arène"""
-    ping = get_event_ping(guild, "everyone")
-    embed = discord.Embed(
-        title="👑 ROI DE LA COLLINE !",
-        description=(
-            "Le trône est ouvert ! 👑\n\n"
-            "Défiez-vous en `.arene @joueur` pendant **30 minutes** !\n"
-            "Le **dernier vainqueur** de la période est couronné **Roi de la Colline** "
-            "et remporte **500 pièces bonus** ! 🏆\n\n"
-            "*Que le meilleur gagne !*"
-        ),
-        color=0xf1c40f
-    )
-    embed.set_footer(text="⚔️ Affrontez-vous en arène pour le trône !")
-    await channel.send(ping, embed=embed)
 
 async def run_loterie(channel, guild):
     """🍀 Loterie du QG — tickets puis tirage, dans un salon dédié"""
@@ -9160,6 +9143,958 @@ _defi_mode("motmelange","Mot Mélangé",     "🔤",  0x1abc9c, "🔤・mot-mela
 _defi_mode("intrus",    "Trouve l'Intrus", "🚩",  0xe67e22, "🚩・trouve-l-intrus", 600, 1200,  90, _src_intrus)
 _defi_mode("premier",   "Premier Arrivé",  "🏃",  0x3498db, "🏃・premier-arrive",  400,  900,  60, _src_premier)
 
+# ============================================================
+#  🚂 TRAIN FOU — voyage collectif, on descend ou on continue
+# ============================================================
+TRAIN_STATIONS = [
+    ("Gare du QG",        "🏙️",  0.00, "Le train s'ébranle. Tout le monde est encore là."),
+    ("Pont de Fer",       "🌉",  0.12, "Le tablier grince sous le poids. Personne ne dit rien."),
+    ("Tunnel Noir",       "🕳️",  0.18, "Trois minutes sans lumière. On entend le métal."),
+    ("Col des Corbeaux",  "🪶",  0.24, "La pente monte. Les freins chauffent."),
+    ("Viaduc Blanc",      "🌫️",  0.30, "Quatre-vingts mètres de vide sous les roues."),
+    ("Aiguillage Fou",    "🔀",  0.36, "Le mécanicien a sauté à la station précédente."),
+    ("Descente Sud",      "⛰️",  0.42, "On accélère tout seuls. Ce n'est pas rassurant."),
+    ("Terminus",          "🏁",  0.48, "Dernière station. Après, il n'y a plus de rails."),
+]
+TRAIN_INCIDENTS = [
+    ("🔥", "Un essieu chauffe", "Le prochain arrêt est plus risqué.", "risque", 0.06),
+    ("🧰", "La caisse à outils", "Quelqu'un répare. Le prochain arrêt est plus sûr.", "risque", -0.08),
+    ("💰", "Un wagon de fret", "La cagnotte enfle d'un coup.", "bonus", 0.35),
+    ("🐄", "Une vache sur la voie", "Arrêt d'urgence. On perd du temps, pas de la vie.", "rien", 0),
+    ("🌧️", "L'orage", "La visibilité tombe. C'est plus dangereux.", "risque", 0.05),
+    ("🎺", "Le contrôleur chante", "Personne ne comprend pourquoi. Le moral remonte.", "rien", 0),
+]
+TRAIN_BASE, TRAIN_PAR_STATION, TRAIN_MAX = 900, 1.55, 9000
+
+class TrainInscription(ui.View):
+    def __init__(self, timeout=45):
+        super().__init__(timeout=timeout)
+        self.joueurs, self.noms, self.message = [], {}, None
+
+    @ui.button(label="Monter à bord", emoji="🚂", style=discord.ButtonStyle.success)
+    async def monter(self, itx, _b):
+        uid = str(itx.user.id)
+        if uid in self.joueurs:
+            return await itx.response.send_message("Tu es déjà dans le train.", ephemeral=True)
+        self.joueurs.append(uid)
+        self.noms[uid] = itx.user.display_name
+        await itx.response.send_message("🚂 Bienvenue à bord. Bon voyage.", ephemeral=True)
+        try: await itx.message.edit(embed=self.build())
+        except Exception: pass
+
+    def build(self):
+        return discord.Embed(
+            title="🚂 TRAIN FOU — embarquement",
+            description=(
+                "Huit stations. À chacune, **vous votez** : on continue ou on s'arrête.\n\n"
+                "🚂 **Continuer** — la cagnotte monte, le risque aussi\n"
+                "🚪 **Descendre** — tu pars avec ta part, **maintenant**\n\n"
+                "*Si le train déraille, ceux qui sont encore dedans perdent tout.*\n"
+                "*Ceux qui sont descendus regardent.*\n\n"
+                f"👥 **{len(self.joueurs)}** passager(s)"),
+            color=0x2c3e50).set_footer(text="45 secondes pour monter")
+
+class TrainStationView(ui.View):
+    """Chaque passager encore à bord vote."""
+    def __init__(self, a_bord, timeout=25):
+        super().__init__(timeout=timeout)
+        self.a_bord = set(a_bord)
+        self.votes = {}
+
+    async def _enregistre(self, itx, choix):
+        uid = str(itx.user.id)
+        if uid not in self.a_bord:
+            return await itx.response.send_message(
+                "Tu n'es pas dans ce train — tu peux regarder, c'est déjà quelque chose.",
+                ephemeral=True)
+        self.votes[uid] = choix
+        await itx.response.send_message(
+            "🚂 Tu votes pour continuer." if choix == "continuer"
+            else "🚪 Tu descends à cette station.", ephemeral=True)
+        if len(self.votes) >= len(self.a_bord):
+            self.stop()
+
+    @ui.button(label="Continuer", emoji="🚂", style=discord.ButtonStyle.danger)
+    async def continuer(self, itx, _b): await self._enregistre(itx, "continuer")
+
+    @ui.button(label="Descendre", emoji="🚪", style=discord.ButtonStyle.secondary)
+    async def descendre(self, itx, _b): await self._enregistre(itx, "descendre")
+
+def _train_embed(etat):
+    nom, emo, risque, texte = TRAIN_STATIONS[etat["station"]]
+    voie = ""
+    for i in range(len(TRAIN_STATIONS)):
+        voie += "🚂" if i == etat["station"] else ("━" if i < etat["station"] else "┄")
+    lignes = []
+    for uid in etat["ordre"]:
+        if uid in etat["a_bord"]:
+            lignes.append(f"🚂 **{etat['noms'][uid]}**")
+        elif uid in etat["descendus"]:
+            lignes.append(f"🚪 {etat['noms'][uid]} — *parti avec {etat['descendus'][uid]:,} p*")
+        else:
+            lignes.append(f"💥 ~~{etat['noms'][uid]}~~")
+    e = discord.Embed(
+        title=f"🚂 {emo} {nom.upper()}  —  station {etat['station']+1}/8",
+        description=f"`{voie}`\n\n*{texte}*\n\n" + "\n".join(lignes),
+        color=0xe74c3c if risque >= 0.30 else 0xe67e22 if risque >= 0.18 else 0x2c3e50)
+    e.add_field(name="💰 Part par passager",
+                value=f"**{etat['part']:,} pièces**", inline=True)
+    e.add_field(name="⚠️ Risque de déraillement",
+                value=f"**{int(etat['risque']*100)} %**", inline=True)
+    e.add_field(name="👥 À bord", value=f"{len(etat['a_bord'])}", inline=True)
+    if etat.get("incident"):
+        e.add_field(name="📣 Sur la voie", value=etat["incident"], inline=False)
+    e.set_footer(text="Continuer = plus de pièces · Descendre = tu gardes ta part")
+    return e
+
+async def run_train_fou(channel, guild):
+    """🚂 Train Fou — huit stations, un vote à chacune, tout ou rien."""
+    salon = await create_event_channel(guild, "🚂・train-fou") if guild else None
+    cible = salon or channel
+    if salon and guild:
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title="🚂 LE TRAIN FOU ENTRE EN GARE",
+            description="Huit stations. À chacune, on vote : continuer ou descendre.",
+            color=0x2c3e50), salon)
+
+    insc = TrainInscription(timeout=45)
+    insc.message = await cible.send(
+        get_event_ping(guild, "everyone") if (cible is channel and guild) else "",
+        embed=insc.build(), view=insc)
+    await insc.wait()
+    for it in insc.children: it.disabled = True
+    try: await insc.message.edit(view=insc)
+    except Exception: pass
+
+    if len(insc.joueurs) < 2:
+        await cible.send(embed=discord.Embed(
+            title="🚂 Le train repart à vide",
+            description=("Personne n'est monté." if not insc.joueurs
+                         else "Un seul passager. Le chef de gare a annulé le départ."),
+            color=0x95a5a6))
+        if salon: await close_event_channel(salon, 60)
+        return
+
+    ordre = insc.joueurs[:]
+    etat = {"ordre": ordre, "noms": insc.noms, "a_bord": set(ordre), "descendus": {},
+            "morts": set(), "station": 0, "part": TRAIN_BASE, "risque": 0.0,
+            "incident": None, "mod_risque": 0.0}
+
+    for idx in range(len(TRAIN_STATIONS)):
+        etat["station"] = idx
+        _n, _e, risque_base, _t = TRAIN_STATIONS[idx]
+        etat["risque"] = max(0.0, min(0.60, risque_base + etat["mod_risque"]))
+
+        vue = TrainStationView(etat["a_bord"], timeout=25)
+        msg = await cible.send(embed=_train_embed(etat), view=vue)
+        await vue.wait()
+        for it in vue.children: it.disabled = True
+        try: await msg.edit(view=vue)
+        except Exception: pass
+
+        # Sans vote, on reste à bord — le train ne s'arrête pas tout seul.
+        descendent = [u for u in etat["a_bord"] if vue.votes.get(u) == "descendre"]
+        for u in descendent:
+            economy_data[u]["coins"] += etat["part"]
+            gazette_gain(u, etat["part"])
+            etat["descendus"][u] = etat["part"]
+            etat["a_bord"].discard(u)
+        if descendent:
+            await cible.send(embed=discord.Embed(
+                description=("🚪 " + ", ".join(f"**{etat['noms'][u]}**" for u in descendent) +
+                             f" descend(ent) avec **{etat['part']:,} pièces** chacun."),
+                color=0x95a5a6))
+
+        if not etat["a_bord"]:
+            await cible.send(embed=discord.Embed(
+                title="🚂 Le train continue sans personne",
+                description="Tout le monde est descendu. Sage. Ennuyeux, mais sage.",
+                color=0x95a5a6))
+            break
+
+        if idx == len(TRAIN_STATIONS) - 1:
+            break
+
+        # ── Déraillement ? ──
+        if random.random() < etat["risque"]:
+            perdus = list(etat["a_bord"])
+            etat["morts"] |= etat["a_bord"]
+            etat["a_bord"] = set()
+            await cible.send(embed=discord.Embed(
+                title="💥 DÉRAILLEMENT",
+                description=(f"**{TRAIN_STATIONS[idx][0]}.** Le train sort de la voie.\n\n"
+                             + ", ".join(f"**{etat['noms'][u]}**" for u in perdus) +
+                             f" perd(ent) **{etat['part']:,} pièces** qu'ils avaient à portée.\n\n"
+                             + ("*Ceux qui étaient descendus n'ont rien dit. C'était plus poli.*"
+                                if etat["descendus"] else "*Personne n'était descendu.*")),
+                color=0xe74c3c))
+            break
+
+        # ── Incident de voie ──
+        etat["part"] = min(TRAIN_MAX, int(etat["part"] * TRAIN_PAR_STATION))
+        if random.random() < 0.45:
+            emo, titre, desc, effet, val = random.choice(TRAIN_INCIDENTS)
+            if effet == "risque":
+                etat["mod_risque"] += val
+            elif effet == "bonus":
+                etat["part"] = min(TRAIN_MAX, int(etat["part"] * (1 + val)))
+            etat["incident"] = f"{emo} **{titre}** — {desc}"
+        else:
+            etat["incident"] = None
+        await asyncio.sleep(1.6)
+
+    # ── Terminus ──
+    survivants = list(etat["a_bord"])
+    if survivants:
+        prime = int(etat["part"] * 1.4)
+        prime = min(TRAIN_MAX, prime)
+        for u in survivants:
+            economy_data[u]["coins"] += prime
+            gazette_gain(u, prime)
+            try: check_coins_achievements(u, cible)
+            except Exception: pass
+        await cible.send(embed=discord.Embed(
+            title="🏁 TERMINUS",
+            description=("Le train s'arrête. Les portes s'ouvrent.\n\n"
+                         + "\n".join(f"🏆 **{etat['noms'][u]}** — +{prime:,} pièces" for u in survivants)
+                         + f"\n\n*{len(etat['descendus'])} descendu(s) en route · "
+                           f"{len(etat['morts'])} resté(s) dedans.*"),
+            color=0x2ecc71))
+    recap = []
+    if etat["descendus"]:
+        recap.append("🚪 " + " · ".join(f"{etat['noms'][u]} ({g:,})"
+                                        for u, g in etat["descendus"].items()))
+    if etat["morts"]:
+        recap.append("💥 " + " · ".join(etat["noms"][u] for u in etat["morts"]))
+    if recap:
+        await cible.send(embed=discord.Embed(
+            title="🚂 Le voyage", description="\n".join(recap), color=0x2c3e50))
+    if salon: await close_event_channel(salon, 150)
+
+# ============================================================
+#  💼 LE DEAL — deux joueurs, un lot, deux valeurs secrètes
+# ============================================================
+DEAL_LOTS = [
+    ("📻", "Un vieux poste radio",        "Il grésille. Il a l'air de valoir quelque chose."),
+    ("🗝️", "Une clé sans serrure",        "Personne ne sait ce qu'elle ouvre. Elle est lourde."),
+    ("📦", "Un carton scellé",            "Il est marqué « fragile » à trois endroits."),
+    ("🖼️", "Un cadre retourné",           "Personne n'a le droit de regarder le recto."),
+    ("💿", "Un disque sans pochette",     "Face A rayée. Face B intacte."),
+    ("🧭", "Une boussole qui ment",       "Elle indique toujours le sud-est."),
+]
+DEAL_ROLES = [
+    ("🔎", "Le Collectionneur", "Tu sais ce que c'est. Tu le veux vraiment."),
+    ("💵", "Le Revendeur",      "Tu t'en fiches. Tu veux la marge."),
+    ("🎭", "Le Curieux",        "Tu n'en as aucune idée. Tu bluffes."),
+]
+
+class DealInscription(ui.View):
+    def __init__(self, timeout=40):
+        super().__init__(timeout=timeout)
+        self.joueurs, self.noms, self.message = [], {}, None
+
+    @ui.button(label="Entrer dans la négociation", emoji="💼", style=discord.ButtonStyle.primary)
+    async def entrer(self, itx, _b):
+        uid = str(itx.user.id)
+        if uid in self.joueurs:
+            return await itx.response.send_message("Tu es déjà à la table.", ephemeral=True)
+        self.joueurs.append(uid)
+        self.noms[uid] = itx.user.display_name
+        await itx.response.send_message(
+            "💼 À la table. Tu recevras ton rôle en privé.", ephemeral=True)
+        try: await itx.message.edit(embed=self.build())
+        except Exception: pass
+
+    def build(self):
+        return discord.Embed(
+            title="💼 LE DEAL — à la table",
+            description=(
+                "Un lot. **Deux acheteurs.** Chacun reçoit en privé :\n"
+                "un **rôle**, et **ce que le lot vaut pour lui**.\n\n"
+                "Vous ne savez pas ce que ça vaut pour l'autre.\n"
+                "Vous discutez **à voix haute**, dans ce salon.\n"
+                "À la fin, chacun pose son offre en secret.\n\n"
+                "**Le plus offrant emporte le lot** — et paie ce qu'il a proposé.\n"
+                "*Payer plus que ça ne vaut, c'est perdre.*\n\n"
+                f"👥 **{len(self.joueurs)}** à la table"),
+            color=0x34495e).set_footer(text="40 secondes pour entrer")
+
+class DealOffreModal(ui.Modal, title="💼 Ton offre finale"):
+    montant = ui.TextInput(label="Combien tu proposes ?", placeholder="ex : 1200",
+                           max_length=6, required=True)
+    def __init__(self, parent, uid):
+        super().__init__()
+        self.parent, self.uid = parent, uid
+    async def on_submit(self, itx):
+        try:
+            m = int("".join(ch for ch in str(self.montant.value) if ch.isdigit()) or 0)
+        except Exception:
+            m = 0
+        self.parent.offres[self.uid] = max(0, m)
+        await itx.response.send_message(
+            f"💼 Offre enregistrée : **{max(0, m):,} pièces**. Scellée.", ephemeral=True)
+        if len(self.parent.offres) >= len(self.parent.joueurs):
+            self.parent.stop()
+
+class DealOffreView(ui.View):
+    def __init__(self, joueurs, timeout=45):
+        super().__init__(timeout=timeout)
+        self.joueurs = set(joueurs)
+        self.offres = {}
+
+    @ui.button(label="Poser mon offre", emoji="💼", style=discord.ButtonStyle.success)
+    async def offrir(self, itx, _b):
+        uid = str(itx.user.id)
+        if uid not in self.joueurs:
+            return await itx.response.send_message(
+                "Tu n'es pas à cette table — mais tu peux suivre la discussion.", ephemeral=True)
+        if uid in self.offres:
+            return await itx.response.send_message(
+                "Ton offre est déjà scellée. On ne revient pas dessus.", ephemeral=True)
+        await itx.response.send_modal(DealOffreModal(self, uid))
+
+async def run_le_deal(channel, guild):
+    """💼 Le Deal — deux acheteurs, un lot, des valeurs secrètes différentes."""
+    salon = await create_event_channel(guild, "💼・le-deal") if guild else None
+    cible = salon or channel
+    if salon and guild:
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title="💼 LE DEAL",
+            description="Un lot, deux acheteurs, deux valeurs secrètes. Négociez.",
+            color=0x34495e), salon)
+
+    insc = DealInscription(timeout=40)
+    insc.message = await cible.send(
+        get_event_ping(guild, "everyone") if (cible is channel and guild) else "",
+        embed=insc.build(), view=insc)
+    await insc.wait()
+    for it in insc.children: it.disabled = True
+    try: await insc.message.edit(view=insc)
+    except Exception: pass
+
+    if len(insc.joueurs) < 2:
+        await cible.send(embed=discord.Embed(
+            title="💼 Négociation annulée",
+            description=("Personne à la table." if not insc.joueurs
+                         else "On ne négocie pas tout seul."),
+            color=0x95a5a6))
+        if salon: await close_event_channel(salon, 60)
+        return
+
+    duo = random.sample(insc.joueurs, 2)
+    emo, lot, desc = random.choice(DEAL_LOTS)
+    roles = random.sample(DEAL_ROLES, 2)
+    # Valeurs secrètes asymétriques : le lot ne vaut pas la même chose pour les deux.
+    valeurs = {duo[0]: random.randint(800, 4500), duo[1]: random.randint(800, 4500)}
+
+    for i, uid in enumerate(duo):
+        r_emo, r_nom, r_desc = roles[i]
+        try:
+            m = cible.guild.get_member(int(uid)) if hasattr(cible, "guild") and cible.guild else None
+            if m:
+                await m.send(embed=discord.Embed(
+                    title=f"{r_emo} {r_nom}",
+                    description=(f"*{r_desc}*\n\n"
+                                 f"Le lot : {emo} **{lot}**\n\n"
+                                 f"💰 Pour toi, il vaut **{valeurs[uid]:,} pièces**.\n\n"
+                                 f"L'autre ignore ce chiffre. Tu ignores le sien.\n"
+                                 f"Si tu remportes le lot, tu gagnes **sa valeur moins ton offre**.\n"
+                                 f"Offrir plus que {valeurs[uid]:,} te fait **perdre** des pièces."),
+                    color=0x34495e))
+        except Exception:
+            pass
+
+    await cible.send(embed=discord.Embed(
+        title=f"{emo} {lot.upper()}",
+        description=(f"*{desc}*\n\n"
+                     f"**{insc.noms[duo[0]]}** {roles[0][0]} contre "
+                     f"**{insc.noms[duo[1]]}** {roles[1][0]}\n\n"
+                     f"Chacun a reçu son rôle et sa valeur en message privé.\n"
+                     f"**Vous avez 2 minutes pour discuter ici.**\n\n"
+                     f"*Vous pouvez mentir. C'est même prévu.*"),
+        color=0x34495e).set_footer(text="Le salon est à vous — négociez à voix haute"))
+
+    for restant in (90, 45, 15):
+        await asyncio.sleep(120 - restant if restant == 90 else (90 - 45 if restant == 45 else 30))
+        await cible.send(f"⏳ **{restant} secondes.**" if restant > 15
+                         else "⏳ **15 secondes — préparez votre offre.**")
+    await asyncio.sleep(15)
+
+    ov = DealOffreView(duo, timeout=45)
+    m_off = await cible.send(embed=discord.Embed(
+        title="💼 OFFRES FINALES",
+        description=("Chacun pose son offre **en secret**.\n"
+                     "Le plus offrant emporte le lot et paie ce qu'il a proposé.\n\n"
+                     "⏰ 45 secondes."),
+        color=0xf39c12), view=ov)
+    await ov.wait()
+    for it in ov.children: it.disabled = True
+    try: await m_off.edit(view=ov)
+    except Exception: pass
+
+    o = {u: ov.offres.get(u, 0) for u in duo}
+    lignes = [f"{insc.noms[u]} — **{o[u]:,} pièces** *(le lot valait {valeurs[u]:,} pour lui)*"
+              for u in duo]
+    if o[duo[0]] == o[duo[1]]:
+        concl = discord.Embed(
+            title="🤝 ÉGALITÉ",
+            description=("\n".join(lignes) +
+                         "\n\nMême offre à la pièce près. **Le lot reste invendu.**\n"
+                         "*Akari range le carton. Personne ne gagne, personne ne perd.*"),
+            color=0xf1c40f)
+    else:
+        gagnant = max(duo, key=lambda u: o[u])
+        perdant = duo[0] if gagnant == duo[1] else duo[1]
+        net = valeurs[gagnant] - o[gagnant]
+        if net > 0:
+            economy_data[gagnant]["coins"] += net
+            gazette_gain(gagnant, net)
+            try: check_coins_achievements(gagnant, cible)
+            except Exception: pass
+            verdict = (f"🏆 **{insc.noms[gagnant]}** emporte le lot.\n"
+                       f"Il valait {valeurs[gagnant]:,} pour lui, il a payé {o[gagnant]:,}.\n"
+                       f"💰 **+{net:,} pièces.**")
+            coul = 0x2ecc71
+        elif net == 0:
+            verdict = (f"😐 **{insc.noms[gagnant]}** emporte le lot pour exactement sa valeur.\n"
+                       f"**Zéro pièce.** Techniquement, il a gagné.")
+            coul = 0x95a5a6
+        else:
+            verdict = (f"💸 **{insc.noms[gagnant]}** emporte le lot… et a payé "
+                       f"**{abs(net):,} de trop**.\n"
+                       f"*Il valait {valeurs[gagnant]:,}. Il a mis {o[gagnant]:,}.*\n"
+                       f"Aucune pièce ne lui est retirée — mais tout le monde a vu.")
+            coul = 0xe74c3c
+        # Lot de consolation : le perdant repart avec une petite prime s'il a bien joué,
+        # c'est-à-dire s'il a su ne pas surenchérir au-delà de sa propre valeur.
+        # La prime récompense le sang-froid, pas le désintérêt : il faut avoir
+        # réellement disputé le lot (offre à au moins 60 % de celle du gagnant).
+        bonus = 0
+        if o[perdant] < valeurs[perdant] and o[perdant] >= o[gagnant] * 0.60:
+            bonus = min(600, int(valeurs[perdant] * 0.12))
+            economy_data[perdant]["coins"] += bonus
+            gazette_gain(perdant, bonus)
+        concl = discord.Embed(
+            title="💼 DEAL CONCLU",
+            description=("\n".join(lignes) + "\n\n" + verdict +
+                         (f"\n\n🎖️ **{insc.noms[perdant]}** n'a pas surpayé — "
+                          f"+{bonus:,} pièces de sang-froid." if bonus else "")),
+            color=coul)
+    concl.set_footer(text=f"{emo} {lot}")
+    await cible.send(embed=concl)
+    if salon: await close_event_channel(salon, 150)
+
+# ============================================================
+#  🃏 CARTE ROUGE — annoncer, mentir, accuser
+# ============================================================
+ROUGE_MISE_BASE = 700
+
+class RougeInscription(ui.View):
+    def __init__(self, timeout=40):
+        super().__init__(timeout=timeout)
+        self.joueurs, self.noms, self.message = [], {}, None
+
+    @ui.button(label="Prendre une main", emoji="🃏", style=discord.ButtonStyle.danger)
+    async def entrer(self, itx, _b):
+        uid = str(itx.user.id)
+        if uid in self.joueurs:
+            return await itx.response.send_message("Tu as déjà ta main.", ephemeral=True)
+        self.joueurs.append(uid)
+        self.noms[uid] = itx.user.display_name
+        await itx.response.send_message("🃏 Tu es dans la partie.", ephemeral=True)
+        try: await itx.message.edit(embed=self.build())
+        except Exception: pass
+
+    def build(self):
+        return discord.Embed(
+            title="🃏 CARTE ROUGE — distribution",
+            description=(
+                "Chacun reçoit **3 cartes en secret** : des noires, et parfois **une rouge**.\n\n"
+                "À ton tour, tu **annonces** combien de rouges tu as.\n"
+                "**Tu peux mentir.** C'est même le jeu.\n\n"
+                "🔴 **Le croire** — on passe au suivant\n"
+                "🚨 **L'accuser** — on retourne sa main\n\n"
+                "*Annoncer haut rapporte — et attire les soupçons.*\n"
+                "*Accuser juste rapporte. Accuser à tort coûte.*\n\n"
+                f"👥 **{len(self.joueurs)}** joueur(s)"),
+            color=0xc0392b).set_footer(text="40 secondes · 3 joueurs minimum")
+
+class RougeAnnonceView(ui.View):
+    """Le joueur au tour annonce un nombre de rouges — vrai ou faux."""
+    def __init__(self, uid, timeout=25):
+        super().__init__(timeout=timeout)
+        self.uid, self.annonce = uid, None
+        for n in range(4):
+            b = ui.Button(label=str(n), emoji="🔴" if n else "⚫",
+                          style=discord.ButtonStyle.danger if n else discord.ButtonStyle.secondary)
+            async def cb(itx, v=n):
+                if str(itx.user.id) != self.uid:
+                    return await itx.response.send_message(
+                        "Ce n'est pas ton tour.", ephemeral=True)
+                self.annonce = v
+                await itx.response.send_message(
+                    f"Tu annonces **{v} rouge(s)**. Assume.", ephemeral=True)
+                self.stop()
+            b.callback = cb
+            self.add_item(b)
+
+class RougeReactionView(ui.View):
+    """Les autres croient ou accusent. Premier à accuser déclenche."""
+    def __init__(self, autres, timeout=20):
+        super().__init__(timeout=timeout)
+        self.autres = set(autres)
+        self.accusateur = None
+        self.croyants = set()
+
+    @ui.button(label="Je le crois", emoji="🤝", style=discord.ButtonStyle.secondary)
+    async def croire(self, itx, _b):
+        uid = str(itx.user.id)
+        if uid not in self.autres:
+            return await itx.response.send_message("Tu n'es pas dans la partie.", ephemeral=True)
+        self.croyants.add(uid)
+        await itx.response.send_message("🤝 Tu le crois. On verra.", ephemeral=True)
+        if len(self.croyants) >= len(self.autres):
+            self.stop()
+
+    @ui.button(label="MENTEUR", emoji="🚨", style=discord.ButtonStyle.danger)
+    async def accuser(self, itx, _b):
+        uid = str(itx.user.id)
+        if uid not in self.autres:
+            return await itx.response.send_message("Tu n'es pas dans la partie.", ephemeral=True)
+        if self.accusateur:
+            return await itx.response.send_message(
+                "Quelqu'un a déjà accusé — trop tard.", ephemeral=True)
+        self.accusateur = uid
+        await itx.response.send_message("🚨 Tu l'accuses. On retourne sa main.", ephemeral=True)
+        self.stop()
+
+def _rouge_embed(etat):
+    lignes = []
+    for uid in etat["ordre"]:
+        j = "🎯" if uid == etat["tour"] else "▪️"
+        lignes.append(f"{j} **{etat['noms'][uid]}** — {etat['points'][uid]:+d} pts"
+                      + (f"  *(a annoncé {etat['annonces'][uid]})*"
+                         if uid in etat["annonces"] else ""))
+    e = discord.Embed(
+        title=f"🃏 CARTE ROUGE — manche {etat['manche']}/{etat['manches']}",
+        description="\n".join(lignes),
+        color=0xc0392b)
+    if etat.get("dernier"):
+        e.add_field(name="📣 Ce qui vient de se passer", value=etat["dernier"], inline=False)
+    e.set_footer(text=f"🔴 {etat['rouges_totales']} rouge(s) en jeu ce tour · "
+                      f"mise {etat['mise']:,} p")
+    return e
+
+async def run_carte_rouge(channel, guild):
+    """🃏 Carte Rouge — annoncer, mentir, accuser."""
+    salon = await create_event_channel(guild, "🃏・carte-rouge") if guild else None
+    cible = salon or channel
+    if salon and guild:
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title="🃏 CARTE ROUGE",
+            description="Trois cartes en secret. Annoncez. Mentez. Accusez.",
+            color=0xc0392b), salon)
+
+    insc = RougeInscription(timeout=40)
+    insc.message = await cible.send(
+        get_event_ping(guild, "everyone") if (cible is channel and guild) else "",
+        embed=insc.build(), view=insc)
+    await insc.wait()
+    for it in insc.children: it.disabled = True
+    try: await insc.message.edit(view=insc)
+    except Exception: pass
+
+    if len(insc.joueurs) < 3:
+        await cible.send(embed=discord.Embed(
+            title="🃏 Partie annulée",
+            description=("Personne n'a pris de main." if not insc.joueurs
+                         else f"**{len(insc.joueurs)}** joueur(s) — il en faut **trois**. "
+                              f"On ne bluffe pas à deux, on se regarde."),
+            color=0x95a5a6))
+        if salon: await close_event_channel(salon, 60)
+        return
+
+    ordre = insc.joueurs[:]
+    random.shuffle(ordre)
+    manches = 2 if len(ordre) >= 5 else 3
+    etat = {"ordre": ordre, "noms": insc.noms, "points": {u: 0 for u in ordre},
+            "manche": 0, "manches": manches, "tour": None, "annonces": {},
+            "rouges_totales": 0, "mise": ROUGE_MISE_BASE, "dernier": None}
+
+    for m in range(1, manches + 1):
+        etat["manche"] = m
+        etat["annonces"] = {}
+        etat["mise"] = ROUGE_MISE_BASE + (m - 1) * 350
+        # Distribution secrète
+        mains = {}
+        for u in ordre:
+            n_rouges = random.choices([0, 1, 2, 3], weights=[34, 40, 20, 6])[0]
+            mains[u] = n_rouges
+            try:
+                mb = cible.guild.get_member(int(u)) if hasattr(cible, "guild") and cible.guild else None
+                if mb:
+                    cartes = "🔴" * n_rouges + "⚫" * (3 - n_rouges)
+                    await mb.send(f"🃏 **Manche {m}** — ta main : {cartes}\n"
+                                  f"*{n_rouges} rouge(s). Personne d'autre ne le sait.*")
+            except Exception:
+                pass
+        etat["rouges_totales"] = sum(mains.values())
+
+        for u in ordre:
+            etat["tour"] = u
+            autres = [x for x in ordre if x != u]
+            msg = await cible.send(embed=_rouge_embed(etat))
+
+            av = RougeAnnonceView(u, timeout=25)
+            m_an = await cible.send(embed=discord.Embed(
+                description=f"🎯 **{insc.noms[u]}**, combien de rouges as-tu ?\n"
+                            f"*Tu as 25 secondes. Tu peux mentir.*",
+                color=0xc0392b), view=av)
+            await av.wait()
+            for it in av.children: it.disabled = True
+            try: await m_an.edit(view=av)
+            except Exception: pass
+            annonce = av.annonce if av.annonce is not None else mains[u]
+            etat["annonces"][u] = annonce
+
+            rv = RougeReactionView(autres, timeout=20)
+            m_re = await cible.send(embed=discord.Embed(
+                title=f"🃏 {insc.noms[u]} annonce **{annonce} rouge(s)**",
+                description="Vous le croyez, ou quelqu'un le traite de menteur ?\n⏰ 20 secondes.",
+                color=0xf39c12), view=rv)
+            await rv.wait()
+            for it in rv.children: it.disabled = True
+            try: await m_re.edit(view=rv)
+            except Exception: pass
+
+            vrai = mains[u]
+            ment = annonce != vrai
+            if rv.accusateur:
+                acc = rv.accusateur
+                if ment:
+                    etat["points"][acc] += 3
+                    etat["points"][u] -= 3
+                    etat["dernier"] = (f"🚨 **{insc.noms[acc]}** accuse — et il avait raison. "
+                                       f"**{insc.noms[u]}** avait **{vrai}** rouge(s), pas {annonce}. "
+                                       f"*(+2 / −2)*")
+                else:
+                    etat["points"][acc] -= 3
+                    etat["points"][u] += annonce + 2
+                    etat["dernier"] = (f"🚨 **{insc.noms[acc]}** accuse… **{insc.noms[u]}** disait vrai. "
+                                       f"**{vrai}** rouge(s). *(−2 / +2)*")
+            else:
+                # Le gain suit l'annonce : dire « zéro » ne rapporte rien,
+                # annoncer trois est lucratif mais attire les soupçons.
+                if ment:
+                    etat["points"][u] += annonce + 1
+                    etat["dernier"] = (f"🤝 Personne n'a bronché. **{insc.noms[u]}** avait "
+                                       f"**{vrai}** rouge(s) et a annoncé {annonce}. "
+                                       f"*Mensonge passé — +{annonce + 1}.*")
+                else:
+                    etat["points"][u] += annonce
+                    etat["dernier"] = (f"🤝 Personne n'a accusé. **{insc.noms[u]}** disait vrai. "
+                                       f"*+{annonce}.*" if annonce else
+                                       f"🤝 **{insc.noms[u]}** annonce zéro. Personne ne réagit. "
+                                       f"*Zéro point. C'était le risque.*")
+            await asyncio.sleep(1.4)
+
+    # ── Décompte ──
+    classement = sorted(ordre, key=lambda u: -etat["points"][u])
+    meilleur = etat["points"][classement[0]]
+    vainqueurs = [u for u in classement if etat["points"][u] == meilleur]
+    lignes = []
+    if meilleur <= 0:
+        lignes.append("*Tout le monde a fini dans le rouge. Akari trouve ça approprié.*")
+        gain_u = 0
+    else:
+        pot = min(9000, ROUGE_MISE_BASE * len(ordre) + meilleur * 250)
+        gain_u = pot // len(vainqueurs)
+        for u in vainqueurs:
+            economy_data[u]["coins"] += gain_u
+            gazette_gain(u, gain_u)
+            try: check_coins_achievements(u, cible)
+            except Exception: pass
+    for i, u in enumerate(classement, 1):
+        med = ["🥇", "🥈", "🥉"][i-1] if i <= 3 else "▪️"
+        prime = f" — +{gain_u:,} p" if u in vainqueurs and gain_u else ""
+        lignes.append(f"{med} **{etat['noms'][u]}** — {etat['points'][u]:+d} pts{prime}")
+    await cible.send(embed=discord.Embed(
+        title="🃏 FIN DE PARTIE",
+        description="\n".join(lignes),
+        color=0x2ecc71 if meilleur > 0 else 0x95a5a6
+    ).set_footer(text=f"{manches} manches · {len(ordre)} joueurs"))
+    if salon: await close_event_channel(salon, 120)
+
+# ============================================================
+#  🧠 MÉMOIRE INVERSÉE — on ne redemande jamais la même chose
+# ============================================================
+MEM_POOL = ["🍎","🐸","🌙","🔥","🎲","🐱","⚓","🎺","🪐","🧊","🍄","🗝️",
+            "🦊","🍇","⚡","🌵","🎯","🐙","🧵","🪶","🥁","🫧","🧭","🍯"]
+MEM_MANCHES = [
+    (5, 7, "facile"), (6, 6, "moyenne"), (7, 5, "difficile"), (8, 5, "cruelle"),
+]
+
+def _mem_question(seq):
+    """Tire une question qui n'est jamais « réécris la séquence »."""
+    n = len(seq)
+    genres = ["position", "avant", "apres", "absent", "inverse", "compte"]
+    g = random.choice(genres)
+    if g == "position":
+        i = random.randrange(n)
+        return (f"Quel emoji était en **position {i+1}** ?", [seq[i]], seq[i])
+    if g == "avant":
+        i = random.randrange(1, n)
+        return (f"Qu'est-ce qui venait **juste avant** {seq[i]} ?", [seq[i-1]], seq[i-1])
+    if g == "apres":
+        i = random.randrange(n-1)
+        return (f"Qu'est-ce qui venait **juste après** {seq[i]} ?", [seq[i+1]], seq[i+1])
+    if g == "absent":
+        dehors = [x for x in MEM_POOL if x not in seq]
+        intrus = random.choice(dehors)
+        prop = random.sample(seq, 3) + [intrus]
+        random.shuffle(prop)
+        return (f"Lequel n'était **PAS** dans la séquence ?\n\n# {'  '.join(prop)}",
+                [intrus], intrus)
+    if g == "inverse":
+        i = random.randrange(n)
+        return (f"En lisant **à l'envers**, quel emoji est en **position {i+1}** ?",
+                [seq[n-1-i]], seq[n-1-i])
+    cible = random.choice(seq)
+    combien = seq.count(cible)
+    return (f"Combien de fois {cible} apparaissait-il ?", [str(combien)], str(combien))
+
+async def run_memoire_inversee(channel, guild):
+    """🧠 Mémoire Inversée — quatre manches, questions qui changent d'angle."""
+    salon = await create_event_channel(guild, "🧠・memoire-inversee") if guild else None
+    cible = salon or channel
+    if salon and guild:
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title="🧠 MÉMOIRE INVERSÉE",
+            description="Une séquence apparaît, disparaît — puis la question tombe.",
+            color=0x8e44ad), salon)
+
+    await cible.send(
+        get_event_ping(guild, "everyone") if (cible is channel and guild) else "",
+        embed=discord.Embed(
+            title="🧠 MÉMOIRE INVERSÉE",
+            description=(
+                "Une suite d'emojis s'affiche quelques secondes, puis **disparaît**.\n"
+                "Ensuite seulement, la question arrive — et ce n'est jamais "
+                "« réécris la séquence ».\n\n"
+                "*Position, voisin, intrus, ordre inversé… on ne sait pas à l'avance.*\n\n"
+                "**4 manches**, de plus en plus longues. Répondez dans le salon.\n"
+                "⏰ La première manche démarre dans 12 secondes."),
+            color=0x8e44ad))
+    await asyncio.sleep(12)
+
+    scores, noms = {}, {}
+    for num, (taille, expo, diff) in enumerate(MEM_MANCHES, 1):
+        seq = random.sample(MEM_POOL, taille)
+        pts = 100 + num * 60
+        m = await cible.send(embed=discord.Embed(
+            title=f"🧠 Manche {num}/4 — {diff}",
+            description=f"# {'  '.join(seq)}\n\n*Mémorise. {expo} secondes.*",
+            color=0x8e44ad))
+        await asyncio.sleep(expo)
+        try:
+            await m.edit(embed=discord.Embed(
+                title=f"🧠 Manche {num}/4 — {diff}",
+                description="# " + "  ".join("⬛" for _ in seq) + "\n\n*Trop tard.*",
+                color=0x8e44ad))
+        except Exception:
+            pass
+        await asyncio.sleep(0.8)
+
+        question, bonnes, revelation = _mem_question(seq)
+        await cible.send(embed=discord.Embed(
+            title=f"❓ Manche {num}",
+            description=f"{question}\n\n🏆 **{pts} points** au premier · ⏰ 20 secondes",
+            color=0x9b59b6))
+
+        def check(msg):
+            return msg.channel == cible and not msg.author.bot and not msg.content.startswith(".")
+        fin = asyncio.get_event_loop().time() + 20
+        gagnant = None
+        while asyncio.get_event_loop().time() < fin:
+            reste = fin - asyncio.get_event_loop().time()
+            if reste <= 0:
+                break
+            try:
+                msg = await bot.wait_for("message", check=check, timeout=reste)
+            except asyncio.TimeoutError:
+                break
+            rep = msg.content.strip()
+            if any(rep == b or normalize_str(rep) == normalize_str(b) for b in bonnes):
+                gagnant = msg.author
+                uid = str(gagnant.id)
+                scores[uid] = scores.get(uid, 0) + pts
+                noms[uid] = gagnant.display_name
+                break
+        if gagnant:
+            await cible.send(embed=discord.Embed(
+                description=f"✅ **{gagnant.display_name}** — c'était bien {revelation}. "
+                            f"*+{pts} points*",
+                color=0x2ecc71))
+        else:
+            await cible.send(embed=discord.Embed(
+                description=f"⏰ Personne. La réponse était {revelation}.\n"
+                            f"*Séquence : {'  '.join(seq)}*",
+                color=0xe74c3c))
+        if scores:
+            cl = sorted(scores.items(), key=lambda x: -x[1])[:5]
+            await cible.send(embed=discord.Embed(
+                title="📊 Scores",
+                description="\n".join(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{noms[u]}** — {s}"
+                                      for i, (u, s) in enumerate(cl)),
+                color=0x8e44ad))
+        await asyncio.sleep(2)
+
+    if not scores:
+        await cible.send(embed=discord.Embed(
+            title="🧠 Personne n'a trouvé",
+            description="Quatre manches, zéro bonne réponse. Akari est perplexe.",
+            color=0x95a5a6))
+        if salon: await close_event_channel(salon, 90)
+        return
+    cl = sorted(scores.items(), key=lambda x: -x[1])
+    lignes = []
+    for i, (u, s) in enumerate(cl):
+        gain = min(2500, int(s * 1.6)) if i == 0 else (int(s * 0.5) if i == 1 else 0)
+        if gain:
+            economy_data[u]["coins"] += gain
+            gazette_gain(u, gain)
+        med = ["🥇", "🥈", "🥉"][i] if i < 3 else "▪️"
+        lignes.append(f"{med} **{noms[u]}** — {s} pts" + (f" · +{gain:,} pièces" if gain else ""))
+    await cible.send(embed=discord.Embed(
+        title="🧠 CLASSEMENT FINAL", description="\n".join(lignes), color=0x2ecc71))
+    if salon: await close_event_channel(salon, 120)
+
+# ============================================================
+#  🧠 PETIT BAC — produire, pas répondre
+# ============================================================
+PETITBAC_CATEGORIES = [
+    "🌍 Un pays", "🎬 Un drama ou un anime", "🍜 Quelque chose qui se mange",
+    "🐾 Un animal", "👤 Un prénom", "🎨 Une couleur", "🎵 Un groupe ou un chanteur",
+    "🏙️ Une ville", "👔 Un métier", "🎭 Un personnage de fiction",
+    "⚽ Un sport", "📦 Un objet du quotidien", "🌿 Une plante",
+]
+PETITBAC_LETTRES = "ABCDEFGHIJLMNOPRSTV"
+
+async def run_petit_bac(channel, guild):
+    """🧠 Petit Bac — une lettre, quatre catégories, l'originalité paie."""
+    salon = await create_event_channel(guild, "🧠・petit-bac") if guild else None
+    cible = salon or channel
+    if salon and guild:
+        await annoncer_event(guild, channel, "everyone", discord.Embed(
+            title="🧠 PETIT BAC",
+            description="Une lettre, quatre catégories. Être original rapporte plus qu'être rapide.",
+            color=0x16a085), salon)
+
+    total = {}
+    noms = {}
+    for manche in (1, 2):
+        lettre = random.choice(PETITBAC_LETTRES)
+        cats = random.sample(PETITBAC_CATEGORIES, 4)
+        liste = "\n".join(f"{i+1}. {c}" for i, c in enumerate(cats))
+        await cible.send(
+            get_event_ping(guild, "everyone") if (cible is channel and guild and manche == 1) else "",
+            embed=discord.Embed(
+                title=f"🧠 PETIT BAC — manche {manche}/2",
+                description=(f"# Lettre : {lettre}\n\n{liste}\n\n"
+                             "**Un seul message**, une réponse par ligne, dans l'ordre.\n"
+                             "```\nMadagascar\nMob Psycho\nMangue\nMarmotte\n```\n"
+                             "🏅 **2 points** si tu es le seul à l'avoir · **1 point** sinon\n"
+                             "⏰ **60 secondes**"),
+                color=0x16a085))
+
+        reponses = {}   # {uid: [4 réponses normalisées]}
+        brutes = {}
+        def check(m):
+            return (m.channel == cible and not m.author.bot
+                    and not m.content.startswith(".") and "\n" in m.content)
+        fin = asyncio.get_event_loop().time() + 60
+        while asyncio.get_event_loop().time() < fin:
+            reste = fin - asyncio.get_event_loop().time()
+            if reste <= 0:
+                break
+            try:
+                m = await bot.wait_for("message", check=check, timeout=reste)
+            except asyncio.TimeoutError:
+                break
+            uid = str(m.author.id)
+            if uid in reponses:
+                continue          # un seul bulletin par personne
+            lignes_r = [l.strip() for l in m.content.split("\n") if l.strip()][:4]
+            lignes_r += [""] * (4 - len(lignes_r))
+            reponses[uid] = [normalize_str(x) for x in lignes_r]
+            brutes[uid] = lignes_r
+            noms[uid] = m.author.display_name
+            try: await m.add_reaction("✅")
+            except Exception: pass
+
+        if not reponses:
+            await cible.send(embed=discord.Embed(
+                description=f"⏰ Personne n'a joué la manche {manche}.", color=0xe74c3c))
+            continue
+
+        # ── Dépouillement : valide si ça commence par la lettre ──
+        pts_manche = {u: 0 for u in reponses}
+        detail = []
+        for i, cat in enumerate(cats):
+            valides = {}
+            for u, r in reponses.items():
+                mot = r[i]
+                if mot and mot[0].upper() == normalize_str(lettre)[0].upper():
+                    valides[u] = mot
+            compte = {}
+            for u, mot in valides.items():
+                compte[mot] = compte.get(mot, 0) + 1
+            for u, mot in valides.items():
+                pts_manche[u] += 2 if compte[mot] == 1 else 1
+            uniques = sum(1 for n in compte.values() if n == 1)
+            detail.append(f"{cat} — **{len(valides)}** réponse(s) valide(s), "
+                          f"{uniques} unique(s)")
+
+        for u, p in pts_manche.items():
+            total[u] = total.get(u, 0) + p
+        cl = sorted(pts_manche.items(), key=lambda x: -x[1])
+        await cible.send(embed=discord.Embed(
+            title=f"📊 Manche {manche} — lettre {lettre}",
+            description="\n".join(detail) + "\n\n" + "\n".join(
+                f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{noms[u]}** — {p} pts "
+                f"*({' · '.join(x or '—' for x in brutes[u])})*"
+                for i, (u, p) in enumerate(cl[:6])),
+            color=0x16a085))
+        await asyncio.sleep(3)
+
+    if not total:
+        await cible.send(embed=discord.Embed(
+            title="🧠 Petit Bac annulé",
+            description="Personne n'a rendu de copie.", color=0x95a5a6))
+        if salon: await close_event_channel(salon, 90)
+        return
+    cl = sorted(total.items(), key=lambda x: -x[1])
+    meilleur = cl[0][1]
+    lignes = []
+    for i, (u, p) in enumerate(cl):
+        gain = 0
+        if p == meilleur and p > 0:
+            gain = min(2200, 400 + p * 130)
+        elif i == 1 and p > 0:
+            gain = min(900, 200 + p * 50)
+        if gain:
+            economy_data[u]["coins"] += gain
+            gazette_gain(u, gain)
+            try: check_coins_achievements(u, cible)
+            except Exception: pass
+        med = ["🥇", "🥈", "🥉"][i] if i < 3 else "▪️"
+        lignes.append(f"{med} **{noms[u]}** — {p} pts" + (f" · +{gain:,} pièces" if gain else ""))
+    await cible.send(embed=discord.Embed(
+        title="🧠 PETIT BAC — classement final",
+        description="\n".join(lignes),
+        color=0x2ecc71).set_footer(text="2 points par réponse unique · 1 si partagée"))
+    if salon: await close_event_channel(salon, 120)
+
 EVENTS_CATALOGUE = {
     "defieclair": {"nom":"⚡ Défis Éclair","fn":"run_defi_eclair","salon":True,"duree":"1 à 3 min","fam":"event",
         "desc":"Question, énigme, anagramme, intrus, géographie ou transformation. Premier trouvé, premier servi.","gain":"350 à 1 500 pièces"},
@@ -9173,6 +10108,16 @@ EVENTS_CATALOGUE = {
         "desc":"Signal GO, emoji cible ou faux départ — le plus rapide rafle la mise.","gain":"500 à 1 400 pièces"},
     "premierclic": {"nom":"⚡ Le Premier qui Clique","fn":"run_premier_clic","salon":True,"duree":"1 min","fam":"mode","parent":"reflexe","desc":"Variante Signal GO.","gain":"500 à 1 400 pièces"},
     "reactioneclair": {"nom":"⚡ Réaction Éclair","fn":"run_reaction_eclair","salon":True,"duree":"1 min","fam":"mode","parent":"reflexe","desc":"Variante Emoji Cible.","gain":"500 à 1 400 pièces"},
+    "trainfou": {"nom":"🚂 Train Fou","fn":"run_train_fou","salon":True,"duree":"8 à 12 min","fam":"event",
+        "desc":"Huit stations. À chacune, vous votez : continuer ou descendre. Si le train déraille, ceux qui sont dedans perdent tout.","gain":"jusqu'à 9 000 pièces"},
+    "ledeal": {"nom":"💼 Le Deal","fn":"run_le_deal","salon":True,"duree":"5 min","fam":"event",
+        "desc":"Un lot, deux acheteurs, deux valeurs secrètes différentes. Négociez à voix haute, offrez en secret.","gain":"la marge sur le lot"},
+    "carterouge": {"nom":"🃏 Carte Rouge","fn":"run_carte_rouge","salon":True,"duree":"6 min","fam":"event",
+        "desc":"Trois cartes en secret. Annoncez combien de rouges vous avez. Vous pouvez mentir.","gain":"jusqu'à 9 000 pièces"},
+    "memoire": {"nom":"🧠 Mémoire Inversée","fn":"run_memoire_inversee","salon":True,"duree":"4 min","fam":"event",
+        "desc":"Une séquence apparaît puis disparaît. La question n'est jamais celle qu'on attend.","gain":"jusqu'à 2 500 pièces"},
+    "petitbac": {"nom":"🧠 Petit Bac","fn":"run_petit_bac","salon":True,"duree":"3 min","fam":"event",
+        "desc":"Une lettre, quatre catégories. Être original rapporte plus qu'être rapide.","gain":"jusqu'à 2 200 pièces"},
     "banquier": {"nom":"🎩 Le Banquier","fn":"run_banquier","salon":True,"duree":"10 min","fam":"event",
         "desc":"Deal or No Deal — 12 valises, un candidat, un banquier qui négocie.","gain":"jusqu'à 9 000 pièces"},
     "ascenseur": {"nom":"🎢 L'Ascenseur","fn":"run_ascenseur","salon":True,"duree":"5 min","fam":"event",
@@ -9222,8 +10167,6 @@ EVENTS_CATALOGUE = {
         "desc":"Le jackpot de .slot passe de ×10 à ×20.","gain":"jackpot doublé"},
     "marchenoir": {"nom":"🕶️ Marché Noir","fn":"run_marche_noir","salon":False,"duree":"24 h","fam":"modificateur",
         "desc":"Trois cartes rares achetables — cher, mais garanties.","gain":"cartes Épique à Mythique"},
-    "roicolline": {"nom":"👑 Roi de la Colline","fn":"run_roi_colline","salon":False,"duree":"30 min","fam":"legacy",
-        "desc":"Affrontez-vous en arène, le dernier vainqueur est couronné.","gain":"500 pièces bonus"},
 }
 
 EVENTS_MIGRATION = {"classement": None, "heuremaudite": "defieclair"}
@@ -9292,7 +10235,9 @@ async def event_cmd(ctx, nom: str = None):
 async def lancerevent_cmd(ctx, nom: str = None):
     """Lance un event immédiatement — .lancerevent <nom> (admin)"""
     ALIAS = {"question":"questioneclair","eclair":"questioneclair","debat":"debatdujour",
-             "roi":"roicolline","colline":"roicolline","loto":"loterie","boss":"invasion",
+             "loto":"loterie","boss":"invasion","train":"trainfou","deal":"ledeal",
+        "rouge":"carterouge","carterouge":"carterouge","mem":"memoire",
+        "bac":"petitbac","petitbac":"petitbac",
              "chasse":"nuitchasse","xp2":"doublexp","casino":"nuitcasino","marche":"marchenoir",
              "carte":"cartemystere","maudite":"defieclair","defi":"defieclair","defis":"defieclair","reflex":"reflexe","colis":"coffre",
              "deal":"banquier","vente":"encheres","enchere":"encheres","premier":"premierarrive",
@@ -10223,7 +11168,8 @@ async def addevent_cmd(ctx, event: str = None, jour: str = None, heure: str = No
                 "defis":"defieclair","debat":"debatdujour","boss":"invasion","chasse":"nuitchasse",
                 "marche":"marchenoir","deal":"banquier","clic":"premierclic","reflex":"reflexe",
                 "tap":"taprace","lift":"ascenseur","etage":"ascenseur","colis":"coffre",
-                "maudite":"defieclair","loto":"loterie"}
+                "maudite":"defieclair","loto":"loterie","train":"trainfou",
+                "deal2":"ledeal","rouge":"carterouge","mem":"memoire","bac":"petitbac"}
     cle = ALIAS_EV.get(cle, cle)
     if cle not in EVENTS_CATALOGUE:
         return await ctx.send(f"❌ Event `{event}` inconnu — tape `.event` pour la liste.")
@@ -10889,8 +11835,8 @@ def panneau_event(guild):
         "⚡ **Question Éclair** — les 3 premiers à répondre gagnent\n"
         "🎤 **Débat du Jour** — vote 🅰️/🅱️, résultat une heure plus tard\n"
         "🍀 **Loterie** — `.loto` pour un ticket, un seul gagnant\n"
-        "👑 **Roi de la Colline** — 30 min de duels, le dernier vainqueur est couronné\n"
-        "🎁 **Colis** · 💰 **Jackpot** · 🏆 **Classement** · ⚡ **Double XP** · 🎰 **Nuit Casino**"
+        
+        "📦 **Coffre** · 💰 **Jackpot** · ⚡ **Double XP** · 🎰 **Nuit Casino**"
     ), inline=False)
     e.add_field(name="🎰 Orientés gacha", value=(
         "🌙 **Nuit de Chasse** · 🕶️ **Marché Noir** · 🎴 **Carte Mystère** · 📦 **Coffre**"
