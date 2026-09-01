@@ -2569,104 +2569,6 @@ class QDChoixView(ui.View):
         await interaction.response.edit_message(view=self)
         self.stop()
 
-async def run_quitte_ou_double(channel, guild):
-    """🎲 Quitte ou Double — un candidat, des questions, une cagnotte qui explose"""
-    salon = await create_event_channel(guild, "🎲・quitte-ou-double")
-    cible = salon or channel
-    if salon:
-        await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🎲 QUITTE OU DOUBLE",
-            description="Un candidat, 8 questions, **jusqu'à 30 000 pièces**… ou rien du tout.",
-            color=0xf1c40f), salon)
-
-    v = QDCandidatView(timeout=60)
-    await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
-                     embed=discord.Embed(
-                         title="🎲 QUITTE OU DOUBLE",
-                         description=("**8 paliers. La cagnotte double à chaque bonne réponse.**\n\n"
-                                      "À chaque étape tu choisis : **encaisser** ou **continuer**.\n"
-                                      "Une seule erreur et **tu repars les mains vides**.\n\n"
-                                      "💰 200 → 500 → 1 000 → 2 000 → 4 000 → 8 000 → 15 000 → **30 000**\n\n"
-                                      "*Qui a les nerfs assez solides ?*"),
-                         color=0xf1c40f), view=v)
-    await v.wait()
-    if not v.candidat:
-        await cible.send(embed=discord.Embed(description="😴 Personne n'a osé.", color=0x95a5a6))
-        if salon: await close_event_channel(salon, 60)
-        return
-
-    joueur = v.candidat
-    uid = str(joueur.id)
-    pool = QUIZ_THEMES["mix"][:]
-    random.shuffle(pool)
-    posees = []
-
-    def check(m):
-        return m.channel == cible and m.author.id == joueur.id
-
-    for palier, montant in enumerate(QD_PALIERS, start=1):
-        q = pool[palier - 1] if palier - 1 < len(pool) else random.choice(QUIZ_THEMES["mix"])
-        posees.append(q)
-        await cible.send(f"{joueur.mention}", embed=discord.Embed(
-            title=f"🎲 Palier {palier}/8  —  {montant:,} pièces en jeu",
-            description=f"**{q['q']}**\n\n*30 secondes pour répondre.*",
-            color=0xf1c40f))
-        try:
-            msg = await bot.wait_for("message", check=check, timeout=30)
-            bonne = check_answer(msg.content, q["a"])
-        except asyncio.TimeoutError:
-            bonne = False
-
-        if not bonne:
-            await cible.send(embed=discord.Embed(
-                title="💀 PERDU !",
-                description=(f"La réponse était **{q['a']}**.\n\n"
-                             f"**{joueur.display_name}** repart avec **0 pièce**…\n"
-                             f"*Il était à un palier de {montant:,} pièces.*"),
-                color=0xe74c3c))
-            if salon: await close_event_channel(salon, 120)
-            return
-
-        await cible.send(embed=discord.Embed(
-            description=f"✅ Bonne réponse ! **{montant:,} pièces** sécurisées… pour l'instant.",
-            color=0x2ecc71))
-        if palier == len(QD_PALIERS):
-            break
-
-        cv = QDChoixView(joueur, timeout=45)
-        await cible.send(f"{joueur.mention}", embed=discord.Embed(
-            title="🤔 Le choix",
-            description=(f"Tu as **{montant:,} pièces** dans la poche.\n"
-                         f"Le palier suivant vaut **{QD_PALIERS[palier]:,} pièces**.\n\n"
-                         f"🔼 **Continuer** — tout risquer pour doubler\n"
-                         f"💰 **J'encaisse** — repartir avec ce que tu as"),
-            color=0xe67e22), view=cv)
-        await cv.wait()
-        if cv.continuer is False:
-            economy_data[uid]["coins"] += montant
-            check_coins_achievements(uid, cible)
-            suivante = posees[-1]
-            await cible.send(embed=discord.Embed(
-                title="💰 ENCAISSÉ !",
-                description=(f"**{joueur.display_name}** repart avec **{montant:,} pièces** !\n\n"
-                             f"*Sagesse ou lâcheté ? Le débat est ouvert.*"),
-                color=0xf1c40f))
-            if salon: await close_event_channel(salon, 120)
-            return
-        await cible.send(embed=discord.Embed(
-            description="🔥 **Il continue !** Le public retient son souffle…", color=0xe74c3c))
-        await asyncio.sleep(2)
-
-    total = QD_PALIERS[-1]
-    economy_data[uid]["coins"] += total
-    check_coins_achievements(uid, cible)
-    await cible.send(embed=discord.Embed(
-        title="🏆 LES 8 PALIERS !",
-        description=(f"**{joueur.display_name}** a tout réussi et empoche **{total:,} pièces** !\n\n"
-                     f"*Une performance qui restera dans les annales du QG.*"),
-        color=0xf1c40f))
-    if salon: await close_event_channel(salon, 180)
-
 # ============================================================
 #  🌍 QUIZ DRAPEAUX — reconnaissance à boutons
 # ============================================================
@@ -6199,103 +6101,133 @@ async def run_invasion(channel, guild):
                          f"*Celui qui porte le coup fatal reçoit un bonus.*"),
             color=0xe74c3c), salon)
 
-async def run_coffre(channel, gain=None, guild=None):
-    """📦 Coffre — premier à .ouvrir gagne les pièces (salon dédié)"""
+COFFRE_PALIERS = [
+    ("simple",   "Coffre",          "📦",  300, 1200, 0xf1c40f, "gacha",    55),
+    ("renforce", "Coffre Renforcé", "🧰",  900, 2200, 0x27ae60, "everyone", 30),
+    ("scelle",   "Coffre Scellé",   "🔐", 2000, 4500, 0x9b59b6, "everyone", 15),
+]
+
+async def run_coffre(channel, gain=None, guild=None, palier=None):
+    """📦 Coffre — un moteur, trois paliers. Absorbe l'ancien Colis."""
     import time as _t
-    gain = gain or random.randint(300, 1200)
-    salon = await create_event_channel(guild, "📦・coffre") if guild else None
+    if palier:
+        p = next((x for x in COFFRE_PALIERS if x[0] == palier), COFFRE_PALIERS[0])
+    else:
+        p = random.choices(COFFRE_PALIERS, weights=[x[7] for x in COFFRE_PALIERS])[0]
+    cle, nom, emo, gmin, gmax, couleur, ping, _poids = p
+    gain = gain or random.randint(gmin, gmax)
+    salon = await create_event_channel(guild, f"{emo}・{cle}") if guild else None
     cible = salon or channel
     coffre_actif[cible.id] = {"contenu": gain, "expires": _t.time() + 300}
-    embed = discord.Embed(
-        title="📦 Un coffre mystérieux est apparu !",
-        description=(f"Tape `.ouvrir` rapidement pour récupérer les **{gain:,} pièces** à l'intérieur !\n"
-                     f"⏰ Disponible **5 minutes** — un seul gagnant !"),
-        color=0xf1c40f)
+    embed = discord.Embed(title=f"{emo} {nom.upper()} !",
+        description=(f"Tape `.ouvrir` pour récupérer les **{gain:,} pièces**.\n"
+                     f"⏰ **5 minutes** — un seul gagnant !"), color=couleur)
     if salon and guild:
-        await annoncer_event(guild, channel, "gacha", discord.Embed(
-            title="📦 Un coffre est apparu !",
-            description=f"**{gain:,} pièces** attendent le premier qui tape `.ouvrir`.",
-            color=0xf1c40f), salon)
+        await annoncer_event(guild, channel, ping, discord.Embed(
+            title=f"{emo} {nom}", description=f"**{gain:,} pièces** au premier `.ouvrir`.",
+            color=couleur), salon)
         await salon.send(embed=embed)
-        asyncio.create_task(close_event_channel(salon, 330))
     else:
-        await cible.send(get_event_ping(guild, "gacha") if guild else "", embed=embed)
-
+        await cible.send(get_event_ping(guild, ping) if guild else "", embed=embed)
 
 async def run_colis(channel, guild):
-    """🎁 Colis Mystère — coffre généreux, dans un salon dédié"""
-    import time as _t
-    gain = random.randint(600, 1500)
-    salon = await create_event_channel(guild, "🎁・colis-mystere")
-    cible = salon or channel
-    coffre_actif[cible.id] = {"contenu": gain, "expires": _t.time() + 300}
-    embed = discord.Embed(
-        title="🎁 COLIS MYSTÈRE !",
-        description=(f"Un colis vient d'arriver au QG — il contient **{gain:,} pièces** !\n"
-                     f"Tape `.ouvrir` pour le récupérer.\n⏰ **5 minutes** — un seul gagnant !"),
-        color=0x27ae60)
-    if salon:
-        await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🎁 COLIS MYSTÈRE !",
-            description=f"**{gain:,} pièces** au premier qui tape `.ouvrir`.",
-            color=0x27ae60), salon)
-        await salon.send(embed=embed)
-        asyncio.create_task(close_event_channel(salon, 330))
-    else:
-        await cible.send(get_event_ping(guild, "everyone"), embed=embed)
+    """Compatibilité — l'ancien Colis est le palier « renforcé » du Coffre."""
+    return await run_coffre(channel, guild=guild, palier="renforce")
 
+# ============================================================
+#  🔵 MODIFICATEURS — registre central + chien de garde
+# ============================================================
+MODIFICATEURS = {
+    "nuitchasse": {"nom":"🌙 Nuit de Chasse","var":"nuit_chasse_active",
+                   "defaut":7200,"fin":"Les taux reviennent à la normale."},
+    "doublexp":   {"nom":"⚡ Double XP","var":"double_xp_event_actif",
+                   "defaut":3600,"fin":"L'XP repasse en gain normal."},
+    "nuitcasino": {"nom":"🎰 Nuit Casino","var":"casino_boost_actif",
+                   "defaut":3600,"fin":"Les gains du casino redeviennent normaux."},
+    "marchenoir": {"nom":"🕶️ Marché Noir","var":None,
+                   "defaut":86400,"fin":"Le Marché Noir a fermé ses portes."},
+}
+modif_actifs = {}
+
+def modif_actif(cle):
+    import time as _mt
+    e = modif_actifs.get(cle)
+    return bool(e) and _mt.time() < e["fin"]
+
+def modif_allumer(cle, duree=None, salon_id=None):
+    import time as _mt
+    if modif_actif(cle): return False
+    M = MODIFICATEURS[cle]
+    modif_actifs[cle] = {"fin": _mt.time() + (duree or M["defaut"]), "salon": salon_id}
+    if M["var"]: globals()[M["var"]] = True
+    return True
+
+def modif_eteindre(cle):
+    M = MODIFICATEURS.get(cle)
+    if M and M["var"]: globals()[M["var"]] = False
+    if cle == "marchenoir":
+        try: marche_noir_actif.clear()
+        except Exception: pass
+    return modif_actifs.pop(cle, None) is not None
+
+def modif_restants(cle):
+    import time as _mt
+    e = modif_actifs.get(cle)
+    return max(0, int(e["fin"] - _mt.time())) if e else 0
+
+def modif_tout_eteindre():
+    coupes = [MODIFICATEURS[c]["nom"] for c in list(modif_actifs)]
+    for c in list(modif_actifs): modif_eteindre(c)
+    for M in MODIFICATEURS.values():
+        if M["var"]: globals()[M["var"]] = False
+    return coupes
+
+@tasks.loop(minutes=1)
+async def modif_watchdog():
+    """Éteint tout modificateur échu, même si sa coroutine a été annulée."""
+    import time as _mt
+    now = _mt.time()
+    for cle in list(modif_actifs):
+        if now >= modif_actifs[cle]["fin"]:
+            M = MODIFICATEURS[cle]
+            sid = modif_actifs[cle].get("salon")
+            modif_eteindre(cle)
+            if sid:
+                sal = bot.get_channel(sid)
+                if sal:
+                    try:
+                        await sal.send(embed=discord.Embed(
+                            description=f"⏰ **{M['nom']}** est terminé — {M['fin']}",
+                            color=0x95a5a6))
+                    except Exception: pass
+            print(f"[Modificateur] {cle} éteint par le chien de garde")
 
 async def run_nuit_chasse(channel, guild, duree=7200):
-    """🌙 Nuit de Chasse — taux Mythique doublés"""
-    global nuit_chasse_active
-    if nuit_chasse_active:
-        return await channel.send("🌙 La Nuit de Chasse est **déjà en cours** !")
-    nuit_chasse_active = True
-    ping = get_event_ping(guild, "gacha")
-    await channel.send(ping, embed=discord.Embed(
+    """🌙 Nuit de Chasse — Mythique ×3, Légendaire ×2."""
+    if not modif_allumer("nuitchasse", duree, channel.id):
+        return await channel.send(f"🌙 Déjà en cours — encore {modif_restants('nuitchasse')//60} min.")
+    await channel.send(get_event_ping(guild, "gacha") if guild else "", embed=discord.Embed(
         title="🌙 NUIT DE CHASSE !",
-        description=(f"🔴 Taux **Mythique ×3** et **Légendaire ×2** pendant **{duree//3600} heures** !\n"
-                     f"C'est le moment de roll avec `.ga` ! 🎰"),
+        description=f"🔴 **Mythique ×3** et **Légendaire ×2** pendant **{duree//3600} h** !",
         color=0x9b59b6))
-    await asyncio.sleep(duree)
-    nuit_chasse_active = False
-    await channel.send(embed=discord.Embed(
-        description="🌅 La **Nuit de Chasse** est terminée — les taux reviennent à la normale.",
-        color=0x95a5a6))
 
 async def run_double_xp(channel, guild, duree=3600):
-    """⚡ Double XP — l'XP des messages est doublée"""
-    global double_xp_event_actif
-    if double_xp_event_actif:
-        return await channel.send("⚡ Le Double XP est **déjà actif** !")
-    double_xp_event_actif = True
-    ping = get_event_ping(guild, "everyone")
-    await channel.send(ping, embed=discord.Embed(
+    """⚡ Double XP — XP des messages doublée."""
+    if not modif_allumer("doublexp", duree, channel.id):
+        return await channel.send(f"⚡ Déjà actif — encore {modif_restants('doublexp')//60} min.")
+    await channel.send(get_event_ping(guild, "everyone") if guild else "", embed=discord.Embed(
         title="⚡ DOUBLE XP !",
-        description=(f"Chaque message rapporte **deux fois plus d'XP** pendant **{duree//60} minutes** !\n"
-                     f"Discutez, ça compte double. 💬"),
+        description=f"Chaque message rapporte **deux fois plus d'XP** pendant **{duree//60} min** !",
         color=0x3498db))
-    await asyncio.sleep(duree)
-    double_xp_event_actif = False
-    await channel.send(embed=discord.Embed(
-        description="⏰ Le **Double XP** est terminé.", color=0x95a5a6))
 
 async def run_nuit_casino(channel, guild, duree=3600):
-    """🎰 Nuit Casino — gains du .slot doublés"""
-    global casino_boost_actif
-    if casino_boost_actif:
-        return await channel.send("🎰 La Nuit Casino est **déjà en cours** !")
-    casino_boost_actif = True
-    ping = get_event_ping(guild, "everyone")
-    await channel.send(ping, embed=discord.Embed(
+    """🎰 Nuit Casino — jackpot du .slot ×20."""
+    if not modif_allumer("nuitcasino", duree, channel.id):
+        return await channel.send(f"🎰 Déjà en cours — encore {modif_restants('nuitcasino')//60} min.")
+    await channel.send(get_event_ping(guild, "everyone") if guild else "", embed=discord.Embed(
         title="🎰 NUIT CASINO !",
-        description=(f"Les gains de `.slot` sont **doublés** pendant **{duree//60} minutes** !\n"
-                     f"Tentez votre chance. 🍀"),
+        description=f"Le **jackpot** de `.slot` passe à **×20** pendant **{duree//60} min** ! 🍀",
         color=0xf1c40f))
-    await asyncio.sleep(duree)
-    casino_boost_actif = False
-    await channel.send(embed=discord.Embed(
-        description="🌅 La **Nuit Casino** est terminée.", color=0x95a5a6))
 
 async def run_marche_noir(channel, guild):
     """🕶️ Marché Noir — 3 cartes rares à acheter pendant 24h"""
@@ -6314,6 +6246,7 @@ async def run_marche_noir(channel, guild):
         prix = prix_map.get(cc["rarete"], 7000) + random.randint(1000, 5000)
         marche_noir_actif[k] = {"prix": prix, "expires": _t.time() + 86400}
         desc += f"{RARETE_EMOJI.get(cc['rarete'],'▫️')} **{cc['nom']}** — **{prix:,} pièces** → `.marcheacheter {k}`\n"
+    modif_allumer("marchenoir", 86400, channel.id)
     ping = get_event_ping(guild, "gacha")
     await channel.send(ping, embed=discord.Embed(title="🕶️ MARCHÉ NOIR", description=desc, color=0x2c3e50))
 
@@ -6978,111 +6911,158 @@ async def run_encheres(channel, guild):
 #  NOUVEAUX EVENTS — Fonctions réutilisables (auto + manuel)
 # ============================================================
 async def run_question_eclair(channel, guild):
-    """⚡ Question Éclair — 3 premiers à répondre gagnent, dans un salon dédié"""
-    dispo = [x for x in QUESTIONS_ECLAIR if x["q"] not in eclair_vues]
-    if not dispo:
-        eclair_vues.clear()
-        dispo = QUESTIONS_ECLAIR
-    q = random.choice(dispo)
-    eclair_vues.append(q["q"])
-    salon_principal = channel
-    salon = await create_event_channel(guild, "⚡・question-eclair")
-    if salon:
-        await annoncer_event(guild, salon_principal, q["theme"], discord.Embed(
-            title="⚡ QUESTION ÉCLAIR !",
-            description="Une question arrive — les **3 premiers** à répondre gagnent des pièces !",
-            color=0xf1c40f), salon)
-        channel = salon
-    ping = get_event_ping(guild, q["theme"]) if channel is salon_principal else ""
-    embed = discord.Embed(
-        title="⚡ QUESTION ÉCLAIR !",
-        description=f"**{q['q']}**\n\n🥇 1er : **200 pièces** • 🥈 2e : **120p** • 🥉 3e : **80p**\n*Réponds vite dans le chat !*",
-        color=0xf1c40f
-    )
-    embed.set_footer(text="⏰ 60 secondes pour répondre !")
-    await channel.send(ping, embed=embed)
-    gagnants = []
-    rewards = [200, 120, 80]
-    def check(m):
-        return m.channel == channel and not m.author.bot and m.author.id not in [g.id for g in gagnants]
-    end = asyncio.get_event_loop().time() + 60
-    while len(gagnants) < 3:
-        remaining = end - asyncio.get_event_loop().time()
-        if remaining <= 0:
-            break
-        try:
-            msg = await bot.wait_for("message", check=check, timeout=remaining)
-            if any(check_answer(msg.content, rep) for rep in q["r"]):
-                place = len(gagnants)
-                gain = rewards[place]
-                economy_data[str(msg.author.id)]["coins"] += gain
-                gazette_gain(str(msg.author.id), gain)
-                gagnants.append(msg.author)
-                unlock_achievement(str(msg.author.id), "eclair_win", channel)
-                medal = ["🥇", "🥈", "🥉"][place]
-                await channel.send(f"{medal} **{msg.author.display_name}** +{gain} pièces !")
-        except asyncio.TimeoutError:
-            break
-    if gagnants:
-        await channel.send(embed=discord.Embed(
-            description=f"✅ Question terminée ! Bravo aux {len(gagnants)} gagnant(s) ! La réponse était : **{q['r'][0]}**",
-            color=0x2ecc71))
-    else:
-        await channel.send(embed=discord.Embed(
-            description=f"⏰ Personne n'a trouvé ! La réponse était : **{q['r'][0]}**",
-            color=0xe74c3c))
-    if channel is not salon_principal:
-        await close_event_channel(channel, 120)
+    """Compatibilité — délègue au moteur commun Défis Éclair."""
+    return await run_defi_eclair(channel, guild, mode="question")
+
+# ============================================================
+#  🎤 DÉBAT 2.0 — trois phases, progression visible, score tardif
+# ============================================================
+class DebatView(ui.View):
+    """Choix de camp par bouton — un seul camp par personne, changeable."""
+    def __init__(self, d, timeout=None):
+        super().__init__(timeout=timeout)
+        self.d = d
+        self.camps = {}          # {uid: "a" / "b"}
+        self.noms = {}
+        self.message = None
+        self.phase = "camps"     # camps -> discussion -> clos
+        for cle, emo in (("a", "🅰️"), ("b", "🅱️")):
+            b = ui.Button(label=d[cle][:70], emoji=emo,
+                          style=discord.ButtonStyle.primary if cle == "a"
+                          else discord.ButtonStyle.danger)
+            async def cb(itx, c=cle):
+                if self.phase == "clos":
+                    return await itx.response.send_message(
+                        "Les votes sont clos — le dépouillement est en cours.", ephemeral=True)
+                uid = str(itx.user.id)
+                avant = self.camps.get(uid)
+                self.camps[uid] = c
+                self.noms[uid] = itx.user.display_name
+                mot = ("Tu changes de camp." if avant and avant != c
+                       else "Tu es déjà de ce côté." if avant else "Camp choisi.")
+                await itx.response.send_message(
+                    f"{'🅰️' if c=='a' else '🅱️'} **{self.d[c]}** — {mot}", ephemeral=True)
+                try: await self.message.edit(embed=self.build())
+                except Exception: pass
+            b.callback = cb
+            self.add_item(b)
+
+    def build(self, restant=None, reveler=False):
+        na = sum(1 for v in self.camps.values() if v == "a")
+        nb = sum(1 for v in self.camps.values() if v == "b")
+        total = na + nb
+        e = discord.Embed(
+            title="🎤 DÉBAT DU JOUR",
+            description=f"## {self.d['sujet']}\n\n🅰️ **{self.d['a']}**\n🆚\n🅱️ **{self.d['b']}**",
+            color=0x9b59b6)
+        # Le décompte exact n'apparaît qu'à la fin : sinon effet boule de neige.
+        if reveler:
+            pa = int(na / total * 100) if total else 0
+            barre_a = "🟦" * round(pa / 10) + "⬜" * (10 - round(pa / 10))
+            e.add_field(name="🅰️", value=f"{barre_a}\n**{na}** voix — {pa} %", inline=False)
+            e.add_field(name="🅱️", value=f"{'🟥'*(10-round(pa/10))}{'⬜'*round(pa/10)}\n"
+                                          f"**{nb}** voix — {100-pa} %", inline=False)
+        else:
+            e.add_field(name="👥 Participation", value=f"**{total}** personne(s) ont pris parti",
+                        inline=True)
+            e.add_field(name="📊 Score", value="*Révélé à la fin*", inline=True)
+        if restant is not None:
+            h, m = restant // 3600, (restant % 3600) // 60
+            e.add_field(name="⏳ Temps restant",
+                        value=f"{h} h {m:02d} min" if h else f"{m} min", inline=True)
+        e.add_field(name="🗣️ Phase", value={
+            "camps": "**1/3 — Choisissez votre camp**",
+            "discussion": "**2/3 — Argumentez dans le salon**",
+            "clos": "**3/3 — Dépouillement**"}[self.phase], inline=False)
+        return e
 
 async def run_debat(channel, guild, duree=3600):
-    """🎤 Débat du Jour — vote dans un salon dédié, résultat annoncé à la fin"""
+    """🎤 Débat 2.0 — camps, discussion, dépouillement."""
     d = random.choice(DEBATS)
-    salon = await create_event_channel(guild, "🎤・debat-du-jour")
-    if not salon:
-        salon = channel
-    embed = discord.Embed(
-        title="🎤 DÉBAT DU JOUR !",
-        description=(f"## {d['sujet']}\n\n🅰️ **{d['a']}**\n🆚\n🅱️ **{d['b']}**\n\n"
-                     f"*Votez avec les réactions — résultat dans {duree//60} minutes.*"),
-        color=0x9b59b6)
-    if salon is not channel:
-        annonce = discord.Embed(
-            title="🎤 DÉBAT DU JOUR !",
+    salon = await create_event_channel(guild, "🎤・debat-du-jour") if guild else None
+    cible = salon or channel
+    if salon and guild:
+        await annoncer_event(guild, channel, d["theme"], discord.Embed(
+            title="🎤 DÉBAT DU JOUR",
             description=f"## {d['sujet']}\n🅰️ {d['a']}  🆚  🅱️ {d['b']}",
-            color=0x9b59b6)
-        await annoncer_event(guild, channel, d["theme"], annonce, salon)
-        msg = await salon.send(embed=embed)
-    else:
-        msg = await salon.send(get_event_ping(guild, d["theme"]), embed=embed)
-    await msg.add_reaction("🅰️")
-    await msg.add_reaction("🅱️")
+            color=0x9b59b6), salon)
 
-    await asyncio.sleep(duree)
+    vue = DebatView(d, timeout=duree + 120)
+    vue.message = await cible.send(
+        get_event_ping(guild, d["theme"]) if (cible is channel and guild) else "",
+        embed=vue.build(restant=duree), view=vue)
 
-    # ── Dépouillement ──
-    try:
-        msg = await salon.fetch_message(msg.id)
-    except Exception:
-        return
-    va = vb = 0
-    for r in msg.reactions:
-        if str(r.emoji) == "🅰️": va = max(0, r.count - 1)
-        elif str(r.emoji) == "🅱️": vb = max(0, r.count - 1)
-    total = va + vb
-    if total == 0:
-        gagnant, detail = "Personne n'a voté", ""
-    elif va > vb:
-        gagnant, detail = f"🅰️ **{d['a']}**", f"{va} voix contre {vb} ({va*100//total}%)"
-    elif vb > va:
-        gagnant, detail = f"🅱️ **{d['b']}**", f"{vb} voix contre {va} ({vb*100//total}%)"
-    else:
-        gagnant, detail = "🤝 **Égalité parfaite !**", f"{va} voix partout"
-    await salon.send(embed=discord.Embed(
-        title="🎤 RÉSULTAT DU DÉBAT",
-        description=f"### {d['sujet']}\n\nLe QG a tranché :\n\n# {gagnant}\n{detail}",
+    # ── Phase 1 : constitution des camps (20 % du temps) ──
+    p1 = max(60, int(duree * 0.20))
+    await asyncio.sleep(p1)
+    vue.phase = "discussion"
+    na = sum(1 for v in vue.camps.values() if v == "a")
+    nb = sum(1 for v in vue.camps.values() if v == "b")
+    try: await vue.message.edit(embed=vue.build(restant=duree - p1))
+    except Exception: pass
+    await cible.send(embed=discord.Embed(
+        description=(f"🗣️ **Les camps sont formés — à vous.**\n\n"
+                     f"**{na + nb}** personnes ont pris parti. Défendez votre côté ici même.\n"
+                     f"*Vous pouvez encore changer d'avis : le bouton reste ouvert.*"),
         color=0x9b59b6))
-    if salon is not channel:
-        await close_event_channel(salon, 300)
+
+    # ── Phase 2 : discussion, avec relances d'Akari ──
+    reste = duree - p1
+    relances = [
+        "🎤 *Akari observe.* Personne n'a encore convaincu personne.",
+        "🎤 *Akari note.* Un camp est plus bruyant. Ce n'est pas la même chose qu'avoir raison.",
+        "🎤 *Akari attend un vrai argument.* Le premier qui en donne un fera bouger des gens.",
+        "🎤 *Akari rappelle* que changer d'avis en cours de débat est autorisé, et rare.",
+    ]
+    jalons = 3
+    for i in range(jalons):
+        await asyncio.sleep(reste / (jalons + 1))
+        restant = int(reste - (reste / (jalons + 1)) * (i + 1))
+        try: await vue.message.edit(embed=vue.build(restant=restant))
+        except Exception: pass
+        if i < len(relances):
+            try: await cible.send(relances[i])
+            except Exception: pass
+    await asyncio.sleep(reste / (jalons + 1))
+
+    # ── Phase 3 : dépouillement ──
+    vue.phase = "clos"
+    for it in vue.children: it.disabled = True
+    na = sum(1 for v in vue.camps.values() if v == "a")
+    nb = sum(1 for v in vue.camps.values() if v == "b")
+    try: await vue.message.edit(embed=vue.build(reveler=True), view=vue)
+    except Exception: pass
+
+    total = na + nb
+    if total == 0:
+        concl = discord.Embed(
+            title="🎤 Débat clos",
+            description=("Personne n'a pris parti.\n\n"
+                         "*Akari trouve ça très révélateur, et refuse d'en dire plus.*"),
+            color=0x95a5a6)
+    elif na == nb:
+        concl = discord.Embed(
+            title="🎤 ÉGALITÉ PARFAITE",
+            description=(f"**{na}** contre **{nb}**.\n\n"
+                         f"🅰️ {d['a']}\n🅱️ {d['b']}\n\n"
+                         f"*Le QG est coupé en deux. On remet ça un autre jour.*"),
+            color=0xf1c40f)
+    else:
+        gagnant = d["a"] if na > nb else d["b"]
+        emo = "🅰️" if na > nb else "🅱️"
+        pct = int(max(na, nb) / total * 100)
+        commentaire = ("écrasant — il n'y avait pas débat" if pct >= 75
+                       else "net" if pct >= 62 else "serré, très serré")
+        concl = discord.Embed(
+            title=f"{emo} {gagnant.upper()}",
+            description=(f"**{max(na, nb)}** voix contre **{min(na, nb)}** — {pct} %.\n"
+                         f"*Verdict {commentaire}.*\n\n"
+                         f"Sujet : *{d['sujet']}*"),
+            color=0x2ecc71)
+    concl.set_footer(text=f"{total} participant(s) · aucune pièce en jeu, juste la fierté")
+    await cible.send(embed=concl)
+    if salon: await close_event_channel(salon, 300)
+
 
 async def run_roi_colline(channel, guild):
     """👑 Roi de la Colline — défis en arène"""
@@ -7187,67 +7167,8 @@ PREMIER_DEFIS = [
 ]
 
 async def run_premier_arrive(channel, guild):
-    """🏃 Premier Arrivé — un défi de transformation, impossible à copier-coller"""
-    MOTS_PREMIER = [
-        "kdrama","akari","gacha","oppa","daebak","chingu","aegyo","ramyeon","hallyu","maknae",
-        "unnie","noona","sunbae","hyung","manhwa","bingsu","kimchi","soju","hanbok","bibimbap",
-        "tteokbokki","sarang","jjigae","saranghae","annyeong","jinjja","omona","mianhae","gomawo",
-        "hwaiting","chimaek","makgeolli","samgyeopsal","japchae","pourfendeur","shinigami",
-        "jinchuriki","nakama","senpai","bulgogi","dalgona","gimbap","hotteok","mandu","naengmyeon",
-        "sundubu","galbi","patbingsu","kimbap","chapssaltteok",
-    ]
-    dispo_mots = [m for m in MOTS_PREMIER if m not in premier_vus]
-    if not dispo_mots:
-        premier_vus.clear()
-        dispo_mots = MOTS_PREMIER
-    mot = random.choice(dispo_mots)
-    premier_vus.append(mot)
-
-    consigne, transfo, explication = random.choice(PREMIER_DEFIS)
-    attendu = transfo(mot)
-    gain = random.randint(500, 1100) + len(mot) * 20
-
-    salon = await create_event_channel(guild, "🏃・premier-arrive")
-    cible = salon or channel
-    if salon:
-        await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🏃 PREMIER ARRIVÉ !",
-            description=f"Un défi de rapidité — **{gain:,} pièces** au premier qui répond juste.",
-            color=0xe67e22), salon)
-    await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
-                     embed=discord.Embed(
-                         title="🏃 PRÊTS ?",
-                         description=(f"Un mot va apparaître.\n"
-                                      f"**Tu devras écrire {explication}.**\n\n"
-                                      f"⚠️ *Le copier-coller ne servira à rien — il faut réfléchir vite !*"),
-                         color=0xe67e22))
-    await asyncio.sleep(random.randint(4, 9))
-    await cible.send(embed=discord.Embed(
-        title="⚡ MAINTENANT !",
-        description=(f"# `{mot.upper()}`\n\n"
-                     f"### ✍️ Écris ce mot **{consigne}**\n"
-                     f"🏆 **{gain:,} pièces** au premier"),
-        color=0xf1c40f))
-
-    def check(m):
-        return (m.channel == cible and not m.author.bot
-                and normalize_str(m.content) == normalize_str(attendu))
-    try:
-        msg = await bot.wait_for("message", check=check, timeout=90)
-        economy_data[str(msg.author.id)]["coins"] += gain
-        gazette_gain(str(msg.author.id), gain)
-        check_coins_achievements(str(msg.author.id), cible)
-        await cible.send(embed=discord.Embed(
-            description=(f"🏆 **{msg.author.display_name}** dégaine le plus vite !\n"
-                         f"Réponse : **{attendu.upper()}** · 💰 +{gain:,} pièces"),
-            color=0x2ecc71))
-    except asyncio.TimeoutError:
-        await cible.send(embed=discord.Embed(
-            description=f"⏰ Personne n'a trouvé ! Il fallait écrire **{attendu.upper()}**",
-            color=0x95a5a6))
-    if salon:
-        await close_event_channel(salon, 90)
-
+    """Compatibilité — délègue au moteur commun Défis Éclair."""
+    return await run_defi_eclair(channel, guild, mode="premier")
 
 async def run_chiffre_mystere(channel, guild):
     """🔢 Chiffre Mystère — devinez le nombre, indices plus chaud / plus froid"""
@@ -7587,82 +7508,218 @@ class TapRaceView(ui.View):
             description=(fin or "**Clique ton bouton le plus vite possible !**\n*Le classement se met à jour toutes les 1,5 s — continue de tapoter sans t'arrêter.*") + "\n\n" + "\n".join(lignes),
             color=0x2ecc71 if fin else 0xe67e22)
 
+# ============================================================
+#  🏁 TAP RACE 2.0 — quatre segments, une décision par segment
+# ============================================================
+TAP_SEGMENTS = [
+    ("Départ",     "🚦", 12, "Les blocs s'ouvrent. Tout le monde part à la même vitesse."),
+    ("Accélération","💨", 18, "La ligne droite. C'est là qu'on creuse — ou qu'on se crame."),
+    ("Obstacle",   "🚧", 14, "Chicane serrée. Forcer ici coûte cher."),
+    ("Sprint",     "🔥", 20, "Dernière ligne droite. Plus rien à économiser."),
+]
+TAP_CLICS_UTILES = 1.5    # clics/s au-delà desquels le rendement s'effondre
+TAP_SURCOUT_CLIC = 0.35   # endurance perdue par clic
+
+TAP_ALLURES = {
+    "forcer":   ("Forcer",   "🔥", 1.45, 0.45, "tu prends des risques"),
+    "tenir":    ("Tenir",    "🏃", 1.00, 0.12, "rythme régulier"),
+    "souffler": ("Souffler", "💧", 0.70, 0.00, "tu récupères de l'endurance"),
+}
+
+class TapAllureView(ui.View):
+    """Chaque coureur choisit son allure pour le segment — 15 s."""
+    def __init__(self, coureurs, timeout=15):
+        super().__init__(timeout=timeout)
+        self.coureurs = {str(u.id) for u in coureurs}
+        self.choix = {}
+        for cle, (lab, emo, _v, _r, _d) in TAP_ALLURES.items():
+            b = ui.Button(label=lab, emoji=emo, style=(
+                discord.ButtonStyle.danger if cle == "forcer" else
+                discord.ButtonStyle.success if cle == "souffler" else
+                discord.ButtonStyle.secondary))
+            async def cb(itx, c=cle):
+                uid = str(itx.user.id)
+                if uid not in self.coureurs:
+                    return await itx.response.send_message(
+                        "Tu n'es pas dans cette course — mais tu peux regarder.", ephemeral=True)
+                self.choix[uid] = c
+                await itx.response.send_message(
+                    f"{TAP_ALLURES[c][1]} **{TAP_ALLURES[c][0]}** — {TAP_ALLURES[c][4]}.", ephemeral=True)
+                if len(self.choix) >= len(self.coureurs):
+                    self.stop()
+            b.callback = cb
+            self.add_item(b)
+
+class TapClicView(ui.View):
+    """Un bouton par coureur pendant le segment."""
+    def __init__(self, coureurs, timeout=12):
+        super().__init__(timeout=timeout)
+        self.clics = {str(u.id): 0 for u in coureurs}
+        for i, u in enumerate(coureurs):
+            b = ui.Button(label=u.display_name[:20], emoji="👟",
+                          style=discord.ButtonStyle.primary, row=i // 2)
+            async def cb(itx, uid=str(u.id)):
+                if str(itx.user.id) != uid:
+                    return await itx.response.send_message(
+                        "Ce bouton n'est pas le tien.", ephemeral=True)
+                self.clics[uid] += 1
+                try: await itx.response.defer()
+                except Exception: pass
+            b.callback = cb
+            self.add_item(b)
+
+def _tap_piste(etat):
+    """Piste lisible d'un coup d'œil, y compris pour un spectateur."""
+    total = etat["total"]
+    lignes = []
+    classement = sorted(etat["dist"].items(), key=lambda x: -x[1])
+    for rang, (uid, d) in enumerate(classement, 1):
+        pct = min(1.0, d / total)
+        n = int(pct * 14)
+        medaille = ["🥇","🥈","🥉"][rang-1] if rang <= 3 else "▪️"
+        endur = etat["endurance"][uid]
+        jauge = "🟩" if endur > 60 else "🟨" if endur > 30 else "🟥"
+        allure = TAP_ALLURES.get(etat["allure"].get(uid, ""), ("","",0,0,""))[1]
+        lignes.append(
+            f"{medaille} **{etat['noms'][uid]}** {allure}\n"
+            f"`{'━'*n}{'🏃' if pct < 1 else '🏁'}{'┄'*(14-n)}`  {jauge} {endur}%")
+    e = discord.Embed(
+        title=f"🏁 TAP RACE — {etat['seg_emo']} {etat['seg_nom']} ({etat['seg']}/4)",
+        description=etat["seg_desc"] + "\n\n" + "\n".join(lignes),
+        color=0xe67e22)
+    if etat.get("dernier"):
+        e.add_field(name="📣 Sur la piste", value=etat["dernier"], inline=False)
+    e.set_footer(text=f"💰 {etat['gain']:,} pièces au vainqueur")
+    return e
+
 async def run_tap_race(channel, guild):
-    """🏁 Tap Race — course de clics, 4 places"""
+    """🏁 Tap Race 2.0 — 4 segments, une allure à choisir avant chacun."""
     places = 4
     gain = random.randint(1500, 3500)
-    salon = await create_event_channel(guild, "🏁・tap-race", sans_reactions=True)
+    salon = await create_event_channel(guild, "🏁・tap-race", sans_reactions=True) if guild else None
     cible = salon or channel
-    if salon:
+    if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
             title="🏁 TAP RACE !",
-            description=f"Course de clics — **{places} places**, **{gain:,} pièces** au vainqueur !",
+            description=f"Quatre segments, quatre décisions — **{gain:,} pièces** au vainqueur.",
             color=0xe67e22), salon)
 
     insc = TapRaceInscription(places, timeout=45)
     insc.message = await cible.send(
-        get_event_ping(guild, "everyone") if cible is channel else "",
+        get_event_ping(guild, "everyone") if (cible is channel and guild) else "",
         embed=discord.Embed(
             title="🏁 TAP RACE — Inscriptions",
-            description=(f"**{places} places seulement** — premier arrivé, premier servi !\n\n"
-                         f"Chaque coureur reçoit **son propre bouton**.\n"
-                         f"Le premier à **{TapRaceView.LIGNE} clics** gagne **{gain:,} pièces**.\n\n"
-                         f"⏰ 45 secondes pour s'inscrire"),
+            description=(
+                f"**{places} places.** La course se joue en **4 segments**.\n\n"
+                f"Avant chaque segment tu choisis une allure :\n"
+                f"🔥 **Forcer** — plus vite, mais l'endurance chute\n"
+                f"🏃 **Tenir** — rythme régulier\n"
+                f"💧 **Souffler** — tu récupères, tu perds du terrain\n\n"
+                f"*Sans endurance, tes clics ne comptent presque plus.*\n"
+                f"🏆 **{gain:,} pièces** au vainqueur · ⏰ 45 s pour s'inscrire"),
             color=0xe67e22), view=insc)
     await insc.wait()
     for it in insc.children: it.disabled = True
     try: await insc.message.edit(view=insc)
     except Exception: pass
 
-    if len(insc.joueurs) < 2:
+    coureurs = insc.joueurs
+    if len(coureurs) < 2:
         await cible.send(embed=discord.Embed(
-            description="😴 Pas assez de coureurs — course annulée.", color=0x95a5a6))
-        if salon:
-            await close_event_channel(salon, 90)
+            title="🏁 Course annulée",
+            description=("Personne au départ." if not coureurs
+                         else f"Seul **{coureurs[0].display_name}** s'est présenté. "
+                              f"Une course à un, ça s'appelle un footing."),
+            color=0x95a5a6))
+        if salon: await close_event_channel(salon, 60)
         return
 
-    for n in ("🔴 **3…**", "🟠 **2…**", "🟡 **1…**"):
-        await cible.send(n, delete_after=3)
-        await asyncio.sleep(1)
+    etat = {"noms": {str(u.id): u.display_name for u in coureurs},
+            "dist": {str(u.id): 0 for u in coureurs},
+            "endurance": {str(u.id): 100 for u in coureurs},
+            "allure": {}, "total": 64, "gain": gain,
+            "seg": 0, "seg_nom": "", "seg_emo": "", "seg_desc": "", "dernier": None}
 
-    course = TapRaceView(insc.joueurs, timeout=90)
-    course.message = await cible.send(embed=course.build(), view=course)
+    for idx, (nom_seg, emo_seg, duree, desc) in enumerate(TAP_SEGMENTS, 1):
+        etat.update({"seg": idx, "seg_nom": nom_seg, "seg_emo": emo_seg, "seg_desc": desc})
 
-    async def rafraichir():
-        """Un seul edit par seconde, et seulement si quelque chose a changé"""
-        while not course.is_finished():
-            await asyncio.sleep(1.5)
-            if course.dirty and not course.is_finished():
-                course.dirty = False
-                try:
-                    # On ne réenvoie QUE l'embed : renvoyer la vue reconstruirait
-                    # les boutons et les ferait sauter sous le doigt des joueurs.
-                    await course.message.edit(embed=course.build())
-                except Exception:
-                    pass
-    tache = asyncio.create_task(rafraichir())
-    await course.wait()
-    tache.cancel()
+        # ── Choix d'allure ──
+        av = TapAllureView(coureurs, timeout=15)
+        m_av = await cible.send(embed=discord.Embed(
+            title=f"{emo_seg} {nom_seg.upper()} — choisis ton allure",
+            description=f"{desc}\n\n⏰ **15 secondes**", color=0xe67e22), view=av)
+        await av.wait()
+        for it in av.children: it.disabled = True
+        try: await m_av.edit(view=av)
+        except Exception: pass
+        for u in coureurs:
+            etat["allure"][str(u.id)] = av.choix.get(str(u.id), "tenir")
 
-    for it in course.children: it.disabled = True
-    if course.gagnant:
-        economy_data[str(course.gagnant.id)]["coins"] += gain
-        gazette_gain(str(course.gagnant.id), gain)
-        xp_data[str(course.gagnant.id)]["xp"] += 50
-        check_coins_achievements(str(course.gagnant.id), cible)
-        # lot de consolation pour les autres
-        for jid in course.clics:
-            if jid != course.gagnant.id and course.clics[jid] > 10:
-                economy_data[str(jid)]["coins"] += 200
-        fin = f"🏆 **{course.gagnant.display_name}** franchit la ligne !\n💰 +{gain:,} pièces · ⭐ +50 XP\n*(200 p de consolation pour les autres coureurs)*"
-    else:
-        fin = "⏰ Personne n'a atteint la ligne d'arrivée…"
-    try:
-        await course.message.edit(embed=course.build(fin), view=course)
-    except Exception:
-        await cible.send(embed=course.build(fin))
-    if salon:
-        await close_event_channel(salon, 120)
+        # ── Segment de clics ──
+        cv = TapClicView(coureurs, timeout=duree)
+        m_cv = await cible.send(embed=_tap_piste(etat), view=cv)
+        await asyncio.sleep(duree)
+        cv.stop()
+        for it in cv.children: it.disabled = True
+        try: await m_cv.edit(view=cv)
+        except Exception: pass
+
+        # ── Résolution ──
+        evenements = []
+        for u in coureurs:
+            uid = str(u.id)
+            cle = etat["allure"][uid]
+            _lab, _emo, mult, cout, _d = TAP_ALLURES[cle]
+            clics = cv.clics.get(uid, 0)
+            endur = etat["endurance"][uid]
+            # Plafond de clics utiles : au-delà, rendement décroissant.
+            # Marteler le bouton n'apporte presque plus rien — c'est la gestion
+            # de l'endurance qui départage, pas la vitesse de doigt.
+            plafond = int(duree * TAP_CLICS_UTILES)
+            utiles = min(clics, plafond) + max(0, clics - plafond) * 0.15
+            rendement = 1.0 if endur >= 60 else (0.6 if endur >= 30 else 0.25)
+            avance = utiles * mult * rendement * random.uniform(0.85, 1.2)
+            if cle == "souffler":
+                etat["endurance"][uid] = min(100, endur + 28)
+            else:
+                etat["endurance"][uid] = max(
+                    0, endur - int(cout * 100) - int(clics * TAP_SURCOUT_CLIC))
+            if cle == "forcer" and endur < 30 and random.random() < 0.35:
+                avance *= 0.4
+                evenements.append(f"😵 **{u.display_name}** force à vide et s'écroule.")
+            elif random.random() < 0.14:
+                bonus = random.choice([
+                    (1.25, f"⚡ **{u.display_name}** trouve un second souffle."),
+                    (0.75, f"🪨 **{u.display_name}** accroche un obstacle."),
+                ])
+                avance *= bonus[0]
+                evenements.append(bonus[1])
+            etat["dist"][uid] += avance
+        etat["dernier"] = "\n".join(evenements[:3]) if evenements else None
+        await cible.send(embed=_tap_piste(etat))
+        await asyncio.sleep(1.5)
+
+    # ── Arrivée ──
+    classement = sorted(etat["dist"].items(), key=lambda x: -x[1])
+    vainqueur, dist_v = classement[0]
+    economy_data[vainqueur]["coins"] += gain
+    gazette_gain(vainqueur, gain)
+    try: check_coins_achievements(vainqueur, cible)
+    except Exception: pass
+    lignes = [f"🥇 **{etat['noms'][vainqueur]}** — +{gain:,} pièces"]
+    if len(classement) > 1:
+        second = int(gain * 0.25)
+        economy_data[classement[1][0]]["coins"] += second
+        gazette_gain(classement[1][0], second)
+        lignes.append(f"🥈 {etat['noms'][classement[1][0]]} — +{second:,} pièces")
+    for uid, _d in classement[2:]:
+        lignes.append(f"▪️ {etat['noms'][uid]}")
+    await cible.send(embed=discord.Embed(
+        title="🏁 ARRIVÉE",
+        description="\n".join(lignes),
+        color=0x2ecc71).set_footer(text="4 segments · l'endurance décide autant que les clics"))
+    if salon: await close_event_channel(salon, 120)
+
 
 # ============================================================
 #  🎢 L'ASCENSEUR — monter étage par étage
@@ -7852,145 +7909,92 @@ class PremierClicView(ui.View):
                 description=f"**CLIQUE MAINTENANT !**\n🏆 {self.gain:,} pièces au premier",
                 color=0x2ecc71), view=self)
 
-async def run_premier_clic(channel, guild):
-    """⚡ Le Premier qui Clique — gare au faux départ"""
-    gain = random.randint(600, 1400)
-    salon = await create_event_channel(guild, "⚡・premier-clic")
+REFLEXE_VARIANTES = ("go", "emoji", "fauxdepart")
+
+async def run_reflexe(channel, guild, variante=None):
+    """⚡ Réflexe — signal GO · emoji cible · faux départ."""
+    v = variante if variante in REFLEXE_VARIANTES else random.choice(REFLEXE_VARIANTES)
+    gain = random.randint(500, 1400)
+    salon = await create_event_channel(guild, "⚡・reflexe") if guild else None
     cible = salon or channel
-    if salon:
+    if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="⚡ LE PREMIER QUI CLIQUE",
-            description=f"Attends le feu vert… **{gain:,} pièces** au plus rapide. Faux départ = éliminé !",
-            color=0xe74c3c), salon)
-    view = PremierClicView(cible, gain, timeout=90)
-    view.message = await cible.send(
-        get_event_ping(guild, "everyone") if cible is channel else "",
-        embed=discord.Embed(
-            title="🚨  ATTENTION…",
-            description=(f"Le bouton va passer au **vert** dans quelques secondes.\n"
-                         f"**Ne clique surtout pas avant** — faux départ = élimination !\n\n"
-                         f"🏆 **{gain:,} pièces** au premier qui clique après le GO"),
-            color=0xe74c3c), view=view)
-    await asyncio.sleep(random.uniform(5, 14))
-    await view.ouvrir()
-    await view.wait()
-    if view.gagnant:
-        economy_data[str(view.gagnant.id)]["coins"] += gain
-        gazette_gain(str(view.gagnant.id), gain)
-        check_coins_achievements(str(view.gagnant.id), cible)
-        extra = f"\n\n*{len(view.elimines)} personne(s) éliminée(s) au faux départ 😂*" if view.elimines else ""
-        await cible.send(embed=discord.Embed(
-            title="🏆 Réflexes d'acier !",
-            description=f"**{view.gagnant.display_name}** dégaine le premier — **+{gain:,} pièces** !{extra}",
-            color=0x2ecc71))
+            title="⚡ RÉFLEXE", description=f"Test de réflexe — **{gain:,} pièces** au plus rapide.",
+            color=0xf39c12), salon)
+    elimines = set()
+    if v == "emoji":
+        POOL = ["🍓","🐉","🌙","⚡","🎴","🔥","💎","🎯","🦊","👑"]
+        bon = random.choice(POOL)
+        leurres = random.sample([x for x in POOL if x != bon], 4)
+        await cible.send(embed=discord.Embed(title="⚡ RÉFLEXE — Emoji Cible",
+            description=f"Quand le signal tombe, écris l'emoji cible.\n\n# {bon}\n\n*Prépare-toi…*",
+            color=0xf39c12))
+        await asyncio.sleep(random.uniform(3, 7))
+        await cible.send(f"🚦 **MAINTENANT !**  ({' '.join(random.sample(leurres+[bon], 5))})")
+        attendu = [bon]
+    elif v == "fauxdepart":
+        await cible.send(embed=discord.Embed(title="⚡ RÉFLEXE — Faux Départ",
+            description="Écris `go` **uniquement** quand je dis **PARTEZ**.\nAvant = éliminé.",
+            color=0xe74c3c))
+        async def _sentinelle():
+            def ck(m): return m.channel == cible and not m.author.bot
+            while True:
+                try:
+                    m = await bot.wait_for("message", check=ck, timeout=1.0)
+                    if m.content.strip().lower() in ("go", "partez"):
+                        elimines.add(m.author.id)
+                        try: await m.add_reaction("❌")
+                        except Exception: pass
+                except asyncio.TimeoutError:
+                    return
+        t = asyncio.create_task(_sentinelle())
+        for _ in range(random.randint(1, 2)):
+            await asyncio.sleep(random.uniform(2, 4))
+            await cible.send(random.choice(["⏳ **Presque…**", "🔸 **PARTE—** non, rien.",
+                                            "⏳ **Attendez…**", "🔸 **PA—** pardon."]))
+        await asyncio.sleep(random.uniform(2, 4))
+        t.cancel()
+        await cible.send("🚦 **PARTEZ !**")
+        attendu = ["go"]
     else:
-        await cible.send(embed=discord.Embed(
-            description="⏰ Personne n'a cliqué après le GO… étrange.", color=0x95a5a6))
-    if salon:
-        await close_event_channel(salon, 90)
+        await cible.send(embed=discord.Embed(title="⚡ RÉFLEXE — Signal GO",
+            description="Écris `go` dès que le signal apparaît.", color=0xf39c12))
+        await asyncio.sleep(random.uniform(4, 9))
+        await cible.send("🟢 **GO !**")
+        attendu = ["go"]
+    debut = asyncio.get_event_loop().time()
+    def check(m):
+        return (m.channel == cible and not m.author.bot and m.author.id not in elimines
+                and m.content.strip().lower() in [a.lower() for a in attendu])
+    try:
+        msg = await bot.wait_for("message", check=check, timeout=20)
+    except asyncio.TimeoutError:
+        await cible.send(embed=discord.Embed(description="⏰ Personne n'a réagi.", color=0xe74c3c))
+        if salon: await close_event_channel(salon, 60)
+        return None
+    ms = int((asyncio.get_event_loop().time() - debut) * 1000)
+    uid = str(msg.author.id)
+    economy_data[uid]["coins"] += gain
+    gazette_gain(uid, gain)
+    try: check_coins_achievements(uid, cible)
+    except Exception: pass
+    await cible.send(embed=discord.Embed(
+        description=f"⚡ **{msg.author.display_name}** — **{ms} ms**\n💰 +{gain:,} pièces",
+        color=0x2ecc71))
+    if salon: await close_event_channel(salon, 60)
+    return msg.author
+
+async def run_premier_clic(channel, guild):
+    """Compatibilité — variante Signal GO de la famille Réflexe."""
+    return await run_reflexe(channel, guild, variante="go")
 
 async def run_reaction_eclair(channel, guild):
-    """⚡ Réaction Éclair — réagir avec le bon emoji"""
-    POOL = ["🔥","💧","🌪️","⚡","🌸","🍀","⭐","🌙","💎","🎯","🎲","🏆","🎪","🍜","🐉","👑","🦋","🎴"]
-    bon = random.choice(POOL)
-    leurres = random.sample([e for e in POOL if e != bon], 4)
-    tous = leurres + [bon]
-    random.shuffle(tous)
-    gain = random.randint(500, 1000)
-
-    salon = await create_event_channel(guild, "⚡・reaction-eclair")
-    cible = salon or channel
-    if salon:
-        await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="⚡ RÉACTION ÉCLAIR",
-            description=f"Réagis avec le bon emoji — **{gain:,} pièces** au plus rapide.",
-            color=0xf1c40f), salon)
-    msg = await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
-                           embed=discord.Embed(
-                               title="⚡ RÉACTION ÉCLAIR",
-                               description=(f"Dans quelques secondes je vais te dire **quel emoji** utiliser.\n"
-                                            f"Les réactions sont déjà en place — sois le premier !\n\n"
-                                            f"🏆 **{gain:,} pièces**"),
-                               color=0xf1c40f))
-    for e in tous:
-        try: await msg.add_reaction(e)
-        except Exception: pass
-    await asyncio.sleep(random.uniform(3, 7))
-    await cible.send(embed=discord.Embed(
-        title=f"👉  RÉAGIS AVEC  {bon}",
-        description=f"Sur le message juste au-dessus ! **{gain:,} pièces** au premier.",
-        color=0x2ecc71))
-
-    def check(reaction, user):
-        return (reaction.message.id == msg.id and str(reaction.emoji) == bon and not user.bot)
-    try:
-        _, user = await bot.wait_for("reaction_add", check=check, timeout=45)
-        economy_data[str(user.id)]["coins"] += gain
-        gazette_gain(str(user.id), gain)
-        check_coins_achievements(str(user.id), cible)
-        await cible.send(embed=discord.Embed(
-            description=f"🏆 **{user.display_name}** a réagi le premier avec {bon} — **+{gain:,} pièces** !",
-            color=0x2ecc71))
-    except asyncio.TimeoutError:
-        await cible.send(embed=discord.Embed(
-            description=f"⏰ Personne n'a réagi avec {bon} à temps !", color=0x95a5a6))
-    if salon:
-        await close_event_channel(salon, 90)
+    """Compatibilité — variante Emoji Cible de la famille Réflexe."""
+    return await run_reflexe(channel, guild, variante="emoji")
 
 async def run_intrus(channel, guild):
-    """🚩 Trouve l'Intrus — repérer le symbole différent"""
-    PAIRES = [("⭐","🔥"),("🟦","🟪"),("🔵","🔷"),("🌸","🌺"),("🐶","🐕"),("😀","😃"),
-              ("🍎","🍏"),("⚫","⬛"),("💚","💙"),("🎴","🃏"),("🌙","🌛"),("❄️","🧊")]
-    normal, intrus = random.choice(PAIRES)
-    lignes, cols = 5, 8
-    pos = random.randrange(lignes * cols)
-    grille = ""
-    for i in range(lignes * cols):
-        grille += intrus if i == pos else normal
-        if (i + 1) % cols == 0:
-            grille += "\n"
-    ligne_rep, col_rep = pos // cols + 1, pos % cols + 1
-    gain = random.randint(600, 1200)
-
-    salon = await create_event_channel(guild, "🚩・trouve-l-intrus")
-    cible = salon or channel
-    if salon:
-        await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🚩 TROUVE L'INTRUS",
-            description=f"Un symbole se cache parmi les autres — **{gain:,} pièces** au premier.",
-            color=0x1abc9c), salon)
-    await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
-                     embed=discord.Embed(
-                         title="🚩 TROUVE L'INTRUS",
-                         description=(f"{grille}\n"
-                                      f"**Un symbole est différent !**\n"
-                                      f"Écris sa position : `ligne colonne` *(ex : `3 5`)*\n\n"
-                                      f"🏆 **{gain:,} pièces** · ⏰ 90 secondes"),
-                         color=0x1abc9c))
-    def check(m):
-        return m.channel == cible and not m.author.bot and re.match(r"^\s*\d+\s+\d+\s*$", m.content)
-    fin = asyncio.get_event_loop().time() + 90
-    while asyncio.get_event_loop().time() < fin:
-        reste = fin - asyncio.get_event_loop().time()
-        try:
-            msg = await bot.wait_for("message", check=check, timeout=reste)
-        except asyncio.TimeoutError:
-            break
-        l, co = (int(x) for x in msg.content.split())
-        if l == ligne_rep and co == col_rep:
-            economy_data[str(msg.author.id)]["coins"] += gain
-            gazette_gain(str(msg.author.id), gain)
-            check_coins_achievements(str(msg.author.id), cible)
-            return await _fin_intrus(cible, salon, embed=discord.Embed(
-                title="🎯 Trouvé !",
-                description=(f"**{msg.author.display_name}** repère le {intrus} en ligne **{ligne_rep}**, "
-                             f"colonne **{col_rep}** !\n💰 +{gain:,} pièces"),
-                color=0x2ecc71))
-        try: await msg.add_reaction("❌")
-        except Exception: pass
-    await _fin_intrus(cible, salon, embed=discord.Embed(
-        description=f"⏰ Personne n'a trouvé — l'intrus {intrus} était en ligne **{ligne_rep}**, colonne **{col_rep}**.",
-        color=0xe74c3c))
+    """Compatibilité — délègue au moteur commun Défis Éclair."""
+    return await run_defi_eclair(channel, guild, mode="intrus")
 
 async def _fin_intrus(cible, salon, embed):
     await cible.send(embed=embed)
@@ -8511,142 +8515,16 @@ async def run_vraifaux(channel, guild):
         await close_event_channel(salon, 90)
 
 async def run_enigme(channel, guild):
-    """🧩 Énigme du Jour — une énigme, un indice à mi-parcours"""
-    enigme, reponse, indice = random.choice(ENIGMES)
-    gain = random.randint(700, 1500)
-    salon = await create_event_channel(guild, "🧩・enigme-du-jour")
-    cible = salon or channel
-    if salon:
-        await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🧩 ÉNIGME DU JOUR",
-            description=f"Une énigme à résoudre — **{gain:,} pièces** pour le premier.",
-            color=0x8e44ad), salon)
-    await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
-                     embed=discord.Embed(
-                         title="🧩 ÉNIGME DU JOUR",
-                         description=f"## {enigme}\n\n🏆 **{gain:,} pièces** au premier · ⏰ 3 minutes",
-                         color=0x8e44ad))
-    def check(m):
-        return m.channel == cible and not m.author.bot and not m.content.startswith(".")
-    fin = asyncio.get_event_loop().time() + 180
-    indice_donne = False
-    while asyncio.get_event_loop().time() < fin:
-        reste = fin - asyncio.get_event_loop().time()
-        if not indice_donne and reste < 100:
-            indice_donne = True
-            await cible.send(embed=discord.Embed(description=f"💡 **Indice :** {indice}", color=0xf39c12))
-        try:
-            msg = await bot.wait_for("message", check=check, timeout=min(reste, 20))
-        except asyncio.TimeoutError:
-            continue
-        if check_answer(msg.content, reponse):
-            economy_data[str(msg.author.id)]["coins"] += gain
-            gazette_gain(str(msg.author.id), gain)
-            check_coins_achievements(str(msg.author.id), cible)
-            await cible.send(embed=discord.Embed(
-                title="🧩 Résolue !",
-                description=f"**{msg.author.display_name}** trouve — c'était **{reponse}** !\n💰 +{gain:,} pièces",
-                color=0x2ecc71))
-            if salon:
-                await close_event_channel(salon, 90)
-            return
-    await cible.send(embed=discord.Embed(
-        description=f"⏰ Personne n'a trouvé — la réponse était **{reponse}**.", color=0xe74c3c))
-    if salon:
-        await close_event_channel(salon, 90)
+    """Compatibilité — délègue au moteur commun Défis Éclair."""
+    return await run_defi_eclair(channel, guild, mode="enigme")
 
 async def run_mot_melange(channel, guild):
-    """🔤 Mot Mélangé — remettre les lettres dans l'ordre"""
-    mot, theme = random.choice(MOTS_MELANGES)
-    lettres = list(mot)
-    while True:
-        random.shuffle(lettres)
-        if "".join(lettres) != mot:
-            break
-    melange = " ".join(l.upper() for l in lettres)
-    gain = random.randint(400, 900) + len(mot) * 20
-    salon = await create_event_channel(guild, "🔤・mot-melange")
-    cible = salon or channel
-    if salon:
-        await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🔤 MOT MÉLANGÉ",
-            description=f"Retrouve le mot caché — **{gain:,} pièces** au premier.",
-            color=0x1abc9c), salon)
-    await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
-                     embed=discord.Embed(
-                         title="🔤 MOT MÉLANGÉ",
-                         description=(f"📂 **Thème : {theme}**\n\n# `{melange}`\n\n"
-                                      f"*{len(mot)} lettres*\n🏆 **{gain:,} pièces** · ⏰ 90 secondes"),
-                         color=0x1abc9c))
-    def check(m):
-        return m.channel == cible and not m.author.bot and not m.content.startswith(".")
-    fin = asyncio.get_event_loop().time() + 90
-    while asyncio.get_event_loop().time() < fin:
-        reste = fin - asyncio.get_event_loop().time()
-        try:
-            msg = await bot.wait_for("message", check=check, timeout=reste)
-        except asyncio.TimeoutError:
-            break
-        if normalize_str(msg.content) == normalize_str(mot):
-            economy_data[str(msg.author.id)]["coins"] += gain
-            gazette_gain(str(msg.author.id), gain)
-            check_coins_achievements(str(msg.author.id), cible)
-            await cible.send(embed=discord.Embed(
-                description=f"🎉 **{msg.author.display_name}** trouve — **{mot.upper()}** !\n💰 +{gain:,} pièces",
-                color=0x2ecc71))
-            if salon:
-                await close_event_channel(salon, 90)
-            return
-    await cible.send(embed=discord.Embed(
-        description=f"⏰ Temps écoulé — c'était **{mot.upper()}**", color=0xe74c3c))
-    if salon:
-        await close_event_channel(salon, 90)
+    """Compatibilité — délègue au moteur commun Défis Éclair."""
+    return await run_defi_eclair(channel, guild, mode="motmelange")
 
 async def run_devine_pays(channel, guild):
-    """🗺️ Devine le Pays — capitales et cultures"""
-    dispo_p = [x for x in PAYS_QUIZ if x[1] not in pays_vues]
-    if not dispo_p:
-        pays_vues.clear()
-        dispo_p = PAYS_QUIZ
-    theme, q, rep = random.choice(dispo_p)
-    pays_vues.append(q)
-    gain = random.randint(350, 700)
-    salon = await create_event_channel(guild, "🗺️・devine-le-pays")
-    cible = salon or channel
-    if salon:
-        await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🗺️ DEVINE LE PAYS",
-            description=f"Une question de géographie — **{gain:,} pièces** au premier.",
-            color=0x16a085), salon)
-    await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
-                     embed=discord.Embed(
-                         title="🗺️ DEVINE LE PAYS",
-                         description=f"📂 **{theme}**\n\n## {q}\n\n🏆 **{gain:,} pièces** · ⏰ 60 secondes",
-                         color=0x16a085))
-    def check(m):
-        return m.channel == cible and not m.author.bot and not m.content.startswith(".")
-    fin = asyncio.get_event_loop().time() + 60
-    while asyncio.get_event_loop().time() < fin:
-        reste = fin - asyncio.get_event_loop().time()
-        try:
-            msg = await bot.wait_for("message", check=check, timeout=reste)
-        except asyncio.TimeoutError:
-            break
-        if check_answer(msg.content, rep):
-            economy_data[str(msg.author.id)]["coins"] += gain
-            gazette_gain(str(msg.author.id), gain)
-            check_coins_achievements(str(msg.author.id), cible)
-            await cible.send(embed=discord.Embed(
-                description=f"🎉 **{msg.author.display_name}** trouve — **{rep}** !\n💰 +{gain:,} pièces",
-                color=0x2ecc71))
-            if salon:
-                await close_event_channel(salon, 90)
-            return
-    await cible.send(embed=discord.Embed(
-        description=f"⏰ Temps écoulé — la réponse était **{rep}**", color=0xe74c3c))
-    if salon:
-        await close_event_channel(salon, 90)
-
+    """Compatibilité — délègue au moteur commun Défis Éclair."""
+    return await run_defi_eclair(channel, guild, mode="pays")
 
 # ============================================================
 #  🎄 EVENTS DE SAISON — Noël & Halloween
@@ -8902,88 +8780,250 @@ class BombeView(ui.View):
                          f"⚠️ *Un seul fil par personne — le choix est définitif.*"),
             color=0xe74c3c)
 
-async def run_bombe(channel, guild):
-    """💣 Bombe Mystère — couper le bon fil parmi 5"""
-    gain = random.choices([g for g, _ in BOMBE_GAINS], weights=[p for _, p in BOMBE_GAINS])[0]
-    bon = random.randrange(len(BOMBE_FILS))
+# ============================================================
+#  💣 BOMBE 2.0 — la bombe circule, chacun décide
+# ============================================================
+BOMBE_FILS2 = [("Rouge","🔴"),("Bleu","🔵"),("Vert","🟢"),
+               ("Jaune","🟡"),("Blanc","⚪"),("Noir","⚫")]
+BOMBE_CAG_BASE, BOMBE_CAG_PAR_JOUEUR, BOMBE_CAG_MAX = 1200, 550, 9000
+BOMBE_MINUTEUR = 6
+BOMBE_TOURS_MAX = 20
+BOMBE_TAXE_PASSE = 0.08
 
-    salon = await create_event_channel(guild, "💣・bombe-mystere")
+class BombeInscription(ui.View):
+    """Phase d'inscription — 40 s pour rejoindre."""
+    def __init__(self, timeout=40):
+        super().__init__(timeout=timeout)
+        self.joueurs, self.noms, self.message = [], {}, None
+
+    @ui.button(label="Rejoindre", emoji="💣", style=discord.ButtonStyle.danger)
+    async def rejoindre(self, itx, _b):
+        uid = str(itx.user.id)
+        if uid in self.joueurs:
+            return await itx.response.send_message("Tu es déjà inscrit·e.", ephemeral=True)
+        self.joueurs.append(uid)
+        self.noms[uid] = itx.user.display_name
+        await itx.response.send_message("💣 Inscrit·e. Bonne chance.", ephemeral=True)
+        try: await itx.message.edit(embed=self.build())
+        except Exception: pass
+
+    def build(self):
+        n = len(self.joueurs)
+        cag = min(BOMBE_CAG_MAX, BOMBE_CAG_BASE + n * BOMBE_CAG_PAR_JOUEUR)
+        return discord.Embed(
+            title="💣 BOMBE — inscriptions",
+            description=(
+                "La bombe va circuler. Quand tu l'as, tu **décides**.\n\n"
+                "🔧 **Désamorcer** — coupe un fil. Réussi, tu la passes. Raté, tu sors.\n"
+                "🤝 **Passer** — sans risque, mais le minuteur descend **pour tout le monde**.\n"
+                "🔍 **Sonder** — un fil sûr révélé rien qu'à toi. Une seule fois.\n\n"
+                f"👥 **{n}** inscrit(s)\n💰 Cagnotte : **{cag:,} pièces**"),
+            color=0xe74c3c).set_footer(text="40 secondes pour rejoindre")
+
+class BombeTour(ui.View):
+    """Tour d'un porteur — seul lui peut agir."""
+    def __init__(self, porteur_uid, sondes_restantes, timeout=20):
+        super().__init__(timeout=timeout)
+        self.porteur = porteur_uid
+        self.action = None
+        self.fil = None
+        if not sondes_restantes:
+            self.remove_item(self.sonder)
+
+    async def interaction_check(self, itx):
+        if str(itx.user.id) != self.porteur:
+            await itx.response.send_message(
+                "Ce n'est pas toi qui as la bombe — regarde, c'est déjà bien.", ephemeral=True)
+            return False
+        return True
+
+    @ui.button(label="Désamorcer", emoji="🔧", style=discord.ButtonStyle.danger)
+    async def desamorcer(self, itx, _b):
+        self.action = "couper"
+        await itx.response.send_message("🔧 Tu attrapes la pince…", ephemeral=True)
+        self.stop()
+
+    @ui.button(label="Passer", emoji="🤝", style=discord.ButtonStyle.secondary)
+    async def passer(self, itx, _b):
+        self.action = "passer"
+        await itx.response.send_message("🤝 Tu la refiles. Lâche.", ephemeral=True)
+        self.stop()
+
+    @ui.button(label="Sonder", emoji="🔍", style=discord.ButtonStyle.primary)
+    async def sonder(self, itx, _b):
+        self.action = "sonder"
+        await itx.response.defer(ephemeral=True)
+        self.stop()
+
+def _bombe_embed(etat):
+    """Tableau de bord — un spectateur comprend tout d'un coup d'œil."""
+    vivants = etat["vivants"]
+    porteur = etat["porteur"]
+    barre = "🟥" * etat["minuteur"] + "⬛" * (BOMBE_MINUTEUR - etat["minuteur"])
+    lignes = []
+    for uid in etat["ordre"]:
+        if uid not in vivants:
+            lignes.append(f"💀 ~~{etat['noms'][uid]}~~")
+        elif uid == porteur:
+            lignes.append(f"💣 **{etat['noms'][uid]}** ← a la bombe")
+        else:
+            lignes.append(f"🙂 {etat['noms'][uid]}")
+    coupes = " ".join(BOMBE_FILS2[i][1] for i in etat["coupes"]) or "aucun"
+    e = discord.Embed(
+        title=f"💣 BOMBE — tour {etat['tour']}",
+        description=f"{barre}\n\n" + "\n".join(lignes),
+        color=0xe74c3c if etat["minuteur"] <= 2 else 0xf39c12)
+    e.add_field(name="⚠️ Risque si tu coupes", value=f"**{int(etat['risque']*100)} %**", inline=True)
+    e.add_field(name="✂️ Fils coupés", value=coupes, inline=True)
+    e.add_field(name="👥 En vie", value=f"{len(vivants)}", inline=True)
+    if etat.get("dernier"):
+        e.add_field(name="📣 Ce qui vient de se passer", value=etat["dernier"], inline=False)
+    e.set_footer(text=f"💰 Cagnotte {etat['cagnotte']:,} pièces")
+    return e
+
+async def run_bombe(channel, guild):
+    """💣 Bombe 2.0 — la bombe circule, chacun décide, un seul survivant."""
+    salon = await create_event_channel(guild, "💣・bombe") if guild else None
     cible = salon or channel
-    if salon:
+    if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
             title="🚨 UNE BOMBE DANS LE QG !",
-            description=f"Coupez le bon fil parmi 5 — **{gain:,} pièces** pour chaque démineur qui réussit.",
+            description="Elle va passer de main en main. Le dernier debout rafle la cagnotte.",
             color=0xe74c3c), salon)
 
-    view = BombeView(timeout=25)
-    view.message = await cible.send(
-        get_event_ping(guild, "everyone") if cible is channel else "",
-        embed=view.build(gain), view=view)
-    await view.wait()
-    for it in view.children:
-        it.disabled = True
-    try:
-        await view.message.edit(view=view)
-    except Exception:
-        pass
+    insc = BombeInscription(timeout=40)
+    insc.message = await cible.send(
+        get_event_ping(guild, "everyone") if (cible is channel and guild) else "",
+        embed=insc.build(), view=insc)
+    await insc.wait()
+    for it in insc.children: it.disabled = True
+    try: await insc.message.edit(view=insc)
+    except Exception: pass
 
-    if not view.choix:
+    if len(insc.joueurs) < 2:
         await cible.send(embed=discord.Embed(
-            title="💥 BOOM !",
-            description="Personne n'a osé toucher un seul fil… la bombe a explosé toute seule. 🤷",
+            title="💨 Désamorçage annulé",
+            description=("Personne n'a osé." if not insc.joueurs
+                         else "Il faut être au moins **deux** — une bombe ne se passe pas tout seul."),
             color=0x95a5a6))
-        if salon:
-            await close_event_channel(salon, 90)
+        if salon: await close_event_channel(salon, 60)
         return
 
-    # ── Suspense ──
-    msg = await cible.send(embed=discord.Embed(description="🔍 **Analyse des fils…**", color=0xf1c40f))
-    for n in ("⏳ **3…**", "⏳ **2…**", "⏳ **1…**"):
-        await asyncio.sleep(1.4)
-        try:
-            await msg.edit(embed=discord.Embed(description=n, color=0xf1c40f))
-        except Exception:
-            pass
-    await asyncio.sleep(1.4)
+    ordre = insc.joueurs[:]
+    random.shuffle(ordre)
+    cagnotte = min(BOMBE_CAG_MAX, BOMBE_CAG_BASE + len(ordre) * BOMBE_CAG_PAR_JOUEUR)
+    etat = {"ordre": ordre, "noms": insc.noms, "vivants": ordre[:], "porteur": ordre[0],
+            "minuteur": BOMBE_MINUTEUR, "tour": 0, "coupes": [], "risque": 0.18,
+            "cagnotte": cagnotte, "dernier": None}
+    sondes = {u: 1 for u in ordre}
+    sondes_faites = {u: [] for u in ordre}
+    vient_de_passer = {u: False for u in ordre}
+    passes = 0
 
-    nom_bon, emo_bon, coul = BOMBE_FILS[bon]
-    gagnants = [u for u, v in view.choix.items() if v == bon]
-    perdants = [u for u, v in view.choix.items() if v != bon]
+    while len(etat["vivants"]) > 1 and etat["minuteur"] > 0 and etat["tour"] < BOMBE_TOURS_MAX:
+        etat["tour"] += 1
+        etat["risque"] = min(0.62, 0.18 + etat["tour"] * 0.045 + len(etat["coupes"]) * 0.03)
+        porteur = etat["porteur"]
+        vue = BombeTour(porteur, sondes[porteur], timeout=20)
+        msg = await cible.send(embed=_bombe_embed(etat), view=vue)
+        await vue.wait()
+        for it in vue.children: it.disabled = True
+        try: await msg.edit(view=vue)
+        except Exception: pass
 
-    if gagnants:
-        mentions = "\n".join(f"<@{u}>" for u in gagnants)
-        for u in gagnants:
-            economy_data[u]["coins"] += gain
-            gazette_gain(u, gain)
-            check_coins_achievements(u, cible)
-        phrase = random.choice(BOMBE_GAGNANT).format(j=f"<@{gagnants[0]}>")
-        embed = discord.Embed(
-            title="✅ La bombe a été désamorcée !",
-            description=(f"Le bon fil était le **{nom_bon}** {emo_bon}\n\n"
-                         f"🎉 **Félicitations à :**\n{mentions}\n\n"
-                         f"Vous remportez chacun **{gain:,} pièces** !\n\n*{phrase}*"),
-            color=coul)
-        if perdants:
-            embed.add_field(
-                name=f"💥 Et les {len(perdants)} autres…",
-                value=(random.choice(BOMBE_PERDANTS) if len(perdants) > 2
-                       else random.choice(BOMBE_PERDANT).format(j=f"<@{perdants[0]}>")),
-                inline=False)
-        await cible.send(embed=embed)
-    else:
-        if len(perdants) > 2:
-            phrase = random.choice(BOMBE_PERDANTS)
-        else:
-            phrase = random.choice(BOMBE_PERDANT).format(j=f"<@{perdants[0]}>")
+        nom = etat["noms"][porteur]
+        act = vue.action
+        # On ne se débarrasse pas de la bombe deux fois de suite.
+        if act == "passer" and vient_de_passer.get(porteur):
+            act = "couper"
+            await cible.send(f"🚫 **{nom}** a déjà refilé la bombe au tour d'avant — cette fois, il coupe.")
+
+        if act == "sonder":
+            sondes[porteur] = 0
+            libres = [i for i in range(len(BOMBE_FILS2))
+                      if i not in etat["coupes"] and i not in sondes_faites[porteur]]
+            if libres:
+                sur = random.choice(libres)
+                sondes_faites[porteur].append(sur)
+                try:
+                    m = cible.guild.get_member(int(porteur)) if hasattr(cible, "guild") else None
+                    if m: await m.send(f"🔍 Fil **{BOMBE_FILS2[sur][0]}** {BOMBE_FILS2[sur][1]} — "
+                                       f"celui-là est sûr. Garde ça pour toi.")
+                except Exception:
+                    pass
+            vient_de_passer[porteur] = False
+            etat["dernier"] = f"🔍 **{nom}** a sondé la bombe. Il sait quelque chose que vous ignorez."
+
+        elif act == "passer" or act is None:
+            etat["minuteur"] -= 1
+            if act == "passer":
+                passes += 1
+                vient_de_passer[porteur] = True
+                etat["cagnotte"] = int(cagnotte * max(0.4, 1 - BOMBE_TAXE_PASSE * passes))
+            etat["dernier"] = (f"🤝 **{nom}** refile la bombe — minuteur −1, cagnotte −8 %."
+                               if act == "passer"
+                               else f"⏱️ **{nom}** n'a rien fait. Le minuteur descend.")
+            suivants = [u for u in etat["vivants"] if u != porteur]
+            etat["porteur"] = random.choice(suivants) if suivants else porteur
+
+        else:  # couper
+            vient_de_passer[porteur] = False
+            rate = random.random() < etat["risque"]
+            if rate:
+                etat["vivants"].remove(porteur)
+                etat["dernier"] = f"💥 **{nom}** a coupé le mauvais fil. Éliminé."
+                if etat["vivants"]:
+                    etat["porteur"] = random.choice(etat["vivants"])
+            else:
+                libres = [i for i in range(len(BOMBE_FILS2)) if i not in etat["coupes"]]
+                if libres:
+                    etat["coupes"].append(random.choice(libres))
+                suivants = [u for u in etat["vivants"] if u != porteur]
+                etat["porteur"] = random.choice(suivants) if suivants else porteur
+                etat["dernier"] = f"✂️ **{nom}** coupe un fil et s'en sort. Il passe la bombe."
+        await asyncio.sleep(1.2)
+
+    # ── Dénouement ──
+    if etat["minuteur"] <= 0 and len(etat["vivants"]) > 1:
+        perdant = etat["porteur"]
+        etat["vivants"] = [u for u in etat["vivants"] if u != perdant]
         await cible.send(embed=discord.Embed(
-            title="💥 BOOM !",
-            description=(f"Personne n'a réussi à désamorcer la bombe…\n"
-                         f"Il fallait couper le **{nom_bon}** {emo_bon}\n\n"
-                         f"*{phrase}*\n\n"
-                         f"💸 Les **{gain:,} pièces** sont parties en fumée."),
+            title="💥 BOOM",
+            description=(f"Le minuteur tombe à zéro. **{etat['noms'][perdant]}** avait la bombe.\n\n"
+                         f"*À force de se la refiler, quelqu'un devait la tenir à la fin.*"),
             color=0xe74c3c))
-    if salon:
-        await close_event_channel(salon, 120)
+
+    cagnotte = etat["cagnotte"]
+    survivants = etat["vivants"]
+    if not survivants:
+        await cible.send(embed=discord.Embed(
+            title="💀 Personne",
+            description="Tout le monde a sauté. Akari note ça quelque part.", color=0x95a5a6))
+        if salon: await close_event_channel(salon, 90)
+        return
+
+    # Cagnotte UNIQUE — 70 % au vainqueur, 30 % partagés entre les autres survivants
+    vainqueur = survivants[0]
+    part_v = int(cagnotte * 0.7) if len(survivants) > 1 else cagnotte
+    economy_data[vainqueur]["coins"] += part_v
+    gazette_gain(vainqueur, part_v)
+    try: check_coins_achievements(vainqueur, cible)
+    except Exception: pass
+    lignes = [f"🏆 **{etat['noms'][vainqueur]}** — +{part_v:,} pièces"]
+    autres = survivants[1:]
+    if autres:
+        part_a = int(cagnotte * 0.3 / len(autres))
+        for u in autres:
+            economy_data[u]["coins"] += part_a
+            gazette_gain(u, part_a)
+            lignes.append(f"🎖️ {etat['noms'][u]} — +{part_a:,} pièces")
+    await cible.send(embed=discord.Embed(
+        title="💣 Désamorcée",
+        description=("\n".join(lignes) +
+                     f"\n\n*{etat['tour']} tours · {len(ordre)} démineurs au départ.*"),
+        color=0x2ecc71).set_footer(text=f"Cagnotte totale : {cagnotte:,} pièces"))
+    if salon: await close_event_channel(salon, 120)
+
 
 # ============================================================
 #  📋 CATALOGUE DES EVENTS — source unique pour .event et .lancerevent
@@ -8993,123 +9033,259 @@ premier_vus = []       # mots déjà utilisés en Premier Arrivé
 vf_vues = []           # affirmations déjà posées
 pays_vues = []         # questions pays déjà posées
 
+# ============================================================
+#  ⚡ MOTEUR COMMUN — DÉFIS ÉCLAIR
+# ============================================================
+DEFIS_MODES = {}
+defis_vus = {}
+
+def _defi_mode(cle, nom, emoji, couleur, salon_nom, gmin, gmax, duree, fournisseur, ping="everyone"):
+    DEFIS_MODES[cle] = {"nom":nom,"emoji":emoji,"couleur":couleur,"salon":salon_nom,
+                        "gain":(gmin,gmax),"duree":duree,"fournisseur":fournisseur,"ping":ping}
+
+def _defi_pioche(mode_cle, source, cle_unicite=lambda x: x):
+    vus = defis_vus.setdefault(mode_cle, [])
+    dispo = [x for x in source if cle_unicite(x) not in vus]
+    if not dispo:
+        vus.clear(); dispo = list(source)
+    choix = random.choice(dispo)
+    vus.append(cle_unicite(choix))
+    if len(vus) > 200: del vus[:100]
+    return choix
+
+async def run_defi_eclair(channel, guild, mode=None):
+    """⚡ Défis Éclair — moteur commun, 6 modes. mode=None -> aléatoire."""
+    cle = mode if mode in DEFIS_MODES else random.choice(list(DEFIS_MODES))
+    M = DEFIS_MODES[cle]
+    titre, corps, reponses, revelation = M["fournisseur"]()
+    gain = random.randint(*M["gain"])
+    salon = await create_event_channel(guild, M["salon"]) if guild else None
+    cible = salon or channel
+    if salon and guild:
+        await annoncer_event(guild, channel, M["ping"], discord.Embed(
+            title=f"{M['emoji']} {M['nom'].upper()}",
+            description=f"{titre}\n🏆 **{gain:,} pièces** au premier.", color=M["couleur"]), salon)
+    await cible.send(get_event_ping(guild, M["ping"]) if (cible is channel and guild) else "",
+        embed=discord.Embed(title=f"{M['emoji']} {M['nom'].upper()}",
+            description=f"{corps}\n\n🏆 **{gain:,} pièces** au premier · ⏰ {M['duree']} s",
+            color=M["couleur"]))
+    def check(m):
+        return m.channel == cible and not m.author.bot and not m.content.startswith(".")
+    fin = asyncio.get_event_loop().time() + M["duree"]
+    gagnant = None
+    while asyncio.get_event_loop().time() < fin:
+        reste = fin - asyncio.get_event_loop().time()
+        if reste <= 0: break
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=reste)
+        except asyncio.TimeoutError:
+            break
+        if any(check_answer(msg.content, r) for r in reponses):
+            gagnant = msg.author
+            uid = str(gagnant.id)
+            economy_data[uid]["coins"] += gain
+            gazette_gain(uid, gain)
+            try: check_coins_achievements(uid, cible)
+            except Exception: pass
+            try: unlock_achievement(uid, "eclair_win", cible)
+            except Exception: pass
+            await cible.send(embed=discord.Embed(
+                description=f"🎉 **{gagnant.display_name}** trouve — {revelation}\n💰 +{gain:,} pièces",
+                color=0x2ecc71))
+            break
+    if not gagnant:
+        await cible.send(embed=discord.Embed(
+            description=f"⏰ Temps écoulé — {revelation}", color=0xe74c3c))
+    if salon: await close_event_channel(salon, 90)
+    return gagnant
+
+MOTS_PREMIER_DEFI = [
+    "kdrama","akari","gacha","oppa","daebak","chingu","aegyo","ramyeon","hallyu","maknae",
+    "unnie","noona","sunbae","hyung","manhwa","bingsu","kimchi","soju","hanbok","bibimbap",
+    "tteokbokki","sarang","jjigae","saranghae","annyeong","jinjja","omona","mianhae","gomawo",
+    "hwaiting","chimaek","makgeolli","samgyeopsal","japchae","pourfendeur","shinigami",
+    "jinchuriki","nakama","senpai","bulgogi","dalgona","gimbap","hotteok","mandu","naengmyeon",
+    "sundubu","galbi","patbingsu","kimbap","chapssaltteok",
+]
+
+def _src_question():
+    q = _defi_pioche("question", QUESTIONS_ECLAIR, lambda x: x["q"])
+    return ("Une question tombe.", f"## {q['q']}", list(q["r"]), f"la réponse était **{q['r'][0]}**")
+
+def _src_pays():
+    theme, q, rep = _defi_pioche("pays", PAYS_QUIZ, lambda x: x[1])
+    return ("Géographie.", f"📂 **{theme}**\n\n## {q}", [rep], f"c'était **{rep.upper()}**")
+
+def _src_enigme():
+    en, rep, indice = _defi_pioche("enigme", ENIGMES, lambda x: x[0])
+    return ("Une énigme.", f"## {en}\n\n*Indice : {indice}*", [rep], f"c'était **{rep.upper()}**")
+
+def _src_motmelange():
+    mot, theme = _defi_pioche("motmelange", MOTS_MELANGES, lambda x: x[0])
+    lettres = list(mot)
+    for _ in range(20):
+        random.shuffle(lettres)
+        if "".join(lettres) != mot: break
+    return ("Remets les lettres dans l'ordre.",
+            f"📂 **Thème : {theme}**\n\n# `{' '.join(l.upper() for l in lettres)}`\n\n*{len(mot)} lettres*",
+            [mot], f"c'était **{mot.upper()}**")
+
+def _src_intrus():
+    PAIRES = [("⭐","🔥"),("🟦","🟪"),("🔵","🔷"),("🌸","🌺"),("🐶","🐕"),("😀","😃"),
+              ("🍎","🍏"),("⚫","⬛"),("💚","💙"),("🎴","🃏"),("🌙","🌛"),("❄️","🧊")]
+    normal, intrus = random.choice(PAIRES)
+    lignes, cols = 5, 8
+    pos = random.randrange(lignes * cols)
+    grille = ""
+    for i in range(lignes * cols):
+        grille += intrus if i == pos else normal
+        if (i + 1) % cols == 0: grille += "\n"
+    li, co = pos // cols + 1, pos % cols + 1
+    return ("Un symbole est différent.",
+            f"{grille}\nDonne sa position — format `ligne colonne` (ex : `3 5`).",
+            [f"{li} {co}", f"{li},{co}", f"{li}-{co}"],
+            f"l'intrus était en **ligne {li}, colonne {co}**")
+
+def _src_premier():
+    mot = _defi_pioche("premier", MOTS_PREMIER_DEFI, lambda x: x)
+    consigne, transfo, explication = random.choice(PREMIER_DEFIS)
+    return ("Un mot, une transformation.",
+            f"# `{mot}`\n\n**{consigne}**\n*{explication}*",
+            [transfo(mot)], f"il fallait écrire **{transfo(mot)}**")
+
+_defi_mode("question",  "Question Éclair", "⚡",  0xf1c40f, "⚡・question-eclair", 400,  800,  60, _src_question)
+_defi_mode("pays",      "Devine le Pays",  "🗺️", 0x16a085, "🗺️・devine-le-pays", 350,  700,  60, _src_pays)
+_defi_mode("enigme",    "Énigme du Jour",  "🧩",  0x8e44ad, "🧩・enigme-du-jour",  700, 1500, 180, _src_enigme)
+_defi_mode("motmelange","Mot Mélangé",     "🔤",  0x1abc9c, "🔤・mot-melange",     400, 1100,  90, _src_motmelange)
+_defi_mode("intrus",    "Trouve l'Intrus", "🚩",  0xe67e22, "🚩・trouve-l-intrus", 600, 1200,  90, _src_intrus)
+_defi_mode("premier",   "Premier Arrivé",  "🏃",  0x3498db, "🏃・premier-arrive",  400,  900,  60, _src_premier)
+
 EVENTS_CATALOGUE = {
-    "questioneclair": {"nom":"⚡ Question Éclair","fn":"run_question_eclair","salon":True,"duree":"1 min",
-        "desc":"Une question tombe, les 3 premiers à répondre gagnent.","gain":"200 / 120 / 80 pièces"},
-    "premierarrive": {"nom":"🏃 Premier Arrivé","fn":"run_premier_arrive","salon":True,"duree":"1 min",
-        "desc":"Un mot apparaît — le premier à le recopier rafle tout.","gain":"400 à 900 pièces"},
-    "chiffremystere": {"nom":"🔢 Chiffre Mystère","fn":"run_chiffre_mystere","salon":True,"duree":"3 min",
-        "desc":"Devinez le nombre caché entre 1 et 100, avec des indices chaud/froid.","gain":"500 à 1 200 pièces"},
-    "pluiepieces": {"nom":"💸 Pluie de Pièces","fn":"run_pluie_pieces","salon":True,"duree":"1 min",
-        "desc":"Des pièces tombent du ciel — tout le monde clique, tout le monde gagne.","gain":"150 à 600 pièces chacun"},
-    "taprace": {"nom":"🏁 Tap Race","fn":"run_tap_race","salon":True,"duree":"2 min",
-        "desc":"4 coureurs, chacun son bouton. Le premier à 40 clics franchit la ligne.","gain":"1 500 à 3 500 pièces"},
-    "ascenseur": {"nom":"🎢 L'Ascenseur","fn":"run_ascenseur","salon":True,"duree":"5 min",
-        "desc":"Un candidat monte étage par étage, la cagnotte double à chaque fois. Un faux pas et il perd tout.","gain":"jusqu'à 512 000 pièces"},
-    "premierclic": {"nom":"⚡ Le Premier qui Clique","fn":"run_premier_clic","salon":True,"duree":"1 min",
-        "desc":"Le bouton passe au vert après un délai aléatoire. Cliquer avant = éliminé.","gain":"600 à 1 400 pièces"},
-    "reactioneclair": {"nom":"⚡ Réaction Éclair","fn":"run_reaction_eclair","salon":True,"duree":"1 min",
-        "desc":"Réagis avec le bon emoji le plus vite possible.","gain":"500 à 1 000 pièces"},
-    "intrus": {"nom":"🚩 Trouve l'Intrus","fn":"run_intrus","salon":True,"duree":"90 s",
-        "desc":"Un symbole différent se cache dans une grille — donne sa position.","gain":"600 à 1 200 pièces"},
-    "coursepets": {"nom":"🏃 Course de Compagnons","fn":"run_course_pets","salon":True,"duree":"3 min",
-        "desc":"Chacun inscrit son compagnon. La vitesse dépend du niveau, de l'humeur et des accessoires.","gain":"1 200 à 2 800 pièces"},
-    "quisuisje": {"nom":"🎭 Qui suis-je ?","fn":"run_qui_suis_je","salon":True,"duree":"2 min",
-        "desc":"Un personnage se cache, les indices tombent un par un. Plus tu trouves tôt, plus tu gagnes.","gain":"300 à 1 600 pièces"},
-    "braquagecoffre": {"nom":"🏦 Braquage du Coffre","fn":"run_braquage_coffre","salon":True,"duree":"6 min",
-        "desc":"3 codes à craquer (calculs, suites logiques). Chaque code rapporte un tiers du coffre.","gain":"jusqu'à 20 000 pièces"},
-    "vraifaux": {"nom":"🧠 Vrai ou Faux","fn":"run_vraifaux","salon":True,"duree":"2 min",
-        "desc":"5 affirmations, deux boutons. Le premier bon clic empoche la mise.","gain":"300 à 600 p par manche"},
-    "enigme": {"nom":"🧩 Énigme du Jour","fn":"run_enigme","salon":True,"duree":"3 min",
-        "desc":"Une énigme à résoudre, avec un indice à mi-parcours.","gain":"700 à 1 500 pièces"},
-    "motmelange": {"nom":"🔤 Mot Mélangé","fn":"run_mot_melange","salon":True,"duree":"90 s",
-        "desc":"Les lettres sont dans le désordre — retrouve le mot.","gain":"400 à 1 500 pièces"},
-    "devinepays": {"nom":"🗺️ Devine le Pays","fn":"run_devine_pays","salon":True,"duree":"1 min",
-        "desc":"Capitales, cultures, géographie — le premier qui trouve gagne.","gain":"350 à 700 pièces"},
-    "sapin": {"nom":"🎄 Le Sapin du QG","fn":"run_sapin_noel","salon":True,"duree":"3 min",
-        "desc":"Cinq cadeaux sous le sapin, un par personne. Du bonbon au coffret scintillant.","gain":"500 à 18 000 pièces"},
-    "halloween": {"nom":"🎃 Des Bonbons ou un Sort","fn":"run_halloween","salon":True,"duree":"3 min",
-        "desc":"Frappe à 3 portes. Des bonbons… ou un piège qui te coûte ta récolte.","gain":"jusqu'à 30 000 pièces"},
-    "bombe": {"nom":"💣 Bombe Mystère","fn":"run_bombe","salon":True,"duree":"1 min",
-        "desc":"Cinq fils, un seul désamorce la bombe. Un choix chacun, définitif.","gain":"2 500 à 20 000 pièces"},
-    "chiffredujour": {"nom":"🎲 Chiffre du Jour","fn":"run_morpion_geant","salon":True,"duree":"90 s",
+    "defieclair": {"nom":"⚡ Défis Éclair","fn":"run_defi_eclair","salon":True,"duree":"1 à 3 min","fam":"event",
+        "desc":"Question, énigme, anagramme, intrus, géographie ou transformation. Premier trouvé, premier servi.","gain":"350 à 1 500 pièces"},
+    "questioneclair": {"nom":"⚡ Question Éclair","fn":"run_question_eclair","salon":True,"duree":"1 min","fam":"mode","parent":"defieclair","desc":"Mode Question.","gain":"400 à 800 pièces"},
+    "devinepays": {"nom":"🗺️ Devine le Pays","fn":"run_devine_pays","salon":True,"duree":"1 min","fam":"mode","parent":"defieclair","desc":"Mode Géographie.","gain":"350 à 700 pièces"},
+    "enigme": {"nom":"🧩 Énigme du Jour","fn":"run_enigme","salon":True,"duree":"3 min","fam":"mode","parent":"defieclair","desc":"Mode Énigme.","gain":"700 à 1 500 pièces"},
+    "motmelange": {"nom":"🔤 Mot Mélangé","fn":"run_mot_melange","salon":True,"duree":"90 s","fam":"mode","parent":"defieclair","desc":"Mode Anagramme.","gain":"400 à 1 100 pièces"},
+    "intrus": {"nom":"🚩 Trouve l'Intrus","fn":"run_intrus","salon":True,"duree":"90 s","fam":"mode","parent":"defieclair","desc":"Mode Observation.","gain":"600 à 1 200 pièces"},
+    "premierarrive": {"nom":"🏃 Premier Arrivé","fn":"run_premier_arrive","salon":True,"duree":"1 min","fam":"mode","parent":"defieclair","desc":"Mode Transformation.","gain":"400 à 900 pièces"},
+    "reflexe": {"nom":"⚡ Réflexe","fn":"run_reflexe","salon":True,"duree":"1 min","fam":"event",
+        "desc":"Signal GO, emoji cible ou faux départ — le plus rapide rafle la mise.","gain":"500 à 1 400 pièces"},
+    "premierclic": {"nom":"⚡ Le Premier qui Clique","fn":"run_premier_clic","salon":True,"duree":"1 min","fam":"mode","parent":"reflexe","desc":"Variante Signal GO.","gain":"500 à 1 400 pièces"},
+    "reactioneclair": {"nom":"⚡ Réaction Éclair","fn":"run_reaction_eclair","salon":True,"duree":"1 min","fam":"mode","parent":"reflexe","desc":"Variante Emoji Cible.","gain":"500 à 1 400 pièces"},
+    "banquier": {"nom":"🎩 Le Banquier","fn":"run_banquier","salon":True,"duree":"10 min","fam":"event",
+        "desc":"Deal or No Deal — 12 valises, un candidat, un banquier qui négocie.","gain":"jusqu'à 9 000 pièces"},
+    "ascenseur": {"nom":"🎢 L'Ascenseur","fn":"run_ascenseur","salon":True,"duree":"5 min","fam":"event",
+        "desc":"Un candidat monte étage par étage, la cagnotte double. Un faux pas et il perd tout.","gain":"cagnotte doublée par étage"},
+    "encheres": {"nom":"🏛️ Enchères","fn":"run_encheres","salon":True,"duree":"3 à 15 min","fam":"event",
+        "desc":"Une carte rare, un rôle ou un item mis aux enchères en direct.","gain":"le lot au plus offrant"},
+    "braquagecoffre": {"nom":"🏦 Braquage du Coffre","fn":"run_braquage_coffre","salon":True,"duree":"6 min","fam":"event",
+        "desc":"3 codes à craquer. Chaque code rapporte un tiers du coffre.","gain":"jusqu'à 20 000 pièces"},
+    "coursepets": {"nom":"🏃 Course de Compagnons","fn":"run_course_pets","salon":True,"duree":"3 min","fam":"event",
+        "desc":"Chacun inscrit son compagnon. Vitesse selon niveau, humeur et accessoires.","gain":"1 200 à 2 800 pièces"},
+    "quisuisje": {"nom":"🎭 Qui suis-je ?","fn":"run_qui_suis_je","salon":True,"duree":"2 min","fam":"event",
+        "desc":"Un personnage se cache, les indices tombent un par un.","gain":"300 à 1 600 pièces"},
+    "chiffremystere": {"nom":"🔢 Chiffre Mystère","fn":"run_chiffre_mystere","salon":True,"duree":"3 min","fam":"event",
+        "desc":"Devinez le nombre caché entre 1 et 100, indices chaud/froid.","gain":"500 à 1 200 pièces"},
+    "vraifaux": {"nom":"🧠 Vrai ou Faux","fn":"run_vraifaux","salon":True,"duree":"2 min","fam":"event",
+        "desc":"5 affirmations, deux boutons, un classement à la fin.","gain":"300 à 600 p par manche"},
+    "bombe": {"nom":"💣 Bombe Mystère","fn":"run_bombe","salon":True,"duree":"1 min","fam":"event",
+        "desc":"Cinq fils, un seul désamorce. Un choix chacun, définitif.","gain":"2 500 à 20 000 pièces"},
+    "taprace": {"nom":"🏁 Tap Race","fn":"run_tap_race","salon":True,"duree":"2 min","fam":"event",
+        "desc":"4 coureurs, chacun son bouton. Premier à 40 clics.","gain":"1 500 à 3 500 pièces"},
+    "pluiepieces": {"nom":"💸 Pluie de Pièces","fn":"run_pluie_pieces","salon":True,"duree":"1 min","fam":"event",
+        "desc":"Des pièces tombent — tout le monde clique, tout le monde gagne.","gain":"150 à 600 p chacun"},
+    "chiffredujour": {"nom":"🎲 Chiffre du Jour","fn":"run_morpion_geant","salon":True,"duree":"90 s","fam":"event",
         "desc":"Un seul pari chacun — le plus proche du nombre secret gagne.","gain":"600 à 1 400 pièces"},
-    "debatdujour": {"nom":"🎤 Débat du Jour","fn":"run_debat","salon":True,"duree":"1 h",
-        "desc":"Deux camps s'affrontent, le serveur vote et le résultat est annoncé.","gain":"Aucun — fierté uniquement"},
-    "coffre": {"nom":"📦 Coffre","fn":"run_coffre","salon":True,"duree":"5 min",
-        "desc":"Un coffre apparaît, le premier à taper .ouvrir rafle les pièces.","gain":"300 à 1 200 pièces"},
-    "colis": {"nom":"🎁 Colis Mystère","fn":"run_colis","salon":True,"duree":"5 min",
-        "desc":"Comme le coffre, mais bien plus généreux.","gain":"600 à 1 500 pièces"},
-    "loterie": {"nom":"🍀 Loterie","fn":"run_loterie","salon":True,"duree":"5 min",
-        "desc":"Tickets à 100 pièces, un seul gagnant rafle toute la cagnotte.","gain":"Toute la cagnotte"},
-    "banquier": {"nom":"🎩 Le Banquier","fn":"run_banquier","salon":True,"duree":"10 min",
-        "desc":"Deal or No Deal — 12 valises, un candidat, un banquier qui négocie.","gain":"Jusqu'à 9 000 pièces"},
-    "encheres": {"nom":"🏛️ Enchères","fn":"run_encheres","salon":True,"duree":"3 à 15 min",
-        "desc":"Une carte rare, un rôle ou un item mis aux enchères en direct.","gain":"Le lot au plus offrant"},
-    "invasion": {"nom":"🐉 Invasion","fn":"run_invasion","salon":True,"duree":"variable",
-        "desc":"Un boss débarque, tout le monde le frappe avec .attaque.","gain":"250-380 p chacun + 250 au coup fatal"},
-    "jackpot": {"nom":"💰 Jackpot","fn":"run_jackpot","salon":False,"duree":"instantané",
+    "coffre": {"nom":"📦 Coffre","fn":"run_coffre","salon":True,"duree":"5 min","fam":"event",
+        "desc":"Simple, renforcé ou scellé. Le premier à taper .ouvrir rafle tout.","gain":"300 à 4 500 pièces"},
+    "colis": {"nom":"🧰 Coffre Renforcé","fn":"run_colis","salon":True,"duree":"5 min","fam":"mode","parent":"coffre","desc":"Palier renforcé du Coffre.","gain":"900 à 2 200 pièces"},
+    "cartemystere": {"nom":"🎴 Carte Mystère","fn":"run_carte_mystere","salon":False,"duree":"1 min","fam":"event",
+        "desc":"Une carte Épique ou mieux tombe — premier au cœur, premier servi.","gain":"une carte rare"},
+    "debatdujour": {"nom":"🎤 Débat du Jour","fn":"run_debat","salon":True,"duree":"1 h","fam":"event",
+        "desc":"Deux camps s'affrontent, le serveur vote.","gain":"aucun — fierté uniquement"},
+    "jackpot": {"nom":"💰 Jackpot","fn":"run_jackpot","salon":False,"duree":"instantané","fam":"casino",
         "desc":"Le premier à écrire !jackpot empoche toute la cagnotte.","gain":"1 500 à 5 000 pièces"},
-    "cartemystere": {"nom":"🎴 Carte Mystère","fn":"run_carte_mystere","salon":False,"duree":"1 min",
-        "desc":"Une carte Épique ou mieux tombe — premier au cœur, premier servi.","gain":"Une carte rare"},
-    "roicolline": {"nom":"👑 Roi de la Colline","fn":"run_roi_colline","salon":False,"duree":"30 min",
-        "desc":"Affrontez-vous en arène, le dernier vainqueur est couronné.","gain":"500 pièces bonus"},
-    "nuitchasse": {"nom":"🌙 Nuit de Chasse","fn":"run_nuit_chasse","salon":False,"duree":"2 h",
-        "desc":"Taux Mythique ×3 et Légendaire ×2 sur tous les tirages.","gain":"Meilleures cartes"},
-    "doublexp": {"nom":"⚡ Double XP","fn":"run_double_xp","salon":False,"duree":"1 h",
+    "loterie": {"nom":"🍀 Loterie","fn":"run_loterie","salon":True,"duree":"5 min","fam":"casino",
+        "desc":"Tickets à 100 pièces, un seul gagnant rafle la cagnotte.","gain":"toute la cagnotte"},
+    "invasion": {"nom":"🐉 Invasion","fn":"run_invasion","salon":True,"duree":"variable","fam":"combat",
+        "desc":"Un boss débarque, tout le monde le frappe avec .attaque.","gain":"250-380 p chacun"},
+    "sapin": {"nom":"🎄 Le Sapin du QG","fn":"run_sapin_noel","salon":True,"duree":"3 min","fam":"saisonnier","saison":"Wintervale",
+        "desc":"Cinq cadeaux sous le sapin, un par personne.","gain":"500 à 18 000 pièces"},
+    "halloween": {"nom":"🎃 Des Bonbons ou un Sort","fn":"run_halloween","salon":True,"duree":"3 min","fam":"saisonnier","saison":"Blackwood",
+        "desc":"Frappe à 3 portes. Des bonbons… ou un piège.","gain":"jusqu'à 30 000 pièces"},
+    "nuitchasse": {"nom":"🌙 Nuit de Chasse","fn":"run_nuit_chasse","salon":False,"duree":"2 h","fam":"modificateur",
+        "desc":"Taux Mythique ×3 et Légendaire ×2 sur tous les tirages.","gain":"meilleures cartes"},
+    "doublexp": {"nom":"⚡ Double XP","fn":"run_double_xp","salon":False,"duree":"1 h","fam":"modificateur",
         "desc":"Chaque message rapporte deux fois plus d'XP.","gain":"XP doublée"},
-    "nuitcasino": {"nom":"🎰 Nuit Casino","fn":"run_nuit_casino","salon":False,"duree":"1 h",
-        "desc":"Les gains de .slot sont doublés.","gain":"Gains ×2 au casino"},
-    "marchenoir": {"nom":"🕶️ Marché Noir","fn":"run_marche_noir","salon":False,"duree":"24 h",
-        "desc":"Trois cartes rares achetables — cher, mais garanties.","gain":"Cartes Épique à Mythique"},
-    "classement": {"nom":"🏆 Classement","fn":"run_classement","salon":False,"duree":"instantané",
-        "desc":"Affiche le top 5 des membres du serveur.","gain":"Aucun"},
-    "heuremaudite": {"nom":"😈 Heure Maudite","fn":"run_heure_maudite","salon":False,"duree":"variable",
-        "desc":"Déclenche un autre event au hasard, sans prévenir lequel.","gain":"Surprise"},
+    "nuitcasino": {"nom":"🎰 Nuit Casino","fn":"run_nuit_casino","salon":False,"duree":"1 h","fam":"modificateur",
+        "desc":"Le jackpot de .slot passe de ×10 à ×20.","gain":"jackpot doublé"},
+    "marchenoir": {"nom":"🕶️ Marché Noir","fn":"run_marche_noir","salon":False,"duree":"24 h","fam":"modificateur",
+        "desc":"Trois cartes rares achetables — cher, mais garanties.","gain":"cartes Épique à Mythique"},
+    "roicolline": {"nom":"👑 Roi de la Colline","fn":"run_roi_colline","salon":False,"duree":"30 min","fam":"legacy",
+        "desc":"Affrontez-vous en arène, le dernier vainqueur est couronné.","gain":"500 pièces bonus"},
 }
+
+EVENTS_MIGRATION = {"classement": None, "heuremaudite": "defieclair"}
+
+FAMILLES_EVENT = {
+    "event":        ("🎪 Events",        0x3498db),
+    "casino":       ("🎰 Casino",        0xf1c40f),
+    "combat":       ("⚔️ Combat",        0xe74c3c),
+    "saisonnier":   ("🎃 Saisonniers",   0xff7518),
+    "modificateur": ("🔵 Modificateurs", 0x5865f2),
+    "legacy":       ("⚫ Legacy",         0x95a5a6),
+}
+
+def events_de(fam):
+    return {k: v for k, v in EVENTS_CATALOGUE.items() if v.get("fam") == fam}
 
 @bot.command(name="event", aliases=["events", "eventinfo"])
 async def event_cmd(ctx, nom: str = None):
-    """Liste des events du serveur — .event [nom]"""
+    """Catalogue des activités du serveur — .event [nom]"""
     if nom:
         cle = nom.lower().strip()
-        e = EVENTS_CATALOGUE.get(cle)
+        e = EVENTS_CATALOGUE.get(cle) or next(
+            (v for k, v in EVENTS_CATALOGUE.items() if cle in k or cle in normalize_str(v["nom"])), None)
         if not e:
-            e = next((v for k, v in EVENTS_CATALOGUE.items() if cle in k or cle in normalize_str(v["nom"])), None)
-        if not e:
-            return await ctx.send(f"❌ Event `{nom}` inconnu — tape `.event` pour la liste.")
-        return await ctx.send(embed=discord.Embed(
-            title=e["nom"],
-            description=e["desc"],
-            color=0x3498db)
-            .add_field(name="⏱️ Durée", value=e["duree"], inline=True)
-            .add_field(name="🏆 Récompense", value=e["gain"], inline=True)
-            .add_field(name="📍 Salon dédié", value="Oui" if e["salon"] else "Non", inline=True))
-
-    pages, groupes = [], {
-        "⚡ Rapides — quelques minutes": ["questioneclair","premierarrive","chiffremystere","pluiepieces",
-                                          "chiffredujour","bombe","vraifaux","motmelange","devinepays",
-                                          "enigme","quisuisje","premierclic","reactioneclair","intrus","taprace","coursepets"],
-        "🎁 À récupérer": ["coffre","colis","jackpot","cartemystere"],
-        "🎄 De saison": ["sapin","halloween"],
-        "🎪 Gros events": ["banquier","ascenseur","encheres","loterie","invasion","roicolline","debatdujour","braquagecoffre"],
-        "🌙 Bonus temporaires": ["nuitchasse","doublexp","nuitcasino","marchenoir","classement","heuremaudite"],
-    }
-    for titre, cles in groupes.items():
-        e = discord.Embed(
-            title=f"🎪 Events du QG — {titre}",
-            description="*Les events tombent tout seuls ou sont lancés par le staff.*",
-            color=0x3498db)
-        for k in cles:
-            ev = EVENTS_CATALOGUE[k]
-            e.add_field(
-                name=f"{ev['nom']}  ·  {ev['duree']}",
-                value=f"{ev['desc']}\n🏆 **{ev['gain']}**" + ("  •  📍 salon dédié" if ev["salon"] else ""),
-                inline=False)
-        e.set_footer(text=f"{len(EVENTS_CATALOGUE)} events au total  •  `.event <nom>` pour le détail")
+            return await ctx.send(f"❌ `{nom}` inconnu — tape `.event` pour la liste.")
+        fam = e.get("fam", "event")
+        lib = FAMILLES_EVENT.get(fam, ("🎯 Mode", 0x95a5a6))
+        emb = (discord.Embed(title=e["nom"], description=e["desc"], color=lib[1])
+               .add_field(name="⏱️ Durée", value=e["duree"], inline=True)
+               .add_field(name="🏆 Récompense", value=e["gain"], inline=True)
+               .add_field(name="📂 Famille", value=lib[0], inline=True))
+        if fam == "mode":
+            emb.add_field(name="🔗 Fait partie de",
+                          value=EVENTS_CATALOGUE.get(e.get("parent",""), {}).get("nom","—"), inline=False)
+        if e.get("saison"):
+            emb.add_field(name="🗓️ Saison", value=e["saison"], inline=True)
+        if fam == "modificateur":
+            r = modif_restants(cle)
+            emb.add_field(name="🔵 État", value=f"Actif — encore {r//60} min" if r else "Inactif", inline=False)
+        return await ctx.send(embed=emb)
+    pages = []
+    for fam, (titre, couleur) in FAMILLES_EVENT.items():
+        items = events_de(fam)
+        if not items: continue
+        e = discord.Embed(title=f"{titre} — {len(items)}", color=couleur, description={
+            "event":"*Des activités auxquelles on participe.*",
+            "casino":"*Mises, tirages et cagnottes.*",
+            "combat":"*Boss et raids — voir aussi `.boss`.*",
+            "saisonnier":"*Ne tournent qu'à leur période.*",
+            "modificateur":"*Pas des events : des états temporaires du serveur.*",
+            "legacy":"*Conservés, mais plus mis en avant.*"}.get(fam, ""))
+        for k, ev in items.items():
+            val = f"{ev['desc']}\n🏆 **{ev['gain']}**"
+            if fam == "modificateur" and modif_restants(k):
+                val += f"\n🔵 **ACTIF** — encore {modif_restants(k)//60} min"
+            modes = [v["nom"] for v in EVENTS_CATALOGUE.values() if v.get("parent") == k]
+            if modes: val += f"\n*Modes : {' · '.join(modes)}*"
+            e.add_field(name=f"{ev['nom']}  ·  {ev['duree']}", value=val, inline=False)
+        e.set_footer(text=f"{len(events_de('event'))} events  •  `.event <nom>` pour le détail")
         pages.append(e)
-    view = PageView(pages, ctx.author, timeout=180)
-    await ctx.send(embed=pages[0], view=view)
+    await ctx.send(embed=pages[0], view=PageView(pages, ctx.author, timeout=180))
+
 
 @bot.command(name="lancerevent", aliases=["startevent"])
 @commands.has_permissions(manage_guild=True)
@@ -9118,7 +9294,7 @@ async def lancerevent_cmd(ctx, nom: str = None):
     ALIAS = {"question":"questioneclair","eclair":"questioneclair","debat":"debatdujour",
              "roi":"roicolline","colline":"roicolline","loto":"loterie","boss":"invasion",
              "chasse":"nuitchasse","xp2":"doublexp","casino":"nuitcasino","marche":"marchenoir",
-             "carte":"cartemystere","top":"classement","maudite":"heuremaudite",
+             "carte":"cartemystere","maudite":"defieclair","defi":"defieclair","defis":"defieclair","reflex":"reflexe","colis":"coffre",
              "deal":"banquier","vente":"encheres","enchere":"encheres","premier":"premierarrive",
              "chiffre":"chiffremystere","pluie":"pluiepieces","dujour":"chiffredujour","fil":"bombe","desamorcer":"bombe","vf":"vraifaux","melange":"motmelange","pays":"devinepays","riddle":"enigme","qui":"quisuisje","coffrefort":"braquagecoffre","braquagecoffre":"braquagecoffre","clic":"premierclic","reaction":"reactioneclair","emoji":"reactioneclair","different":"intrus","course":"taprace","tap":"taprace","etage":"ascenseur","lift":"ascenseur","course":"coursepets","noel":"sapin","cadeaux":"sapin","bonbons":"halloween","citrouille":"halloween","pets":"coursepets"}
     if not nom:
@@ -9151,12 +9327,7 @@ async def stopervent_cmd(ctx):
     """Arrête tous les events en cours — .stopervent"""
     global nuit_chasse_active, double_xp_event_actif, casino_boost_actif, jackpot_cagnotte
     arretes = []
-    if nuit_chasse_active:
-        nuit_chasse_active = False; arretes.append("🌙 Nuit de Chasse")
-    if double_xp_event_actif:
-        double_xp_event_actif = False; arretes.append("⚡ Double XP")
-    if casino_boost_actif:
-        casino_boost_actif = False; arretes.append("🎰 Nuit Casino")
+    arretes.extend(modif_tout_eteindre())
     if jackpot_cagnotte:
         jackpot_cagnotte = 0; arretes.append("💰 Jackpot")
     if marche_noir_actif:
@@ -9936,6 +10107,23 @@ def save_scheduled_events():
     except Exception as e:
         print(f"[Scheduler] Erreur sauvegarde : {e}")
 
+def migrer_scheduled_events():
+    """Vague 1A — remappe les plannings dont la clé a changé. Rien ne disparaît en silence."""
+    global scheduled_events
+    bouges, perdus = [], []
+    for e in list(scheduled_events):
+        cle = e.get("event")
+        if cle in EVENTS_CATALOGUE: continue
+        remp = EVENTS_MIGRATION.get(cle, "__inconnu__")
+        if remp in (None, "__inconnu__"):
+            perdus.append(cle); scheduled_events.remove(e)
+        else:
+            e["event"] = remp; bouges.append(f"{cle} -> {remp}")
+    if bouges: print(f"[Migration planning] remappés : {', '.join(bouges)}")
+    if perdus: print(f"[Migration planning] retirés : {', '.join(perdus)}")
+    if bouges or perdus: save_scheduled_events()
+    return bouges, perdus
+
 def load_scheduled_events():
     global scheduled_events
     if not os.path.exists(SCHEDULED_EVENTS_FILE):
@@ -9943,6 +10131,7 @@ def load_scheduled_events():
     try:
         with open(SCHEDULED_EVENTS_FILE, "r", encoding="utf-8") as f:
             scheduled_events = json.load(f)
+        migrer_scheduled_events()
         print(f"[Scheduler] ✅ {len(scheduled_events)} event(s) programmé(s)")
     except Exception as e:
         print(f"[Scheduler] Erreur chargement : {e}")
@@ -10030,9 +10219,11 @@ async def addevent_cmd(ctx, event: str = None, jour: str = None, heure: str = No
             color=0x3498db))
 
     cle = event.lower().strip()
-    ALIAS_EV = {"question":"questioneclair","eclair":"questioneclair","debat":"debatdujour",
-                "boss":"invasion","chasse":"nuitchasse","marche":"marchenoir","deal":"banquier",
-                "clic":"premierclic","tap":"taprace","lift":"ascenseur","etage":"ascenseur"}
+    ALIAS_EV = {"question":"questioneclair","eclair":"questioneclair","defi":"defieclair",
+                "defis":"defieclair","debat":"debatdujour","boss":"invasion","chasse":"nuitchasse",
+                "marche":"marchenoir","deal":"banquier","clic":"premierclic","reflex":"reflexe",
+                "tap":"taprace","lift":"ascenseur","etage":"ascenseur","colis":"coffre",
+                "maudite":"defieclair","loto":"loterie"}
     cle = ALIAS_EV.get(cle, cle)
     if cle not in EVENTS_CATALOGUE:
         return await ctx.send(f"❌ Event `{event}` inconnu — tape `.event` pour la liste.")
@@ -37880,6 +38071,7 @@ async def on_ready():
     anniversaires_pets.start()
     gazette_task.start()
     nettoyer_salons_inactifs.start()
+    modif_watchdog.start()
     await bot.change_presence(
         activity=discord.Activity(type=discord.ActivityType.watching, name="🎬 Kdrama • .help")
     )
