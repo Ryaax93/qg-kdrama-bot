@@ -2893,18 +2893,64 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
 # ============================================================
 #  NIVEAUX / XP
 # ============================================================
-# ── Source de vérité unique des stats d'arène ──
-ARENE_PV_BASE, ARENE_PV_PAS   = 250, 8
-ARENE_END_BASE, ARENE_END_PAS = 100, 5
-ARENE_ATK_PAS, ARENE_DEF_PAS  = 3, 3
+# ── Arène : source de vérité unique des stats et des styles ──
+ARENE_PV_BASE,  ARENE_PV_PAS   = 250, 9
+ARENE_END_BASE, ARENE_END_PAS  = 60, 6
+ARENE_ATK_PAS,  ARENE_DEF_PAS  = 4, 4
+ARENE_REGEN_BASE, ARENE_REGEN_PAS = 11, 1.0
+ARENE_DEF_CAP, ARENE_DEF_DEN   = 0.40, 160    # réduction plafonnée, rendements décroissants
+ARENE_ATK_MAX, ARENE_ATK_DEN   = 1.5, 95      # multiplicateur plafonné
+
+ARENE_STYLES = {
+    "tank":       ("🛡️", "Tank",       "Encaisse. Soigne mieux, souffre moins quand il est bas."),
+    "assaut":     ("🗡️", "Assaut",     "Frappe fort. Critiques doublés, mais moins de PV."),
+    "endurance":  ("⚡", "Endurance",  "Tient la distance. Actions moins chères, frappe fort à plein souffle."),
+    "polyvalent": ("⚖️", "Polyvalent", "Aucun point faible. Légèrement meilleur partout."),
+}
+
+def arene_style(uid):
+    """Le style émerge de la répartition des points — aucune classe n'est imposée."""
+    s = arena_stats[uid]
+    pv, at, df, en = s["pv_bonus"], s["atk_bonus"], s["def_bonus"], s["end_bonus"]
+    tot = pv + at + df + en
+    if tot < 5:
+        return "polyvalent"
+    if (pv + df) / tot >= 0.60: return "tank"
+    if at / tot >= 0.50:        return "assaut"
+    if en / tot >= 0.50:        return "endurance"
+    return "polyvalent"
 
 def arene_totaux(uid):
-    """PV, END, bonus ATK, bonus DEF réellement utilisés par le moteur de combat."""
+    """PV, END, ATK, DEF réellement utilisés par le moteur de combat."""
     s = arena_stats[uid]
-    return (ARENE_PV_BASE  + s["pv_bonus"]  * ARENE_PV_PAS,
+    pv  = ARENE_PV_BASE  + s["pv_bonus"]  * ARENE_PV_PAS
+    if arene_style(uid) == "assaut":
+        pv = int(pv * 0.90)                      # le glass cannon paie sa puissance
+    return (pv,
             ARENE_END_BASE + s["end_bonus"] * ARENE_END_PAS,
             s["atk_bonus"] * ARENE_ATK_PAS,
             s["def_bonus"] * ARENE_DEF_PAS)
+
+def arene_profil(uid):
+    """Tout ce dont le moteur a besoin, passifs de style compris."""
+    hp, end, atk, dfn = arene_totaux(uid)
+    st = arene_style(uid)
+    p = {"hp_max": hp, "end_max": end, "atk_b": atk, "def_b": dfn, "style": st,
+         "regen": ARENE_REGEN_BASE + arena_stats[uid]["end_bonus"] * ARENE_REGEN_PAS,
+         "cout": 1.0, "crit": 0.12, "poly": 1.0, "rempart": 1.0, "soin": 1.0, "elan": 1.0}
+    if st == "assaut":     p["crit"] = 0.24
+    if st == "endurance":  p["regen"] *= 1.30; p["cout"] = 0.75; p["elan"] = 1.15
+    if st == "tank":       p["rempart"] = 0.85; p["soin"] = 1.55
+    if st == "polyvalent": p["poly"] = 1.04
+    return p
+
+def arene_reduction(def_b):
+    """DEF : réduction en pourcentage, plafonnée. Jamais d'immunité."""
+    return min(ARENE_DEF_CAP, def_b / (def_b + ARENE_DEF_DEN))
+
+def arene_multiplicateur(atk_b):
+    """ATK : multiplicateur à rendements décroissants. Jamais ×3."""
+    return 1 + (atk_b / (atk_b + ARENE_ATK_DEN)) * ARENE_ATK_MAX
 
 @bot.command(name="rank", aliases=["niveau","xp"])
 async def rank(ctx, member: discord.Member = None):
@@ -2923,84 +2969,129 @@ async def rank(ctx, member: discord.Member = None):
     embed.add_field(name="Niveau", value=str(lvl))
     embed.add_field(name="XP", value=f"{xp}/{needed}")
     embed.add_field(name="Progression", value=f"`{bar}`", inline=False)
-    embed.add_field(name="⚔️ Stats Arène", value=(
-        f"❤️ **PV** : {hp_total} *(+{s['pv_bonus']*8})*\n"
-        f"⚡ **Endurance** : {end_total} *(+{s['end_bonus']*5})*\n"
-        f"🗡️ **ATK bonus** : +{s['atk_bonus']*3}\n"
-        f"🛡️ **DEF bonus** : +{s['def_bonus']*3}\n"
-        f"🆙 **Points dispo** : **{pts}**"
-    ), inline=False)
+    p = arene_profil(uid)
+    emo_s, nom_s, desc_s = ARENE_STYLES[p["style"]]
+    embed.add_field(name="🎯 Style", value=f"{emo_s} **{nom_s}**\n*{desc_s}*", inline=False)
+    embed.add_field(name="⚔️ Combattant", value=(
+        f"❤️ **{p['hp_max']} PV**\n"
+        f"🗡️ **×{arene_multiplicateur(p['atk_b']):.2f}** dégâts\n"
+        f"🛡️ **−{arene_reduction(p['def_b'])*100:.0f} %** subis\n"
+        f"⚡ **{p['end_max']} END** *(régén {int(p['regen'])}/tour)*"
+    ), inline=True)
+    victoires = user_stats[uid].get("arene_wins", 0)
+    embed.add_field(name="📊 Investi", value=(
+        f"❤️ {s['pv_bonus']} · 🗡️ {s['atk_bonus']}\n"
+        f"🛡️ {s['def_bonus']} · ⚡ {s['end_bonus']}\n"
+        f"🆙 **{pts}** point(s) libre(s)\n"
+        f"🏆 **{victoires}** victoire(s)"
+    ), inline=True)
     embed.set_footer(text="Utilise .ameliorer pour dépenser tes points !" if pts > 0 else "Gagne de l'XP pour obtenir des points d'amélioration !")
     embed.set_thumbnail(url=member.display_avatar.url)
     await ctx.send(embed=embed)
 
 @bot.command(name="ameliorer", aliases=["amelio", "upgrade", "up"])
 async def ameliorer(ctx, stat: str = None):
-    """Dépense tes points d'amélioration — .ameliorer <pv|atk|def|endurance>"""
+    """Dépense tes points d'amélioration — .ameliorer"""
     uid = str(ctx.author.id)
-    pts = points_amelio[uid]
-    s = arena_stats[uid]
-
-    stats_valides = {
-        "pv":        ("pv_bonus",  "❤️ PV",         "+8 HP max"),
-        "atk":       ("atk_bonus", "🗡️ Attaque",    "+3 ATK"),
-        "def":       ("def_bonus", "🛡️ Défense",    "+3 DEF"),
-        "endurance": ("end_bonus", "⚡ Endurance",   "+5 END max"),
-        "end":       ("end_bonus", "⚡ Endurance",   "+5 END max"),
+    STATS = {
+        "pv":  ("pv_bonus",  "❤️", "PV",  ARENE_PV_PAS,  "points de vie"),
+        "atk": ("atk_bonus", "🗡️", "ATK", ARENE_ATK_PAS, "puissance de frappe"),
+        "def": ("def_bonus", "🛡️", "DEF", ARENE_DEF_PAS, "réduction des dégâts"),
+        "end": ("end_bonus", "⚡", "END", ARENE_END_PAS, "souffle et régénération"),
     }
+    ALIAS = {"vie": "pv", "hp": "pv", "attaque": "atk", "att": "atk",
+             "defense": "def", "défense": "def", "endurance": "end"}
 
-    # Affichage sans argument
-    if not stat:
-        embed = discord.Embed(
-            title="🆙 Points d'amélioration",
-            description=(
-                f"Tu as **{pts} point(s)** disponible(s) !\n\n"
-                f"Utilise `.ameliorer <stat>` pour dépenser un point :\n\n"
-                f"`.ameliorer pv` — ❤️ **+8 HP max** *(actuellement {ARENE_PV_BASE + s['pv_bonus']*ARENE_PV_PAS})*\n"
-                f"`.ameliorer atk` — 🗡️ **+3 ATK bonus** *(actuellement +{s['atk_bonus']*3})*\n"
-                f"`.ameliorer def` — 🛡️ **+3 DEF bonus** *(actuellement +{s['def_bonus']*3})*\n"
-                f"`.ameliorer endurance` — ⚡ **+5 END max** *(actuellement {100 + s['end_bonus']*5})*\n\n"
-                f"*1 point = 1 amélioration. Points gagnés à chaque level up !*"
-            ),
-            color=0x3498db
-        )
-        embed.set_footer(text="💡 Gagne des niveaux avec .daily .quiz .boss .arene !")
-        return await ctx.send(embed=embed)
+    def fiche():
+        s = arena_stats[uid]
+        p = arene_profil(uid)
+        emo, nom, desc = ARENE_STYLES[p["style"]]
+        pts = points_amelio[uid]
+        e = discord.Embed(
+            title=f"🆙 {ctx.author.display_name}",
+            description=(f"**{pts} point(s)** à dépenser\n"
+                         f"{emo} **{nom}** — *{desc}*"),
+            color=0x3498db if pts else 0x95a5a6)
+        e.add_field(name="❤️ PV",
+                    value=f"**{p['hp_max']}**\n*+{ARENE_PV_PAS} au prochain*", inline=True)
+        e.add_field(name="🗡️ ATK",
+                    value=f"**×{arene_multiplicateur(p['atk_b']):.2f}**\n"
+                          f"*×{arene_multiplicateur(p['atk_b'] + ARENE_ATK_PAS):.2f} au prochain*",
+                    inline=True)
+        e.add_field(name="🛡️ DEF",
+                    value=f"**−{arene_reduction(p['def_b'])*100:.0f} %**\n"
+                          f"*−{arene_reduction(p['def_b'] + ARENE_DEF_PAS)*100:.0f} % au prochain*",
+                    inline=True)
+        e.add_field(name="⚡ END",
+                    value=f"**{p['end_max']}** *(régén {int(p['regen'])}/tour)*\n"
+                          f"*+{ARENE_END_PAS} au prochain*", inline=True)
+        e.add_field(name="📊 Répartition",
+                    value=f"❤️{s['pv_bonus']} · 🗡️{s['atk_bonus']} · "
+                          f"🛡️{s['def_bonus']} · ⚡{s['end_bonus']}", inline=True)
+        e.set_footer(text="Le style suit ta répartition — aucune classe à choisir")
+        return e
 
-    stat = stat.lower()
-    if stat not in stats_valides:
-        return await ctx.send(
-            f"❌ Stat invalide ! Choisis : `pv` • `atk` • `def` • `endurance`\n"
-            f"Ex : `.ameliorer pv`"
-        )
+    def depenser(cle):
+        champ = STATS[cle][0]
+        arena_stats[uid][champ] += 1
+        points_amelio[uid] -= 1
+        save_all_data()
 
-    if pts <= 0:
+    # ── Mode texte conservé : .ameliorer atk ──
+    if stat:
+        cle = ALIAS.get(stat.lower().strip(), stat.lower().strip())
+        if cle not in STATS:
+            return await ctx.send("❌ Stat inconnue — `pv`, `atk`, `def` ou `end`.")
+        if points_amelio[uid] < 1:
+            return await ctx.send("❌ Aucun point disponible. Monte des niveaux !")
+        avant = arene_profil(uid)
+        depenser(cle)
+        apres = arene_profil(uid)
+        emo, nom, _pas, _p, _d = (STATS[cle][1], STATS[cle][2], 0, 0, 0)
+        chg = {"pv":  f"{avant['hp_max']} → **{apres['hp_max']}** PV",
+               "atk": f"×{arene_multiplicateur(avant['atk_b']):.2f} → "
+                      f"**×{arene_multiplicateur(apres['atk_b']):.2f}**",
+               "def": f"−{arene_reduction(avant['def_b'])*100:.0f} % → "
+                      f"**−{arene_reduction(apres['def_b'])*100:.0f} %**",
+               "end": f"{avant['end_max']} → **{apres['end_max']}** END"}[cle]
+        txt = f"{emo} **{nom}** — {chg}"
+        if avant["style"] != apres["style"]:
+            e2, n2, d2 = ARENE_STYLES[apres["style"]]
+            txt += f"\n\n🎯 Ton style devient **{e2} {n2}** — *{d2}*"
         return await ctx.send(embed=discord.Embed(
-            description="❌ Tu n'as pas de points d'amélioration disponibles !\nGagne des niveaux pour en obtenir 🆙",
-            color=0xe74c3c
-        ))
+            description=txt + f"\n\n*Points restants : {points_amelio[uid]}*",
+            color=0x2ecc71))
 
-    cle, label, effet = stats_valides[stat]
-    s[cle] += 1
-    points_amelio[uid] -= 1
+    # ── Interface boutons ──
+    class UpView(ui.View):
+        def __init__(self):
+            super().__init__(timeout=120)
+            for cle, (_ch, emo, nom, _pas, _d) in STATS.items():
+                b = ui.Button(label=nom, emoji=emo, style=discord.ButtonStyle.primary,
+                              disabled=points_amelio[uid] < 1)
+                async def cb(itx, c=cle):
+                    if str(itx.user.id) != uid:
+                        return await itx.response.send_message(
+                            "Ce n'est pas ta fiche — tape `.ameliorer`.", ephemeral=True)
+                    if points_amelio[uid] < 1:
+                        return await itx.response.send_message(
+                            "Plus de points disponibles.", ephemeral=True)
+                    avant = arene_profil(uid)
+                    depenser(c)
+                    apres = arene_profil(uid)
+                    if points_amelio[uid] < 1:
+                        for it in self.children: it.disabled = True
+                    msg = ""
+                    if avant["style"] != apres["style"]:
+                        e2, n2, _d2 = ARENE_STYLES[apres["style"]]
+                        msg = f"\n🎯 Nouveau style : **{e2} {n2}**"
+                    await itx.response.edit_message(embed=fiche(), view=self)
+                    if msg:
+                        await itx.followup.send(msg.strip(), ephemeral=True)
+                b.callback = cb
+                self.add_item(b)
+    await ctx.send(embed=fiche(), view=UpView())
 
-    save_all_data()
-    hp_total, end_total, _atk, _def = arene_totaux(uid)
-
-    embed = discord.Embed(
-        title="✅ Amélioration appliquée !",
-        description=(
-            f"**{label}** améliorée — **{effet}** !\n\n"
-            f"❤️ **PV max** : {hp_total}\n"
-            f"⚡ **END max** : {end_total}\n"
-            f"🗡️ **ATK bonus** : +{s['atk_bonus']*3}\n"
-            f"🛡️ **DEF bonus** : +{s['def_bonus']*3}\n\n"
-            f"*Points restants : **{points_amelio[uid]}***"
-        ),
-        color=0x2ecc71
-    )
-    embed.set_footer(text="⚔️ Ces stats sont actives dans l'arène !")
-    await ctx.send(embed=embed)
 
 @bot.command(name="leaderboard", aliases=["top","classement","lb"])
 async def leaderboard(ctx):
@@ -11286,11 +11377,9 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
     uid1 = str(ctx.author.id)
     uid2 = str(adversaire.id)
 
-    def get_stats(uid):
-        return arene_totaux(uid)
-
-    hp1_max, end1_max, atk1_b, def1_b = get_stats(uid1)
-    hp2_max, end2_max, atk2_b, def2_b = get_stats(uid2)
+    prof1, prof2 = arene_profil(uid1), arene_profil(uid2)
+    hp1_max, end1_max = prof1["hp_max"], prof1["end_max"]
+    hp2_max, end2_max = prof2["hp_max"], prof2["end_max"]
 
     # ── Invitation ────────────────────────────────────────────
     class InviteView(ui.View):
@@ -11325,12 +11414,12 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
         return
 
     # ── Setup ─────────────────────────────────────────────────
-    joueurs = [
-        {"membre": ctx.author,  "hp": hp1_max, "hp_max": hp1_max, "end": end1_max, "end_max": end1_max,
-         "atk_b": atk1_b, "def_b": def1_b, "esquive": False, "defense": False, "couleur": "🔴"},
-        {"membre": adversaire,  "hp": hp2_max, "hp_max": hp2_max, "end": end2_max, "end_max": end2_max,
-         "atk_b": atk2_b, "def_b": def2_b, "esquive": False, "defense": False, "couleur": "🔵"},
-    ]
+    joueurs = []
+    for membre, p, coul in ((ctx.author, prof1, "🔴"), (adversaire, prof2, "🔵")):
+        j = dict(p)
+        j.update({"membre": membre, "hp": p["hp_max"], "end": p["end_max"],
+                  "esquive": False, "defense": False, "couleur": coul})
+        joueurs.append(j)
     active_arene[ctx.channel.id] = True
     tour_num  = 1
     tour_idx  = 0
@@ -11338,12 +11427,12 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
     historique = []
 
     ACTIONS_INFO = {
-        0: {"nom": "Attaque",          "emoji": "⚔️",  "cout": 10, "lo": 25, "hi": 40, "desc": "Frappe fiable"},
-        1: {"nom": "Frappe Chargée",   "emoji": "💥",  "cout": 30, "lo": 10, "hi": 65, "desc": "Risqué mais dévastateur"},
-        2: {"nom": "Att. Spéciale",    "emoji": "🌀",  "cout": 20, "lo": 30, "hi": 50, "desc": "Puissante et stable"},
-        3: {"nom": "Défense",          "emoji": "🛡️", "cout": 5,  "lo": 0,  "hi": 0,  "desc": "−50% dégâts reçus"},
-        4: {"nom": "Soin",             "emoji": "🌿",  "cout": 8,  "lo": 0,  "hi": 0,  "desc": "+15-30 HP"},
-        5: {"nom": "Esquive",          "emoji": "💨",  "cout": 15, "lo": 0,  "hi": 0,  "desc": "Esquive secrète"},
+        0: {"nom": "Attaque",        "emoji": "⚔️",  "cout": 10, "lo": 20, "hi": 30, "desc": "Toujours dispo"},
+        1: {"nom": "Frappe Chargée", "emoji": "💥",  "cout": 36, "lo": 22, "hi": 80, "desc": "Chère, imprévisible"},
+        2: {"nom": "Att. Spéciale",  "emoji": "🌀",  "cout": 24, "lo": 38, "hi": 56, "desc": "Chère, fiable"},
+        3: {"nom": "Défense",        "emoji": "🛡️", "cout": 6,  "lo": 0,  "hi": 0,  "desc": "−50% + riposte"},
+        4: {"nom": "Soin",           "emoji": "🌿",  "cout": 14, "lo": 0,  "hi": 0,  "desc": "+6% PV max"},
+        5: {"nom": "Esquive",        "emoji": "💨",  "cout": 16, "lo": 0,  "hi": 0,  "desc": "Esquive secrète"},
     }
 
     def barre(val, maxi, longueur=14):
@@ -11453,7 +11542,8 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
     while ctx.channel.id in active_arene:
         attaquant = joueurs[tour_idx]
         defenseur = joueurs[1 - tour_idx]
-        attaquant["end"] = min(attaquant["end_max"], attaquant["end"] + REGEN_END)
+        attaquant["end"] = min(attaquant["end_max"],
+                               int(attaquant["end"] + attaquant["regen"]))
 
         view, chosen, done_ev = build_view_actions(attaquant)
 
@@ -11471,10 +11561,11 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
 
         choix = chosen["val"] if chosen["val"] is not None else 0
         action = ACTIONS_INFO[choix]
-        cout   = action["cout"]
+        cout   = max(1, int(action["cout"] * attaquant["cout"]))
 
         if attaquant["end"] < cout:
-            choix = 0; action = ACTIONS_INFO[0]; cout = action["cout"]
+            choix = 0; action = ACTIONS_INFO[0]
+            cout = max(1, int(action["cout"] * attaquant["cout"]))
             historique.append(f"⚡ {attaquant['membre'].display_name} manque d'END — attaque de base !")
 
         attaquant["end"] = max(0, attaquant["end"] - cout)
@@ -11486,7 +11577,7 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
             historique.append(f"🛡️ **{nom_a}** se défend ! *(dégâts −50% ce tour)*")
 
         elif choix == 4: # Soin
-            soin = random.randint(15, 30)
+            soin = int(attaquant["hp_max"] * 0.06 * attaquant["soin"])
             attaquant["hp"] = min(attaquant["hp_max"], attaquant["hp"] + soin)
             historique.append(f"🌿 **{nom_a}** se soigne — **+{soin} HP** !")
 
@@ -11496,21 +11587,33 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
             historique.append(f"💨 **{nom_a}** se prépare... *(action secrète)*")
 
         else:  # Attaques 0 1 2
-            base = random.randint(action["lo"], action["hi"]) + attaquant["atk_b"]
-            base = max(1, base - defenseur["def_b"])
-            critique = random.random() < 0.12
-            if critique: base = int(base * 1.5)
-
+            base = random.randint(action["lo"], action["hi"])
+            base *= arene_multiplicateur(attaquant["atk_b"])
+            base *= attaquant["poly"]
+            if attaquant["end"] > attaquant["end_max"] * 0.60:
+                base *= attaquant["elan"]
+            base *= (1 - arene_reduction(defenseur["def_b"]))
+            critique = random.random() < attaquant["crit"]
+            if critique: base *= 1.5
+            riposte = 0
             if defenseur["esquive"]:
                 defenseur["esquive"] = False
                 historique.append(f"💨 **{nom_a}** attaque... **{nom_d}** esquive ! *0 dégâts*")
             else:
                 if defenseur["defense"]:
-                    base //= 2
+                    base *= 0.5
                     defenseur["defense"] = False
+                    riposte = int(defenseur["def_b"] * 0.8)
+                    if riposte:
+                        attaquant["hp"] = max(0, attaquant["hp"] - riposte)
+                if defenseur["hp"] < defenseur["hp_max"] * 0.40:
+                    base *= defenseur["rempart"]
+                base = max(4, int(base))
                 defenseur["hp"] = max(0, defenseur["hp"] - base)
                 crit = " ✦ ***CRITIQUE !***" if critique else ""
-                historique.append(f"{action['emoji']} **{nom_a}** {action['nom'].lower()} — **−{base} HP** !{crit}")
+                rip  = f" *(riposte −{riposte})*" if riposte else ""
+                historique.append(
+                    f"{action['emoji']} **{nom_a}** {action['nom'].lower()} — **−{base} HP** !{crit}{rip}")
 
         tour_num += 1
         tour_idx  = 1 - tour_idx
@@ -11565,8 +11668,9 @@ async def attaque_cmd(ctx):
     now = datetime.datetime.utcnow().timestamp()
 
     last = game["participants"].get(uid, {}).get("last_attack", 0)
-    if now - last < 4:
-        restant = int(4 - (now - last))
+    cd = game.get("cd", {}).get(uid, 4)
+    if now - last < cd:
+        restant = max(1, int(cd - (now - last)))
         return await ctx.send(f"⏳ Encore **{restant}s** avant de refrapper !", delete_after=4)
 
     # Supprimer le message de commande pour garder le salon propre
@@ -11576,7 +11680,28 @@ async def attaque_cmd(ctx):
         pass
 
     niveau = xp_data[uid]["level"]
+    # Le build compte : chaque style apporte quelque chose de différent au raid.
+    p = arene_profil(uid)
     degats = random.randint(10 + niveau * 2, 30 + niveau * 5)
+    degats = int(degats * arene_multiplicateur(p["atk_b"]) * p["poly"])
+    role = None
+    if p["style"] == "tank":
+        # Le tank encaisse pour le groupe : il réduit la riposte du boss.
+        game["riposte_reduite"] = min(0.50, game.get("riposte_reduite", 0.0) + 0.06)
+        role = f"🛡️ *{ctx.author.display_name} tient la ligne* — riposte du boss −{int(game['riposte_reduite']*100)} %"
+    elif p["style"] == "endurance":
+        # L'endurance frappe plus souvent : son cooldown est réduit.
+        game.setdefault("cd", {})[uid] = 2.5
+        role = "⚡ *Cadence soutenue* — tu peux refrapper plus vite"
+    elif p["style"] == "assaut":
+        if random.random() < 0.24:
+            degats = int(degats * 1.6)
+            role = "🗡️ *Coup critique !*"
+    else:
+        soin = int(arene_totaux(uid)[0] * 0.03)
+        game["bonus_groupe"] = game.get("bonus_groupe", 0) + 1
+        role = f"⚖️ *Appui tactique* — +{game['bonus_groupe']} % de dégâts pour tout le groupe"
+        degats = int(degats * (1 + game["bonus_groupe"] / 100))
 
     if uid not in game["participants"]:
         game["participants"][uid] = {"degats_total": 0, "last_attack": 0, "membre": ctx.author.display_name}
@@ -11591,6 +11716,7 @@ async def attaque_cmd(ctx):
         # ── Boss vaincu ──────────────────────────────────────
         recompense = boss["recompense"]
         economy_data[uid]["coins"] += 250
+        unlock_achievement(uid, "boss_kill", ctx.channel)
         for pid, data in game["participants"].items():
             economy_data[pid]["coins"] += recompense
             xp_data[pid]["xp"] += 50
@@ -11635,6 +11761,8 @@ async def attaque_cmd(ctx):
     else:
         # ── Mise à jour de l'embed boss ──────────────────────
         derniere = f"**{ctx.author.display_name}** inflige **{degats:,} dégâts** !"
+        if role:
+            derniere += f"\n{role}"
         try:
             await game["msg"].edit(embed=build_boss_embed(gid, derniere))
         except:
@@ -12213,6 +12341,7 @@ ACHIEVEMENTS = {
     "burn_10":      {"nom": "Pyromane",           "emoji": "🔥", "desc": "Recycler 10 cartes",             "stat": "burns",       "seuil": 10,    "reward": 500,  "cat": "🎰 Gacha"},
     # ⚔️ COMBAT
     "arene_1":      {"nom": "Premier Sang",       "emoji": "⚔️", "desc": "Gagner un duel d'arène",         "stat": "arene_wins",  "seuil": 1,     "reward": 200,  "cat": "⚔️ Combat"},
+    "arene_100":    {"nom": "Champion d'Arène",  "emoji": "🏆", "desc": "Gagner 100 duels d'arène",       "stat": "arene_wins",  "seuil": 100,   "reward": 4000, "cat": "⚔️ Combat"},
     "arene_25":     {"nom": "Gladiateur",         "emoji": "🗡️", "desc": "Gagner 25 duels d'arène",        "stat": "arene_wins",  "seuil": 25,    "reward": 1500, "cat": "⚔️ Combat"},
     "pb_10":        {"nom": "Maître Dresseur",    "emoji": "🎴", "desc": "Gagner 10 gachabattles",          "stat": "pb_wins",     "seuil": 10,    "reward": 1000, "cat": "⚔️ Combat"},
     "boss_kill":    {"nom": "Tueur de Boss",      "emoji": "👹", "desc": "Porter le coup final à un boss", "stat": None,          "seuil": None,  "reward": 1000, "cat": "⚔️ Combat"},
@@ -12224,6 +12353,15 @@ ACHIEVEMENTS = {
     # 💖 SOCIAL & EVENTS
     "mariage":      {"nom": "Cœur Pris",          "emoji": "💍", "desc": "Se marier",                      "stat": None,          "seuil": None,  "reward": 500,  "cat": "💖 Social"},
     "loterie_win":  {"nom": "Chanceux",           "emoji": "🍀", "desc": "Gagner une loterie",             "stat": None,          "seuil": None,  "reward": 1000, "cat": "💖 Social"},
+    # 🕵️ SECRETS — cachés jusqu'à l'obtention
+    "pas_de_bol":   {"nom": "Pas de Bol",        "emoji": "🎲", "desc": "10 rolls d'affilée sans rien au-dessus de Rare", "stat": None, "seuil": None, "reward": 400,  "cat": "🕵️ Secrets", "secret": True},
+    "improbable":   {"nom": "L'Improbable",      "emoji": "🍀", "desc": "Gagner un duel avec moins de 5 % de PV",         "stat": None, "seuil": None, "reward": 800,  "cat": "🕵️ Secrets", "secret": True},
+    "sang_froid":   {"nom": "Sang-Froid",        "emoji": "🎩", "desc": "Refuser trois offres du Banquier puis gagner",   "stat": None, "seuil": None, "reward": 900,  "cat": "🕵️ Secrets", "secret": True},
+    "descendu":     {"nom": "On Aurait Dû Descendre", "emoji": "🚂", "desc": "Rester dans le Train Fou jusqu'au terminus", "stat": None, "seuil": None, "reward": 1200, "cat": "🕵️ Secrets", "secret": True},
+    "menteur":      {"nom": "Beau Parleur",      "emoji": "🃏", "desc": "Passer trois mensonges de suite à Carte Rouge",  "stat": None, "seuil": None, "reward": 700,  "cat": "🕵️ Secrets", "secret": True},
+    "noctambule":   {"nom": "Noctambule",        "emoji": "🌙", "desc": "Écrire entre 4 h et 5 h du matin",               "stat": None, "seuil": None, "reward": 300,  "cat": "🕵️ Secrets", "secret": True},
+    "fidele":       {"nom": "L'Ancien",          "emoji": "🕰️", "desc": "Un an de présence sur le serveur",               "stat": None, "seuil": None, "reward": 2000, "cat": "🕵️ Secrets", "secret": True},
+    "poisse":       {"nom": "Maudit",            "emoji": "🐈‍⬛", "desc": "Perdre cinq fois d'affilée au .slot",           "stat": None, "seuil": None, "reward": 350,  "cat": "🕵️ Secrets", "secret": True},
     "pet_1":        {"nom": "Ami des Bêtes",      "emoji": "🐾", "desc": "Adopter un compagnon",           "stat": None,          "seuil": None,  "reward": 200,  "cat": "💖 Social"},
 }
 
@@ -12234,11 +12372,17 @@ def unlock_achievement(uid, ach_id, channel=None):
     achievements_data[uid].add(ach_id)
     a = ACHIEVEMENTS[ach_id]
     economy_data[uid]["coins"] += a["reward"]
+    tid = TITRE_PAR_SUCCES.get(ach_id)
+    titre_neuf = donner_titre(uid, tid) if tid else False
     if channel:
         try:
+            txt = (f"🏆 **SUCCÈS DÉBLOQUÉ !** {a['emoji']} **{a['nom']}**\n"
+                   f"*{a['desc']}* — <@{uid}> gagne **+{a['reward']} pièces** !")
+            if titre_neuf:
+                e_t, lib_t = TITRES[tid][0], TITRES[tid][1]
+                txt += f"\n👑 Nouveau titre : **{e_t} {lib_t}** — `.pins` pour l'équiper."
             asyncio.create_task(channel.send(embed=discord.Embed(
-                description=f"🏆 **SUCCÈS DÉBLOQUÉ !** {a['emoji']} **{a['nom']}**\n*{a['desc']}* — <@{uid}> gagne **+{a['reward']} pièces** !",
-                color=0xf1c40f)))
+                description=txt, color=0xf1c40f)))
         except Exception:
             pass
     return True
@@ -12278,10 +12422,27 @@ async def succes_cmd(ctx, membre: discord.Member = None):
     """Voir tes succès débloqués — .succes [@membre]"""
     target = membre or ctx.author
     uid = str(target.id)
+    if target == ctx.author:
+        neufs_s, neufs_t = rattraper_progression(uid)
+        if neufs_s or neufs_t:
+            save_all_data()
+            bloc = []
+            if neufs_s:
+                bloc.append("🏆 " + " · ".join(
+                    f"{ACHIEVEMENTS[a]['emoji']} **{ACHIEVEMENTS[a]['nom']}**" for a in neufs_s[:6])
+                    + (f" *+{len(neufs_s)-6}*" if len(neufs_s) > 6 else ""))
+            if neufs_t:
+                bloc.append("👑 " + " · ".join(f"**{TITRES[t][0]} {TITRES[t][1]}**" for t in neufs_t))
+            await ctx.send(embed=discord.Embed(
+                title="✨ Rattrapage",
+                description="Voilà ce que tu avais déjà mérité :\n\n" + "\n".join(bloc),
+                color=0xf1c40f))
     unlocked = achievements_data[uid]
     # Grouper par catégorie
     cats = {}
     for ach_id, a in ACHIEVEMENTS.items():
+        if a.get("secret") and ach_id not in unlocked:
+            a = dict(a, nom="???", desc="*Succès secret — à découvrir*", emoji="❔")
         cats.setdefault(a["cat"], []).append((ach_id, a))
     pages = []
     total = len(ACHIEVEMENTS)
@@ -15084,7 +15245,70 @@ PINS = {
     "course_win":        ("🏃", "Sprinteur",           "Gagner une Course de Compagnons"),
     "collectionneur":    ("🎴", "Collectionneur",      "Posséder 250 cartes"),
 }
-pins_data = defaultdict(set)   # {uid: {pin_id}}
+pins_data = defaultdict(set)     # {uid: {pin_id}}
+pins_equipes = defaultdict(list)  # {uid: [pin_id, ...]}  — 3 maximum
+PINS_MAX_EQUIPES = 3
+
+# ============================================================
+#  👑 TITRES — un seul équipé à la fois
+#  (id, emoji, libellé, condition lisible, rareté, secret)
+# ============================================================
+TITRES = {
+    # ── courants ──
+    "novice":       ("🌱", "le Nouveau",       "Arriver sur le serveur",             "commun",   False),
+    "bavard":       ("💬", "le Bavard",        "500 messages",                       "commun",   False),
+    "collectionneur":("🎴", "le Collectionneur","Posséder 100 cartes",               "commun",   False),
+    "dresseur":     ("🐾", "le Dresseur",      "Compagnon niveau 10",                "commun",   False),
+    "critique":     ("🎬", "le Critique",      "Noter 10 dramas",                    "commun",   False),
+    # ── rares ──
+    "gladiateur":   ("⚔️", "le Gladiateur",    "25 victoires en arène",              "rare",     False),
+    "champion":     ("🏆", "le Champion",      "100 victoires en arène",             "rare",     False),
+    "millionnaire": ("💰", "le Millionnaire",  "1 000 000 de pièces",                "rare",     False),
+    "veteran":      ("💫", "le Vétéran",       "Niveau 50",                          "rare",     False),
+    "scenariste":   ("📖", "le Scénariste",    "Terminer une Chronique",             "rare",     False),
+    "encyclopedie": ("🎓", "l'Encyclopédie",   "100 bonnes réponses au quiz",        "rare",     False),
+    # ── secrets ──
+    "survivant":    ("🐺", "le Survivant",     "???",                                "secret",   True),
+    "improbable":   ("🍀", "l'Improbable",     "???",                                "secret",   True),
+    "maudit":       ("🐈‍⬛", "le Maudit",       "???",                                "secret",   True),
+    "ancien":       ("🕰️", "l'Ancien",         "???",                                "secret",   True),
+    "tete_brulee":  ("🎢", "la Tête Brûlée",   "???",                                "secret",   True),
+}
+titres_data = defaultdict(set)      # {uid: {titre_id}}
+titre_equipe = {}                   # {uid: titre_id}
+
+# Succès et pins qui accordent un titre au passage
+TITRE_PAR_SUCCES = {
+    "bavard_2": "bavard", "niveau_50": "veteran", "arene_25": "gladiateur",
+    "arene_100": "champion", "quiz_100": "encyclopedie", "drama_10": "critique",
+    "collec_100": "collectionneur", "improbable": "improbable",
+    "poisse": "maudit", "fidele": "ancien",
+}
+TITRE_PAR_PIN = {
+    "millionnaire": "millionnaire", "pet_max": "dresseur",
+    "lg_survivant": "survivant", "ascenseur_top": "tete_brulee",
+    "drama_votant": "scenariste",
+}
+
+def donner_titre(uid, tid):
+    """Débloque un titre. Retourne True si c'est nouveau."""
+    if tid not in TITRES or tid in titres_data[uid]:
+        return False
+    titres_data[uid].add(tid)
+    return True
+
+def titre_affiche(uid):
+    """Le titre équipé, prêt à être affiché. Chaîne vide si aucun."""
+    tid = titre_equipe.get(uid)
+    if not tid or tid not in TITRES or tid not in titres_data[uid]:
+        return ""
+    emo, lib, _c, _r, _s = TITRES[tid]
+    return f"{emo} {lib}"
+
+def pins_affiches(uid):
+    """Les pins équipés, filtrés sur ceux réellement possédés."""
+    return [p for p in pins_equipes.get(uid, []) if p in pins_data[uid] and p in PINS]
+
 welcome_announced = set()      # {uid} — annonces de bienvenue déjà faites
 
 async def donner_pin(uid, pin_id, channel=None):
@@ -15093,6 +15317,8 @@ async def donner_pin(uid, pin_id, channel=None):
         return False
     pins_data[uid].add(pin_id)
     emo, nom, desc = PINS[pin_id]
+    tid = TITRE_PAR_PIN.get(pin_id)
+    if tid: donner_titre(uid, tid)
     if channel:
         try:
             await channel.send(embed=discord.Embed(
@@ -15103,6 +15329,41 @@ async def donner_pin(uid, pin_id, channel=None):
             pass
     gazette_fait("divers", f"<@{uid}> a débloqué le pin {emo} **{nom}**.", 2)
     return True
+
+def rattraper_progression(uid):
+    """Rétroactif : attribue ce que le bot SAIT déjà, sans rien inventer.
+    Les données absentes de l'historique ne sont pas reconstruites."""
+    neufs_s, neufs_t = [], []
+    def succes(aid, cond):
+        if cond and aid in ACHIEVEMENTS and aid not in achievements_data[uid]:
+            achievements_data[uid].add(aid)
+            economy_data[uid]["coins"] += ACHIEVEMENTS[aid]["reward"]
+            neufs_s.append(aid)
+            t = TITRE_PAR_SUCCES.get(aid)
+            if t and donner_titre(uid, t): neufs_t.append(t)
+    # ── Depuis les compteurs déjà suivis ──
+    st = user_stats[uid]
+    for aid, a in ACHIEVEMENTS.items():
+        if a["stat"] and a["seuil"]:
+            succes(aid, st.get(a["stat"], 0) >= a["seuil"])
+    # ── Depuis l'état réel des collections et comptes ──
+    coll = gacha_collections.get(uid, {})
+    succes("mythique_1", any(ANIME_CARDS_DB.get(k, {}).get("rarete") == "Mythique" for k in coll))
+    succes("collec_25",  len(coll) >= 25)
+    succes("collec_100", len(coll) >= 100)
+    succes("serie_1",    bool(serie_badges.get(uid)))
+    succes("fusion_max", any(v >= 3 for v in fusion_levels.get(uid, {}).values()))
+    succes("riche_10k",  economy_data[uid]["coins"] >= 10000)
+    succes("riche_100k", economy_data[uid]["coins"] >= 100000)
+    _p, _d, pst = get_active_pet(uid)
+    succes("pet_1", bool(pst))
+    # ── Titre d'arrivée : tout le monde y a droit ──
+    if donner_titre(uid, "novice"): neufs_t.append("novice")
+    # NON RÉTROACTIF — DONNÉE HISTORIQUE ABSENTE :
+    #   eclair_win · loterie_win · mariage · braquages · boss_kill
+    #   et tous les succès secrets : aucun historique ne permet de savoir
+    #   si ces actions ont eu lieu avant l'introduction du compteur.
+    return neufs_s, neufs_t
 
 def verifier_pins(uid):
     """Vérifie tous les pins automatiques. Retourne la liste des nouveaux."""
@@ -15126,36 +15387,138 @@ def verifier_pins(uid):
     check("pet_amis", sum(1 for k, v in petamitie.items() if uid in k.split("|") and v > 0) >= 5)
     return nouveaux
 
-@bot.command(name="pins", aliases=["badges", "mespins"])
+@bot.command(name="pins", aliases=["badges", "mespins", "titres", "titre"])
 async def pins_cmd(ctx, membre: discord.Member = None):
-    """Tes pins débloqués — .pins"""
+    """Ta vitrine — pins et titre. `.pins` ou `.titres`"""
     cible = membre or ctx.author
     uid = str(cible.id)
-    for p in verifier_pins(uid):
-        await donner_pin(uid, p, ctx.channel if cible == ctx.author else None)
-    save_all_data()
-    obtenus = pins_data.get(uid, set())
-    lignes_o, lignes_m = [], []
-    for k, (emo, nom, desc) in PINS.items():
-        if k in obtenus:
-            lignes_o.append(f"{emo} **{nom}**")
-        else:
-            lignes_m.append(f"🔒 {nom} — *{desc}*")
-    embed = discord.Embed(
-        title=f"🎖️ Pins de {cible.display_name}",
-        description=(f"**{len(obtenus)}/{len(PINS)} débloqués**\n\n"
-                     + ("  ·  ".join(lignes_o) if lignes_o else "*Aucun pour l'instant.*")),
-        color=0xf1c40f)
-    if lignes_m:
-        embed.add_field(name="🔒 À débloquer",
-                        value="\n".join(lignes_m[:10]) + (f"\n*…et {len(lignes_m)-10} autres*" if len(lignes_m) > 10 else ""),
-                        inline=False)
-    embed.set_footer(text="Les pins ne s'achètent pas — ils se méritent. Ils s'affichent sur ton profil.")
-    await ctx.send(embed=embed)
+    soi = cible == ctx.author
+    if soi:
+        for p in verifier_pins(uid):
+            await donner_pin(uid, p, ctx.channel)
+        save_all_data()
 
-# ============================================================
-#  🌟 VITRINE & 🎵 HUMEUR
-# ============================================================
+    def emb_pins():
+        obt = pins_data.get(uid, set())
+        eq  = pins_affiches(uid)
+        e = discord.Embed(
+            title=f"🎖️ Vitrine de {cible.display_name}",
+            description=(f"**{len(obt)}/{len(PINS)} pins** débloqués\n"
+                         f"👑 Titre : **{titre_affiche(uid) or '*aucun*'}**"),
+            color=0xf1c40f)
+        e.add_field(
+            name=f"📌 Équipés ({len(eq)}/{PINS_MAX_EQUIPES})",
+            value="  ".join(f"{PINS[p][0]} **{PINS[p][1]}**" for p in eq) or "*Aucun — clique ci-dessous.*",
+            inline=False)
+        libres = [p for p in obt if p not in eq and p in PINS]
+        if libres:
+            e.add_field(name="🎒 En réserve",
+                        value="  ·  ".join(f"{PINS[p][0]} {PINS[p][1]}" for p in libres[:8])
+                              + (f"  *+{len(libres)-8}*" if len(libres) > 8 else ""), inline=False)
+        manque = [k for k in PINS if k not in obt]
+        if manque:
+            e.add_field(name=f"🔒 À débloquer ({len(manque)})",
+                        value="\n".join(f"🔒 {PINS[k][1]} — *{PINS[k][2]}*" for k in manque[:6])
+                              + (f"\n*…et {len(manque)-6} autres*" if len(manque) > 6 else ""),
+                        inline=False)
+        return e
+
+    def emb_titres():
+        obt = titres_data.get(uid, set())
+        vis = [k for k, v in TITRES.items() if not v[4] or k in obt]
+        caches = sum(1 for k, v in TITRES.items() if v[4] and k not in obt)
+        e = discord.Embed(
+            title=f"👑 Titres de {cible.display_name}",
+            description=(f"**{len(obt)}/{len(TITRES)}** débloqués\n"
+                         f"Actuel : **{titre_affiche(uid) or '*aucun*'}**"),
+            color=0x9b59b6)
+        for rar, lib in (("commun", "🟢 Courants"), ("rare", "🟣 Rares"), ("secret", "🕵️ Secrets")):
+            lignes = [f"{'✅' if k in obt else '🔒'} {TITRES[k][0]} **{TITRES[k][1]}** — "
+                      f"*{TITRES[k][2]}*"
+                      for k in vis if TITRES[k][3] == rar]
+            if rar == "secret" and caches:
+                lignes.append(f"❔ **???** — *{caches} titre(s) encore secret(s)*")
+            if lignes:
+                e.add_field(name=lib, value="\n".join(lignes[:8]), inline=False)
+        return e
+
+    class Vitrine(ui.View):
+        def __init__(self):
+            super().__init__(timeout=180)
+            self.onglet = "pins"
+            if not soi:
+                for it in list(self.children):
+                    if getattr(it, "custom_id", "") == "gerer":
+                        self.remove_item(it)
+
+        async def interaction_check(self, itx):
+            if not soi and getattr(itx.data, "get", lambda *_: "")("custom_id") == "gerer":
+                return False
+            return True
+
+        @ui.button(label="Pins", emoji="🎖️", style=discord.ButtonStyle.primary)
+        async def onglet_pins(self, itx, _b):
+            self.onglet = "pins"
+            await itx.response.edit_message(embed=emb_pins(), view=self)
+
+        @ui.button(label="Titres", emoji="👑", style=discord.ButtonStyle.secondary)
+        async def onglet_titres(self, itx, _b):
+            self.onglet = "titres"
+            await itx.response.edit_message(embed=emb_titres(), view=self)
+
+        @ui.button(label="Gérer", emoji="⚙️", style=discord.ButtonStyle.success, custom_id="gerer")
+        async def gerer(self, itx, _b):
+            if str(itx.user.id) != uid:
+                return await itx.response.send_message(
+                    "Ce n'est pas ta vitrine — tape `.pins`.", ephemeral=True)
+            if self.onglet == "pins":
+                obt = [p for p in pins_data.get(uid, set()) if p in PINS]
+                if not obt:
+                    return await itx.response.send_message(
+                        "Tu n'as encore aucun pin à équiper.", ephemeral=True)
+                opts = [discord.SelectOption(
+                            label=PINS[p][1][:100], emoji=PINS[p][0], value=p,
+                            default=p in pins_affiches(uid)) for p in obt[:25]]
+                sel = ui.Select(placeholder=f"Choisis jusqu'à {PINS_MAX_EQUIPES} pins",
+                                min_values=0, max_values=min(PINS_MAX_EQUIPES, len(opts)),
+                                options=opts)
+                async def cb_p(i2):
+                    pins_equipes[uid] = [v for v in sel.values if v in pins_data[uid]][:PINS_MAX_EQUIPES]
+                    save_all_data()
+                    await i2.response.edit_message(
+                        content=f"📌 {len(pins_equipes[uid])} pin(s) équipé(s).", view=None)
+                sel.callback = cb_p
+                v2 = ui.View(timeout=90); v2.add_item(sel)
+                return await itx.response.send_message(view=v2, ephemeral=True)
+            obt = [t for t in titres_data.get(uid, set()) if t in TITRES]
+            if not obt:
+                return await itx.response.send_message(
+                    "Tu n'as encore aucun titre.", ephemeral=True)
+            opts = [discord.SelectOption(label=TITRES[t][1][:100], emoji=TITRES[t][0], value=t,
+                                         default=titre_equipe.get(uid) == t) for t in obt[:24]]
+            opts.append(discord.SelectOption(label="Aucun titre", emoji="🚫", value="__aucun__"))
+            sel = ui.Select(placeholder="Un seul titre à la fois", options=opts)
+            async def cb_t(i2):
+                v = sel.values[0]
+                if v == "__aucun__":
+                    titre_equipe.pop(uid, None); txt = "👑 Titre retiré."
+                elif v in titres_data[uid]:
+                    titre_equipe[uid] = v; txt = f"👑 Titre équipé : **{titre_affiche(uid)}**"
+                else:
+                    txt = "❌ Tu ne possèdes pas ce titre."
+                save_all_data()
+                await i2.response.edit_message(content=txt, view=None)
+            sel.callback = cb_t
+            v2 = ui.View(timeout=90); v2.add_item(sel)
+            await itx.response.send_message(view=v2, ephemeral=True)
+
+    depart = emb_titres() if ctx.invoked_with in ("titres", "titre") else emb_pins()
+    vue = Vitrine()
+    if ctx.invoked_with in ("titres", "titre"):
+        vue.onglet = "titres"
+    await ctx.send(embed=depart, view=vue)
+
+
 @bot.command(name="vitrine", aliases=["showcase"])
 async def vitrine_cmd(ctx, *, cartes: str = None):
     """Expose 3 cartes sur ton profil — .vitrine <carte1>, <carte2>, <carte3>"""
@@ -36527,18 +36890,71 @@ async def marcheacheter_cmd(ctx, *, perso: str = None):
 # ── Missions journalières ──
 # claims : set des ids de missions déjà encaissées aujourd'hui (+ "bonus")
 def _missions_neuf():
-    return {"messages": 0, "rolls": 0, "daily": 0, "wins": 0, "quiz": 0,
-            "claims": [], "reset": 0}
+    d = {"claims": [], "reset": 0, "hier": []}
+    d.update({m[1]: 0 for m in MISSIONS_POOL})
+    return d
 
 missions_progress = defaultdict(_missions_neuf)
 
-MISSIONS_DEF = [
-    {"id": "messages", "desc": "💬 Envoyer 20 messages",          "cible": 20, "coins": 100, "xp": 20},
-    {"id": "rolls",    "desc": "🎰 Faire 3 rolls gacha",           "cible": 3,  "coins": 150, "xp": 30},
-    {"id": "daily",    "desc": "💰 Utiliser .daily",               "cible": 1,  "coins": 80,  "xp": 15},
-    {"id": "quiz",     "desc": "🎯 Répondre juste au quiz 2x",     "cible": 2,  "coins": 120, "xp": 25},
-    {"id": "wins",     "desc": "⚔️ Gagner 1 combat (arène/quiz)",  "cible": 1,  "coins": 200, "xp": 50},
+# ── Missions journalières : familles, tirage varié, 4 par jour ──
+MISSIONS_POOL = [
+    # famille · id · description · cible · pièces · xp
+    ("jeu",       "quiz",      "🎯 Répondre juste au quiz 2 fois",     2,  120, 25),
+    ("jeu",       "quiz_5",    "🎯 Répondre juste au quiz 5 fois",     5,  220, 40),
+    ("jeu",       "morpion",   "🎮 Jouer une partie de morpion",       1,  100, 20),
+    ("gacha",     "rolls",     "🎰 Faire 3 rolls",                     3,  150, 30),
+    ("gacha",     "rolls_10",  "🎰 Faire 10 rolls",                    10, 300, 50),
+    ("gacha",     "burns",     "🔥 Recycler 2 cartes",                 2,  130, 25),
+    ("pet",       "pet_soin",  "🐾 T'occuper de ton compagnon",        1,  120, 25),
+    ("pet",       "pet_jeu",   "🐾 Jouer avec ton compagnon 2 fois",   2,  160, 30),
+    ("combat",    "wins",      "⚔️ Gagner 1 combat",                   1,  200, 50),
+    ("combat",    "arene",     "⚔️ Faire un duel en arène",            1,  150, 30),
+    ("combat",    "boss_hit",  "👹 Frapper un boss 3 fois",            3,  180, 35),
+    ("economie",  "daily",     "💰 Utiliser .daily",                   1,  80,  15),
+    ("economie",  "slot",      "🎰 Tenter 3 fois la machine",          3,  110, 20),
+    ("economie",  "banque",    "🏦 Déposer des pièces à la banque",    1,  100, 20),
+    ("social",    "messages",  "💬 Envoyer 20 messages",               20, 100, 20),
+    ("social",    "reactions", "👍 Réagir à 5 messages",               5,  90,  15),
+    ("chronique", "chro_vote", "📖 Voter dans la Chronique",           1,  140, 30),
 ]
+MISSIONS_FAMILLES = {
+    "jeu": "🎮 Jeu", "gacha": "🎴 Gacha", "pet": "🐾 Compagnon",
+    "combat": "⚔️ Combat", "economie": "💰 Économie",
+    "social": "👥 Social", "chronique": "📖 Chronique",
+}
+MISSIONS_PAR_JOUR = 4
+MISSIONS_SANS_PREREQUIS = {"messages", "reactions", "daily", "slot", "quiz", "rolls", "morpion"}
+
+def missions_du_jour(uid):
+    """Tire 4 missions de familles différentes, en évitant celles d'hier.
+    Le tirage est déterministe par (uid, jour) : même liste toute la journée."""
+    import time as _t, hashlib
+    jour = int(_t.time() // 86400)
+    p = missions_progress[uid]
+    hier = set(p.get("hier", []))
+    rng = random.Random(int(hashlib.md5(f"{uid}:{jour}".encode()).hexdigest()[:8], 16))
+    # Un débutant ne doit pas tomber sur des missions qu'il ne peut pas faire.
+    debutant = xp_data[uid]["level"] < 3
+    dispo = [m for m in MISSIONS_POOL
+             if (not debutant or m[1] in MISSIONS_SANS_PREREQUIS)]
+    familles = list({m[0] for m in dispo})
+    rng.shuffle(familles)
+    choisies, vues_fam = [], set()
+    for fam in familles:
+        if len(choisies) >= MISSIONS_PAR_JOUR:
+            break
+        cands = [m for m in dispo if m[0] == fam and m[1] not in hier]
+        if not cands:
+            cands = [m for m in dispo if m[0] == fam]
+        if cands:
+            choisies.append(rng.choice(cands)); vues_fam.add(fam)
+    while len(choisies) < MISSIONS_PAR_JOUR and len(choisies) < len(dispo):
+        reste = [m for m in dispo if m not in choisies]
+        if not reste: break
+        choisies.append(rng.choice(reste))
+    return [{"fam": f, "id": i, "desc": d, "cible": ci, "coins": co, "xp": x}
+            for f, i, d, ci, co, x in choisies]
+
 MISSIONS_BONUS = {"coins": 250, "xp": 50}
 
 def missions_reset_si_besoin(uid):
@@ -36551,8 +36967,9 @@ def missions_reset_si_besoin(uid):
     p.pop("claimed", None)
     now = _t.time()
     if now - p["reset"] >= 86400:
-        for k in ("messages", "rolls", "daily", "wins", "quiz"):
-            p[k] = 0
+        p["hier"] = [m["id"] for m in missions_du_jour(uid)] if p["reset"] else []
+        for m in MISSIONS_POOL:
+            p[m[1]] = 0
         p["claims"] = []
         p["reset"]  = now
     return p
@@ -36576,7 +36993,7 @@ async def missions_cmd(ctx):
     nouvelles   = []
     nb_finies   = 0
 
-    for m in MISSIONS_DEF:
+    for m in missions_du_jour(uid):
         prog = p.get(m["id"], 0)
         fait = prog >= m["cible"]
         deja = m["id"] in p["claims"]
@@ -36598,7 +37015,7 @@ async def missions_cmd(ctx):
 
     # Bonus « toutes les missions » — encaissable une seule fois
     bonus = False
-    if nb_finies == len(MISSIONS_DEF) and "bonus" not in p["claims"]:
+    if nb_finies == MISSIONS_PAR_JOUR and "bonus" not in p["claims"]:
         p["claims"].append("bonus")
         gagne_coins += MISSIONS_BONUS["coins"]
         gagne_xp    += MISSIONS_BONUS["xp"]
@@ -36613,7 +37030,7 @@ async def missions_cmd(ctx):
             pied += f"\n🎉 BONUS TOUTES MISSIONS : +{MISSIONS_BONUS['coins']} pièces & +{MISSIONS_BONUS['xp']} XP"
         embed.set_footer(text=pied)
     else:
-        restantes = len(MISSIONS_DEF) - nb_finies
+        restantes = MISSIONS_PAR_JOUR - nb_finies
         embed.set_footer(text=(
             "✅ Tout est encaissé pour aujourd'hui — reviens demain !"
             if restantes == 0 else
@@ -38286,6 +38703,9 @@ def save_all_data():
             "pets": pets_data,
             "achievements": {k: list(v) for k, v in achievements_data.items()},
             "missions": {k: dict(v) for k, v in missions_progress.items()},
+            "titres": {k: list(v) for k, v in titres_data.items()},
+            "titre_equipe": dict(titre_equipe),
+            "pins_equipes": {k: list(v) for k, v in pins_equipes.items()},
             "user_stats": {k: dict(v) for k, v in user_stats.items()},
             "arena_stats": {k: dict(v) for k, v in arena_stats.items()},
             "points_amelio": dict(points_amelio),
@@ -38389,6 +38809,11 @@ def load_all_data():
             pets_data.update(data.get("pets", {}))
             for k, v in data.get("achievements", {}).items():
                 achievements_data[k] = set(v)
+            for k, v in data.get("titres", {}).items():
+                titres_data[k] = set(v)
+            titre_equipe.update(data.get("titre_equipe", {}))
+            for k, v in data.get("pins_equipes", {}).items():
+                pins_equipes[k] = list(v)[:PINS_MAX_EQUIPES]
             for k, v in data.get("missions", {}).items():
                 base = _missions_neuf()
                 base.update(v)
