@@ -1016,6 +1016,7 @@ async def on_message(message):
     # XP passif
     uid = str(message.author.id)
     message_count[uid] += 1
+    act_ajouter(uid, messages=1)
     xp_gain = random.randint(4, 10) if double_xp_event_actif else random.randint(2, 5)
     _pbxp = pet_bonus(uid, "xp")
     if _pbxp:
@@ -1099,14 +1100,16 @@ async def on_voice_state_update(member, before, after):
     import time
     uid = str(member.id)
     if before.channel is None and after.channel is not None:
-        # Rejoint un vocal
         voice_join_time[uid] = time.time()
     elif before.channel is not None and after.channel is None:
-        # Quitte le vocal
         if uid in voice_join_time:
-            minutes = int((time.time() - voice_join_time[uid]) / 60)
-            voice_time[uid] += minutes
-            del voice_join_time[uid]
+            debut = voice_join_time.pop(uid)
+            minutes = int((time.time() - debut) / 60)
+            if minutes > 0:
+                voice_time[uid] += minutes
+                # Crédité sur le jour où la session a COMMENCÉ : une session
+                # à cheval sur minuit ne bascule pas entièrement au lendemain.
+                act_ajouter(uid, minutes=minutes, ts=debut)
 
 # ============================================================
 #  HELP — 6 pages membres + 4 pages admin (masquées aux membres)
@@ -5753,6 +5756,99 @@ async def avatar_cmd(ctx, member: discord.Member = None):
     embed.set_image(url=m.display_avatar.url)
     await ctx.send(embed=embed)
 
+@bot.command(name="activite", aliases=["activité", "activity", "act"])
+async def activite_cmd(ctx, membre: discord.Member = None):
+    """Ton activité sur le serveur — .activite [@membre]"""
+    cible = membre or ctx.author
+    uid = str(cible.id)
+
+    def fiche():
+        mj, ms, mt, vj, vs, vt = act_lire(uid)
+        e = discord.Embed(title=f"📊 Activité de {cible.display_name}", color=0x5865F2)
+        e.set_thumbnail(url=cible.display_avatar.url)
+        e.add_field(name="💬 Messages",
+                    value=(f"Aujourd'hui : **{mj:,}**\n"
+                           f"Cette semaine : **{ms:,}**\n"
+                           f"Total : **{mt:,}**"), inline=True)
+        e.add_field(name="🎙️ Vocal",
+                    value=(f"Aujourd'hui : **{act_duree(vj)}**\n"
+                           f"Cette semaine : **{act_duree(vs)}**\n"
+                           f"Total : **{act_duree(vt)}**"), inline=True)
+        e.set_footer(text="Jour et semaine comptent depuis la mise en place du suivi")
+        return e
+
+    PER = {"jour": ("Aujourd'hui", 0, 3), "semaine": ("Cette semaine", 1, 4),
+           "total": ("Total", 2, 5)}
+
+    def classement(kind, per):
+        """Ne lit que les compteurs persistés — aucun parcours d'historique."""
+        lib, im, iv = PER[per]
+        idx = im if kind == "msg" else iv
+        lignes = []
+        for u in set(activite_data) | set(message_count) | set(voice_time):
+            val = act_lire(u)[idx]
+            if val > 0:
+                lignes.append((u, val))
+        lignes.sort(key=lambda x: (-x[1], x[0]))
+        titre = "💬 TOP MESSAGES" if kind == "msg" else "🎙️ TOP VOCAL"
+        e = discord.Embed(title=f"{titre} — {lib}", color=0x5865F2)
+        if not lignes:
+            e.description = "*Aucune activité enregistrée sur cette période.*"
+            return e
+        corps = []
+        for i, (u, val) in enumerate(lignes[:10], 1):
+            m = ctx.guild.get_member(int(u)) if ctx.guild else None
+            nom = m.display_name if m else f"Membre parti ({u[:6]}…)"
+            med = ["🥇", "🥈", "🥉"][i-1] if i <= 3 else f"`{i:2d}`"
+            corps.append(f"{med} **{nom}** — {val:,}" if kind == "msg"
+                         else f"{med} **{nom}** — {act_duree(val)}")
+        e.description = "\n".join(corps)
+        moi = next((i for i, (u, _) in enumerate(lignes, 1) if u == str(ctx.author.id)), None)
+        e.set_footer(text=(f"Tu es {moi}e sur {len(lignes)}" if moi
+                           else f"Tu n'apparais pas encore — {len(lignes)} classé(s)"))
+        return e
+
+    class ActView(ui.View):
+        def __init__(self):
+            super().__init__(timeout=180)
+            self.vue = "fiche"; self.kind = "msg"; self.per = "jour"
+            self._construire()
+
+        def _construire(self):
+            self.clear_items()
+            if self.vue == "fiche":
+                b = ui.Button(label="Classements", emoji="🏆", style=discord.ButtonStyle.primary)
+                async def cb(itx):
+                    self.vue = "top"; self._construire()
+                    await itx.response.edit_message(embed=classement(self.kind, self.per), view=self)
+                b.callback = cb
+                self.add_item(b)
+                return
+            for k, lab, emo in (("msg", "Messages", "💬"), ("voc", "Vocal", "🎙️")):
+                b = ui.Button(label=lab, emoji=emo, row=0, style=(
+                    discord.ButtonStyle.success if self.kind == k else discord.ButtonStyle.secondary))
+                async def cb(itx, kk=k):
+                    self.kind = kk; self._construire()
+                    await itx.response.edit_message(embed=classement(self.kind, self.per), view=self)
+                b.callback = cb
+                self.add_item(b)
+            for p in PER:
+                b = ui.Button(label=PER[p][0], row=1, style=(
+                    discord.ButtonStyle.primary if self.per == p else discord.ButtonStyle.secondary))
+                async def cb(itx, pp=p):
+                    self.per = pp; self._construire()
+                    await itx.response.edit_message(embed=classement(self.kind, self.per), view=self)
+                b.callback = cb
+                self.add_item(b)
+            b = ui.Button(label="Retour", emoji="↩️", row=2, style=discord.ButtonStyle.secondary)
+            async def cbr(itx):
+                self.vue = "fiche"; self._construire()
+                await itx.response.edit_message(embed=fiche(), view=self)
+            b.callback = cbr
+            self.add_item(b)
+
+    await ctx.send(embed=fiche(), view=ActView())
+
 @bot.command(name="stats", aliases=["messtats", "statistiques"])
 async def stats_cmd(ctx, membre: discord.Member = None):
     """Tes statistiques complètes — .stats [@membre]"""
@@ -6272,6 +6368,19 @@ def modif_tout_eteindre():
     for M in MODIFICATEURS.values():
         if M["var"]: globals()[M["var"]] = False
     return coupes
+
+@tasks.loop(minutes=10)
+async def act_solder_vocal():
+    """Solde périodiquement les sessions vocales en cours.
+    Sans cela, un redémarrage perdait tout le temps non comptabilisé."""
+    import time as _t
+    now = _t.time()
+    for uid, debut in list(voice_join_time.items()):
+        minutes = int((now - debut) / 60)
+        if minutes >= 1:
+            voice_time[uid] += minutes
+            act_ajouter(uid, minutes=minutes, ts=debut)
+            voice_join_time[uid] = debut + minutes * 60
 
 @tasks.loop(minutes=1)
 async def modif_watchdog():
@@ -12192,119 +12301,97 @@ async def profil_cmd(ctx, membre: discord.Member = None):
     """Ta carte de membre — .profil [@membre]"""
     target = membre or ctx.author
     uid = str(target.id)
-    for _p in verifier_pins(uid):
-        await donner_pin(uid, _p, ctx.channel if target == ctx.author else None)
+    soi = target == ctx.author
+    if soi:
+        for _p in verifier_pins(uid):
+            await donner_pin(uid, _p, ctx.channel)
 
-    lvl = xp_data[uid]["level"]
-    xp = xp_data[uid]["xp"]
+    lvl    = xp_data[uid]["level"]
+    xp     = xp_data[uid]["xp"]
     needed = lvl * 100
-    coins = economy_data[uid]["coins"]
-    depot = bank_data[uid].get("depot", 0)
+    coins  = economy_data[uid]["coins"]
     nb_cartes = len(gacha_collections.get(uid, {}))
     nb_succes = len(achievements_data.get(uid, set()))
-    s = user_stats[uid]
     cosmo = profil_custom.get(uid, {})
-    mes_pins = pins_data.get(uid, set())
 
-    # ── Rang et bordure selon le niveau ──
     if lvl >= 50:   bord, rang, coul_r = "👑", "LÉGENDE", 0xf1c40f
     elif lvl >= 35: bord, rang, coul_r = "💎", "MYTHIQUE", 0xe74c3c
     elif lvl >= 25: bord, rang, coul_r = "🔱", "VÉTÉRAN", 0x9b59b6
     elif lvl >= 15: bord, rang, coul_r = "⭐", "CONFIRMÉ", 0x3498db
     elif lvl >= 8:  bord, rang, coul_r = "✦", "INITIÉ", 0x2ecc71
     else:           bord, rang, coul_r = "▪️", "NOUVEAU", 0x95a5a6
-
     cadre = PROFIL_CADRES.get(cosmo.get("cadre"))
     sep = cadre[2] if cadre else bord * 13
     signature = cosmo.get("emoji", "")
     couleur = cosmo.get("couleur", coul_r)
-    holo = "  ✨" if lvl >= 50 else ""
-
     ratio = min(1.0, xp / max(needed, 1))
     barre = "▰" * int(ratio * 12) + "▱" * (12 - int(ratio * 12))
-    classement = sorted(xp_data.items(), key=lambda x: (x[1]["level"], x[1]["xp"]), reverse=True)
-    rang_srv = next((i + 1 for i, (u, _) in enumerate(classement) if u == uid), None)
-    medaille = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rang_srv, f"#{rang_srv}" if rang_srv else "—")
 
-    # ── Corps de la carte ──
-    corps = [sep]
-    corps.append(f"### {signature} {target.display_name} {signature}".rstrip())
-    corps.append(f"**{rang}**{holo}  ·  Niveau **{lvl}**  ·  {get_tier(lvl)}")
-    if cosmo.get("titre"):
-        corps.append(f"⟨ *{cosmo['titre']}* ⟩")
+    # ── En-tête : nom · titre équipé · pins équipés ──
+    titre = titre_affiche(uid) or cosmo.get("titre", "")
+    corps = [sep, f"### {signature} {target.display_name} {signature}".rstrip()]
+    if titre:
+        corps.append(f"**{titre}**")
+    corps.append(f"{rang}  ·  Niveau **{lvl}**  ·  {get_tier(lvl)}")
+    equipes = pins_affiches(uid)
+    if equipes:
+        corps.append("　".join(PINS[p][0] for p in equipes))
     if cosmo.get("citation"):
-        corps.append(f"*« {cosmo['citation']} »*")
-    if cosmo.get("mood"):
-        corps.append(f"🎵 *{cosmo['mood']}*")
-    if mes_pins:
-        corps.append("  ".join(PINS[p][0] for p in mes_pins if p in PINS))
+        corps.append(f"*« {cosmo['citation'][:140]} »*")
     corps.append(sep)
     corps.append(f"`{barre}`  **{xp} / {needed} XP**")
 
     embed = discord.Embed(description="\n".join(corps), color=couleur)
-    embed.set_author(name=f"🃏  CARTE DE MEMBRE  ·  QG KDRAMA", icon_url=target.display_avatar.url)
+    embed.set_author(name="🃏  CARTE DE MEMBRE  ·  QG KDRAMA",
+                     icon_url=target.display_avatar.url)
     embed.set_thumbnail(url=target.display_avatar.url)
 
-    embed.add_field(name="💰 Fortune",
-                    value=f"**{coins:,}**" + (f"\n🏦 {depot:,} en banque" if depot else ""), inline=True)
-    embed.add_field(name="🏆 Classement",
-                    value=f"**{medaille}**\n*sur {len(classement)} membres*", inline=True)
-    embed.add_field(name="🎖️ Succès",
-                    value=f"**{nb_succes}** / {len(ACHIEVEMENTS)}", inline=True)
+    # ── Six stats au plus : seulement celles qui racontent quelque chose ──
+    style_emo, style_nom, _sd = ARENE_STYLES[arene_style(uid)]
+    embed.add_field(name="💰 Fortune", value=f"**{coins:,}**", inline=True)
     embed.add_field(name="🎴 Collection", value=f"**{nb_cartes}** cartes", inline=True)
-    embed.add_field(name="💬 Messages", value=f"**{s.get('messages', 0):,}**", inline=True)
-    embed.add_field(name="⚔️ Victoires",
-                    value=f"**{s.get('arene_wins', 0) + s.get('pb_wins', 0)}**", inline=True)
+    embed.add_field(name="🎖️ Succès", value=f"**{nb_succes}** / {len(ACHIEVEMENTS)}", inline=True)
+    embed.add_field(name="⚔️ Style", value=f"{style_emo} **{style_nom}**", inline=True)
+    depuis = getattr(target, "joined_at", None)
+    if depuis:
+        jours = max(0, (discord.utils.utcnow() - depuis).days)
+        embed.add_field(name="🕰️ Au QG",
+                        value=f"**{jours // 365} an(s)**" if jours >= 365 else f"**{jours} jour(s)**",
+                        inline=True)
+    if equipes:
+        embed.add_field(name="📌 Pins",
+                        value="\n".join(f"{PINS[p][0]} **{PINS[p][1]}**" for p in equipes),
+                        inline=True)
 
-    # Compagnon
+    # ── Compagnon : l'essentiel, pas ses quatorze barres ──
     pid, pdb, pstate = get_active_pet(uid)
     if pid:
-        _ref = len(pets_data.get(uid, {}).get("refuge", []))
-        _amis = sum(1 for k, v in petamitie.items() if uid in k.split("|") and v > 0)
-        _rom = pet_evolution(pstate['level'])[1]
-        val = (f"**{pet_nom_decore(uid, pdb)}** — ✨ Évo. {_rom} · Niveau {pstate['level']}\n"
-               f"{pet_bonus_texte(pdb, pstate['level'], uid)}")
-        extra = []
-        if _ref: extra.append(f"🏡 {_ref} meuble(s)")
-        if _amis: extra.append(f"💞 {_amis} ami(s)")
-        if extra: val += "\n" + "  ·  ".join(extra)
-        embed.add_field(name="🐾 Compagnon", value=val, inline=False)
+        embed.add_field(
+            name="🐾 Compagnon",
+            value=(f"**{pet_nom_decore(uid, pdb)}** — {pdb.get('rarete', '')}\n"
+                   f"Niveau {pstate['level']} · évo. {pet_evolution(pstate['level'])[1]}"),
+            inline=False)
 
-    # Vitrine
-    vit = [k for k in cosmo.get("vitrine", []) if k in ANIME_CARDS_DB]
+    # ── Vitrine : les cartes dont on est fier, trois au plus ──
+    vit = [k for k in cosmo.get("vitrine", []) if k in ANIME_CARDS_DB][:3]
     if vit:
-        embed.add_field(name="🌟 Vitrine",
-                        value="\n".join(f"{RARETE_EMOJI.get(ANIME_CARDS_DB[k]['rarete'],'')} "
-                                        f"**{ANIME_CARDS_DB[k]['nom']}** — *{ANIME_CARDS_DB[k]['serie']}*"
-                                        for k in vit), inline=False)
+        embed.add_field(
+            name="🌟 Vitrine",
+            value="\n".join(f"{RARETE_EMOJI.get(ANIME_CARDS_DB[k]['rarete'], '')} "
+                            f"**{ANIME_CARDS_DB[k]['nom']}** — *{ANIME_CARDS_DB[k]['serie']}*"
+                            for k in vit), inline=False)
 
-    # Pins détaillés
-    if mes_pins:
-        embed.add_field(name=f"🎖️ Pins ({len(mes_pins)}/{len(PINS)})",
-                        value="  ·  ".join(f"{PINS[p][0]} {PINS[p][1]}"
-                                          for p in list(mes_pins)[:6] if p in PINS), inline=False)
-
-    # Mariage
-    if uid in mariages:
-        conjoint = ctx.guild.get_member(int(mariages[uid])) if ctx.guild else None
+    if uid in mariages and ctx.guild:
+        conjoint = ctx.guild.get_member(int(mariages[uid]))
         if conjoint:
             embed.add_field(name="💍 Marié(e) à", value=conjoint.display_name, inline=True)
 
-    # Titres achetés
-    noms_boutique = {n for n, _ in ROLES_BOUTIQUE.values()}
-    portes = [r.name for r in getattr(target, "roles", []) if r.name in noms_boutique]
-    if portes:
-        embed.add_field(name="🎭 Titres", value=" · ".join(portes[:4]), inline=False)
-
-    embed.add_field(name="\u200b", value=sep, inline=False)
+    embed.set_footer(text="`.pins` pour la vitrine  ·  `.activite` pour l'activité"
+                     if soi else f"Profil de {target.display_name}")
     if vit and ANIME_CARDS_DB[vit[0]].get("image"):
         embed.set_image(url=ANIME_CARDS_DB[vit[0]]["image"])
-    elif cosmo.get("banniere"):
-        embed.set_image(url=cosmo["banniere"])
-    embed.set_footer(text=(f"Membre depuis le {target.joined_at.strftime('%d/%m/%Y')}"
-                           if getattr(target, "joined_at", None) else "QG Kdrama")
-                          + f"  ·  `.macustom` pour personnaliser")
     await ctx.send(embed=embed)
+
 
 
 # ============================================================
@@ -14432,12 +14519,61 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "6.0.0"
+BOT_VERSION = "7.0.0"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "7.0.0": {
+   "titre": "AKARI POLISH — sept vagues de refonte 🔧",
+   "ajouts": [
+     "🎪 **Catalogue d'events réorganisé** en cinq familles : Events, Casino, "
+     "Combat, Saisonniers et Modificateurs. `.event` ne mélange plus tout.",
+     "🚂 **Cinq nouveaux events** — Train Fou *(huit stations, on vote pour "
+     "continuer ou descendre)*, Le Deal *(deux acheteurs, deux valeurs "
+     "secrètes)*, Carte Rouge *(annoncer, mentir, accuser)*, Mémoire Inversée "
+     "et Petit Bac.",
+     "💣 **Bombe 2.0** — la bombe circule maintenant de main en main. "
+     "Désamorcer, passer ou sonder : à toi de voir.",
+     "🏁 **Tap Race 2.0** — quatre segments et une allure à choisir. "
+     "Marteler le bouton ne suffit plus, il faut gérer son souffle.",
+     "🎤 **Débat 2.0** — trois phases, participation et temps restant visibles.",
+     "⚔️ **Arène refondue** — ton **style de combat** se déduit de tes "
+     "améliorations : 🛡️ Tank, 🗡️ Assaut, ⚡ Endurance ou ⚖️ Polyvalent. "
+     "Chacun a ses forces et ses faiblesses, y compris contre les boss.",
+     "🆙 **`.ameliorer` à boutons** — l'effet exact du prochain point s'affiche.",
+     "📋 **Missions renouvelées** — 17 missions réparties en 7 familles, "
+     "4 tirées par jour, différentes d'un membre à l'autre.",
+     "🏆 **Succès étendus** — 40 succès dont **8 secrets** à découvrir.",
+     "👑 **Titres** — 16 titres à débloquer, un seul porté à la fois.",
+     "📌 **Pins équipables** — jusqu'à 3 sur ton profil, via `.pins`.",
+     "👤 **Profil 2.0** — une vraie carte de membre : titre, pins, compagnon, "
+     "vitrine. Lisible en quelques secondes.",
+     "📊 **`.activite`** — tes messages et ton temps vocal, par jour, par "
+     "semaine et au total, avec les classements du serveur.",
+     "👋 **Accueil en deux temps** — la prophétie au salon d'arrivée, et une "
+     "annonce dans le général pour que tout le monde puisse dire bonjour.",
+   ],
+   "correctifs": [
+     "⚔️ Les PV affichés par `.ameliorer` ne mentaient plus : 250, pas 120.",
+     "📋 Les missions se réclament **une par une**. Encaisser la première ne "
+     "bloque plus les suivantes, et la progression survit aux redémarrages.",
+     "🐾 Le Phénix Légendaire existait mais était écrasé par le Mythique. "
+     "Les deux sont désormais distincts — aucun compagnon n'a changé de main.",
+     "🎰 La Nuit Casino rendait la machine **rentable** : le boost porte "
+     "maintenant sur le jackpot seul. Mise plafonnée et annoncée.",
+     "🏦 Les intérêts de la banque sont plafonnés à 30 jours.",
+     "💣 La Bombe versait le gain à *chaque* gagnant. Un seul pot désormais.",
+     "🔵 Les modificateurs ne peuvent plus rester bloqués : un chien de garde "
+     "les éteint même si quelque chose s'est mal passé.",
+     "👑 Roi de la Colline promettait 500 pièces que personne n'a jamais "
+     "reçues. L'event a été retiré.",
+     "🎙️ Le temps vocal n'était plus perdu au redémarrage, et une session à "
+     "cheval sur minuit compte pour le bon jour.",
+     "📌 Les pins ne s'affichaient plus en double sur le profil.",
+   ],
+ },
  "6.0.0": {
    "titre": "MARIÉS MALGRÉ NOUS — la saison complète 💍",
    "ajouts": [
@@ -14736,20 +14872,86 @@ async def annoncer_maj(guild):
         return False, f"{type(e).__name__}: {e}"
 
 
+def _v_tuple(v):
+    """« 5.10.0 » se range après « 5.9.1 » — comparaison numérique, pas alphabétique."""
+    try:
+        return tuple(int(x) for x in v.split("."))
+    except Exception:
+        return (0,)
+
+def versions_triees():
+    """Toutes les versions connues, de la plus récente à la plus ancienne."""
+    return sorted(UPDATES, key=_v_tuple, reverse=True)
+
+def embed_version(v):
+    """Notes d'une version donnée."""
+    u = UPDATES.get(v)
+    if not u:
+        return discord.Embed(title=f"⚠️ v{v} inconnue", color=0xe74c3c)
+    actuelle = (v == BOT_VERSION)
+    e = discord.Embed(
+        title=f"🚀 {u['titre']}",
+        description=f"*Version {v}*" + ("  ·  **version actuelle**" if actuelle else ""),
+        color=0x2ecc71 if actuelle else 0x95a5a6)
+    if u.get("ajouts"):
+        txt = "\n".join(f"• {x}" for x in u["ajouts"])
+        e.add_field(name="✨ Nouveautés", value=txt[:1024], inline=False)
+        if len(txt) > 1024:
+            e.add_field(name="✨ Nouveautés (suite)", value=txt[1024:2048], inline=False)
+    if u.get("correctifs"):
+        txt = "\n".join(f"• {x}" for x in u["correctifs"])
+        e.add_field(name="🔧 Correctifs", value=txt[:1024], inline=False)
+        if len(txt) > 1024:
+            e.add_field(name="🔧 Correctifs (suite)", value=txt[1024:2048], inline=False)
+    liste = versions_triees()
+    e.set_footer(text=f"Version {liste.index(v) + 1} sur {len(liste)}  ·  "
+                      f"navigue avec les flèches")
+    return e
+
 @bot.command(name="changelog", aliases=["maj", "nouveautes", "version"])
-async def changelog_cmd(ctx):
-    """Les nouveautés de la dernière mise à jour — .changelog"""
-    embed = discord.Embed(
-        title=f"🚀 {CHANGELOG['titre']}",
-        description=f"*Version {BOT_VERSION}*",
-        color=0x2ecc71)
-    txt = "\n".join(f"• {x}" for x in CHANGELOG["ajouts"])
-    for i in range(0, len(txt), 1000):
-        embed.add_field(name="✨ Nouveautés" if i == 0 else "\u200b", value=txt[i:i+1000], inline=False)
-    if CHANGELOG.get("correctifs"):
-        embed.add_field(name="🔧 Correctifs",
-                        value="\n".join(f"• {x}" for x in CHANGELOG["correctifs"])[:1024], inline=False)
-    await ctx.send(embed=embed)
+async def changelog_cmd(ctx, version: str = None):
+    """Les nouveautés — .changelog [version]"""
+    liste = versions_triees()
+    if version:
+        v = version.lstrip("vV")
+        if v not in UPDATES:
+            return await ctx.send(embed=discord.Embed(
+                description=(f"❌ Version **{version}** inconnue.\n"
+                             f"Connues : {' · '.join('`'+x+'`' for x in liste[:8])}…"),
+                color=0xe74c3c))
+        depart = liste.index(v)
+    else:
+        depart = liste.index(BOT_VERSION) if BOT_VERSION in liste else 0
+
+    class HistoView(ui.View):
+        def __init__(self, idx):
+            super().__init__(timeout=180)
+            self.idx = idx
+            self._maj()
+
+        def _maj(self):
+            self.precedent.disabled = self.idx >= len(liste) - 1
+            self.suivant.disabled = self.idx <= 0
+            self.actuelle.disabled = liste[self.idx] == BOT_VERSION
+
+        @ui.button(label="Plus ancienne", emoji="◀️", style=discord.ButtonStyle.secondary)
+        async def precedent(self, itx, _b):
+            self.idx = min(len(liste) - 1, self.idx + 1); self._maj()
+            await itx.response.edit_message(embed=embed_version(liste[self.idx]), view=self)
+
+        @ui.button(label="Actuelle", emoji="🏠", style=discord.ButtonStyle.primary)
+        async def actuelle(self, itx, _b):
+            self.idx = liste.index(BOT_VERSION) if BOT_VERSION in liste else 0
+            self._maj()
+            await itx.response.edit_message(embed=embed_version(liste[self.idx]), view=self)
+
+        @ui.button(label="Plus récente", emoji="▶️", style=discord.ButtonStyle.secondary)
+        async def suivant(self, itx, _b):
+            self.idx = max(0, self.idx - 1); self._maj()
+            await itx.response.edit_message(embed=embed_version(liste[self.idx]), view=self)
+
+    await ctx.send(embed=embed_version(liste[depart]), view=HistoView(depart))
+
 
 @bot.command(name="forcemaj", aliases=["announceupdate", "annoncemaj"])
 @commands.has_permissions(administrator=True)
@@ -34309,6 +34511,63 @@ def _pendu_embed(game):
 
 double_xp_users = {}  # {user_id: end_timestamp}
 voice_time = defaultdict(int)  # {user_id: minutes}
+# ============================================================
+#  📊 ACTIVITÉ — compteurs jour / semaine / total
+#  Les totaux existaient déjà (message_count, voice_time).
+#  Le découpage jour/semaine démarre à l'installation : aucun
+#  historique ne permet de le reconstruire rétroactivement.
+# ============================================================
+ACT_TZ = 2   # décalage horaire du serveur, en heures
+
+def _act_periodes(ts=None):
+    """(jour, semaine) courants dans le fuseau du serveur."""
+    import time as _t
+    ts = ts if ts is not None else _t.time()
+    local = ts + ACT_TZ * 3600
+    jour = int(local // 86400)
+    return jour, (jour + 4) // 7      # +4 : l'époque Unix tombe un jeudi
+
+def _act_neuf():
+    j, s = _act_periodes()
+    return {"msg_j": 0, "msg_s": 0, "voc_j": 0, "voc_s": 0, "jour": j, "sem": s}
+
+activite_data = defaultdict(_act_neuf)
+
+def act_maj(uid, ts=None):
+    """Bascule les compteurs si le jour ou la semaine a changé.
+    Idempotent : appelable plusieurs fois sans jamais créditer deux fois."""
+    a = activite_data[uid]
+    j, s = _act_periodes(ts)
+    if a.get("jour") != j:
+        a["msg_j"] = 0; a["voc_j"] = 0; a["jour"] = j
+    if a.get("sem") != s:
+        a["msg_s"] = 0; a["voc_s"] = 0; a["sem"] = s
+    return a
+
+def act_ajouter(uid, messages=0, minutes=0, ts=None):
+    """Crédite les compteurs. Les valeurs négatives sont ignorées."""
+    if messages <= 0 and minutes <= 0:
+        return
+    a = act_maj(uid, ts)
+    if messages > 0:
+        a["msg_j"] += messages; a["msg_s"] += messages
+    if minutes > 0:
+        a["voc_j"] += minutes; a["voc_s"] += minutes
+
+def act_lire(uid):
+    """(msg_j, msg_s, msg_total, voc_j, voc_s, voc_total) — jamais négatif."""
+    a = act_maj(uid)
+    return (max(0, a["msg_j"]), max(0, a["msg_s"]), max(0, message_count.get(uid, 0)),
+            max(0, a["voc_j"]), max(0, a["voc_s"]), max(0, voice_time.get(uid, 0)))
+
+def act_duree(minutes):
+    """42 → « 42 min » · 130 → « 2 h 10 »"""
+    minutes = max(0, int(minutes))
+    if minutes < 60:
+        return f"{minutes} min"
+    return f"{minutes // 60} h {minutes % 60:02d}"
+
+
 voice_join_time = {}  # {user_id: join_timestamp}
 
 @bot.command(name="gachabattle", aliases=["gb", "pokebattle", "pb"])
@@ -38703,6 +38962,7 @@ def save_all_data():
             "pets": pets_data,
             "achievements": {k: list(v) for k, v in achievements_data.items()},
             "missions": {k: dict(v) for k, v in missions_progress.items()},
+            "activite": {k: dict(v) for k, v in activite_data.items()},
             "titres": {k: list(v) for k, v in titres_data.items()},
             "titre_equipe": dict(titre_equipe),
             "pins_equipes": {k: list(v) for k, v in pins_equipes.items()},
@@ -38809,6 +39069,8 @@ def load_all_data():
             pets_data.update(data.get("pets", {}))
             for k, v in data.get("achievements", {}).items():
                 achievements_data[k] = set(v)
+            for k, v in data.get("activite", {}).items():
+                b = _act_neuf(); b.update(v); activite_data[k] = b
             for k, v in data.get("titres", {}).items():
                 titres_data[k] = set(v)
             titre_equipe.update(data.get("titre_equipe", {}))
@@ -39443,6 +39705,7 @@ async def on_ready():
     gazette_task.start()
     nettoyer_salons_inactifs.start()
     modif_watchdog.start()
+    act_solder_vocal.start()
     await bot.change_presence(
         activity=discord.Activity(type=discord.ActivityType.watching, name="🎬 Kdrama • .help")
     )
