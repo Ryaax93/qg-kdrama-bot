@@ -1187,8 +1187,13 @@ def build_help_pages(guild, is_admin=False):
         "`.fit <description>` — Poster ton look dans le salon filles\n"
         "*Réservé aux membres ayant le rôle filles du serveur.*"
     ), inline=False)
+    e.add_field(name="📊 Ton activité", value=(
+        "`.activite [@membre]` — Messages et vocal *(jour, semaine, total)*\n"
+        "`.records [@membre]` — 🏆 Tes records et ceux du QG"
+    ), inline=False)
     e.add_field(name="🎂 Divers", value=(
-        "`.anniversaire <JJ/MM>` — Enregistrer ta date"
+        "`.anniversaire <JJ/MM>` — Enregistrer ta date\n"
+        "`.souvenirs` — Tes objets de collection"
     ), inline=False)
     e.add_field(name="🎨 Personnalisation *(à débloquer en boutique)*", value=(
         "`.macustom` — Voir tout ce que tu as débloqué 🎨\n"
@@ -1198,6 +1203,7 @@ def build_help_pages(guild, is_admin=False):
     ), inline=False)
     e.add_field(name="🎖️ Ce qui se mérite", value=(
         "`.pins` — Tes pins *(18 à débloquer, ils ne s'achètent pas)*\n"
+        "`.pins` *(alias `.titres`)* — Équipe 3 pins et 1 titre 👑\n"
         "`.vitrine <c1>, <c2>, <c3>` — Expose 3 cartes sur ton profil\n"
         "`.mood <texte>` — Ton humeur du jour *(gratuit)*"
     ), inline=False)
@@ -1336,6 +1342,10 @@ def build_help_pages(guild, is_admin=False):
         "`.liens [@membre]` — Tes liens · `.topliens` — Les duos du serveur"
     ), inline=False)
     e.set_footer(text="Chaque compagnon a un caractère et une particularité cachée à découvrir ✨")
+    e.add_field(name="🤗 Au quotidien", value=(
+        "`.petaction <laver|promener|dormir|caresser>` — Prendre soin de lui\n"
+        "*Raccourcis : `.laver` · `.promener` · `.dormir` · `.caresser`*"
+    ), inline=False)
     pages.append(("🐾", "Compagnons", e))
 
     e = discord.Embed(title="🎮  Jeux & Duels",
@@ -1437,11 +1447,29 @@ def build_help_pages(guild, is_admin=False):
         "`.avatar [@membre]` — L'avatar en grand\n"
         "`.sondage <question>` — Lancer un sondage\n"
         "`.giveaway <durée> <lot>` — Lancer un giveaway\n"
-        "`.help` — Cette aide"
+        "`.help` — Cette aide  ·  `.help <commande>` — Le détail d'une commande\n"
+        "`.guide` — 📘 Découvrir le QG"
+    ), inline=False)
+    e.add_field(name="🎁 Faire plaisir", value=(
+        "`.cadeau @membre <montant|carte>` — Offrir un paquet emballé 🎀\n"
+        "`.pay @membre <montant>` — Envoyer des pièces directement"
+    ), inline=False)
+    e.add_field(name="📰 La vie du QG", value=(
+        "`.gazette` — Le journal de la semaine 📰\n"
+        "`.archives` — Les grands moments du QG 🗃️\n"
+        "`.cejourla` — Ce qui s'est passé un tel jour 🕰️"
+    ), inline=False)
+    e.add_field(name="🎫 Support", value=(
+        "`.ticket <sujet>` — Ouvrir un ticket avec le staff\n"
+        "`.close` — Fermer le ticket courant"
+    ), inline=False)
+    e.add_field(name="🎵 Musique", value=(
+        "`.play <titre>` · `.queue` · `.skip` · `.stop`"
     ), inline=False)
     e.add_field(name="📖 La Chronique", value=(
         "*Une histoire interactive où les choix du serveur changent réellement la suite.*\n"
-        "`.chronique` — Où en est la série, et voter quand un choix s'ouvre"
+        "`.chronique` — Où en est la série, et voter quand un choix s'ouvre\n"
+        "`.saison` — La saison en cours"
     ), inline=False)
     e.add_field(name="🌙 Ambiances & rendez-vous", value=(
         "`.nuit` — État du **Mode Nuit** 🌙 *(minuit → 6 h)*\n"
@@ -1491,6 +1519,15 @@ def build_help_pages(guild, is_admin=False):
     ), inline=False)
     e.add_field(name="📖 Aide", value=(
         "`.helpadmin` — Cette aide staff  ·  `.help` — L'aide des joueurs"
+    ), inline=False)
+    e.add_field(name="🛠️ Maintenance", value=(
+        "`.removecoins @membre <montant>` — Retirer des pièces\n"
+        "`.resetplayer @membre` — Réinitialiser un joueur *(irréversible)*\n"
+        "`.secretstory` — Lancer une session Secret Story"
+    ), inline=False)
+    e.add_field(name="🎬 Drama Show", value=(
+        "`.drama-start` · `.drama-next` · `.drama-cast` · `.drama-tropes`\n"
+        "`.drama-stop` · `.drama-reset`"
     ), inline=False)
     pages.append(("🛡️", "Admin — Modération", e))
 
@@ -1641,9 +1678,197 @@ class HelpView(ui.View):
         self.index = (self.index + 1) % len(self.pages)
         await self.refresh(interaction)
 
+# ============================================================
+#  📘 GUIDE — découvrir le QG en deux minutes
+#  Le Guide répond à « qu'est-ce qu'on peut faire ? ».
+#  .help répond à « quelle commande taper ? ». Deux rôles distincts.
+# ============================================================
+# Point d'extension saisonnier : un pack pourra remplacer ces trois valeurs
+# sans toucher au reste. Aucun mois n'est codé en dur ici.
+GUIDE_HABILLAGE = {
+    "normal": {
+        "titre": "🌸  BIENVENUE AU QG",
+        "intro": ("Akari fait tourner la maison : jeux, économie, cartes, compagnons, "
+                  "histoires interactives et événements.\n\n"
+                  "*Prends deux minutes. Tu n'as pas besoin de tout retenir.*"),
+        "couleur": 0xff6b9d,
+    },
+}
+
+def guide_habillage():
+    return GUIDE_HABILLAGE.get(AKARI_MODE) or GUIDE_HABILLAGE["normal"]
+
+# (clé, emoji, libellé, titre, texte, commandes clés)
+GUIDE_PAGES = [
+    ("debut", "🚀", "Premiers pas", "🚀  PREMIERS PAS",
+     "Cinq choses à essayer, dans l'ordre. Rien d'obligatoire.", [
+        "**1.** `.profil` — voir qui tu es ici",
+        "**2.** `.daily` — ton bonus quotidien",
+        "**3.** `.missions` — tes objectifs du jour",
+        "**4.** `.ga` — tenter une carte",
+        "**5.** `.pet` — adopter un compagnon",
+     ]),
+    ("jouer", "🎮", "Jouer", "🎮  JOUER",
+     "Des quiz, des duels, des jeux rapides. Seul ou contre quelqu'un.", [
+        "`.quiz` — questions kdrama et animé",
+        "`.arene @membre` — duel au tour par tour",
+        "`.jeux` — la liste complète",
+     ]),
+    ("eco", "💰", "Économie", "💰  ÉCONOMIE",
+     "Les pièces servent partout : boutique, cartes, compagnons, cadeaux.", [
+        "`.balance` — ton solde",
+        "`.travailler` — gagner des pièces",
+        "`.banque` — mettre de côté *(avec intérêts)*",
+        "`.boutique` — dépenser",
+     ]),
+    ("gacha", "🎴", "Gacha", "🎴  GACHA",
+     "Construis ta collection, trouve des cartes rares et fais-les combattre.", [
+        "`.ga` — tirer une carte",
+        "`.collection` — ce que tu possèdes",
+        "`.gachabattle @membre` — combat de cartes",
+     ]),
+    ("pets", "🐾", "Compagnons", "🐾  COMPAGNONS",
+     ("Adopte, prends soin de lui, découvre son caractère, aménage son refuge "
+      "et pars en activité avec lui.\n\n"
+      "*C'est un des systèmes les plus profonds du bot — laisse-toi le temps.*"), [
+        "`.pet` — ton compagnon",
+        "`.nourrir` · `.jouer` — s'en occuper",
+        "`.petrefuge` — son chez-lui",
+        "`.petsortie` — partir en activité",
+     ]),
+    ("chro", "📖", "Chroniques", "📖  CHRONIQUES",
+     ("Des histoires interactives publiées épisode par épisode.\n"
+      "Quand un choix s'ouvre, le serveur vote — et la suite en tient compte.\n\n"
+      "*Le reste, tu le découvriras en lisant.*"), [
+        "`.chronique` — où en est l'histoire, et voter",
+     ]),
+    ("events", "🎪", "Events", "🎪  ÉVÉNEMENTS",
+     ("Trois formats.\n"
+      "🟢 **Flash** — une minute, tout le monde peut sauter dedans.\n"
+      "🟠 **Principaux** — quelques minutes, des décisions à prendre.\n"
+      "🔴 **Showtime** — rares. Quand il y en a un, ça se sait."), [
+        "`.event` — le catalogue",
+        "`.planning` — comment ça tourne",
+     ]),
+    ("qg", "✨", "À ne pas manquer", "✨  À NE PAS MANQUER",
+     "Ce qui fait que le QG n'est pas juste un bot d'économie.", [
+        "📰 `.gazette` — le journal hebdomadaire du serveur",
+        "🗃️ `.archives` — les grands moments de son histoire",
+        "🏆 `.records` — les plus hauts scores jamais atteints",
+        "🎖️ `.succes` — 40 succès, dont certains secrets",
+        "🎁 `.cadeau @membre` — offrir un paquet emballé",
+        "🤖 *Akari se souvient de certains exploits. Il lui arrive d'en parler.*",
+     ]),
+]
+
+@bot.command(name="guide", aliases=["decouvrir", "start", "bienvenue"])
+async def guide_cmd(ctx):
+    """Découvrir le QG — .guide"""
+    uid = str(ctx.author.id)
+    hab = guide_habillage()
+
+    def etapes():
+        """Checklist bâtie uniquement sur des données déjà suivies."""
+        pid, _pdb, _ps = get_active_pet(uid)
+        return [
+            ("Voir ton profil", xp_data[uid]["xp"] > 0 or economy_data[uid]["coins"] > 0),
+            ("Récupérer un daily", user_stats[uid].get("dailies", 0) > 0),
+            ("Jouer une partie", user_stats[uid].get("quiz_ok", 0) > 0
+                                 or user_stats[uid].get("arene_wins", 0) > 0),
+            ("Obtenir une carte", len(gacha_collections.get(uid, {})) > 0),
+            ("Adopter un compagnon", bool(pid)),
+        ]
+
+    def accueil():
+        e = discord.Embed(title=hab["titre"], description=hab["intro"], color=hab["couleur"])
+        faites = etapes()
+        n = sum(1 for _l, ok in faites if ok)
+        if n < len(faites):
+            e.add_field(
+                name=f"🧭 Tes débuts — {n}/{len(faites)}",
+                value="\n".join(f"{'✅' if ok else '⬜'} {lab}" for lab, ok in faites)
+                      + "\n\n*Aucune récompense, juste un repère.*",
+                inline=False)
+        else:
+            e.add_field(name="🧭 Tes débuts",
+                        value="✅ Tu as fait le tour des bases. La suite est à toi.",
+                        inline=False)
+        e.add_field(name="📚 Explorer",
+                    value="Choisis une rubrique ci-dessous.\n"
+                          "*Besoin d'une commande précise ? → `.help`*", inline=False)
+        e.set_footer(text="`.help <commande>` pour le détail d'une commande")
+        if ctx.guild and ctx.guild.icon:
+            e.set_thumbnail(url=ctx.guild.icon.url)
+        return e
+
+    def page(cle):
+        p = next((x for x in GUIDE_PAGES if x[0] == cle), None)
+        if not p:
+            return accueil()
+        _c, _emo, _lab, titre, texte, cmds = p
+        e = discord.Embed(title=titre, description=texte, color=hab["couleur"])
+        e.add_field(name="⌨️ Pour commencer", value="\n".join(cmds), inline=False)
+        e.set_footer(text="Toutes les commandes → `.help`")
+        return e
+
+    class GuideView(ui.View):
+        def __init__(self):
+            super().__init__(timeout=240)
+            opts = [discord.SelectOption(label=lab, emoji=emo, value=cle, description=t[:95])
+                    for cle, emo, lab, _ti, t, _cm in GUIDE_PAGES]
+            sel = ui.Select(placeholder="📚 Explorer une rubrique…", options=opts, row=0)
+            async def cb(itx):
+                await itx.response.edit_message(embed=page(sel.values[0]), view=self)
+            sel.callback = cb
+            self.add_item(sel)
+
+        @ui.button(label="Accueil", emoji="🏠", style=discord.ButtonStyle.secondary, row=1)
+        async def home(self, itx, _b):
+            await itx.response.edit_message(embed=accueil(), view=self)
+
+        @ui.button(label="Toutes les commandes", emoji="❓",
+                   style=discord.ButtonStyle.primary, row=1)
+        async def vers_help(self, itx, _b):
+            await itx.response.send_message(
+                "Tape `.help` — ou `.help <commande>` pour une commande précise.",
+                ephemeral=True)
+
+    await ctx.send(embed=accueil(), view=GuideView())
+
 @bot.command(name="help", aliases=["aide", "commandes"])
-async def help_cmd(ctx):
-    """Affiche l'aide des joueurs — .help"""
+async def help_cmd(ctx, recherche: str = None):
+    """L'aide — .help  ·  .help <commande> pour une commande précise"""
+    if recherche:
+        nom = recherche.lower().lstrip(".").strip()
+        cmd = bot.get_command(nom)
+        if not cmd:
+            proches = [c2.name for c2 in bot.commands
+                       if nom in c2.name or c2.name.startswith(nom[:3])][:6]
+            return await ctx.send(embed=discord.Embed(
+                description=(f"❌ `.{nom}` n'existe pas."
+                             + (f"\n\nTu cherchais peut-être : "
+                                + " · ".join(f"`.{p}`" for p in proches) if proches else "")
+                             + "\n\n*`.help` pour la liste complète.*"),
+                color=0xe74c3c))
+        # Une commande d'admin ne se documente pas pour tout le monde.
+        est_admin = any("has_permissions" in getattr(x, "__qualname__", "")
+                        or "is_owner" in getattr(x, "__qualname__", "")
+                        for x in cmd.checks)
+        if est_admin and not (ctx.guild and ctx.author.guild_permissions.administrator):
+            return await ctx.send(embed=discord.Embed(
+                description=f"🔒 `.{cmd.name}` est réservée au staff.", color=0x95a5a6))
+        e = discord.Embed(title=f"`.{cmd.name}`",
+                          description=(cmd.help or "*Pas de description.*").strip(),
+                          color=0x5865F2)
+        sig = cmd.signature.strip()
+        e.add_field(name="📝 Usage", value=f"`.{cmd.name}{' ' + sig if sig else ''}`", inline=False)
+        if cmd.aliases:
+            e.add_field(name="🏷️ Alias",
+                        value=" · ".join(f"`.{a}`" for a in cmd.aliases), inline=False)
+        if est_admin:
+            e.add_field(name="🛡️ Accès", value="Staff uniquement", inline=False)
+        e.set_footer(text="`.help` pour toutes les commandes  ·  `.guide` pour découvrir le QG")
+        return await ctx.send(embed=e)
     pages = build_help_pages(ctx.guild, is_admin=False)
     view = HelpView(pages, ctx.author, timeout=180)
     await ctx.send(embed=pages[0][2], view=view)
@@ -3322,11 +3547,21 @@ async def balance(ctx, member: discord.Member = None):
 
 @bot.command(name="pay", aliases=["donner","transfer"])
 async def pay(ctx, member: discord.Member, amount: int):
+    """Envoyer des pièces — .pay @membre <montant>"""
     uid = str(ctx.author.id)
+    # Un montant négatif inversait le transfert : l'expéditeur se servait
+    # sur le compte du destinataire. Corrigé.
+    if amount <= 0:
+        return await ctx.send("❌ Le montant doit être **supérieur à zéro**.")
+    if member.bot:
+        return await ctx.send("❌ Les bots n'ont pas besoin de pièces.")
+    if member.id == ctx.author.id:
+        return await ctx.send("❌ Tu ne peux pas te payer toi-même.")
     if economy_data[uid]["coins"] < amount:
         return await ctx.send("❌ Pas assez de pièces !")
     economy_data[uid]["coins"] -= amount
     economy_data[str(member.id)]["coins"] += amount
+    save_all_data()
     await ctx.send(embed=discord.Embed(
         description=f"💸 **{ctx.author.display_name}** a envoyé **{amount} pièces** à **{member.display_name}**.",
         color=0x27ae60
@@ -3563,6 +3798,57 @@ async def roast(ctx, member: discord.Member = None):
         description=f"🔥 {target.mention} : {random.choice(ROASTS_QG)}",
         color=0xe74c3c
     ))
+
+@bot.command(name="cadeau", aliases=["offrir", "gift"])
+async def cadeau_cmd(ctx, destinataire: discord.Member = None, contenu: str = None, *, mot: str = ""):
+    """Offrir un cadeau emballé — .cadeau @membre <montant|carte> [petit mot]"""
+    if not destinataire or not contenu:
+        return await ctx.send(embed=discord.Embed(
+            title="🎁 Offrir un cadeau",
+            description=("`.cadeau @membre 2500` — des pièces\n"
+                         "`.cadeau @membre <carte>` — une carte de ta collection\n\n"
+                         "Tu peux ajouter un petit mot après.\n"
+                         "*Le contenu est prélevé tout de suite ; seul le destinataire "
+                         "peut ouvrir.*"),
+            color=0xe91e63))
+    if destinataire.bot:
+        return await ctx.send("❌ Les bots n'ouvrent pas les cadeaux.")
+    if destinataire.id == ctx.author.id:
+        return await ctx.send("❌ S'offrir un cadeau à soi-même, c'est un peu triste.")
+
+    if contenu.replace(",", "").replace(" ", "").isdigit():
+        type_, valeur = "coins", int(contenu.replace(",", "").replace(" ", ""))
+    else:
+        cle = contenu.lower().strip()
+        if cle not in ANIME_CARDS_DB:
+            cle = next((k for k, v in ANIME_CARDS_DB.items()
+                        if normalize_str(v["nom"]) == normalize_str(contenu)), None)
+        if not cle:
+            return await ctx.send("❌ Montant ou carte introuvable.")
+        type_, valeur = "carte", cle
+
+    cid, err = cadeau_creer(ctx.author.id, destinataire.id, type_, valeur, mot)
+    if err:
+        return await ctx.send(f"❌ {err}")
+    save_all_data()
+
+    # Un souvenir seulement si c'est réellement notable.
+    g = cadeaux_data[cid]
+    notable = (type_ == "coins" and g["valeur"] >= CADEAU_SEUIL_MEMOIRE) or \
+              (type_ == "carte" and
+               ANIME_CARDS_DB.get(valeur, {}).get("rarete") in ("Légendaire", "Mythique"))
+    if notable:
+        memoriser("social.gift", uid=str(destinataire.id), unique=False, tag=cid,
+                  contexte=f"un cadeau de {ctx.author.display_name}")
+
+    e = discord.Embed(
+        title=f"🎁 Un cadeau pour {destinataire.display_name}",
+        description=f"**{ctx.author.display_name}** t'a laissé quelque chose.",
+        color=0xe91e63)
+    if g["msg"]:
+        e.add_field(name="💌", value=f"*« {g['msg']} »*", inline=False)
+    e.set_footer(text="Seul le destinataire peut l'ouvrir  ·  7 jours pour le faire")
+    await ctx.send(destinataire.mention, embed=e, view=CadeauView(cid))
 
 @bot.command(name="compliment")
 async def compliment(ctx, member: discord.Member = None):
@@ -5731,11 +6017,29 @@ async def anniversaire_cmd(ctx, date: str = None):
         return await ctx.send(embed=embed)
     try:
         j, mo = date.split("/")
-        assert 1<=int(j)<=31 and 1<=int(mo)<=12
-    except:
-        return await ctx.send("❌ Format `JJ/MM` — Ex: `.anniversaire 25/03`")
-    anniversaire_data[uid] = date
-    await ctx.send(embed=discord.Embed(description=f"🎂 Anniversaire enregistré le **{date}** ! 🎉", color=0xff6b9d))
+        j, mo = int(j), int(mo)
+        JOURS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        assert 1 <= mo <= 12 and 1 <= j <= JOURS[mo - 1]
+        date = f"{j:02d}/{mo:02d}"
+    except Exception:
+        return await ctx.send("❌ Format `JJ/MM` — Ex : `.anniversaire 25/03`")
+    ancienne = anniversaire_data.get(uid)
+    if ancienne == date:
+        return await ctx.send(f"🎂 Ta date est déjà réglée sur le **{date}**.")
+    # On ne change pas sa date pour retoucher le cadeau.
+    ok, jours = anniv_peut_changer(uid)
+    if not ok:
+        return await ctx.send(embed=discord.Embed(
+            description=(f"🔒 Ta date est enregistrée au **{ancienne}**.\n"
+                         f"Elle pourra être modifiée dans **{jours} jour(s)**.\n\n"
+                         f"*Akari préfère éviter les anniversaires à répétition.*"),
+            color=0xe67e22))
+    anniv_enregistrer(uid, date)
+    save_all_data()
+    txt = f"🎂 Anniversaire enregistré le **{date}** ! 🎉"
+    if ancienne:
+        txt = f"🎂 Date changée : {ancienne} → **{date}**."
+    await ctx.send(embed=discord.Embed(description=txt, color=0xff6b9d))
 
 snipe_data = {}
 
@@ -11464,21 +11768,166 @@ async def planningauto_cmd(ctx):
     embed.set_footer(text=f"Events auto : {statut} • .delevent <#> pour supprimer")
     await ctx.send(embed=embed)
 
+# ============================================================
+#  🎂 ANNIVERSAIRES 2.0 · 🎁 CADEAUX · ✉️ SURPRISES
+#  Akari observe, accompagne et se souvient. Elle ne distribue pas.
+# ============================================================
+ANNIV_CADEAU = 1500          # symbolique, une fois par an
+ANNIV_XP = 200
+ANNIV_DELAI_CHANGEMENT = 30 * 86400   # on ne change pas sa date pour re-toucher
+
+anniv_meta = {}      # {uid: {"pose": ts, "fete": "AAAA"}}
+anniv_souhaits = {}  # {f"{uid}:{annee}": set(uid_souhaitants)}  — éphémère par célébration
+
+def anniv_peut_changer(uid):
+    """Retourne (autorisé, jours_restants). Poser sa date la 1re fois est libre."""
+    import time as _t
+    m = anniv_meta.get(str(uid))
+    if not m or not m.get("pose"):
+        return True, 0
+    ecoule = _t.time() - m["pose"]
+    if ecoule >= ANNIV_DELAI_CHANGEMENT:
+        return True, 0
+    return False, int((ANNIV_DELAI_CHANGEMENT - ecoule) // 86400) + 1
+
+def anniv_enregistrer(uid, date):
+    import time as _t
+    uid = str(uid)
+    anniversaire_data[uid] = date
+    anniv_meta.setdefault(uid, {})["pose"] = _t.time()
+
+def anniv_du_jour(quand=None):
+    """Les membres qui fêtent aujourd'hui. Le 29 février est fêté le 28
+    les années non bissextiles."""
+    import datetime as _dt
+    ref = _dt.datetime.fromtimestamp(quand) if quand else _dt.datetime.now()
+    jm = ref.strftime("%d/%m")
+    bissextile = (ref.year % 4 == 0 and ref.year % 100 != 0) or ref.year % 400 == 0
+    cibles = {jm}
+    if jm == "28/02" and not bissextile:
+        cibles.add("29/02")
+    return [u for u, d in anniversaire_data.items() if d in cibles]
+
+def anniv_deja_fete(uid, annee=None):
+    import datetime as _dt
+    annee = annee or _dt.datetime.now().year
+    return anniv_meta.get(str(uid), {}).get("fete") == str(annee)
+
+def anniv_marquer_fete(uid, annee=None):
+    """Marque la célébration. Retourne False si déjà faite cette année —
+    résiste au double passage de la tâche et au redémarrage."""
+    import datetime as _dt
+    uid = str(uid)
+    annee = str(annee or _dt.datetime.now().year)
+    if anniv_meta.get(uid, {}).get("fete") == annee:
+        return False
+    anniv_meta.setdefault(uid, {})["fete"] = annee
+    return True
+
+def anniv_offrir(uid, annee=None):
+    """Le petit cadeau d'Akari, une seule fois par an. Verrouillé sur la
+    même clé que la célébration : impossible de le toucher deux fois."""
+    import datetime as _dt
+    uid = str(uid)
+    annee = str(annee or _dt.datetime.now().year)
+    if not anniv_marquer_fete(uid, annee):
+        return False
+    economy_data[uid]["coins"] += ANNIV_CADEAU
+    xp_data[uid]["xp"] += ANNIV_XP
+    memoriser("social.birthday", uid=uid, tag=annee, contexte="Anniversaire fêté au QG")
+    return True
+
+ANNIV_MOTS = [
+    "Akari a coché la date. Elle coche rarement des dates.",
+    "Un an de plus, et toujours là. Le QG apprécie.",
+    "La rédaction a préparé un gâteau. Il est virtuel, mais l'intention est réelle.",
+    "Akari ne sait pas quel âge tu as et ne compte pas le demander.",
+    "Le QG fait une pause dans ses affaires pour te souhaiter ça.",
+]
+
+class AnnivView(ui.View):
+    """Un bouton, un souhait par personne, pas quarante messages."""
+    def __init__(self, uid_fete, annee, timeout=None):
+        super().__init__(timeout=timeout)
+        self.uid_fete = str(uid_fete)
+        self.cle = f"{self.uid_fete}:{annee}"
+        anniv_souhaits.setdefault(self.cle, set())
+        self.message = None
+
+    @property
+    def nb(self):
+        return len(anniv_souhaits.get(self.cle, set()))
+
+    @ui.button(label="Souhaiter un joyeux anniversaire", emoji="🎉",
+               style=discord.ButtonStyle.success)
+    async def souhaiter(self, itx, _b):
+        uid = str(itx.user.id)
+        if uid == self.uid_fete:
+            return await itx.response.send_message(
+                "Se souhaiter soi-même, c'est un peu triste. Attends un peu.", ephemeral=True)
+        s = anniv_souhaits.setdefault(self.cle, set())
+        if uid in s:
+            return await itx.response.send_message(
+                "Tu lui as déjà souhaité — une fois suffit.", ephemeral=True)
+        s.add(uid)
+        await itx.response.send_message("🎉 C'est noté, merci !", ephemeral=True)
+        try:
+            if self.message:
+                await self.message.edit(embed=anniv_embed(itx.guild, self.uid_fete, self.nb))
+        except Exception:
+            pass
+
+def anniv_embed(guild, uid_fete, nb=0):
+    m = guild.get_member(int(uid_fete)) if guild else None
+    nom = m.display_name if m else "un membre"
+    e = discord.Embed(
+        title=f"🎂 JOYEUX ANNIVERSAIRE {nom.upper()} !",
+        description=f"*{random.choice(ANNIV_MOTS)}*",
+        color=0xff6b9d)
+    if m:
+        e.set_thumbnail(url=m.display_avatar.url)
+        if getattr(m, "joined_at", None):
+            jours = max(0, (discord.utils.utcnow() - m.joined_at).days)
+            e.add_field(name="🕰️ Au QG depuis",
+                        value=f"**{jours // 365} an(s)**" if jours >= 365
+                        else f"**{jours} jour(s)**", inline=True)
+    e.add_field(name="🎁 Cadeau d'Akari",
+                value=f"**{ANNIV_CADEAU:,}** pièces · **{ANNIV_XP}** XP", inline=True)
+    if nb:
+        e.add_field(
+            name="🎉 Les souhaits",
+            value=(f"**{nb}** personne lui a souhaité un joyeux anniversaire !" if nb == 1
+                   else f"**{nb}** personnes lui ont souhaité un joyeux anniversaire !"),
+            inline=False)
+    return e
+
 @tasks.loop(minutes=1)
 async def check_anniversaires():
-    today = datetime.datetime.now().strftime("%d/%m")
+    """Célèbre les anniversaires du jour. Une seule fois par personne et par
+    année, même si la tâche repasse ou si le bot redémarre."""
+    import datetime as _dt
+    annee = _dt.datetime.now().year
+    fetes = anniv_du_jour()
+    if not fetes:
+        return
     for guild in bot.guilds:
-        channel = discord.utils.get(guild.text_channels, name="général") or guild.system_channel
-        if not channel: continue
-        for user_id, date in anniversaire_data.items():
-            if date == today:
-                m = guild.get_member(int(user_id))
-                if m:
-                    await channel.send(embed=discord.Embed(
-                        title="🎂 Joyeux Anniversaire !",
-                        description=f"Toute la communauté souhaite un joyeux anniversaire à **{m.mention}** ! 🎉🥳",
-                        color=0xff6b9d
-                    ))
+        channel = (guild.get_channel(SALON_GENERAL_ID) if SALON_GENERAL_ID else None) \
+                  or discord.utils.get(guild.text_channels, name="général") \
+                  or guild.system_channel
+        if not channel:
+            continue
+        for uid in fetes:
+            m = guild.get_member(int(uid))
+            if not m:
+                continue
+            if not anniv_offrir(uid, annee):     # verrou : cadeau + célébration
+                continue
+            vue = AnnivView(uid, annee)
+            try:
+                vue.message = await channel.send(m.mention, embed=anniv_embed(guild, uid), view=vue)
+            except Exception as e:
+                print(f"[Anniversaire] envoi impossible : {e}")
+    save_all_data()
 
 @bot.command(name="arene", aliases=["duel","pvp"])
 async def arene_cmd(ctx, adversaire: discord.Member = None):
@@ -14665,12 +15114,92 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "7.2.0"
+BOT_VERSION = "7.5.0"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "7.5.0": {
+   "titre": "TROUVER SON CHEMIN 📘",
+   "ajouts": [
+     "📘 **`.guide`** — un parcours en deux minutes pour découvrir le QG. "
+     "Huit rubriques, des phrases courtes, et cinq choses à essayer en arrivant.",
+     "🧭 **Une petite checklist de départ** apparaît sur ton guide : voir ton "
+     "profil, prendre ton daily, jouer, sortir une carte, adopter un compagnon. "
+     "Aucune récompense, aucune pression — juste un repère. Elle s'efface "
+     "une fois terminée.",
+     "❓ **`.help <commande>`** — la description, l'usage et les alias d'une "
+     "commande précise. `.help cadeau` t'apprend qu'elle répond aussi à "
+     "`.offrir` et `.gift`.",
+     "🔎 **Une faute de frappe ne bloque plus** : `.help car` propose les "
+     "commandes proches.",
+   ],
+   "correctifs": [
+     "📚 **21 commandes n'apparaissaient nulle part dans l'aide** — dont "
+     "`.activite`, `.records`, `.cadeau`, la musique et les tickets. "
+     "Les 243 commandes sont désormais documentées.",
+     "🔐 Les commandes du staff ne sont décrites qu'au staff, y compris via "
+     "`.help <commande>`.",
+     "📱 Les pages d'aide restent sous les limites d'affichage de Discord.",
+   ],
+ },
+ "7.4.0": {
+   "titre": "AKARI REMARQUE 🤖",
+   "ajouts": [
+     "🤖 **Akari ne se contente plus d'afficher des embeds.** Il lui arrive "
+     "de dire un mot quand quelque chose sort de l'ordinaire.",
+     "🎴 **Ton premier Mythique**, un record du QG battu, une grosse perte, "
+     "un palier de compagnon, ton anniversaire : elle sait faire la "
+     "différence entre ça et une carte Rare de plus.",
+     "🌙 **Elle remarque l'heure.** Passé deux heures du matin, elle le dit "
+     "parfois. Sans insister.",
+     "👋 **Elle remarque les retours.** Après plusieurs semaines d'absence, "
+     "un simple *« Ça faisait un moment. »*",
+     "📜 **Elle remarque les anciens.** Rarement, mais elle le remarque.",
+   ],
+   "correctifs": [
+     "🤖 Akari parle **au maximum une fois toutes les six heures** par membre, "
+     "et jamais deux fois du même sujet dans la quinzaine. Elle ne commente "
+     "pas chaque commande — c'est le but.",
+     "🤖 Si plusieurs choses arrivent en même temps, elle n'en retient qu'une : "
+     "un premier Mythique passe avant une remarque sur l'heure.",
+     "🔐 Elle retient **un seul horodatage** par membre : la dernière fois "
+     "qu'elle t'a vu. Ni les salons, ni les horaires détaillés, ni le contenu "
+     "des messages. Suivi démarré à cette version.",
+   ],
+ },
+ "7.3.0": {
+   "titre": "LA VIE DU QG 🎂",
+   "ajouts": [
+     "🎂 **Anniversaires 2.0** — le jour J, Akari te met en avant dans le "
+     "général avec un bouton **🎉 Souhaiter un joyeux anniversaire**. "
+     "Le compteur monte en direct, une voix par personne.",
+     "🎁 **Petit cadeau d'Akari** — 1 500 pièces et 200 XP le jour de ton "
+     "anniversaire, une fois par an. Symbolique, mais c'est l'intention.",
+     "🎁 **`.cadeau @membre <montant|carte>`** — offre un paquet emballé. "
+     "Le contenu ne se révèle qu'à l'ouverture, et seul le destinataire "
+     "peut ouvrir. Tu peux joindre un petit mot.",
+     "💌 **Cadeaux de cartes** — la carte part avec son niveau de fusion.",
+     "✉️ **Il arrive qu'Akari laisse quelque chose.** Une enveloppe, un mot, "
+     "un bonbon. C'est rare, ça ne se provoque pas, et ça ne rapporte pas "
+     "toujours des pièces. À toi de voir si tu ouvres.",
+     "📰 **La Gazette parle des anniversaires** — via la mémoire d'Akari.",
+   ],
+   "correctifs": [
+     "🔐 **`.pay` acceptait les montants négatifs** — on pouvait se servir "
+     "sur le compte d'autrui. Corrigé. Les paiements à soi-même et aux bots "
+     "sont également bloqués.",
+     "🎂 On ne peut plus changer sa date d'anniversaire tous les jours pour "
+     "retoucher le cadeau : un délai de 30 jours s'applique après le premier "
+     "enregistrement.",
+     "🎂 Un anniversaire n'est fêté qu'une fois par an, même si le bot "
+     "redémarre le jour même.",
+     "🎁 Le contenu d'un cadeau est prélevé à l'emballage : impossible "
+     "d'emballer puis de dépenser. Un cadeau non ouvert au bout de 7 jours "
+     "retourne à l'expéditeur.",
+   ],
+ },
  "7.2.0": {
    "titre": "LE JOURNAL DU QG 📰",
    "ajouts": [
@@ -15230,6 +15759,8 @@ def record_maj(uid, cle, valeur, memoriser_aussi=True):
         if tid:
             memoriser(tid, uid=uid, valeur=valeur, unique=False,
                       tag=f"{cle}:{valeur}", importance=3 if qg else 2)
+        if qg:
+            akari_en_attente[uid] = ("record_qg", valeur)   # écrase le record perso
     return perso, qg
 
 def record_perso(uid, cle):
@@ -15297,6 +15828,9 @@ MEM_TYPES = {
     # ── 💰 Fortune ──
     "wealth.record":        ("💎", "Fortune record",           2, "fortune"),
     # ── 🌐 Serveur ──
+    # ── 🤝 Social ──
+    "social.birthday":      ("🎂", "Anniversaire au QG",      2, "social"),
+    "social.gift":          ("🎁", "Cadeau reçu",             2, "social"),
     "server.event":         ("🌐", "Événement du QG",          3, "serveur"),
 }
 
@@ -15309,6 +15843,21 @@ def _mem_cle(type_id, uid, tag):
 def memoire_a(type_id, uid=None, tag=None):
     """Ce souvenir a-t-il déjà été enregistré ? Résiste aux doubles appels."""
     return _mem_cle(type_id, uid, tag) in memoire_vus
+
+# Souvenirs qui méritent éventuellement un mot d'Akari.
+AKARI_DECLENCHEURS = {
+    "gacha.first_mythic": "first_mythic",
+    "wealth.record":      "record_perso",
+    "casino.biggest_win": "grosse_victoire",
+    "casino.jackpot":     "grosse_victoire",
+    "casino.biggest_loss": "grosse_perte",
+    "event.banquier_win":  "exploit",
+    "event.train_terminus":"exploit",
+    "event.ascenseur_top": "exploit",
+    "pet.milestone":       "pet_milestone",
+    "social.birthday":     "anniversaire",
+}
+akari_en_attente = {}   # {uid: (contexte, valeur)} — consommé par le hook
 
 def memoriser(type_id, uid=None, valeur=None, contexte=None, tag=None,
               importance=None, unique=True):
@@ -15332,6 +15881,10 @@ def memoriser(type_id, uid=None, valeur=None, contexte=None, tag=None,
     if tag:                 e["g"] = str(tag)[:60]
     memoire_data.append(e)
     memoire_vus.add(cle)
+    # Akari remarque. Elle ne parle pas forcément : le hook décidera.
+    cx = AKARI_DECLENCHEURS.get(type_id)
+    if cx and uid:
+        akari_en_attente[str(uid)] = (cx, valeur)
     if len(memoire_data) > MEMOIRE_MAX:
         # On n'élague que le bruit : les souvenirs exceptionnels restent.
         garde = [x for x in memoire_data if x["i"] >= 2]
@@ -15759,6 +16312,11 @@ GAZETTE_RUBRIQUES = {
         "**{n}** a terminé une histoire. Akari ne dira pas laquelle.",
         "Une Chronique de plus pour **{n}**.",
     ]),
+    "social": ("🎂", "La vie du QG", [
+        "**{n}** a fêté son anniversaire. Le QG a chanté faux, mais il a chanté.",
+        "C'était l'anniversaire de **{n}**. Akari avait coché la date.",
+        "**{n}** a reçu {x}. Quelqu'un a pensé à quelqu'un.",
+    ]),
     "serveur": ("🌐", "Le QG", ["{x}"]),
 }
 GAZETTE_CALME = [
@@ -15824,6 +16382,449 @@ def gazette_phrase(e, nom_fn):
     return (emo, titre, txt.replace("{n}", str(n))
                             .replace("{v}", f"{v:,}" if isinstance(v, int) else str(v or ""))
                             .replace("{x}", str(e.get("x") or "")))
+
+# ── 🎁 CADEAUX ENTRE MEMBRES ──
+# Le contenu est PRÉLEVÉ à l'emballage, jamais à l'ouverture : impossible
+# d'emballer puis de dépenser, et impossible de dupliquer à l'ouverture.
+CADEAU_EXPIRATION = 7 * 86400
+CADEAU_MSG_MAX = 140
+CADEAU_SEUIL_MEMOIRE = 25000     # en dessous, ce n'est pas un souvenir
+
+cadeaux_data = {}   # {id: {de, pour, type, valeur, msg, cree, ouvert}}
+_cadeau_seq = [0]
+
+def cadeau_nettoyer_message(txt):
+    """Pas de ping, pas de Markdown cassant, longueur bornée."""
+    if not txt:
+        return ""
+    t = str(txt)[:CADEAU_MSG_MAX]
+    t = t.replace("@everyone", "@\u200beveryone").replace("@here", "@\u200bhere")
+    t = re.sub(r"<@[!&]?(\d+)>", "quelqu'un", t)
+    t = t.replace("```", "").replace("\n", " ").strip()
+    return t
+
+def cadeau_creer(de, pour, type_, valeur, message=""):
+    """Emballe un cadeau en prélevant immédiatement le contenu.
+    Retourne (id, erreur). L'un des deux est None."""
+    import time as _t
+    de, pour = str(de), str(pour)
+    if de == pour:
+        return None, "Tu ne peux pas t'offrir un cadeau à toi-même."
+    if type_ == "coins":
+        try:
+            v = int(valeur)
+        except (TypeError, ValueError):
+            return None, "Montant invalide."
+        if v <= 0:
+            return None, "Le montant doit être **supérieur à zéro**."
+        if economy_data[de]["coins"] < v:
+            return None, f"Tu n'as que **{economy_data[de]['coins']:,}** pièces."
+        economy_data[de]["coins"] -= v            # prélèvement immédiat
+        contenu = v
+    elif type_ == "carte":
+        cle = str(valeur)
+        if cle not in ANIME_CARDS_DB:
+            return None, "Cette carte n'existe pas."
+        if cle not in gacha_collections.get(de, {}):
+            return None, "Tu ne possèdes pas cette carte."
+        etat = gacha_collections[de].pop(cle)      # retrait immédiat
+        contenu = {"cle": cle, "etat": etat}
+    else:
+        return None, "Type de cadeau inconnu."
+    _cadeau_seq[0] += 1
+    cid = f"g{int(_t.time())}{_cadeau_seq[0]}"
+    cadeaux_data[cid] = {"de": de, "pour": pour, "type": type_, "valeur": contenu,
+                         "msg": cadeau_nettoyer_message(message),
+                         "cree": _t.time(), "ouvert": False}
+    return cid, None
+
+def cadeau_ouvrir(cid, par):
+    """Ouvre le cadeau. Retourne (ok, message_ou_donnees).
+    Le drapeau est posé AVANT le crédit : deux callbacks simultanés ne
+    peuvent pas créditer deux fois."""
+    import time as _t
+    g = cadeaux_data.get(cid)
+    if not g:
+        return False, "Ce cadeau n'existe plus."
+    if g["ouvert"]:
+        return False, "Ce cadeau a déjà été ouvert."
+    if str(par) != g["pour"]:
+        return False, "Ce cadeau ne t'est pas destiné."
+    if _t.time() - g["cree"] > CADEAU_EXPIRATION:
+        return False, "Ce cadeau a expiré. Le contenu est retourné à l'expéditeur."
+    g["ouvert"] = True                      # verrou posé en premier
+    pour = g["pour"]
+    if g["type"] == "coins":
+        economy_data[pour]["coins"] += g["valeur"]
+    else:
+        gacha_collections.setdefault(pour, {})[g["valeur"]["cle"]] = g["valeur"]["etat"]
+    return True, g
+
+def cadeau_rendre(cid):
+    """Rend le contenu à l'expéditeur (expiration, destinataire parti…)."""
+    g = cadeaux_data.get(cid)
+    if not g or g["ouvert"]:
+        return False
+    g["ouvert"] = True
+    if g["type"] == "coins":
+        economy_data[g["de"]]["coins"] += g["valeur"]
+    else:
+        gacha_collections.setdefault(g["de"], {})[g["valeur"]["cle"]] = g["valeur"]["etat"]
+    return True
+
+def cadeaux_purger():
+    """Rend les cadeaux expirés et oublie les cadeaux ouverts anciens."""
+    import time as _t
+    now = _t.time()
+    rendus = 0
+    for cid, g in list(cadeaux_data.items()):
+        if not g["ouvert"] and now - g["cree"] > CADEAU_EXPIRATION:
+            if cadeau_rendre(cid):
+                rendus += 1
+        if g["ouvert"] and now - g["cree"] > CADEAU_EXPIRATION * 2:
+            cadeaux_data.pop(cid, None)
+    return rendus
+
+CADEAU_MOTS = [
+    "Akari a servi d'intermédiaire. Elle n'a rien pris au passage.",
+    "Livré sans commentaire. Enfin, presque.",
+    "Le paquet est arrivé intact. Akari a vérifié.",
+    "Quelqu'un a pensé à toi. Ça arrive.",
+]
+
+class CadeauView(ui.View):
+    """Seul le destinataire peut ouvrir. L'expéditeur ne récupère rien."""
+    def __init__(self, cid, timeout=None):
+        super().__init__(timeout=timeout)
+        self.cid = cid
+
+    @ui.button(label="Ouvrir", emoji="🎁", style=discord.ButtonStyle.success)
+    async def ouvrir(self, itx, bouton):
+        g = cadeaux_data.get(self.cid)
+        if g and str(itx.user.id) == g["de"] and not g["ouvert"]:
+            return await itx.response.send_message(
+                "C'est ton cadeau — pour quelqu'un d'autre. Patience.", ephemeral=True)
+        ok, res = cadeau_ouvrir(self.cid, itx.user.id)
+        if not ok:
+            return await itx.response.send_message(f"❌ {res}", ephemeral=True)
+        bouton.disabled = True
+        if res["type"] == "coins":
+            reveal = f"💰 **{res['valeur']:,} pièces**"
+        else:
+            info = ANIME_CARDS_DB.get(res["valeur"]["cle"], {})
+            reveal = (f"{RARETE_EMOJI.get(info.get('rarete',''),'🎴')} "
+                      f"**{info.get('nom','?')}** — {info.get('rarete','?')}")
+        e = discord.Embed(title="🎀 Ouvert !",
+                          description=f"{reveal}\n\n*{random.choice(CADEAU_MOTS)}*",
+                          color=0x2ecc71)
+        if res["msg"]:
+            e.add_field(name="💌 Mot de l'expéditeur", value=f"*« {res['msg']} »*", inline=False)
+        save_all_data()
+        await itx.response.edit_message(embed=e, view=self)
+
+# ============================================================
+#  🤖 PERSONNALITÉ CONTEXTUELLE D'AKARI
+#  Elle observe, elle remarque, elle se tait la plupart du temps.
+#  Une seule couche : aucun `if` de personnalité dispersé ailleurs.
+# ============================================================
+AKARI_MODE = "normal"          # un pack saisonnier pourra le remplacer
+AKARI_SUIVI_DEPUIS = "7.4.0"
+
+AKARI_COOLDOWN_GLOBAL = 6 * 3600     # une réaction toutes les 6 h par membre
+AKARI_COOLDOWN_TYPE = 14 * 86400     # le même contexte ne revient pas avant 2 semaines
+AKARI_MEMOIRE_PHRASES = 4            # on ne répète pas une phrase récente
+AKARI_ABSENCE_JOURS = 14             # en dessous, ce n'est pas une absence
+
+akari_meta = {}      # {uid: {"dernier": ts, "types": {ctx: ts}, "phrases": [i], "vu": ts}}
+
+# (contexte, priorité, variantes)  — priorité haute = passe avant
+# 3 exceptionnel · 2 personnel important · 1 contexte d'ambiance
+AKARI_CONTEXTES = {
+    "first_mythic": (3, [
+        "Ton premier Mythique. Celui-là, tu risques de t'en souvenir.",
+        "Premier Mythique. Akari a noté la date, au cas où tu l'oublierais.",
+        "C'est le premier. Il n'y a qu'une fois où on peut dire ça.",
+    ]),
+    "record_qg": (3, [
+        "{v} — nouveau record du QG. Personne n'avait fait mieux.",
+        "Record du QG battu : {v}. Akari met à jour le tableau.",
+        "{v}. C'est le meilleur score jamais vu ici. Pour l'instant.",
+    ]),
+    "exploit": (3, [
+        "Peu de gens vont jusqu'au bout de celui-là.",
+        "Akari a vu passer beaucoup de tentatives. Pas beaucoup de réussites.",
+        "Ça, ça se raconte.",
+    ]),
+    "record_perso": (2, [
+        "{v}. Ton meilleur score jusqu'ici.",
+        "Nouveau record personnel : {v}.",
+        "{v} — tu n'étais jamais monté aussi haut.",
+    ]),
+    "grosse_perte": (2, [
+        "…Je vais faire comme si je n'avais pas vu ça.",
+        "Akari détourne poliment le regard.",
+        "On ne va pas s'attarder là-dessus.",
+        "Ça arrive. Rarement d'un coup, mais ça arrive.",
+    ]),
+    "grosse_victoire": (2, [
+        "La maison n'a pas gagné cette fois. Ça la changera.",
+        "Akari vérifie les chiffres. Ils sont bons.",
+        "Bien joué. Ne recommence pas trop souvent.",
+    ]),
+    "pet_milestone": (2, [
+        "Il a bien grandi. Tu t'en occupes correctement.",
+        "Akari le voyait tout petit. Le temps passe.",
+        "Niveau {v}. Ce n'est pas rien, pour un compagnon.",
+    ]),
+    "anniversaire": (2, [
+        "Akari avait coché la date. Elle en coche peu.",
+        "Bonne journée. C'est tout ce qu'elle dira.",
+    ]),
+    "retour": (2, [
+        "Ça faisait un moment.",
+        "Tiens. Akari commençait à s'habituer au silence.",
+        "Te revoilà. Le QG n'a pas beaucoup changé.",
+    ]),
+    "ancien": (1, [
+        "Tu es là depuis longtemps. Akari s'en souvient.",
+        "Les anciens deviennent rares. Tant mieux qu'il en reste.",
+    ]),
+    "nuit": (1, [
+        "Il est tard. Akari ne juge pas, elle constate.",
+        "Le QG est calme à cette heure-ci.",
+        "Encore debout. Akari aussi, mais elle n'a pas le choix.",
+    ]),
+}
+
+# Un pack saisonnier remplacera ces entrées sans toucher au moteur.
+AKARI_PACKS = {"normal": {}}
+
+def akari_variantes(contexte):
+    """Variantes actives : le pack du mode courant prime sur le normal."""
+    base = AKARI_CONTEXTES.get(contexte)
+    if not base:
+        return 1, []
+    prio, phrases = base
+    pack = AKARI_PACKS.get(AKARI_MODE, {}).get(contexte)
+    if pack:
+        prio = pack.get("prio", prio)
+        phrases = pack.get("phrases", phrases)
+    return prio, phrases
+
+def akari_freq():
+    """Un pack saisonnier peut rendre Akari un peu plus ou moins bavarde."""
+    return AKARI_PACKS.get(AKARI_MODE, {}).get("_freq", 1.0)
+
+def akari_moment(ts=None):
+    """Tranche horaire du QG, dans le fuseau réellement configuré."""
+    import datetime as _dt
+    t = _dt.datetime.fromtimestamp((ts or __import__("time").time()) + 0)
+    h = (t.hour + ACT_TZ) % 24
+    if 2 <= h < 6:   return "nuit"
+    if 6 <= h < 12:  return "matin"
+    if 12 <= h < 19: return "journee"
+    return "soir"
+
+def akari_voit(uid):
+    """Note la dernière interaction utile. UN horodatage, rien d'autre :
+    pas de salon, pas d'horaire détaillé, pas d'historique de présence.
+    Retourne l'ancien horodatage pour détecter un retour."""
+    import time as _t
+    uid = str(uid)
+    m = akari_meta.setdefault(uid, {})
+    avant = m.get("vu")
+    m["avant_vu"] = avant          # conservé un instant pour détecter un retour
+    m["vu"] = _t.time()
+    return avant
+
+def akari_peut_parler(uid, contexte):
+    """Cooldown global, cooldown par contexte, et jamais deux fois de suite."""
+    import time as _t
+    m = akari_meta.get(str(uid), {})
+    now = _t.time()
+    if now - m.get("dernier", 0) < AKARI_COOLDOWN_GLOBAL:
+        return False
+    if now - m.get("types", {}).get(contexte, 0) < AKARI_COOLDOWN_TYPE:
+        return False
+    return True
+
+def akari_reagir(uid, contextes, valeur=None):
+    """Choisit AU PLUS une réaction parmi les contextes proposés.
+    Retourne la phrase, ou None. N'affirme jamais rien que l'appelant
+    n'ait pas établi : le contexte est fourni, pas deviné."""
+    import time as _t
+    uid = str(uid)
+    if isinstance(contextes, str):
+        contextes = [contextes]
+    candidats = [(akari_variantes(cx)[0], cx) for cx in contextes if akari_variantes(cx)[1]]
+    if not candidats:
+        return None
+    candidats.sort(key=lambda x: -x[0])
+    prio_max = candidats[0][0]
+    # Un contexte d'ambiance ne passe jamais devant un moment exceptionnel.
+    retenus = [cx for p, cx in candidats if p == prio_max]
+    cx = random.choice(retenus)
+    if not akari_peut_parler(uid, cx):
+        return None
+    if random.random() >= akari_freq():
+        return None
+    _prio, phrases = akari_variantes(cx)
+    m = akari_meta.setdefault(uid, {})
+    recentes = m.get("phrases", [])
+    dispo = [p for p in phrases if p not in recentes] or list(phrases)
+    txt = random.choice(dispo)
+    now = _t.time()
+    m["dernier"] = now
+    m.setdefault("types", {})[cx] = now
+    m["phrases"] = (recentes + [txt])[-AKARI_MEMOIRE_PHRASES:]
+    if valeur is not None:
+        txt = txt.replace("{v}", f"{valeur:,}" if isinstance(valeur, int) else str(valeur))
+    return txt
+
+def akari_contexte_ambiance(uid, membre=None):
+    """Contextes de fond : nuit, retour, ancienneté. Priorité faible."""
+    import time as _t
+    cx = []
+    if akari_moment() == "nuit":
+        cx.append("nuit")
+    avant = akari_meta.get(str(uid), {}).get("avant_vu")
+    if avant and _t.time() - avant > AKARI_ABSENCE_JOURS * 86400:
+        cx.append("retour")
+    if membre is not None and getattr(membre, "joined_at", None):
+        try:
+            if (discord.utils.utcnow() - membre.joined_at).days >= 365:
+                cx.append("ancien")
+        except Exception:
+            pass
+    return cx
+
+# ── ✉️ SURPRISES D'AKARI ──
+# Rare, non farmable, et pas une lootbox : l'intérêt est le moment,
+# pas le montant. Certaines ne donnent rien du tout.
+SURPRISE_COOLDOWN = 4 * 86400      # par membre
+SURPRISE_MAX_SEMAINE = 3           # pour tout le serveur
+SURPRISE_CHANCE = 0.004            # jamais affichée au joueur
+# Commandes réputées « moments de jeu » : on ne tire que sur celles-là.
+# Volontairement court — pas les commandes de consultation, ni les techniques.
+SURPRISE_ACTIONS = {
+    "daily", "travailler", "ga", "arene", "chronique",
+    "nourrir", "jouer", "cadeau", "missions",
+}
+
+surprise_meta = {}    # {uid: {"dernier": ts}}
+surprise_semaine = {"sem": 0, "n": 0}
+
+SURPRISES = [
+    ("piece_trouvee", "✉️", "Une enveloppe porte ton nom.",
+     "Dedans : **{v} pièces** et rien d'autre. Aucune explication.", "coins", (300, 900)),
+    ("mot_akari", "📜", "Un mot plié en quatre.",
+     "*« Je t'ai vu jouer tard hier soir. Ce n'est pas un reproche. »*\n\n"
+     "Signé : Akari. Il n'y a rien d'autre dans l'enveloppe.", "rien", None),
+    ("bonbon", "🍬", "Un bonbon posé sur le comptoir.",
+     "Il est encore emballé. Tu le manges. C'est bon.\n\n**+{v} XP**, allez savoir pourquoi.",
+     "xp", (60, 180)),
+    ("liste", "📋", "Une liste de courses qui n'est pas la tienne.",
+     "*« lait — piles — demander à {q} s'il va bien »*\n\n"
+     "Akari récupère la liste sans commentaire.", "rien", None),
+    ("piece_ancienne", "🪙", "Une pièce qui ne ressemble pas aux autres.",
+     "Elle est plus lourde. Le comptoir l'accepte quand même : **+{v} pièces**.",
+     "coins", (800, 2000)),
+    ("photo", "📷", "Une photo tombée d'un cadre.",
+     "On y voit le QG, plus vide qu'aujourd'hui. Personne ne sait qui l'a prise.\n\n"
+     "Akari la remet en place.", "rien", None),
+]
+
+def _surprise_semaine():
+    import time as _t
+    return int((_t.time() + ACT_TZ * 3600) // 86400 + 4) // 7
+
+def surprise_tirer(uid, action):
+    """Retourne une surprise, ou None. Ne se déclenche que sur des actions
+    légitimes, jamais en rafale, et jamais plus de 3 par semaine au QG."""
+    import time as _t
+    if action not in SURPRISE_ACTIONS:
+        return None
+    if not uid:
+        return None
+    uid = str(uid)
+    now = _t.time()
+    sem = _surprise_semaine()
+    if surprise_semaine.get("sem") != sem:
+        surprise_semaine["sem"] = sem
+        surprise_semaine["n"] = 0
+    if surprise_semaine["n"] >= SURPRISE_MAX_SEMAINE:
+        return None
+    dernier = surprise_meta.get(uid, {}).get("dernier", 0)
+    if now - dernier < SURPRISE_COOLDOWN:
+        return None
+    if random.random() >= SURPRISE_CHANCE:
+        return None
+    surprise_meta.setdefault(uid, {})["dernier"] = now
+    surprise_semaine["n"] += 1
+    return random.choice(SURPRISES)
+
+class SurpriseView(ui.View):
+    """Ouvrir ou laisser. Laisser n'est pas une punition."""
+    def __init__(self, uid, surprise, timeout=600):
+        super().__init__(timeout=timeout)
+        self.uid = str(uid)
+        self.s = surprise
+        self.fait = False
+
+    async def interaction_check(self, itx):
+        if str(itx.user.id) != self.uid:
+            await itx.response.send_message(
+                "Cette enveloppe ne porte pas ton nom.", ephemeral=True)
+            return False
+        return True
+
+    @ui.button(label="Ouvrir", emoji="✉️", style=discord.ButtonStyle.primary)
+    async def ouvrir(self, itx, _b):
+        if self.fait:
+            return await itx.response.send_message("Déjà ouverte.", ephemeral=True)
+        self.fait = True                      # verrou avant tout crédit
+        cle, emo, titre, corps, genre, bornes = self.s
+        v = random.randint(*bornes) if bornes else 0
+        if genre == "coins":
+            economy_data[self.uid]["coins"] += v
+        elif genre == "xp":
+            xp_data[self.uid]["xp"] += v
+        for it in self.children:
+            it.disabled = True
+        txt = corps.replace("{v}", f"{v:,}").replace("{q}", "quelqu'un")
+        save_all_data()
+        await itx.response.edit_message(
+            embed=discord.Embed(title=f"{emo} {titre}", description=txt, color=0x9b59b6),
+            view=self)
+
+    @ui.button(label="Laisser", emoji="🚪", style=discord.ButtonStyle.secondary)
+    async def laisser(self, itx, _b):
+        if self.fait:
+            return await itx.response.send_message("Trop tard.", ephemeral=True)
+        self.fait = True
+        for it in self.children:
+            it.disabled = True
+        await itx.response.edit_message(
+            embed=discord.Embed(
+                description="Tu laisses l'enveloppe où elle est.\n\n"
+                            "*Akari ne dit rien. Elle a l'air d'approuver.*",
+                color=0x95a5a6), view=self)
+
+async def surprise_proposer(channel, membre, action):
+    """À appeler après une action légitime. Ne fait rien la plupart du temps."""
+    s = surprise_tirer(membre.id, action)
+    if not s:
+        return False
+    _cle, emo, titre, _c, _g, _b = s
+    try:
+        await channel.send(
+            membre.mention,
+            embed=discord.Embed(title=f"{emo} {titre}",
+                                description="*Personne ne l'a posée là.*", color=0x9b59b6),
+            view=SurpriseView(membre.id, s))
+        return True
+    except Exception:
+        return False
 
 # ── 🗃️ ARCHIVES : l'histoire du QG, pas l'historique des Gazettes ──
 ARCHIVES_TYPES_SERVEUR = {"server.event"}
@@ -39721,6 +40722,9 @@ def save_all_data():
             "records_qg": dict(records_qg),
             "gazette_schema": GAZETTE_SCHEMA,
             "gazette_editions": GAZETTE_EDITIONS,
+            "anniv_meta": anniv_meta,
+            "akari": akari_meta,
+            "cadeaux": cadeaux_data,
             "titres": {k: list(v) for k, v in titres_data.items()},
             "titre_equipe": dict(titre_equipe),
             "pins_equipes": {k: list(v) for k, v in pins_equipes.items()},
@@ -39850,6 +40854,15 @@ def load_all_data():
             except Exception as _e:
                 print(f"[Mémoire] chargement impossible, mémoire vide : {type(_e).__name__}")
                 memoire_data.clear(); memoire_vus.clear()
+            try:
+                anniv_meta.update(data.get("anniv_meta", {}))
+                akari_meta.update(data.get("akari", {}))
+                for _k, _g in (data.get("cadeaux") or {}).items():
+                    if isinstance(_g, dict) and {"de","pour","type","valeur"} <= set(_g):
+                        cadeaux_data[_k] = _g
+                cadeaux_purger()
+            except Exception as _e:
+                print(f"[Social] chargement partiel : {type(_e).__name__}")
             try:
                 _ed = data.get("gazette_editions", [])
                 GAZETTE_EDITIONS.clear()
@@ -40164,6 +41177,51 @@ async def on_error(event, *args, **kwargs):
     import traceback
     print(f"❌ Erreur dans l'événement '{event}' :")
     traceback.print_exc()
+
+@bot.event
+async def on_command_completion(ctx):
+    """Point transversal unique des surprises d'Akari.
+
+    discord.py ne déclenche cet événement que si la commande s'est terminée
+    SANS erreur : les commandes inexistantes et celles qui échouent partent
+    dans on_command_error, les clics de bouton ne sont pas des commandes, et
+    les appels internes ne passent pas par le processeur de commandes.
+    Il reste à écarter les bots, les commandes d'administration et tout ce
+    qui n'est pas un moment de jeu.
+
+    Une commande réussie = au plus UNE tentative. Les vraies protections
+    restent le cooldown de 4 jours et le plafond de 3 par semaine."""
+    try:
+        if ctx.author.bot or not ctx.guild:
+            return
+        nom = ctx.command.name if ctx.command else None
+        if nom not in SURPRISE_ACTIONS:
+            return
+        # Ceinture et bretelles : une commande d'admin ne déclenche rien,
+        # même si son nom figurait par erreur dans la liste.
+        for chk in getattr(ctx.command, "checks", []):
+            if "has_permissions" in getattr(chk, "__qualname__", ""):
+                return
+        # Akari note simplement qu'elle t'a vu — un horodatage, rien d'autre.
+        avant_vu = akari_voit(ctx.author.id)
+        # Une surprise et une réaction ne partent jamais ensemble.
+        if await surprise_proposer(ctx.channel, ctx.author, nom):
+            return
+        uid = str(ctx.author.id)
+        # Un moment exceptionnel vient-il de se produire pendant la commande ?
+        cx_fort, valeur = akari_en_attente.pop(uid, (None, None))
+        cx = [cx_fort] if cx_fort else akari_contexte_ambiance(uid, ctx.author)
+        if not cx:
+            return
+        phrase = akari_reagir(uid, cx, valeur)
+        if phrase:
+            try:
+                await ctx.send(f"-# 🤖 {phrase}")
+            except Exception:
+                pass
+    except Exception as e:
+        # Une surprise ne doit jamais abîmer la réponse de la commande.
+        print(f"[Surprise] ignorée : {type(e).__name__}: {e}")
 
 @bot.event
 async def on_command_error(ctx, error):
