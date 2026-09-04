@@ -1744,6 +1744,7 @@ async def givecard_cmd(ctx, membre: discord.Member = None, *, perso: str = None)
     claimed_cards[key] = uid
     if key not in gacha_collections[uid]:
         gacha_collections[uid][key] = {"fusion": 0}
+        memoire_observer_carte(uid, key)
     gazette_note(uid, "cartes")
     try: check_collection_achievements(uid, ctx.channel)
     except Exception: pass
@@ -3739,6 +3740,7 @@ def donner_carte(uid, key, channel=None, source=""):
         return False
     claimed_cards[key] = uid
     gacha_collections[uid][key] = {"fusion": 0}
+    memoire_observer_carte(uid, key)
     gazette_note(uid, "cartes")
     try:
         check_collection_achievements(uid, channel)
@@ -5374,6 +5376,7 @@ async def acheter_cmd(ctx, item_id: str = None):
             return await ctx.send(f"❌ Tu possèdes déjà **{p['nom']}** ! Utilise `.pet equiper {p['nom']}`.")
         import time as _tp
         pets_data[uid]["owned"][iid] = {"level": 1, "xp": 0, "adoption": _tp.time(), "carnet": []}
+        memoriser("pet.adoption", uid=uid, contexte=PETS_DB.get(iid, {}).get("nom", iid))
         pet_init_perso(uid, iid)
         if not pets_data[uid]["active"]:
             pets_data[uid]["active"] = iid
@@ -5594,6 +5597,7 @@ async def acheter_cmd(ctx, item_id: str = None):
         while xp_data[uid]["xp"] >= xp_data[uid]["level"] * 100:
             xp_data[uid]["xp"] -= xp_data[uid]["level"] * 100
             xp_data[uid]["level"] += 1
+            memoire_observer_niveau(uid, xp_data[uid]["level"])
             points_amelio[uid] += 1
             monte += 1
         return await ctx.send(embed=discord.Embed(
@@ -7886,6 +7890,8 @@ async def run_tap_race(channel, guild):
     classement = sorted(etat["dist"].items(), key=lambda x: -x[1])
     vainqueur, dist_v = classement[0]
     economy_data[vainqueur]["coins"] += gain
+    memoriser("event.banquier_win", uid=vainqueur, valeur=int(gain), unique=False,
+              tag=f"banquier:{int(gain)}")
     gazette_gain(vainqueur, gain)
     try: check_coins_achievements(vainqueur, cible)
     except Exception: pass
@@ -9553,6 +9559,9 @@ async def run_train_fou(channel, guild):
             gazette_gain(u, prime)
             try: check_coins_achievements(u, cible)
             except Exception: pass
+        for _u in survivants:
+            memoriser("event.train_terminus", uid=_u, valeur=int(prime), unique=False,
+                      tag=f"train:{int(prime)}")
         await cible.send(embed=discord.Embed(
             title="🏁 TERMINUS",
             description=("Le train s'arrête. Les portes s'ouvrent.\n\n"
@@ -11826,6 +11835,7 @@ async def attaque_cmd(ctx):
         recompense = boss["recompense"]
         economy_data[uid]["coins"] += 250
         unlock_achievement(uid, "boss_kill", ctx.channel)
+        memoriser("boss.kill", uid=uid, unique=False, contexte=boss.get("nom", "un boss"))
         for pid, data in game["participants"].items():
             economy_data[pid]["coins"] += recompense
             xp_data[pid]["xp"] += 50
@@ -12478,15 +12488,76 @@ def track_stat(uid, stat, amount=1, channel=None):
     """Incrémente une stat + vérifie les succès à seuil liés"""
     user_stats[uid][stat] += amount
     val = user_stats[uid][stat]
+    if stat == "arene_wins":
+        memoire_observer_arene(uid)
+    elif stat == "quiz_ok":
+        record_maj(uid, "quiz", val, memoriser_aussi=False)
     for ach_id, a in ACHIEVEMENTS.items():
         if a["stat"] == stat and a["seuil"] and val >= a["seuil"] and ach_id not in achievements_data[uid]:
             unlock_achievement(uid, ach_id, channel)
+
+def memoire_observer_gain(uid, montant):
+    """Observation unique des gains : fortune record, jackpot exceptionnel."""
+    try:
+        uid = str(uid)
+        total = economy_data[uid]["coins"] + bank_data[uid].get("depot", 0)
+        record_maj(uid, "fortune", total)
+        if montant >= 15000:
+            memoriser("casino.jackpot", uid=uid, valeur=int(montant), unique=False,
+                      tag=f"jackpot:{int(montant)}")
+    except Exception:
+        pass
+
+def memoire_observer_carte(uid, cle_carte):
+    """Une carte obtenue. Seules les premières fois et les paliers comptent —
+    une Rare de plus n'est pas un souvenir."""
+    try:
+        uid = str(uid)
+        info = ANIME_CARDS_DB.get(cle_carte, {})
+        rarete, nom = info.get("rarete"), info.get("nom", "?")
+        if rarete == "Mythique":
+            memoriser("gacha.first_mythic", uid=uid, contexte=nom)
+        elif rarete == "Légendaire":
+            memoriser("gacha.first_legend", uid=uid, contexte=nom)
+        coll = gacha_collections.get(uid, {})
+        for palier in (50, 100, 250, 500):
+            if len(coll) >= palier:
+                memoriser("gacha.collection", uid=uid, valeur=palier, tag=str(palier))
+        record_maj(uid, "collection", len(coll), memoriser_aussi=False)
+        record_maj(uid, "mythiques",
+                   sum(1 for k in coll
+                       if ANIME_CARDS_DB.get(k, {}).get("rarete") == "Mythique"),
+                   memoriser_aussi=False)
+    except Exception:
+        pass
+
+def memoire_observer_niveau(uid, niveau):
+    """Paliers de niveau."""
+    try:
+        for palier in (10, 25, 50, 75, 100):
+            if niveau >= palier:
+                memoriser("level.milestone", uid=str(uid), valeur=palier, tag=str(palier))
+    except Exception:
+        pass
+
+def memoire_observer_arene(uid):
+    """Paliers de victoires en arène."""
+    try:
+        uid = str(uid)
+        w = user_stats[uid].get("arene_wins", 0)
+        record_maj(uid, "arene", w, memoriser_aussi=False)
+        for palier in (10, 50, 100, 250):
+            if w >= palier:
+                memoriser("arena.milestone", uid=uid, valeur=palier, tag=str(palier))
+    except Exception:
+        pass
 
 def gazette_gain(uid, montant):
     """Note un gain de pièces pour la gazette"""
     gazette_note(uid, "gains", montant)
     if montant > gazette_stats[uid].get("plus_gros_gain", 0):
         gazette_stats[uid]["plus_gros_gain"] = montant
+    memoire_observer_gain(uid, montant)
 
 def check_coins_achievements(uid, channel=None):
     """Vérifie les succès de richesse"""
@@ -12503,6 +12574,80 @@ def check_collection_achievements(uid, channel=None):
         unlock_achievement(uid, "collec_25", channel)
     if n >= 100:
         unlock_achievement(uid, "collec_100", channel)
+
+@bot.command(name="records", aliases=["record", "recordsqg", "hof"])
+async def records_cmd(ctx, membre: discord.Member = None):
+    """Les records du QG et les tiens — .records [@membre]"""
+    cible = membre or ctx.author
+    uid = str(cible.id)
+    if cible == ctx.author:
+        records_rattraper(uid)
+        save_all_data()
+
+    def emb_qg():
+        e = discord.Embed(
+            title="🏆 RECORDS DU QG",
+            description="*Les plus hauts jamais atteints sur le serveur.*",
+            color=0xf1c40f)
+        lignes = []
+        for cle, (emo, lib, unite, _t) in RECORDS_DEF.items():
+            u, val, d = record_qg(cle)
+            if not val:
+                continue
+            m = ctx.guild.get_member(int(u)) if ctx.guild and u else None
+            nom = m.display_name if m else (f"Membre parti" if u else "—")
+            lignes.append(f"{emo} **{lib}**\n　{nom} — **{val:,}** {unite}")
+        e.description += "\n\n" + ("\n".join(lignes) if lignes
+                                   else "*Aucun record enregistré pour l'instant.*")
+        e.set_footer(text=f"Suivi depuis la v{RECORDS_DEPUIS} — les maxima antérieurs "
+                          f"n'avaient jamais été enregistrés")
+        return e
+
+    def emb_perso():
+        e = discord.Embed(title=f"👤 Records de {cible.display_name}", color=0x3498db)
+        lignes = []
+        for cle, (emo, lib, unite, _t) in RECORDS_DEF.items():
+            val, d = record_perso(uid, cle)
+            if not val:
+                continue
+            u_qg, v_qg, _ = record_qg(cle)
+            couronne = " 👑" if u_qg == uid else ""
+            lignes.append(f"{emo} **{lib}** — **{val:,}** {unite}{couronne}")
+        e.description = ("\n".join(lignes) if lignes
+                         else "*Aucun record pour l'instant. Joue un peu !*")
+        detenus = sum(1 for k in RECORDS_DEF if record_qg(k)[0] == uid)
+        if detenus:
+            e.add_field(name="👑 Records du QG détenus", value=f"**{detenus}**", inline=True)
+        return e
+
+    def emb_souvenirs():
+        sv = memoire_chercher(uid=uid, importance_min=2, limite=12)
+        e = discord.Embed(title=f"🧠 Ce qu'Akari retient de {cible.display_name}",
+                          color=0x9b59b6)
+        e.description = ("\n".join(f"`{memoire_date(s)}`  {memoire_libelle(s)}" for s in sv)
+                         if sv else "*Rien de mémorable pour l'instant.*")
+        total = len(memoire_chercher(uid=uid, importance_min=1, limite=0))
+        e.set_footer(text=f"{total} souvenir(s) enregistré(s)")
+        return e
+
+    class RecView(ui.View):
+        def __init__(self):
+            super().__init__(timeout=180)
+
+        @ui.button(label="Serveur", emoji="🌐", style=discord.ButtonStyle.primary)
+        async def b_qg(self, itx, _b):
+            await itx.response.edit_message(embed=emb_qg(), view=self)
+
+        @ui.button(label="Mes records", emoji="👤", style=discord.ButtonStyle.secondary)
+        async def b_perso(self, itx, _b):
+            await itx.response.edit_message(embed=emb_perso(), view=self)
+
+        @ui.button(label="Souvenirs", emoji="🧠", style=discord.ButtonStyle.secondary)
+        async def b_souv(self, itx, _b):
+            await itx.response.edit_message(embed=emb_souvenirs(), view=self)
+
+    depart = emb_perso() if membre else emb_qg()
+    await ctx.send(embed=depart, view=RecView())
 
 @bot.command(name="succes", aliases=["achievements", "succès", "trophees"])
 async def succes_cmd(ctx, membre: discord.Member = None):
@@ -14433,6 +14578,7 @@ async def ouvrircase_cmd(ctx):
         while xp_data[uid]["xp"] >= xp_data[uid]["level"] * 100:
             xp_data[uid]["xp"] -= xp_data[uid]["level"] * 100
             xp_data[uid]["level"] += 1
+            memoire_observer_niveau(uid, xp_data[uid]["level"])
             points_amelio[uid] += 1
     elif typ == "rolls":
         roll_data[uid]["rolls"] = min(roll_data[uid]["rolls"] + val, ROLLS_MAX + 10)
@@ -14519,12 +14665,59 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "7.0.0"
+BOT_VERSION = "7.2.0"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "7.2.0": {
+   "titre": "LE JOURNAL DU QG 📰",
+   "ajouts": [
+     "📰 **Gazette 2.0** — Akari ne se contente plus d'aligner des chiffres. "
+     "Elle choisit ce qui mérite d'être raconté et l'écrit avec ses mots.",
+     "✍️ **Chaque fait a sa ligne.** *« Untel repart avec 42 000 pièces. "
+     "Pour une fois, la maison n'a pas gagné. »*",
+     "🎯 **Sélection éditoriale** — deux faits par catégorie et par membre au "
+     "maximum. Plus de Gazette entièrement remplie par le même joueur.",
+     "🗃️ **Archives du QG** — les grands moments de l'histoire du serveur, "
+     "rangés par année et par mois. `.archives`",
+     "🕰️ **Ce jour-là…** — Akari ressort les souvenirs dont l'anniversaire "
+     "tombe aujourd'hui. `.cejourla`",
+     "📰 **Trois onglets** dans `.gazette` : Gazette, Archives, Ce jour-là.",
+   ],
+   "correctifs": [
+     "📰 Un fait raconté dans une édition ne revient plus la semaine suivante.",
+     "📅 La semaine est figée sur le jour : relancer `.gazette` deux minutes "
+     "plus tard raconte exactement la même chose.",
+     "🧹 Les chiffres du QG ne s'affichent plus quand tout est à zéro.",
+     "🗃️ Les éditions publiées sont archivées — elles ne se recalculent plus "
+     "à partir de données qui ont changé depuis.",
+   ],
+ },
+ "7.1.0": {
+   "titre": "LA MÉMOIRE D'AKARI 🧠",
+   "ajouts": [
+     "🧠 **Akari se souvient.** Elle retient désormais les moments qui comptent : "
+     "ton premier Mythique, tes paliers de niveau, l'adoption de ton compagnon, "
+     "tes victoires marquantes. Pas chaque roll, pas chaque message — ce qui "
+     "mérite d'être raconté.",
+     "🏆 **`.records`** — les plus hauts jamais atteints au QG, et les tiens. "
+     "Fortune, gains au casino, collection, Mythiques, victoires d'arène, "
+     "niveau de compagnon.",
+     "👑 **Détenir un record du QG** se voit : une couronne apparaît à côté.",
+     "🧠 **Onglet Souvenirs** dans `.records` — la liste datée de ce qu'Akari "
+     "a retenu de toi.",
+     "📌 **Trois pins débloqués** qui ne pouvaient jamais l'être : Sommet de "
+     "l'Ascenseur, Course de Compagnons et Votant Drama.",
+   ],
+   "correctifs": [
+     "🏆 Les records démarrent à cette version. Ce qui était calculable depuis "
+     "ton état actuel — fortune, collection, victoires — a été rattrapé. "
+     "Les maxima passés n'avaient jamais été enregistrés, ils ne sont pas inventés.",
+     "🧠 Une entrée de mémoire abîmée n'empêche plus Akari de démarrer.",
+   ],
+ },
  "7.0.0": {
    "titre": "AKARI POLISH — sept vagues de refonte 🔧",
    "ajouts": [
@@ -14975,6 +15168,225 @@ async def forcemaj_cmd(ctx):
 # ============================================================
 #  📰 LA GAZETTE DU QG — le journal hebdomadaire
 # ============================================================
+# ============================================================
+#  🧠 MÉMOIRE CENTRALE D'AKARI
+#  Une seule source pour les moments mémorables. Elle OBSERVE et
+#  MÉMORISE : elle ne distribue jamais de récompense. Les systèmes
+#  sources restent seuls responsables des gains.
+#  Elle ne remplace ni les états (xp_data…) ni les compteurs
+#  (user_stats…) : elle ne stocke que ce qui mérite d'être raconté.
+# ============================================================
+# ============================================================
+#  🏆 RECORDS — maxima historiques
+#  Un record n'est pas un état : « fortune actuelle » n'en est pas un,
+#  « plus grande fortune atteinte » en est un.
+#  Le suivi démarre à la v7.1.0 — aucun maximum passé n'existait avant.
+# ============================================================
+RECORDS_DEPUIS = "7.1.0"
+RECORDS_DEF = {
+    "fortune":      ("💎", "Plus grande fortune",   "pièces",     "wealth.record"),
+    "casino_gain":  ("🎰", "Plus gros gain casino", "pièces",     "casino.biggest_win"),
+    "casino_perte": ("💀", "Plus grosse perte",     "pièces",     "casino.biggest_loss"),
+    "collection":   ("🎴", "Plus grande collection","cartes",     None),
+    "mythiques":    ("💠", "Mythiques possédés",    "mythiques",  None),
+    "arene":        ("⚔️", "Victoires en arène",    "victoires",  None),
+    "pet_niveau":   ("🐾", "Compagnon le plus haut","niveau",     None),
+    "quiz":         ("🎓", "Bonnes réponses quiz",  "réponses",   None),
+}
+
+records_perso = defaultdict(dict)   # {uid: {cle: {"v": valeur, "d": date}}}
+records_qg = {}                     # {cle: {"u": uid, "v": valeur, "d": date}}
+
+def record_maj(uid, cle, valeur, memoriser_aussi=True):
+    """Enregistre une valeur si elle bat le record. Idempotent : rejouer la
+    même valeur ne change rien et ne re-déclenche aucun souvenir.
+    Retourne (perso_battu, qg_battu)."""
+    import time as _t
+    if cle not in RECORDS_DEF or valeur is None:
+        return False, False
+    try:
+        valeur = int(valeur)
+    except (TypeError, ValueError):
+        return False, False
+    if valeur <= 0:
+        return False, False
+    uid = str(uid)
+    now = _t.time()
+    perso = qg = False
+
+    ancien = records_perso[uid].get(cle, {}).get("v", 0)
+    if valeur > ancien:                       # strictement : l'égalité ne bat rien
+        records_perso[uid][cle] = {"v": valeur, "d": now}
+        perso = True
+
+    a_qg = records_qg.get(cle)
+    if a_qg is None or valeur > a_qg["v"]:
+        records_qg[cle] = {"u": uid, "v": valeur, "d": now}
+        qg = True
+
+    # La mémoire observe ; elle ne récompense rien.
+    if perso and memoriser_aussi:
+        tid = RECORDS_DEF[cle][3]
+        if tid:
+            memoriser(tid, uid=uid, valeur=valeur, unique=False,
+                      tag=f"{cle}:{valeur}", importance=3 if qg else 2)
+    return perso, qg
+
+def record_perso(uid, cle):
+    """(valeur, date) du record personnel, ou (0, None)."""
+    e = records_perso.get(str(uid), {}).get(cle)
+    return (e["v"], e["d"]) if e else (0, None)
+
+def record_qg(cle):
+    """(uid, valeur, date) du record serveur, ou (None, 0, None)."""
+    e = records_qg.get(cle)
+    return (e["u"], e["v"], e["d"]) if e else (None, 0, None)
+
+def records_rattraper(uid):
+    """Initialise les records depuis l'état actuel, sans inventer d'historique.
+    Ce qui est calculable exactement l'est ; le reste démarre maintenant."""
+    uid = str(uid)
+    faits = []
+    coll = gacha_collections.get(uid, {})
+    calculables = {
+        "fortune":    economy_data[uid]["coins"] + bank_data[uid].get("depot", 0),
+        "collection": len(coll),
+        "mythiques":  sum(1 for k in coll
+                          if ANIME_CARDS_DB.get(k, {}).get("rarete") == "Mythique"),
+        "arene":      user_stats[uid].get("arene_wins", 0),
+        "quiz":       user_stats[uid].get("quiz_ok", 0),
+    }
+    pets = pets_data.get(uid, {}).get("owned", {})
+    if pets:
+        calculables["pet_niveau"] = max(p.get("level", 0) for p in pets.values())
+    for cle, val in calculables.items():
+        if val and record_maj(uid, cle, val, memoriser_aussi=False)[0]:
+            faits.append(cle)
+    # casino_gain / casino_perte : NON RATTRAPABLES, aucun historique de mise
+    return faits
+
+MEMOIRE_SCHEMA = 1
+MEMOIRE_MAX = 4000          # au-delà, on élague les entrées d'importance 1
+
+# importance : 1 notable · 2 important · 3 exceptionnel
+MEM_TYPES = {
+    # ── 🎴 Gacha ──
+    "gacha.first_mythic":   ("🎴", "Premier Mythique",        3, "gacha"),
+    "gacha.first_legend":   ("🎴", "Première Légendaire",     2, "gacha"),
+    "gacha.collection":     ("🎴", "Palier de collection",    2, "gacha"),
+    # ── ⭐ Progression ──
+    "level.milestone":      ("⭐", "Palier de niveau",         2, "progression"),
+    "member.anniversary":   ("🕰️", "Anniversaire au QG",      2, "progression"),
+    # ── 🎰 Casino ──
+    "casino.biggest_win":   ("🎰", "Plus gros gain",           2, "casino"),
+    "casino.biggest_loss":  ("💀", "Plus grosse perte",        2, "casino"),
+    "casino.jackpot":       ("💰", "Jackpot",                  3, "casino"),
+    # ── 🎪 Events ──
+    "event.banquier_win":   ("🎩", "Victoire au Banquier",     3, "event"),
+    "event.train_terminus": ("🚂", "Terminus du Train Fou",    3, "event"),
+    "event.ascenseur_top":  ("🎢", "Sommet de l'Ascenseur",    3, "event"),
+    "event.course_win":     ("🏃", "Course de Compagnons",     2, "event"),
+    # ── 🐾 Compagnon ──
+    "pet.adoption":         ("🐾", "Première adoption",        2, "pet"),
+    "pet.milestone":        ("🐾", "Palier de compagnon",      2, "pet"),
+    # ── ⚔️ Combat ──
+    "arena.milestone":      ("⚔️", "Palier de victoires",      2, "combat"),
+    "boss.kill":            ("👹", "Coup fatal sur un boss",   2, "combat"),
+    # ── 📖 Chronique ──
+    "chronique.ending":     ("📖", "Chronique terminée",       3, "chronique"),
+    # ── 💰 Fortune ──
+    "wealth.record":        ("💎", "Fortune record",           2, "fortune"),
+    # ── 🌐 Serveur ──
+    "server.event":         ("🌐", "Événement du QG",          3, "serveur"),
+}
+
+memoire_data = []        # [{...}] trié par date croissante
+memoire_vus = set()      # clés de déduplication déjà enregistrées
+
+def _mem_cle(type_id, uid, tag):
+    return f"{type_id}|{uid or '-'}|{tag or '-'}"
+
+def memoire_a(type_id, uid=None, tag=None):
+    """Ce souvenir a-t-il déjà été enregistré ? Résiste aux doubles appels."""
+    return _mem_cle(type_id, uid, tag) in memoire_vus
+
+def memoriser(type_id, uid=None, valeur=None, contexte=None, tag=None,
+              importance=None, unique=True):
+    """Enregistre un souvenir. Retourne l'entrée, ou None si déjà connue.
+
+    unique=True  : une seule fois pour ce (type, membre, tag) — les
+                   « premières fois » ne peuvent jamais être doublées.
+    unique=False : chaque occurrence compte (victoires d'event, etc.).
+    Aucune récompense n'est distribuée ici, par conception."""
+    import time as _t
+    if type_id not in MEM_TYPES:
+        return None
+    cle = _mem_cle(type_id, uid, tag)
+    if unique and cle in memoire_vus:
+        return None
+    emo, lib, imp_def, cat = MEM_TYPES[type_id]
+    e = {"t": type_id, "u": str(uid) if uid else None, "d": _t.time(),
+         "i": int(importance if importance is not None else imp_def), "c": cat}
+    if valeur is not None:  e["v"] = valeur
+    if contexte:            e["x"] = str(contexte)[:180]
+    if tag:                 e["g"] = str(tag)[:60]
+    memoire_data.append(e)
+    memoire_vus.add(cle)
+    if len(memoire_data) > MEMOIRE_MAX:
+        # On n'élague que le bruit : les souvenirs exceptionnels restent.
+        garde = [x for x in memoire_data if x["i"] >= 2]
+        bruit = [x for x in memoire_data if x["i"] < 2]
+        memoire_data[:] = sorted(garde + bruit[-(MEMOIRE_MAX - len(garde)):],
+                                 key=lambda x: x["d"])
+    return e
+
+def memoire_chercher(uid=None, depuis=None, jusqu_a=None, types=None,
+                     categories=None, importance_min=1, limite=50, serveur=None):
+    """Interroge la mémoire. C'est l'accesseur que Gazette, Archives,
+    Records et Profil utiliseront — aucun texte français à analyser."""
+    r = []
+    for e in memoire_data:
+        if e["i"] < importance_min:                       continue
+        if depuis is not None and e["d"] < depuis:        continue
+        if jusqu_a is not None and e["d"] > jusqu_a:      continue
+        if uid is not None and e["u"] != str(uid):        continue
+        if serveur is True and e["u"] is not None:        continue
+        if serveur is False and e["u"] is None:           continue
+        if types and e["t"] not in types:                 continue
+        if categories and e["c"] not in categories:       continue
+        r.append(e)
+    r.sort(key=lambda x: -x["d"])
+    return r[:limite] if limite else r
+
+def memoire_recents(depuis, importance_min=2, limite=30):
+    """Ce qui vient d'arriver — pour la future Gazette et les réactions d'Akari."""
+    return memoire_chercher(depuis=depuis, importance_min=importance_min, limite=limite)
+
+def memoire_premiere(uid, type_id):
+    """Le souvenir « première fois » d'un membre, ou None."""
+    r = memoire_chercher(uid=uid, types=[type_id], importance_min=1, limite=1)
+    return r[0] if r else None
+
+def memoire_libelle(e):
+    """Rendu lisible d'un souvenir, construit depuis son type — jamais stocké."""
+    emo, lib, _i, _c = MEM_TYPES.get(e["t"], ("•", e["t"], 1, "?"))
+    txt = f"{emo} {lib}"
+    if e.get("v") is not None:
+        txt += f" — **{e['v']:,}**" if isinstance(e["v"], int) else f" — **{e['v']}**"
+    if e.get("x"):
+        txt += f" *({e['x']})*"
+    return txt
+
+def memoire_date(e, fmt="%d/%m/%Y"):
+    import datetime as _dt
+    return _dt.datetime.fromtimestamp(e["d"]).strftime(fmt)
+
+def _memoire_reindexer():
+    """Reconstruit l'index de déduplication après un chargement."""
+    memoire_vus.clear()
+    for e in memoire_data:
+        memoire_vus.add(_mem_cle(e["t"], e["u"], e.get("g")))
+
 gazette_stats = defaultdict(lambda: defaultdict(int))   # {uid: {métrique: valeur}}
 gazette_faits = []          # faits marquants de la semaine
 gazette_semaine = {"num": 1, "debut": None}
@@ -15102,7 +15514,8 @@ async def construire_gazette(guild):
     total_cartes = sum(s.get("cartes", 0) for s in gazette_stats.values())
     total_pieces = sum(s.get("gains", 0) for s in gazette_stats.values())
     actifs = len([u for u, s in gazette_stats.items() if s.get("messages", 0) > 0])
-    embed.add_field(name="📈 Le QG en chiffres", value=(
+    if any((total_msg, total_ev, total_cartes)):
+      embed.add_field(name="📈 Le QG en chiffres", value=(
         f"💬 **{total_msg:,}** messages · 👥 **{actifs}** membres actifs\n"
         f"🎪 **{total_ev}** participations aux events\n"
         f"🎴 **{total_cartes}** cartes claimées\n"
@@ -15139,24 +15552,355 @@ async def gazette_task():
     gazette_semaine["num"] += 1
     save_all_data()
 
-@bot.command(name="gazette", aliases=["journal", "news"])
+@bot.command(name="gazette", aliases=["journal", "news", "archives", "cejourla"])
 async def gazette_cmd(ctx):
-    """La gazette de la semaine en cours — .gazette"""
-    embed = await construire_gazette(ctx.guild)
-    embed.set_author(name="Aperçu en direct — la version finale sort dimanche à 20 h")
-    await ctx.send(embed=embed)
+    """Le journal du QG — .gazette · .archives · .cejourla"""
+    guild = ctx.guild
+
+    def nom(uid):
+        if not uid:
+            return "Le QG"
+        m = guild.get_member(int(uid)) if guild else None
+        return m.display_name if m else "un membre parti"
+
+    async def emb_gazette():
+        base = await construire_gazette(guild)
+        debut, fin_p = gazette_periode()
+        faits = gazette_selection(debut, fin_p)
+        if faits:
+            groupes = {}
+            for e in faits:
+                emo, titre, phrase = gazette_phrase(e, nom)
+                groupes.setdefault((emo, titre), []).append(phrase)
+            for (emo, titre), lignes in groupes.items():
+                base.add_field(name=f"{emo} {titre}",
+                               value="\n".join(f"▪️ {x}" for x in lignes), inline=False)
+        elif not base.fields:
+            base.description = f"*{random.choice(GAZETTE_CALME)}*"
+        cj = ce_jour_la()
+        if cj:
+            ans, e = cj[0]
+            base.add_field(name="🕰️ Ce jour-là…",
+                           value=f"{ce_jour_la_texte(ans).capitalize()}, "
+                                 f"{memoire_libelle(e).lower()}", inline=False)
+        base.set_footer(text=f"Semaine du {time.strftime('%d/%m', time.localtime(debut))} "
+                             f"au {time.strftime('%d/%m', time.localtime(fin_p - 1))}"
+                             f"  ·  {len(faits)} fait(s) retenu(s)")
+        return base
+
+    def emb_archives(annee=None):
+        annees = archives_annees()
+        if not annees:
+            return discord.Embed(
+                title="🗃️ ARCHIVES DU QG",
+                description="*Les archives sont vides. L'histoire commence maintenant.*",
+                color=0x8e6f47), annees
+        annee = annee if annee in annees else annees[0]
+        e = discord.Embed(
+            title=f"🗃️ ARCHIVES DU QG — {annee}",
+            description="*Ce que le QG retiendra.*", color=0x8e6f47)
+        for (m, lib), entrees in archives_par_mois(annee).items():
+            lignes = []
+            for x in entrees[:5]:
+                jour = time.strftime("%d", time.localtime(x["d"]))
+                who = f" — **{nom(x['u'])}**" if x.get("u") else ""
+                lignes.append(f"`{jour}` {memoire_libelle(x)}{who}")
+            e.add_field(name=f"📅 {lib.capitalize()} {annee}",
+                        value="\n".join(lignes), inline=False)
+        e.set_footer(text=f"{len(archives_entrees(annee))} entrée(s) en {annee}  ·  "
+                          f"années : {' · '.join(str(a) for a in annees)}")
+        return e, annees
+
+    def emb_cejour():
+        cj = ce_jour_la(limite=5)
+        e = discord.Embed(title="🕰️ CE JOUR-LÀ…", color=0x9b59b6)
+        if not cj:
+            e.description = ("*Rien de particulier ne s'est passé un "
+                             f"{time.strftime('%d %B', time.localtime())} au QG.*\n\n"
+                             "*Akari attend patiemment que l'histoire s'écrive.*")
+            return e
+        e.description = "\n\n".join(
+            f"**{ce_jour_la_texte(ans).capitalize()}**\n"
+            f"{memoire_libelle(x)}" + (f" — **{nom(x['u'])}**" if x.get("u") else "")
+            for ans, x in cj)
+        return e
+
+    class JournalView(ui.View):
+        def __init__(self):
+            super().__init__(timeout=180)
+            self.annee = None
+
+        @ui.button(label="Gazette", emoji="📰", style=discord.ButtonStyle.primary)
+        async def b_gz(self, itx, _b):
+            await itx.response.edit_message(embed=await emb_gazette(), view=self)
+
+        @ui.button(label="Archives", emoji="🗃️", style=discord.ButtonStyle.secondary)
+        async def b_ar(self, itx, _b):
+            emb, annees = emb_archives(self.annee)
+            self.annee = self.annee or (annees[0] if annees else None)
+            await itx.response.edit_message(embed=emb, view=self)
+
+        @ui.button(label="Année ◀️", style=discord.ButtonStyle.secondary, row=1)
+        async def b_an(self, itx, _b):
+            annees = archives_annees()
+            if not annees:
+                return await itx.response.send_message("Aucune archive.", ephemeral=True)
+            cur = self.annee if self.annee in annees else annees[0]
+            self.annee = annees[(annees.index(cur) + 1) % len(annees)]
+            await itx.response.edit_message(embed=emb_archives(self.annee)[0], view=self)
+
+        @ui.button(label="Ce jour-là", emoji="🕰️", style=discord.ButtonStyle.secondary)
+        async def b_cj(self, itx, _b):
+            await itx.response.edit_message(embed=emb_cejour(), view=self)
+
+    inv = (ctx.invoked_with or "").lower()
+    if inv == "archives":
+        depart = emb_archives()[0]
+    elif inv == "cejourla":
+        depart = emb_cejour()
+    else:
+        depart = await emb_gazette()
+        depart.set_author(name="Aperçu en direct — la version finale sort dimanche à 20 h")
+    await ctx.send(embed=depart, view=JournalView())
+
+def gazette_publier(faits, debut, fin_p, texte=""):
+    """Archive l'édition publiée : la période et les faits retenus, pas les
+    sources. Les faits deviennent consommés et ne reparaîtront pas."""
+    import time as _t
+    GAZETTE_EDITIONS.append({
+        "n": len(GAZETTE_EDITIONS) + 1, "d": _t.time(),
+        "p": [debut, fin_p], "faits": [_gz_signature(e) for e in faits],
+        "txt": texte[:400],
+    })
+    if len(GAZETTE_EDITIONS) > GAZETTE_MAX_EDITIONS:
+        del GAZETTE_EDITIONS[:len(GAZETTE_EDITIONS) - GAZETTE_MAX_EDITIONS]
+    return GAZETTE_EDITIONS[-1]
+
 
 @bot.command(name="forcegazette")
 @commands.has_permissions(administrator=True)
 async def forcegazette_cmd(ctx):
     """Publie la gazette immédiatement et remet les compteurs à zéro — (admin)"""
+    def _nom(uid):
+        if not uid: return "Le QG"
+        m = ctx.guild.get_member(int(uid)) if ctx.guild else None
+        return m.display_name if m else "un membre parti"
+    debut, fin_p = gazette_periode()
+    faits = gazette_selection(debut, fin_p)
     embed = await construire_gazette(ctx.guild)
+    if faits:
+        groupes = {}
+        for e in faits:
+            emo, titre, phrase = gazette_phrase(e, _nom)
+            groupes.setdefault((emo, titre), []).append(phrase)
+        for (emo, titre), lignes in groupes.items():
+            embed.add_field(name=f"{emo} {titre}",
+                            value="\n".join(f"▪️ {x}" for x in lignes), inline=False)
+    elif not embed.fields:
+        embed.description = f"*{random.choice(GAZETTE_CALME)}*"
     await ctx.send(embed=embed)
+    # L'édition est archivée : ses faits ne seront pas racontés deux fois.
+    ed = gazette_publier(faits, debut, fin_p, embed.description or "")
     gazette_stats.clear()
     gazette_faits.clear()
     gazette_semaine["num"] += 1
     save_all_data()
-    await ctx.send("✅ Gazette publiée, compteurs remis à zéro.", delete_after=8)
+    await ctx.send(f"✅ Édition n°{ed['n']} publiée — {len(faits)} fait(s) archivé(s).",
+                   delete_after=10)
+
+# ============================================================
+#  📰 GAZETTE 2.0 · 🗃️ ARCHIVES · 🕰️ CE JOUR-LÀ
+#  Trois lectures d'UNE seule mémoire. Aucun historique parallèle.
+# ============================================================
+GAZETTE_SCHEMA = 1
+GAZETTE_EDITIONS = []     # éditions publiées : période + faits retenus, pas les sources
+GAZETTE_MAX_EDITIONS = 60
+GAZETTE_MAX_FAITS = 8
+GAZETTE_MAX_PAR_CAT = 2   # jamais six entrées Casino
+GAZETTE_MAX_PAR_MEMBRE = 2
+
+# Rubriques : catégorie mémoire → (emoji, titre, gabarits éditoriaux)
+# Le {n} est le membre, {v} la valeur, {x} le contexte.
+GAZETTE_RUBRIQUES = {
+    "gacha": ("🎴", "Trouvaille de la semaine", [
+        "**{n}** a sorti **{x}**. La rédaction n'a pas encore compris comment.",
+        "**{n}** décroche **{x}**. Certains rollent depuis des mois pour ça.",
+        "**{x}** est tombé pour **{n}**. Akari a vérifié : c'est bien réel.",
+        "**{n}** ajoute **{x}** à sa collection. Discrètement, mais pas trop.",
+    ]),
+    "casino": ("🎰", "Du côté du Casino", [
+        "**{n}** repart avec **{v}** pièces. Pour une fois, la maison n'a pas gagné.",
+        "**{v}** pièces pour **{n}**. La machine s'en remettra.",
+        "**{n}** a tenté quelque chose. Ça a marché : **{v}** pièces.",
+    ]),
+    "event": ("🎪", "L'exploit de la semaine", [
+        "**{n}** s'en est sorti. On ne dira pas comment.",
+        "**{n}** l'a fait. Il y avait des témoins.",
+        "**{n}** a gagné quelque chose que peu de gens gagnent.",
+    ]),
+    "combat": ("⚔️", "Dans l'arène", [
+        "**{n}** franchit la barre des **{v}** victoires.",
+        "**{v}** victoires pour **{n}**. La liste des adversaires s'allonge.",
+    ]),
+    "pet": ("🐾", "Vie des compagnons", [
+        "**{n}** a adopté **{x}**. Espérons que ça se passe bien.",
+        "**{x}** a rejoint **{n}**. Le QG compte un habitant de plus.",
+        "**{n}** et **{x}** franchissent une étape.",
+    ]),
+    "progression": ("⭐", "Ça monte", [
+        "**{n}** atteint le **niveau {v}**. Personne ne l'a vu venir.",
+        "Niveau **{v}** pour **{n}**. Ça commence à se voir.",
+    ]),
+    "fortune": ("💎", "Nouveau record", [
+        "**{n}** n'a jamais été aussi riche : **{v}** pièces.",
+        "**{v}** pièces pour **{n}**. Record personnel battu.",
+    ]),
+    "chronique": ("📖", "Chroniques", [
+        "**{n}** a terminé une histoire. Akari ne dira pas laquelle.",
+        "Une Chronique de plus pour **{n}**.",
+    ]),
+    "serveur": ("🌐", "Le QG", ["{x}"]),
+}
+GAZETTE_CALME = [
+    "Semaine calme au QG. Même Akari a eu le temps de se reposer.",
+    "Il ne s'est pas passé grand-chose. Ça arrive.",
+    "Une semaine tranquille. La rédaction en profite.",
+    "Peu de choses à raconter cette fois. Tant mieux pour tout le monde.",
+]
+
+def gazette_periode(fin=None):
+    """Semaine glissante figée sur le jour : relancer .gazette deux minutes
+    plus tard raconte exactement la même semaine."""
+    import time as _t
+    fin = fin if fin is not None else _t.time()
+    jour = int((fin + ACT_TZ * 3600) // 86400)
+    borne = jour * 86400 - ACT_TZ * 3600      # minuit local du jour courant
+    return borne - 7 * 86400, borne + 86400   # les 7 jours précédents + aujourd'hui
+
+def _gz_consommes():
+    """Signatures des faits déjà parus — un souvenir n'est pas raconté deux fois."""
+    vus = set()
+    for ed in GAZETTE_EDITIONS:
+        vus.update(ed.get("faits", []))
+    return vus
+
+def _gz_signature(e):
+    return f"{e['t']}|{e.get('u') or '-'}|{int(e['d'])}"
+
+def gazette_selection(debut, fin, deja=None):
+    """Choix éditorial : importance, variété des catégories, variété des membres.
+    Retourne la liste des souvenirs retenus, au plus GAZETTE_MAX_FAITS."""
+    deja = deja if deja is not None else _gz_consommes()
+    cands = memoire_chercher(depuis=debut, jusqu_a=fin, importance_min=2, limite=0)
+    cands = [e for e in cands if _gz_signature(e) not in deja]
+    # Les plus marquants d'abord, puis les plus récents.
+    cands.sort(key=lambda e: (-e["i"], -e["d"]))
+    retenus, par_cat, par_membre = [], {}, {}
+    for e in cands:
+        cat, u = e["c"], e.get("u")
+        if par_cat.get(cat, 0) >= GAZETTE_MAX_PAR_CAT:
+            continue
+        if u and par_membre.get(u, 0) >= GAZETTE_MAX_PAR_MEMBRE:
+            continue
+        retenus.append(e)
+        par_cat[cat] = par_cat.get(cat, 0) + 1
+        if u:
+            par_membre[u] = par_membre.get(u, 0) + 1
+        if len(retenus) >= GAZETTE_MAX_FAITS:
+            break
+    return retenus
+
+def gazette_phrase(e, nom_fn):
+    """Ligne éditoriale d'un fait. Gabarit tiré de façon stable sur le souvenir."""
+    emo, titre, gabarits = GAZETTE_RUBRIQUES.get(e["c"], ("▪️", "En bref", ["{n} — {x}"]))
+    idx = int(e["d"]) % len(gabarits)
+    n = nom_fn(e.get("u")) if e.get("u") else "Le QG"
+    v = e.get("v")
+    txt = gabarits[idx]
+    if "{v}" in txt and v is None:
+        txt = gabarits[0] if "{v}" not in gabarits[0] else "**{n}** — {x}"
+    if "{x}" in txt and not e.get("x"):
+        txt = next((g for g in gabarits if "{x}" not in g), "**{n}**")
+    return (emo, titre, txt.replace("{n}", str(n))
+                            .replace("{v}", f"{v:,}" if isinstance(v, int) else str(v or ""))
+                            .replace("{x}", str(e.get("x") or "")))
+
+# ── 🗃️ ARCHIVES : l'histoire du QG, pas l'historique des Gazettes ──
+ARCHIVES_TYPES_SERVEUR = {"server.event"}
+ARCHIVES_TYPES_EXPLOIT = {"event.banquier_win", "event.train_terminus",
+                          "event.ascenseur_top", "chronique.ending",
+                          "gacha.first_mythic", "casino.jackpot"}
+
+def archives_entrees(annee=None):
+    """Ce qui mérite d'entrer dans l'histoire : souvenirs serveur, et
+    exploits personnels d'importance 3 uniquement. Pas chaque petit record."""
+    import datetime as _dt
+    r = []
+    for e in memoire_data:
+        garde = False
+        if e["t"] in ARCHIVES_TYPES_SERVEUR:
+            garde = True                              # tout événement serveur
+        elif e["i"] >= 3 and e["t"] in ARCHIVES_TYPES_EXPLOIT:
+            garde = True                              # exploit exceptionnel
+        if not garde:
+            continue
+        if annee is not None:
+            if _dt.datetime.fromtimestamp(e["d"]).year != annee:
+                continue
+        r.append(e)
+    r.sort(key=lambda x: -x["d"])
+    return r
+
+def archives_annees():
+    """Années représentées dans les Archives, de la plus récente à la plus ancienne."""
+    import datetime as _dt
+    return sorted({_dt.datetime.fromtimestamp(e["d"]).year
+                   for e in archives_entrees()}, reverse=True)
+
+MOIS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet",
+           "août", "septembre", "octobre", "novembre", "décembre"]
+
+def archives_par_mois(annee):
+    """{(mois, libellé): [entrées]} pour une année donnée."""
+    import datetime as _dt
+    groupes = {}
+    for e in archives_entrees(annee):
+        d = _dt.datetime.fromtimestamp(e["d"])
+        groupes.setdefault(d.month, []).append(e)
+    return {(m, MOIS_FR[m - 1]): v for m, v in sorted(groupes.items(), reverse=True)}
+
+# ── 🕰️ CE JOUR-LÀ : anniversaires de souvenirs anciens ──
+CEJOUR_TYPES_EXCLUS = {"casino.biggest_loss"}   # rien d'humiliant en public
+
+def ce_jour_la(quand=None, limite=3):
+    """Souvenirs dont l'anniversaire tombe aujourd'hui.
+    Uniquement des faits datés, importants et présentables en public."""
+    import datetime as _dt
+    ref = _dt.datetime.fromtimestamp(quand) if quand else _dt.datetime.now()
+    # Le 29 février se commémore le 28 les années non bissextiles.
+    def meme_jour(d):
+        if d.month == 2 and d.day == 29:
+            try:
+                _dt.date(ref.year, 2, 29)
+                return ref.month == 2 and ref.day == 29
+            except ValueError:
+                return ref.month == 2 and ref.day == 28
+        return (d.month, d.day) == (ref.month, ref.day)
+
+    trouves = []
+    for e in memoire_data:
+        if e["i"] < 3:                          continue   # exceptionnel seulement
+        if e["t"] in CEJOUR_TYPES_EXCLUS:       continue
+        d = _dt.datetime.fromtimestamp(e["d"])
+        ans = ref.year - d.year
+        if ans < 1:                             continue   # au moins un an
+        if not meme_jour(d):                    continue
+        trouves.append((ans, e))
+    trouves.sort(key=lambda x: (-x[0], -x[1]["i"]))
+    return trouves[:limite]
+
+def ce_jour_la_texte(ans):
+    return "il y a **un an**" if ans == 1 else f"il y a **{ans} ans**"
 
 # ============================================================
 #  🤝 LES LIENS — le bot mémorise qui joue avec qui
@@ -15573,6 +16317,13 @@ def verifier_pins(uid):
     def check(pid, cond):
         if cond and pid not in pins_data[uid]:
             nouveaux.append(pid)
+    # ── Trois pins orphelins raccordés via la mémoire centrale ──
+    check("ascenseur_top",
+          bool(memoire_chercher(uid=uid, types=["event.ascenseur_top"], limite=1)))
+    check("course_win",
+          bool(memoire_chercher(uid=uid, types=["event.course_win"], limite=1)))
+    check("drama_votant",
+          bool(memoire_chercher(uid=uid, types=["chronique.ending"], limite=1)))
     coll = gacha_collections.get(uid, {})
     check("premiere_mythique", any(ANIME_CARDS_DB.get(k, {}).get("rarete") == "Mythique" for k in coll))
     check("cent_cartes", len(coll) >= 100)
@@ -36331,6 +37082,7 @@ async def utiliser_item_solo(ctx, uid, iid):
         while xp_data[uid]["xp"] >= xp_data[uid]["level"] * 100:
             xp_data[uid]["xp"] -= xp_data[uid]["level"] * 100
             xp_data[uid]["level"] += 1
+            memoire_observer_niveau(uid, xp_data[uid]["level"])
             points_amelio[uid] += 1
             monte += 1
         await ctx.send(embed=discord.Embed(
@@ -38963,6 +39715,12 @@ def save_all_data():
             "achievements": {k: list(v) for k, v in achievements_data.items()},
             "missions": {k: dict(v) for k, v in missions_progress.items()},
             "activite": {k: dict(v) for k, v in activite_data.items()},
+            "memoire_schema": MEMOIRE_SCHEMA,
+            "memoire": memoire_data,
+            "records_perso": {k: dict(v) for k, v in records_perso.items()},
+            "records_qg": dict(records_qg),
+            "gazette_schema": GAZETTE_SCHEMA,
+            "gazette_editions": GAZETTE_EDITIONS,
             "titres": {k: list(v) for k, v in titres_data.items()},
             "titre_equipe": dict(titre_equipe),
             "pins_equipes": {k: list(v) for k, v in pins_equipes.items()},
@@ -39069,6 +39827,50 @@ def load_all_data():
             pets_data.update(data.get("pets", {}))
             for k, v in data.get("achievements", {}).items():
                 achievements_data[k] = set(v)
+            # ── Mémoire centrale : une entrée corrompue ne bloque pas le démarrage ──
+            try:
+                _brut = data.get("memoire", [])
+                _sch = int(data.get("memoire_schema", 0))
+                memoire_data.clear()
+                _rejets = 0
+                for _e in _brut if isinstance(_brut, list) else []:
+                    if (isinstance(_e, dict) and _e.get("t") in MEM_TYPES
+                            and isinstance(_e.get("d"), (int, float))):
+                        _e.setdefault("i", MEM_TYPES[_e["t"]][2])
+                        _e.setdefault("c", MEM_TYPES[_e["t"]][3])
+                        memoire_data.append(_e)
+                    else:
+                        _rejets += 1
+                memoire_data.sort(key=lambda x: x["d"])
+                _memoire_reindexer()
+                if _rejets:
+                    print(f"[Mémoire] {_rejets} entrée(s) invalide(s) ignorée(s)")
+                if _sch and _sch != MEMOIRE_SCHEMA:
+                    print(f"[Mémoire] schéma {_sch} → {MEMOIRE_SCHEMA}")
+            except Exception as _e:
+                print(f"[Mémoire] chargement impossible, mémoire vide : {type(_e).__name__}")
+                memoire_data.clear(); memoire_vus.clear()
+            try:
+                _ed = data.get("gazette_editions", [])
+                GAZETTE_EDITIONS.clear()
+                for _e in _ed if isinstance(_ed, list) else []:
+                    if isinstance(_e, dict) and isinstance(_e.get("faits"), list):
+                        GAZETTE_EDITIONS.append(_e)
+                if len(GAZETTE_EDITIONS) > GAZETTE_MAX_EDITIONS:
+                    del GAZETTE_EDITIONS[:len(GAZETTE_EDITIONS) - GAZETTE_MAX_EDITIONS]
+            except Exception as _e:
+                print(f"[Gazette] éditions non chargées : {type(_e).__name__}")
+                GAZETTE_EDITIONS.clear()
+            try:
+                for k, v in data.get("records_perso", {}).items():
+                    if isinstance(v, dict):
+                        records_perso[k] = {ck: cv for ck, cv in v.items()
+                                            if ck in RECORDS_DEF and isinstance(cv, dict)}
+                for k, v in data.get("records_qg", {}).items():
+                    if k in RECORDS_DEF and isinstance(v, dict) and "v" in v:
+                        records_qg[k] = v
+            except Exception as _e:
+                print(f"[Records] chargement partiel : {type(_e).__name__}")
             for k, v in data.get("activite", {}).items():
                 b = _act_neuf(); b.update(v); activite_data[k] = b
             for k, v in data.get("titres", {}).items():
