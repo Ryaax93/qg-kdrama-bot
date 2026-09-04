@@ -5470,6 +5470,29 @@ def hl_rang(c):
     """Rang pour Higher/Lower : As bas, Roi haut."""
     return CARTES_VALEURS.index(c[0])
 
+# ── 🎰 SLOT : table de gains ──
+# Les triples ne paient plus tous pareil : 💎 et 👑 portent le gros potentiel.
+# La PAIRE reste figée à ×2 — elle tombe 32,8 % du temps, la booster
+# rendrait le jeu rentable (leçon de la Vague 0 sur la Nuit Casino).
+SLOT_SYMBOLES = ["🌸", "🗡️", "🦊", "👑", "🐉", "💎", "🎭", "⚡"]
+SLOT_TRIPLE = {"💎": 35, "👑": 22}     # les autres symboles paient SLOT_TRIPLE_BASE
+SLOT_TRIPLE_BASE = 12
+SLOT_PAIRE = 2
+SLOT_BOOST_TRIPLE = 1.25               # Nuit Casino — triples uniquement
+
+def slot_multiplicateur(symbole):
+    """Gain d'un triple. RTP 90,8 % en normal, 96,9 % pendant la Nuit Casino."""
+    m = SLOT_TRIPLE.get(symbole, SLOT_TRIPLE_BASE)
+    return int(m * SLOT_BOOST_TRIPLE) if casino_boost_actif else m
+
+def slot_rtp(boost=False):
+    """RTP théorique, calculé sur la table réelle."""
+    n = len(SLOT_SYMBOLES)
+    b = SLOT_BOOST_TRIPLE if boost else 1.0
+    triples = sum(int(SLOT_TRIPLE.get(s, SLOT_TRIPLE_BASE) * b) for s in SLOT_SYMBOLES)
+    paires = n * (n - 1) * 3 * SLOT_PAIRE
+    return (triples + paires) / n ** 3
+
 # ── Casino : bornes de mise (source de vérité, utilisée par .slot et le help) ──
 SLOT_MISE_MIN = 10
 SLOT_MISE_MAX = 25000
@@ -6002,7 +6025,7 @@ async def slot_cmd(ctx, mise: str = "50"):
         mise = SLOT_MISE_MAX
         await ctx.send(f"ℹ️ Mise plafonnée à **{SLOT_MISE_MAX:,} pièces** par partie.", delete_after=6)
     economy_data[uid]["coins"] -= mise
-    SYMBOLES = ["🌸", "🗡️", "🦊", "👑", "🐉", "💎", "🎭", "⚡"]
+    SYMBOLES = list(SLOT_SYMBOLES)
     msg = await ctx.send("🎰 | ⏳ | ⏳ | ⏳ |")
     await asyncio.sleep(0.7)
     r1 = random.choice(SYMBOLES)
@@ -6014,17 +6037,32 @@ async def slot_cmd(ctx, mise: str = "50"):
     r3 = random.choice(SYMBOLES)
     await msg.edit(content=f"🎰 | {r1} | {r2} | {r3} |")
     if r1 == r2 == r3:
-        gain = mise * (20 if casino_boost_actif else 10)
+        mult = slot_multiplicateur(r1)
+        gain = mise * mult
         economy_data[uid]["coins"] += gain
         gazette_gain(uid, gain)
-        embed = discord.Embed(title="🎰 JACKPOT !!!", description=f"**{r1} {r2} {r3}**\n\n🎉 **+{gain} pièces !**", color=0xf1c40f)
-    elif r1==r2 or r2==r3 or r1==r3:
-        gain = mise * 2
+        titre = "🎰 TRIPLE 💎 !!!" if r1 == "💎" else (
+                "🎰 TRIPLE 👑 !" if r1 == "👑" else "🎰 TRIPLE !")
+        embed = discord.Embed(
+            title=titre,
+            description=(f"**{r1} {r2} {r3}**\n\n"
+                         f"×{mult} — 🎉 **+{gain:,} pièces !**"),
+            color=0xf1c40f)
+    elif r1 == r2 or r2 == r3 or r1 == r3:
+        gain = mise * SLOT_PAIRE
         economy_data[uid]["coins"] += gain
         gazette_gain(uid, gain)
-        embed = discord.Embed(title="🎰 Paire !", description=f"**{r1} {r2} {r3}**\n\n✅ **+{gain} pièces !**", color=0x2ecc71)
+        embed = discord.Embed(
+            title="🎰 Paire !",
+            description=f"**{r1} {r2} {r3}**\n\n✅ **+{gain:,} pièces !**",
+            color=0x2ecc71)
     else:
-        embed = discord.Embed(title="🎰 Raté...", description=f"**{r1} {r2} {r3}**\n\n💸 Perdu **{mise} pièces**", color=0xe74c3c)
+        embed = discord.Embed(
+            title="🎰 Raté...",
+            description=f"**{r1} {r2} {r3}**\n\n💸 Perdu **{mise:,} pièces**",
+            color=0xe74c3c)
+    if casino_boost_actif:
+        embed.set_author(name="🌙 Nuit Casino — les triples paient davantage")
     embed.set_footer(text=f"💰 Solde : {economy_data[uid]['coins']:,} pièces  •  Mise : {mise:,}")
     await ctx.send(embed=embed)
 
@@ -15805,12 +15843,27 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "7.7.0"
+BOT_VERSION = "7.7.1"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "7.7.1": {
+   "titre": "Le Slot rééquilibré 🎰",
+   "ajouts": [
+     "💎 **Les triples ne paient plus tous pareil.** Trois 💎 rapportent "
+     "**×35**, trois 👑 **×22**, les autres **×12** — contre ×10 pour tout "
+     "le monde avant.",
+   ],
+   "correctifs": [
+     "🎰 Le Slot était bien plus dur que les autres jeux du Casino. "
+     "Il redistribue maintenant **90,8 %** au lieu de 81,3 %, tout en gardant "
+     "le plus gros potentiel de gain de la maison.",
+     "🌙 Pendant la **Nuit Casino**, seuls les triples sont majorés — "
+     "la paire reste à ×2. Le RTP monte à 96,9 % sans jamais dépasser 100 %.",
+   ],
+ },
  "7.7.0": {
    "titre": "LE CASINO OUVRE VRAIMENT 🎰",
    "ajouts": [
