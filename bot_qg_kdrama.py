@@ -6009,11 +6009,26 @@ async def divorcer_cmd(ctx):
 async def anniversaire_cmd(ctx, date: str = None):
     uid = str(ctx.author.id)
     if not date:
-        if not anniversaire_data: return await ctx.send("🎂 Aucun anniversaire enregistré !")
-        embed = discord.Embed(title="🎂 Anniversaires du QG", color=0xff6b9d)
-        for user_id, d in anniversaire_data.items():
-            m = ctx.guild.get_member(int(user_id))
-            if m: embed.add_field(name=m.display_name, value=f"🎂 {d}", inline=True)
+        if not anniversaire_data:
+            return await ctx.send("🎂 Aucun anniversaire enregistré !")
+        lignes = anniversaires_tries(ctx.guild)
+        if not lignes:
+            return await ctx.send("🎂 Aucun anniversaire d'un membre présent.")
+        embed = discord.Embed(
+            title="🎂 Anniversaires du QG",
+            description="*Classés par prochaine occurrence.*",
+            color=0xff6b9d)
+        auj = [x for x in lignes if x[2] == 0]
+        suite = [x for x in lignes if x[2] > 0]
+        if auj:
+            embed.add_field(
+                name="🎉 Aujourd'hui",
+                value="\n".join(f"**{nom}**" for nom, _d, _j, _lib in auj), inline=False)
+        if suite:
+            bloc = "\n".join(f"`{lib}` — {nom}" for nom, _d, _j, lib in suite[:15])
+            embed.add_field(name="📅 À venir", value=bloc, inline=False)
+            if len(suite) > 15:
+                embed.set_footer(text=f"{len(suite) - 15} autre(s) plus tard dans l'année")
         return await ctx.send(embed=embed)
     try:
         j, mo = date.split("/")
@@ -11796,6 +11811,53 @@ def anniv_enregistrer(uid, date):
     anniversaire_data[uid] = date
     anniv_meta.setdefault(uid, {})["pose"] = _t.time()
 
+MOIS_COURT = ["janv.", "févr.", "mars", "avril", "mai", "juin",
+              "juil.", "août", "sept.", "oct.", "nov.", "déc."]
+
+def anniv_prochain(jm, ref=None):
+    """Jours avant la prochaine occurrence réelle de JJ/MM.
+    Le 8 janvier ne remonte pas devant septembre : on compare des dates,
+    pas des nombres. Le 29 février bascule au 28 les années normales."""
+    import datetime as _dt
+    ref = ref or _dt.date.today()
+    try:
+        j, m = (int(x) for x in jm.split("/"))
+    except Exception:
+        return None, None
+    def occurrence(annee):
+        jj = j
+        if m == 2 and j == 29:
+            bis = (annee % 4 == 0 and annee % 100 != 0) or annee % 400 == 0
+            if not bis:
+                jj = 28
+        try:
+            return _dt.date(annee, m, jj)
+        except ValueError:
+            return None
+    d = occurrence(ref.year)
+    if d is None or d < ref:
+        d = occurrence(ref.year + 1)
+    if d is None:
+        return None, None
+    return (d - ref).days, d
+
+def anniversaires_tries(guild, ref=None):
+    """[(nom, JJ/MM, jours_restants, libellé)] du plus proche au plus lointain.
+    Départage stable : jours, puis nom, puis identifiant."""
+    out = []
+    for uid, jm in anniversaire_data.items():
+        m = guild.get_member(int(uid)) if guild else None
+        if not m:
+            continue
+        jours, d = anniv_prochain(jm, ref)
+        if jours is None:
+            continue
+        lib = "aujourd'hui" if jours == 0 else (
+            "demain" if jours == 1 else f"{d.day} {MOIS_COURT[d.month - 1]}")
+        out.append((m.display_name, jm, jours, lib))
+    out.sort(key=lambda x: (x[2], x[0].lower()))
+    return out
+
 def anniv_du_jour(quand=None):
     """Les membres qui fêtent aujourd'hui. Le 29 février est fêté le 28
     les années non bissextiles."""
@@ -15114,12 +15176,43 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "7.5.0"
+BOT_VERSION = "7.6.0"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "7.6.0": {
+   "titre": "GIRLS ONLY 2.0 💅",
+   "ajouts": [
+     "🌙 **Le Ritual du Soir passe à 23 h** avec un tout nouveau catalogue : "
+     "**51 questions réparties en 16 thèmes** — crush, red flags, girl code, "
+     "ex, dilemmes, confessions, jalousie…",
+     "💋 **Des questions faites pour débattre**, pas pour répondre en un mot. "
+     "*« Il regarde toutes tes stories mais ne t'écrit jamais. Ça veut dire "
+     "quelque chose ou absolument rien ? »*",
+     "🔁 **Aucune question ne revient** tant que les 50 autres ne sont pas "
+     "passées — et l'historique survit aux redémarrages.",
+     "🎲 **Les thèmes tournent** : plus quatre soirs de crush d'affilée.",
+   ],
+   "correctifs": [
+     "⭐ **Star of the Week comptait uniquement les messages du salon Girls "
+     "Only.** Une fille très présente ailleurs sur le serveur n'était jamais "
+     "reconnue. Elle récompense désormais la présence sur **tout le QG** — "
+     "l'éligibilité reste le rôle Girls Only.",
+     "💎 **Diamond Girl utilisait le compteur hebdomadaire**, remis à zéro "
+     "chaque lundi : elle récompensait en fait la dernière semaine du mois. "
+     "Elle couvre maintenant le mois entier.",
+     "🛑 **Ce n'est plus un concours de spam.** Le score plafonne les messages "
+     "quotidiens et valorise la **régularité** : sept jours de présence pèsent "
+     "davantage que deux mille messages en une soirée.",
+     "🏆 Une gagnante publiée ne change plus si le classement est recalculé, "
+     "et les égalités se départagent toujours de la même façon.",
+     "🎂 **`.anniversaire` affichait la liste dans l'ordre d'enregistrement.** "
+     "Elle est maintenant classée par **prochain anniversaire réel** — le "
+     "8 janvier ne remonte plus devant septembre.",
+   ],
+ },
  "7.5.0": {
    "titre": "TROUVER SON CHEMIN 📘",
    "ajouts": [
@@ -15831,6 +15924,8 @@ MEM_TYPES = {
     # ── 🤝 Social ──
     "social.birthday":      ("🎂", "Anniversaire au QG",      2, "social"),
     "social.gift":          ("🎁", "Cadeau reçu",             2, "social"),
+    "social.star":          ("💫", "Star of the Week",        2, "social"),
+    "social.diamond":       ("💎", "Diamond Girl du mois",    3, "social"),
     "server.event":         ("🌐", "Événement du QG",          3, "serveur"),
 }
 
@@ -16697,6 +16792,84 @@ def akari_contexte_ambiance(uid, membre=None):
         except Exception:
             pass
     return cx
+
+# ── ⭐ STAR & 💎 DIAMOND : éligibilité Girls Only, activité TOUT le QG ──
+# L'ancien système comptait uniquement les messages du salon Girls Only.
+# Une fille très présente ailleurs sur le serveur n'était jamais reconnue.
+GIRLS_PLAFOND_JOUR = 120      # au-delà, rendement fortement décroissant
+GIRLS_POIDS_EXTRA = 0.15      # ce que valent les messages au-delà du plafond
+GIRLS_POIDS_VOCAL = 0.45      # par minute de vocal
+GIRLS_POIDS_JOUR = 60         # bonus par jour de présence — la régularité paie
+
+girls_jours = defaultdict(lambda: defaultdict(set))  # {periode: {uid: {jours}}}
+girls_mois = defaultdict(lambda: defaultdict(lambda: {"msg": 0, "voc": 0}))
+girls_palmares = {}   # {"star_2026-W36": {...}} — figé une fois publié
+
+def girls_noter(uid, messages=0, minutes=0, ts=None):
+    """Alimente les cumuls hebdo/mensuels. Appelé pour TOUT le serveur :
+    l'éligibilité Girls Only est vérifiée plus tard, au moment du classement."""
+    import time as _t, datetime as _dt
+    ts = ts or _t.time()
+    d = _dt.datetime.fromtimestamp(ts + ACT_TZ * 3600)
+    uid = str(uid)
+    girls_jours[f"{d.year}-{d.month:02d}"][uid].add(d.day)
+    m = girls_mois[f"{d.year}-{d.month:02d}"][uid]
+    m["msg"] += max(0, messages)
+    m["voc"] += max(0, minutes)
+
+def girls_score(msg, voc, jours):
+    """Score anti-spam. Les premiers messages du jour comptent plein tarif,
+    les suivants presque plus : marteler « mdr » 400 fois ne suffit pas."""
+    jours = max(1, jours)
+    plafond = GIRLS_PLAFOND_JOUR * jours
+    utiles = min(msg, plafond) + max(0, msg - plafond) * GIRLS_POIDS_EXTRA
+    return int(utiles + voc * GIRLS_POIDS_VOCAL + jours * GIRLS_POIDS_JOUR)
+
+def girls_eligibles(guild):
+    """Membres portant le rôle Girls Only. Les bots sont exclus."""
+    if not (guild and ROLE_GIRLS_ID):
+        return set()
+    role = guild.get_role(ROLE_GIRLS_ID)
+    if not role:
+        return set()
+    return {str(m.id) for m in role.members if not m.bot}
+
+def girls_classement(guild, periode):
+    """periode = 'semaine' ou 'mois'. Renvoie [(uid, score, detail)] trié.
+    Départage déterministe : score, puis jours actifs, puis identifiant."""
+    import datetime as _dt
+    elig = girls_eligibles(guild)
+    if not elig:
+        return []
+    d = _dt.datetime.now()
+    cle_mois = f"{d.year}-{d.month:02d}"
+    lignes = []
+    for uid in elig:
+        if periode == "semaine":
+            a = act_maj(uid)
+            msg, voc = a.get("msg_s", 0), a.get("voc_s", 0)
+            jours = min(7, len(girls_jours[cle_mois].get(uid, set())))
+        else:
+            m = girls_mois[cle_mois].get(uid, {"msg": 0, "voc": 0})
+            msg, voc = m["msg"], m["voc"]
+            jours = len(girls_jours[cle_mois].get(uid, set()))
+        if msg <= 0 and voc <= 0:
+            continue
+        lignes.append((uid, girls_score(msg, voc, jours),
+                       {"msg": msg, "voc": voc, "jours": jours}))
+    lignes.sort(key=lambda x: (-x[1], -x[2]["jours"], x[0]))
+    return lignes
+
+def girls_deja_publie(cle):
+    return cle in girls_palmares
+
+def girls_figer(cle, uid, score, detail):
+    """Une gagnante publiée ne change plus, même si on recalcule."""
+    import time as _t
+    if cle in girls_palmares:
+        return False
+    girls_palmares[cle] = {"u": uid, "s": score, "d": detail, "t": _t.time()}
+    return True
 
 # ── ✉️ SURPRISES D'AKARI ──
 # Rare, non farmable, et pas une lootbox : l'intérêt est le moment,
@@ -36300,6 +36473,10 @@ def act_ajouter(uid, messages=0, minutes=0, ts=None):
     """Crédite les compteurs. Les valeurs négatives sont ignorées."""
     if messages <= 0 and minutes <= 0:
         return
+    try:
+        girls_noter(uid, messages, minutes, ts)   # cumuls Star / Diamond
+    except Exception:
+        pass
     a = act_maj(uid, ts)
     if messages > 0:
         a["msg_j"] += messages; a["msg_s"] += messages
@@ -40547,120 +40724,209 @@ async def lg_status(ctx):
 girls_message_count = defaultdict(lambda: defaultdict(int))  # {guild_id: {uid: count}}
 
 # Questions Ritual du Soir (21h chaque soir dans le salon girls)
-RITUAL_QUESTIONS = [
-    "🌙 **Ritual du Soir** — Quel drama vous fait vibrer en ce moment ? 🎬",
-    "🌙 **Ritual du Soir** — Le personnage masculin qui vous a le plus marquées, et pourquoi ? 💜",
-    "🌙 **Ritual du Soir** — Scène de drama qui vous a fait pleurer comme une madeleine ? 😭",
-    "🌙 **Ritual du Soir** — Votre OST de drama préférée du moment ? 🎵",
-    "🌙 **Ritual du Soir** — Second lead syndrome : sur quel drama vous l'avez le plus mal vécu ? 💔",
-    "🌙 **Ritual du Soir** — Un drama que vous avez abandonné mais que vous voulez reprendre ? 📺",
-    "🌙 **Ritual du Soir** — Votre drama comfort, celui que vous relancez quand ça va pas ? 🤗",
-    "🌙 **Ritual du Soir** — Si vous pouviez vivre dans l'univers d'un drama, lequel ? ✨",
-    "🌙 **Ritual du Soir** — Le pire cliché de kdrama que vous adorez quand même ? 😂",
-    "🌙 **Ritual du Soir** — Quel drama recommanderiez-vous à quelqu'un qui n'en a jamais vu ? 🌸",
-    "🌙 **Ritual du Soir** — Team fin heureuse ou team fin ouverte ? 💭",
-    "🌙 **Ritual du Soir** — Le plat coréen que vous rêvez de goûter après l'avoir vu à l'écran ? 🍜",
-    "🌙 **Ritual du Soir** — Un drama surcoté selon vous ? Soyez honnêtes 👀",
-    "🌙 **Ritual du Soir** — Votre plus longue session de binge-watching ? Avouez tout 😅",
-    "🌙 **Ritual du Soir** — Quelle héroïne de drama vous ressemble le plus ? 💫",
-    "🌙 **Ritual du Soir** — La réplique de drama que vous n'avez jamais oubliée ? 💌",
-    "🌙 **Ritual du Soir** — Vous êtes plutôt drama historique ou drama moderne ? 🏯",
-    "🌙 **Ritual du Soir** — Le couple de drama que vous shippez le plus fort ? 💞",
-    "🌙 **Ritual du Soir** — Un drama que vous avez commencé juste pour l'acteur, assumez 😌",
-    "🌙 **Ritual du Soir** — Votre routine idéale pour une soirée drama ? Plaid, snacks, tout ✨",
-    "🌙 **Ritual du Soir** — Le méchant de drama le mieux écrit selon vous ? 😈",
-    "🌙 **Ritual du Soir** — Si votre vie était un drama, quel serait le titre ? 🎬",
-    "🌙 **Ritual du Soir** — Un drama qui vous a fait changer d'avis sur quelque chose ? 💭",
-    "🌙 **Ritual du Soir** — Vous préférez regarder seule ou en groupe ? 👯",
-    "🌙 **Ritual du Soir** — Le drama le plus stressant que vous ayez tenu jusqu'au bout ? 😰",
+# ── 🌙 Ritual du Soir : 16 catégories, aucune répétition avant épuisement ──
+# (catégorie, question) — le catalogue est contrôlé éditorialement :
+# deux questions qui provoqueraient la même discussion ont été fusionnées.
+RITUAL_CATALOGUE = [
+ ("crush", "Il te plaît énormément mais répond toujours six heures après. Tu continues ou tu lâches ?"),
+ ("crush", "Quel détail tout bête peut rendre quelqu'un instantanément attirant ?"),
+ ("crush", "On peut avoir un crush sur quelqu'un qu'on n'a jamais rencontré en vrai ?"),
+ ("crush", "Tu dis à ton crush que tu l'aimes bien, ou tu attends qu'il fasse le premier pas ?"),
+ ("crush", "Le pire moment pour se rendre compte qu'on a un crush sur quelqu'un ?"),
+
+ ("redflag", "C'est quoi un red flag que tout le monde banalise beaucoup trop ?"),
+ ("redflag", "Un green flag tellement rare que vous l'avez remarqué tout de suite ?"),
+ ("redflag", "Il parle mal à un serveur devant toi au premier rendez-vous. Tu réagis comment ?"),
+ ("redflag", "« Mon ex était folle. » Red flag immédiat ou ça dépend du contexte ?"),
+ ("redflag", "Quel comportement au premier date vous fait comprendre qu'il n'y en aura pas de deuxième ?"),
+
+ ("couple", "Vous préférez quelqu'un de très romantique ou quelqu'un qui montre son affection par de petites actions ?"),
+ ("couple", "Dans un couple, jusqu'où va le droit de regarder le téléphone de l'autre ? Nulle part ou ça se discute ?"),
+ ("couple", "Il faut tout se dire dans un couple, ou certaines choses peuvent rester pour soi ?"),
+ ("couple", "Vous seriez capables de sortir avec quelqu'un qui déteste vos dramas ?"),
+
+ ("ambigu", "Il regarde toutes tes stories mais ne t'écrit jamais. Ça veut dire quelque chose ou absolument rien ?"),
+ ("ambigu", "Une amitié où on se dit « je t'aime » tous les jours, c'est encore une amitié ?"),
+ ("ambigu", "Vous êtes proches, il ne se passe rien, mais tout le monde vous demande si vous êtes ensemble. Vous faites quoi ?"),
+
+ ("ex", "On peut rester ami avec un ex, honnêtement ?"),
+ ("ex", "Votre ex vous écrit à deux heures du matin. Vous ouvrez ou vous laissez ?"),
+ ("ex", "Vous vérifieriez le nouveau/la nouvelle de votre ex, ou vous ne voulez surtout pas savoir ?"),
+
+ ("confession", "Le truc le plus embarrassant que vous ayez fait pour attirer l'attention de quelqu'un ?"),
+ ("confession", "Avouez : vous avez déjà relu une conversation entière pour analyser un seul message ?"),
+ ("confession", "Un mensonge minuscule que vous avez déjà dit pour vous rendre plus intéressante ?"),
+
+ ("amitie", "Votre meilleure amie vous ment pour vous protéger. Vous préférez ça ou la vérité qui pique ?"),
+ ("amitie", "Une amie qui disparaît trois mois puis revient comme si de rien n'était : vous accueillez ou vous en parlez ?"),
+ ("amitie", "Combien de temps sans nouvelles avant qu'une amitié soit vraiment finie ?"),
+
+ ("girlcode", "Vous pardonnez à une amie qui parle à votre ex sans vous prévenir ?"),
+ ("girlcode", "Une amie sait que vous avez un crush et commence quand même à beaucoup lui parler. Girl code cassé ou pas forcément ?"),
+ ("girlcode", "Vous apprenez que le copain d'une connaissance la trompe. Vous lui dites ou pas ?"),
+
+ ("reseaux", "Un like sur une photo de 2019, c'est mignon ou c'est flippant ?"),
+ ("reseaux", "Poster son couple sur les réseaux : nécessaire, inutile, ou suspect ?"),
+ ("reseaux", "Vous répondez tout de suite ou vous attendez exprès un peu ?"),
+
+ ("opinion", "Une opinion sur les relations qui vous vaut toujours des ennuis quand vous la dites ?"),
+ ("opinion", "L'amour au premier regard : vrai truc ou histoire qu'on se raconte après coup ?"),
+ ("opinion", "Les grands gestes romantiques, c'est beau ou c'est de la mise en scène ?"),
+
+ ("dilemme", "Quelqu'un de parfait mais qui vous ennuie, ou quelqu'un d'imparfait avec qui vous ne vous ennuyez jamais ?"),
+ ("dilemme", "Savoir exactement ce que pense la personne qui vous plaît, ou ne jamais le savoir ?"),
+ ("dilemme", "Une relation formidable pendant six mois, ou une relation correcte pendant dix ans ?"),
+
+ ("genant", "Le message que vous avez envoyé à la mauvaise personne et que vous n'avez jamais oublié ?"),
+ ("genant", "Croiser son crush au pire moment possible : racontez."),
+
+ ("serieux", "À quel moment on sait qu'une relation devient sérieuse ?"),
+ ("serieux", "Présenter quelqu'un à sa famille : au bout de combien de temps ?"),
+ ("serieux", "Vous suivriez quelqu'un dans une autre ville pour une relation ?"),
+
+ ("jalousie", "Un peu de jalousie, c'est la preuve qu'on tient à l'autre, ou déjà un problème ?"),
+ ("jalousie", "Votre copain a une meilleure amie très proche. Ça va ou ça ne va pas ?"),
+
+ ("comportement", "Vous préférez qu'on vous dise les choses directement, quitte à ce que ça pique ?"),
+ ("comportement", "Vous êtes plutôt du genre à couper net ou à laisser une deuxième chance ?"),
+ ("comportement", "Pardonner, c'est de la force ou c'est se mentir à soi-même ?"),
+
+ ("scenario", "Vous pouvez revivre une seule journée de votre vie. Vous changez quelque chose ou pas ?"),
+ ("scenario", "Vous recevez un message anonyme : « je te vois tous les jours et tu ne me remarques pas ». Vous cherchez qui c'est ?"),
+ ("scenario", "Si votre vie était un drama, vous seriez le premier ou le second rôle ? Et honnêtement ?"),
 ]
+
+RITUAL_CATEGORIES = {
+    "crush": "💘 Crush", "redflag": "🚩 Red flags", "couple": "💌 Couple",
+    "ambigu": "👀 Ambigu", "ex": "💔 Les ex", "confession": "🤭 Confessions",
+    "amitie": "👯 Amitié", "girlcode": "💅 Girl code", "reseaux": "📱 Réseaux",
+    "opinion": "🍿 Opinions", "dilemme": "⚖️ Dilemmes", "genant": "😭 Moments gênants",
+    "serieux": "💍 Du sérieux", "jalousie": "🫣 Jalousie",
+    "comportement": "🧠 Comportements", "scenario": "🎭 Scénarios",
+}
+
+# Compatibilité : l'ancienne liste reste lisible par le code existant.
+RITUAL_QUESTIONS = [q for _cat, q in RITUAL_CATALOGUE]
+
+ritual_etat = {"vues": [], "cats": [], "cycle": 1}
+
+def ritual_tirer():
+    """Tire une question jamais posée dans le cycle courant, en évitant
+    de répéter les catégories récentes. Retourne (catégorie, question)."""
+    vues = set(ritual_etat.get("vues", []))
+    pool = [(i, cat, q) for i, (cat, q) in enumerate(RITUAL_CATALOGUE) if i not in vues]
+    if not pool:
+        # Nouveau cycle : on repart de zéro, mais les dernières questions du
+        # cycle précédent restent écartées pour ne pas enchaîner.
+        fin = list(ritual_etat.get("vues", []))[-6:]
+        ritual_etat["vues"] = []
+        ritual_etat["cycle"] = ritual_etat.get("cycle", 1) + 1
+        pool = [(i, cat, q) for i, (cat, q) in enumerate(RITUAL_CATALOGUE) if i not in set(fin)]
+    recentes = ritual_etat.get("cats", [])[-4:]
+    frais = [x for x in pool if x[1] not in recentes]
+    i, cat, q = random.choice(frais or pool)
+    ritual_etat.setdefault("vues", []).append(i)
+    ritual_etat.setdefault("cats", []).append(cat)
+    ritual_etat["cats"] = ritual_etat["cats"][-10:]
+    return cat, q
+
+
 
 # Tracking Girls Only — géré directement dans on_message
 
 @tasks.loop(minutes=1)
 async def girls_auto_tasks():
-    """Tasks automatiques Girls Only — Star of the Week, Diamond Girl, Ritual du Soir"""
+    """Girls Only — Ritual du Soir (23 h), Star of the Week, Diamond Girl.
+    Chaque publication est verrouillée sur une clé : ni doublon le même soir,
+    ni republication après redémarrage."""
     import datetime as _dt
     now = _dt.datetime.now()
-
     for guild in bot.guilds:
         if not SALON_GIRLS_ID:
             continue
-        channel_girls = guild.get_channel(SALON_GIRLS_ID)
-        if not channel_girls:
+        salon = guild.get_channel(SALON_GIRLS_ID)
+        if not salon:
             continue
-
         gid = guild.id
+        ping = ""
+        if ROLE_GIRLS_ID:
+            r = guild.get_role(ROLE_GIRLS_ID)
+            ping = r.mention if r else ""
 
-        # ── RITUAL DU SOIR — 21h chaque soir ─────────────────────────
-        key_ritual = f"ritual_{gid}_{now.date()}"
-        if now.hour == 21 and now.minute == 0 and key_ritual not in planning_last_run:
-            planning_last_run[key_ritual] = True
-            question = random.choice(RITUAL_QUESTIONS)
-            if ROLE_GIRLS_ID:
-                role = guild.get_role(ROLE_GIRLS_ID)
-                ping = role.mention if role else ""
-            else:
-                ping = ""
-            await channel_girls.send(
-                f"{ping}\n" if ping else "",
-                embed=discord.Embed(
-                    description=question,
+        # ── 🌙 RITUAL DU SOIR — 23 h ─────────────────────────────────
+        cle = f"ritual_{gid}_{now.date()}"
+        if now.hour == 23 and cle not in planning_last_run:
+            planning_last_run[cle] = True
+            cat, question = ritual_tirer()
+            save_all_data()
+            try:
+                await salon.send(ping, embed=discord.Embed(
+                    title=f"🌙  RITUAL DU SOIR — {RITUAL_CATEGORIES.get(cat, '')}",
+                    description=f"## {question}",
                     color=0xff6b9d
-                ).set_footer(text="🌙 Ritual du Soir — QG Kdrama Girls 🌸")
-            )
+                ).set_footer(text="Répondez, débattez, contredisez-vous. 🌸"))
+            except Exception as e:
+                print(f"[Ritual] envoi impossible : {e}")
 
-        # ── STAR OF THE WEEK — Lundi 10h ──────────────────────────────
-        key_star = f"star_week_{gid}_{now.isocalendar()[1]}"  # numéro de semaine
-        if now.weekday() == 0 and now.hour == 10 and now.minute == 0 and key_star not in planning_last_run:
-            planning_last_run[key_star] = True
-            counts = girls_message_count[gid]
-            if counts:
-                top_uid = max(counts, key=counts.get)
-                top_count = counts[top_uid]
-                top_member = guild.get_member(int(top_uid))
-                if top_member and top_count > 0:
-                    embed = discord.Embed(
-                        title="💫 Star of the Week !",
-                        description=(
-                            f"Cette semaine, la fille la plus active du QG est...\n\n"
-                            f"✨ **{top_member.mention}** ✨\n\n"
-                            f"*{top_count} messages dans notre salon cette semaine !*\n\n"
-                            f"Félicitations à notre Star 🌟💜"
-                        ),
-                        color=0xf1c40f
-                    )
-                    embed.set_thumbnail(url=top_member.display_avatar.url)
-                    embed.set_footer(text="⭐ Star of the Week — QG Kdrama Girls 🌸")
-                    chan_annonces = guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else channel_girls
-                    await (chan_annonces or channel_girls).send(embed=embed)
-                    # Reset compteur de la semaine
-                    girls_message_count[gid] = defaultdict(int)
+        # ── ⭐ STAR OF THE WEEK — lundi 10 h ──────────────────────────
+        sem = now.isocalendar()
+        cle_star = f"star_{gid}_{sem[0]}-W{sem[1]:02d}"
+        if now.weekday() == 0 and now.hour == 10 and not girls_deja_publie(cle_star):
+            cl = girls_classement(guild, "semaine")
+            if cl:
+                uid, score, det = cl[0]
+                membre = guild.get_member(int(uid))
+                if membre and girls_figer(cle_star, uid, score, det):
+                    e = discord.Embed(
+                        title="💫  STAR OF THE WEEK",
+                        description=(f"La fille la plus présente au QG cette semaine :\n\n"
+                                     f"✨ **{membre.mention}** ✨"),
+                        color=0xf1c40f)
+                    e.add_field(name="💬 Messages", value=f"**{det['msg']:,}**", inline=True)
+                    if det["voc"]:
+                        e.add_field(name="🎙️ Vocal", value=act_duree(det["voc"]), inline=True)
+                    e.add_field(name="📅 Jours actifs", value=f"**{det['jours']}**/7", inline=True)
+                    e.set_thumbnail(url=membre.display_avatar.url)
+                    e.set_footer(text="Présence sur tout le serveur, pas seulement ici 🌸")
+                    dest = (guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None) or salon
+                    try:
+                        await dest.send(embed=e)
+                        memoriser("social.star", uid=uid, valeur=score,
+                                  tag=f"{sem[0]}-W{sem[1]:02d}",
+                                  contexte="Star of the Week")
+                    except Exception as ex:
+                        print(f"[Star] envoi impossible : {ex}")
+                    save_all_data()
 
-        # ── DIAMOND GIRL — 1er du mois 12h ────────────────────────────
-        key_diamond = f"diamond_{gid}_{now.year}_{now.month}"
-        if now.day == 1 and now.hour == 12 and now.minute == 0 and key_diamond not in planning_last_run:
-            planning_last_run[key_diamond] = True
-            counts = girls_message_count[gid]
-            if counts:
-                top_uid = max(counts, key=counts.get)
-                top_count = counts[top_uid]
-                top_member = guild.get_member(int(top_uid))
-                if top_member and top_count > 0:
-                    embed = discord.Embed(
-                        title="💎 Diamond Girl du Mois !",
-                        description=(
-                            f"Ce mois-ci, la Diamond Girl du QG est...\n\n"
-                            f"💎 **{top_member.mention}** 💎\n\n"
-                            f"*La plus active, la plus brillante de toutes !*\n\n"
-                            f"Félicitations à notre Diamond Girl 👑💜"
-                        ),
-                        color=0x3498db
-                    )
-                    embed.set_thumbnail(url=top_member.display_avatar.url)
-                    embed.set_footer(text="💎 Diamond Girl — QG Kdrama Girls 🌸")
-                    chan_annonces = guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else channel_girls
-                    await (chan_annonces or channel_girls).send(embed=embed)
+        # ── 💎 DIAMOND GIRL — 1er du mois, 12 h ──────────────────────
+        prec = (now.replace(day=1) - _dt.timedelta(days=1))
+        cle_dia = f"diamond_{gid}_{prec.year}-{prec.month:02d}"
+        if now.day == 1 and now.hour == 12 and not girls_deja_publie(cle_dia):
+            cl = girls_classement(guild, "mois")
+            if cl:
+                uid, score, det = cl[0]
+                membre = guild.get_member(int(uid))
+                if membre and girls_figer(cle_dia, uid, score, det):
+                    e = discord.Embed(
+                        title="💎  DIAMOND GIRL DU MOIS",
+                        description=(f"Celle qui a fait vivre le QG tout le mois :\n\n"
+                                     f"💎 **{membre.mention}** 💎"),
+                        color=0x3498db)
+                    e.add_field(name="💬 Messages", value=f"**{det['msg']:,}**", inline=True)
+                    if det["voc"]:
+                        e.add_field(name="🎙️ Vocal", value=act_duree(det["voc"]), inline=True)
+                    e.add_field(name="📅 Jours actifs", value=f"**{det['jours']}**", inline=True)
+                    e.set_thumbnail(url=membre.display_avatar.url)
+                    e.set_footer(text="Régularité récompensée — ce n'est pas un concours de messages 🌸")
+                    dest = (guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None) or salon
+                    try:
+                        await dest.send(embed=e)
+                        memoriser("social.diamond", uid=uid, valeur=score,
+                                  tag=f"{prec.year}-{prec.month:02d}",
+                                  contexte="Diamond Girl du mois")
+                    except Exception as ex:
+                        print(f"[Diamond] envoi impossible : {ex}")
+                    save_all_data()
 
 # ============================================================
 #  PERSISTANCE JSON — Sauvegarde et chargement des données
@@ -40724,6 +40990,14 @@ def save_all_data():
             "gazette_editions": GAZETTE_EDITIONS,
             "anniv_meta": anniv_meta,
             "akari": akari_meta,
+            "ritual": {"vues": ritual_etat.get("vues", []),
+                       "cats": ritual_etat.get("cats", []),
+                       "cycle": ritual_etat.get("cycle", 1)},
+            "girls_palmares": girls_palmares,
+            "girls_mois": {p: {u: dict(v) for u, v in m.items()}
+                           for p, m in girls_mois.items()},
+            "girls_jours": {p: {u: sorted(v) for u, v in m.items()}
+                            for p, m in girls_jours.items()},
             "cadeaux": cadeaux_data,
             "titres": {k: list(v) for k, v in titres_data.items()},
             "titre_equipe": dict(titre_equipe),
@@ -40857,6 +41131,20 @@ def load_all_data():
             try:
                 anniv_meta.update(data.get("anniv_meta", {}))
                 akari_meta.update(data.get("akari", {}))
+                _r = data.get("ritual") or {}
+                if isinstance(_r, dict):
+                    ritual_etat["vues"] = [i for i in _r.get("vues", [])
+                                           if isinstance(i, int) and 0 <= i < len(RITUAL_CATALOGUE)]
+                    ritual_etat["cats"] = list(_r.get("cats", []))[-10:]
+                    ritual_etat["cycle"] = int(_r.get("cycle", 1) or 1)
+                girls_palmares.update(data.get("girls_palmares", {}))
+                for _p, _m in (data.get("girls_mois") or {}).items():
+                    for _u, _v in _m.items():
+                        girls_mois[_p][_u] = {"msg": int(_v.get("msg", 0)),
+                                              "voc": int(_v.get("voc", 0))}
+                for _p, _m in (data.get("girls_jours") or {}).items():
+                    for _u, _v in _m.items():
+                        girls_jours[_p][_u] = set(_v)
                 for _k, _g in (data.get("cadeaux") or {}).items():
                     if isinstance(_g, dict) and {"de","pour","type","valeur"} <= set(_g):
                         cadeaux_data[_k] = _g
