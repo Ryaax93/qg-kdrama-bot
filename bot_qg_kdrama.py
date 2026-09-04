@@ -1238,6 +1238,14 @@ def build_help_pages(guild, is_admin=False):
         "`.braquage @membre` — Tenter un vol *(12 % de réussite, très risqué)*\n"
         "*Alias : `.steal` · `.voler`*"
     ), inline=False)
+    e.add_field(name="🎰 Casino", value=(
+        "`.casino` — Tous les jeux et ton solde\n"
+        "`.slot <mise>` — Machine à sous\n"
+        "`.blackjack <mise>` — 21 contre le croupier *(alias `.bj`)*\n"
+        "`.roulette <pari> <mise>` — Rouge, noir, pair, impair ou numéro plein\n"
+        "`.crash <mise>` — Encaisse avant la rupture\n"
+        "`.higherlower <mise>` — Plus haute ou plus basse ? *(alias `.hl`)*"
+    ), inline=False)
     pages.append(("💰", "Économie", e))
 
     # ══════════════ 4 — GACHA ══════════════
@@ -1720,6 +1728,16 @@ GUIDE_PAGES = [
         "`.travailler` — gagner des pièces",
         "`.banque` — mettre de côté *(avec intérêts)*",
         "`.boutique` — dépenser",
+     ]),
+    ("casino", "🎰", "Casino", "🎰  CASINO",
+     ("Cinq jeux, cinq façons de perdre ses pièces.\n"
+      "*La maison garde un léger avantage — c'est le principe.*"), [
+        "`.casino` — la vitrine et ton solde",
+        "`.slot` — la machine à sous",
+        "`.blackjack` — 21 contre le croupier",
+        "`.roulette` — rouge, noir, ou un numéro plein",
+        "`.crash` — encaisse avant la rupture",
+        "`.hl` — plus haute ou plus basse ?",
      ]),
     ("gacha", "🎴", "Gacha", "🎴  GACHA",
      "Construis ta collection, trouve des cartes rares et fais-les combattre.", [
@@ -5345,9 +5363,620 @@ async def braquage_cmd(ctx, target: discord.Member = None):
             color=0xe74c3c
         ))
 
+# ============================================================
+#  🎰 CASINO — socle commun
+#  Une seule logique de mise pour tous les jeux. La mise est
+#  PRÉLEVÉE au lancement, jamais au résultat : impossible de
+#  miser puis de dépenser ailleurs avant d'encaisser.
+# ============================================================
+CASINO_MISE_MIN = 10
+CASINO_MISE_MAX = 25000
+CASINO_TIMEOUT = 120          # une partie abandonnée est résolue, pas figée
+
+casino_parties = {}           # {uid: cle_jeu} — une partie à la fois par joueur
+
+def casino_lire_mise(texte, solde):
+    """« 500 » · « 1,000 » · « all » → (mise, erreur). L'un des deux est None.
+    Refuse tout ce qui n'est pas un entier strictement positif."""
+    if texte is None:
+        texte = "50"
+    t = str(texte).strip().lower().replace(" ", "").replace(",", "").replace(".", "")
+    if t in ("all", "max", "tout"):
+        m = min(solde, CASINO_MISE_MAX)
+        return (m, None) if m >= CASINO_MISE_MIN else (None, "Solde insuffisant.")
+    if t.startswith("-") or not t.isdigit():
+        return None, "Mise invalide — indique un nombre, ou `all`."
+    m = int(t)
+    if m < CASINO_MISE_MIN:
+        return None, f"Mise minimum : **{CASINO_MISE_MIN} pièces**."
+    if m > solde:
+        return None, f"Tu n'as que **{solde:,} pièces**."
+    return min(m, CASINO_MISE_MAX), None
+
+def casino_engager(uid, texte, jeu):
+    """Valide, prélève et verrouille. Retourne (mise, erreur, plafonnee)."""
+    uid = str(uid)
+    if casino_parties.get(uid):
+        return None, "Tu as déjà une partie en cours. Termine-la d'abord.", False
+    solde = economy_data[uid]["coins"]
+    mise, err = casino_lire_mise(texte, solde)
+    if err:
+        return None, err, False
+    demande, _e = (None, None)
+    plafonnee = False
+    try:
+        t = str(texte or "").strip().lower().replace(" ", "").replace(",", "")
+        if t.isdigit() and int(t) > CASINO_MISE_MAX:
+            plafonnee = True
+    except Exception:
+        pass
+    economy_data[uid]["coins"] -= mise      # prélèvement immédiat
+    casino_parties[uid] = jeu
+    return mise, None, plafonnee
+
+def casino_liberer(uid):
+    casino_parties.pop(str(uid), None)
+
+def casino_payer(uid, montant, mise=0):
+    """Verse un gain et libère la partie. montant = ce que le joueur RÉCUPÈRE
+    (mise comprise). Le net sert aux records et à la mémoire."""
+    uid = str(uid)
+    casino_liberer(uid)
+    montant = max(0, int(montant))
+    if montant:
+        economy_data[uid]["coins"] += montant
+    net = montant - mise
+    try:
+        if net > 0:
+            gazette_gain(uid, net)
+            record_maj(uid, "casino_gain", net)
+        elif net < 0:
+            record_maj(uid, "casino_perte", -net)
+        check_coins_achievements(uid, None)
+    except Exception:
+        pass
+    save_all_data()
+    return net
+
+# ── Jeu de cartes réel, partagé par Blackjack et Higher/Lower ──
+CARTES_ENSEIGNES = ["♠️", "♥️", "♦️", "♣️"]
+CARTES_VALEURS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
+
+def paquet_neuf(n=1):
+    """Un vrai paquet de 52 cartes, mélangé. Pas de random.randint(1, 21)."""
+    p = [(v, e) for _ in range(n) for e in CARTES_ENSEIGNES for v in CARTES_VALEURS]
+    random.shuffle(p)
+    return p
+
+def carte_txt(c):
+    return f"`{c[0]}{c[1]}`"
+
+def bj_valeur(main):
+    """Total d'une main. Un As vaut 11, puis 1 si la main dépasse 21."""
+    total = 0
+    as_ = 0
+    for v, _e in main:
+        if v == "A":
+            as_ += 1; total += 11
+        elif v in ("J", "Q", "K"):
+            total += 10
+        else:
+            total += int(v)
+    while total > 21 and as_:
+        total -= 10; as_ -= 1
+    return total
+
+def hl_rang(c):
+    """Rang pour Higher/Lower : As bas, Roi haut."""
+    return CARTES_VALEURS.index(c[0])
+
 # ── Casino : bornes de mise (source de vérité, utilisée par .slot et le help) ──
 SLOT_MISE_MIN = 10
 SLOT_MISE_MAX = 25000
+
+# ── 🃏 BLACKJACK ──
+# Paquet réel, As 1/11, blackjack naturel payé 3:2, croupier tire jusqu'à 17.
+BJ_BLACKJACK = 2.5      # le joueur récupère 2,5× sa mise (gain net = 1,5×)
+BJ_GAIN = 2.0
+BJ_EGALITE = 1.0
+
+class BlackjackView(ui.View):
+    def __init__(self, uid, mise, timeout=CASINO_TIMEOUT):
+        super().__init__(timeout=timeout)
+        self.uid = str(uid)
+        self.mise = mise
+        self.paquet = paquet_neuf()
+        self.joueur = [self.paquet.pop(), self.paquet.pop()]
+        self.croupier = [self.paquet.pop(), self.paquet.pop()]
+        self.fini = False
+        self.message = None
+        self.peut_doubler = True
+
+    async def interaction_check(self, itx):
+        if str(itx.user.id) != self.uid:
+            await itx.response.send_message("Ce n'est pas ta partie.", ephemeral=True)
+            return False
+        if self.fini:
+            await itx.response.send_message("La partie est terminée.", ephemeral=True)
+            return False
+        return True
+
+    def embed(self, reveler=False, verdict=None, coul=0x2c3e50):
+        jv = bj_valeur(self.joueur)
+        e = discord.Embed(title="🃏  BLACKJACK", color=coul)
+        if reveler:
+            cv = bj_valeur(self.croupier)
+            e.add_field(name=f"🎩 Croupier — **{cv}**",
+                        value=" ".join(carte_txt(c) for c in self.croupier), inline=False)
+        else:
+            e.add_field(name="🎩 Croupier",
+                        value=f"{carte_txt(self.croupier[0])} `??`", inline=False)
+        e.add_field(name=f"🫵 Toi — **{jv}**",
+                    value=" ".join(carte_txt(c) for c in self.joueur), inline=False)
+        if verdict:
+            e.description = verdict
+        e.set_footer(text=f"Mise : {self.mise:,} pièces")
+        return e
+
+    async def terminer(self, itx, verdict, multiplicateur, coul):
+        self.fini = True
+        for it in self.children:
+            it.disabled = True
+        gain = int(self.mise * multiplicateur)
+        net = casino_payer(self.uid, gain, self.mise)
+        txt = verdict
+        if net > 0:
+            txt += f"\n\n💰 **+{net:,} pièces**"
+        elif net < 0:
+            txt += f"\n\n💸 **{net:,} pièces**"
+        else:
+            txt += "\n\n➖ Mise rendue."
+        await itx.response.edit_message(embed=self.embed(True, txt, coul), view=self)
+
+    async def jouer_croupier(self, itx):
+        while bj_valeur(self.croupier) < 17:
+            self.croupier.append(self.paquet.pop())
+        jv, cv = bj_valeur(self.joueur), bj_valeur(self.croupier)
+        if cv > 21:
+            return await self.terminer(itx, f"🎩 Le croupier saute à **{cv}**.", BJ_GAIN, 0x2ecc71)
+        if jv > cv:
+            return await self.terminer(itx, f"✅ **{jv}** contre **{cv}**.", BJ_GAIN, 0x2ecc71)
+        if jv < cv:
+            return await self.terminer(itx, f"❌ **{cv}** pour le croupier.", 0.0, 0xe74c3c)
+        await self.terminer(itx, f"➖ Égalité à **{jv}**.", BJ_EGALITE, 0x95a5a6)
+
+    @ui.button(label="Tirer", emoji="🃏", style=discord.ButtonStyle.primary)
+    async def tirer(self, itx, _b):
+        self.peut_doubler = False
+        self.doubler.disabled = True
+        self.joueur.append(self.paquet.pop())
+        if bj_valeur(self.joueur) > 21:
+            return await self.terminer(itx, f"💥 Tu sautes à **{bj_valeur(self.joueur)}**.",
+                                       0.0, 0xe74c3c)
+        await itx.response.edit_message(embed=self.embed(), view=self)
+
+    @ui.button(label="Rester", emoji="✋", style=discord.ButtonStyle.secondary)
+    async def rester(self, itx, _b):
+        await self.jouer_croupier(itx)
+
+    @ui.button(label="Doubler", emoji="💰", style=discord.ButtonStyle.success)
+    async def doubler(self, itx, _b):
+        if not self.peut_doubler:
+            return await itx.response.send_message(
+                "On ne double qu'avant de tirer.", ephemeral=True)
+        if economy_data[self.uid]["coins"] < self.mise:
+            return await itx.response.send_message(
+                "Pas assez de pièces pour doubler.", ephemeral=True)
+        economy_data[self.uid]["coins"] -= self.mise
+        self.mise *= 2
+        self.peut_doubler = False
+        self.joueur.append(self.paquet.pop())
+        if bj_valeur(self.joueur) > 21:
+            return await self.terminer(itx, f"💥 Doublé puis sauté à **{bj_valeur(self.joueur)}**.",
+                                       0.0, 0xe74c3c)
+        await self.jouer_croupier(itx)
+
+    async def on_timeout(self):
+        """Une partie abandonnée se résout : le croupier joue, la mise n'est
+        jamais réservée éternellement."""
+        if self.fini:
+            return
+        self.fini = True
+        while bj_valeur(self.croupier) < 17:
+            self.croupier.append(self.paquet.pop())
+        jv, cv = bj_valeur(self.joueur), bj_valeur(self.croupier)
+        mult = BJ_GAIN if (cv > 21 or jv > cv) else (BJ_EGALITE if jv == cv else 0.0)
+        casino_payer(self.uid, int(self.mise * mult), self.mise)
+        for it in self.children:
+            it.disabled = True
+        try:
+            if self.message:
+                await self.message.edit(
+                    embed=self.embed(True, "⏰ Partie abandonnée — résolue automatiquement.",
+                                     0x95a5a6), view=self)
+        except Exception:
+            pass
+
+@bot.command(name="blackjack", aliases=["bj", "21"])
+async def blackjack_cmd(ctx, mise: str = "50"):
+    """Blackjack contre le croupier — .blackjack <mise|all>"""
+    uid = str(ctx.author.id)
+    m, err, plaf = casino_engager(uid, mise, "blackjack")
+    if err:
+        return await ctx.send(f"❌ {err}")
+    if plaf:
+        await ctx.send(f"ℹ️ Mise plafonnée à **{CASINO_MISE_MAX:,}**.", delete_after=6)
+    vue = BlackjackView(uid, m)
+    jv, cv = bj_valeur(vue.joueur), bj_valeur(vue.croupier)
+    # Blackjack naturel : on tranche immédiatement.
+    if jv == 21 or cv == 21:
+        vue.fini = True
+        for it in vue.children:
+            it.disabled = True
+        if jv == 21 and cv == 21:
+            net = casino_payer(uid, int(m * BJ_EGALITE), m)
+            txt, coul = "➖ Deux blackjacks. Égalité.", 0x95a5a6
+        elif jv == 21:
+            net = casino_payer(uid, int(m * BJ_BLACKJACK), m)
+            txt, coul = f"🃏 **BLACKJACK !** +{net:,} pièces", 0xf1c40f
+        else:
+            net = casino_payer(uid, 0, m)
+            txt, coul = "🎩 Blackjack du croupier. Mauvais timing.", 0xe74c3c
+        return await ctx.send(embed=vue.embed(True, txt, coul), view=vue)
+    if economy_data[uid]["coins"] < m:
+        vue.doubler.disabled = True
+    vue.message = await ctx.send(embed=vue.embed(), view=vue)
+
+
+# ── 🎡 ROULETTE — européenne, un seul zéro ──
+ROULETTE_ROUGES = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
+ROULETTE_MISES = {
+    "rouge":  ("🔴 Rouge",  2.0, lambda n: n in ROULETTE_ROUGES),
+    "noir":   ("⚫ Noir",   2.0, lambda n: n != 0 and n not in ROULETTE_ROUGES),
+    "pair":   ("🟢 Pair",   2.0, lambda n: n != 0 and n % 2 == 0),
+    "impair": ("🟡 Impair", 2.0, lambda n: n % 2 == 1),
+    "manque": ("⬇️ Manque (1-18)", 2.0, lambda n: 1 <= n <= 18),
+    "passe":  ("⬆️ Passe (19-36)", 2.0, lambda n: 19 <= n <= 36),
+}
+
+@bot.command(name="roulette", aliases=["rlt"])
+async def roulette_cmd(ctx, pari: str = None, mise: str = "50"):
+    """Roulette européenne — .roulette <rouge|noir|pair|impair|manque|passe|0-36> <mise>"""
+    if not pari:
+        return await ctx.send(embed=discord.Embed(
+            title="🎡  ROULETTE",
+            description=("Roulette européenne — **un seul zéro**.\n\n"
+                         + "\n".join(f"`.roulette {k} <mise>` — {lib} · paie **×{mult:g}**"
+                                     for k, (lib, mult, _f) in ROULETTE_MISES.items())
+                         + "\n`.roulette 17 <mise>` — numéro plein · paie **×36**"),
+            color=0xc0392b))
+    p = pari.lower().strip()
+    plein = None
+    if p.isdigit():
+        plein = int(p)
+        if not 0 <= plein <= 36:
+            return await ctx.send("❌ Un numéro entre **0 et 36**.")
+    elif p not in ROULETTE_MISES:
+        return await ctx.send("❌ Pari inconnu — tape `.roulette` pour la liste.")
+
+    uid = str(ctx.author.id)
+    m, err, plaf = casino_engager(uid, mise, "roulette")
+    if err:
+        return await ctx.send(f"❌ {err}")
+    if plaf:
+        await ctx.send(f"ℹ️ Mise plafonnée à **{CASINO_MISE_MAX:,}**.", delete_after=6)
+
+    msg = await ctx.send(embed=discord.Embed(
+        title="🎡  ROULETTE", description="*La bille tourne…*", color=0xc0392b))
+    await asyncio.sleep(1.6)
+    n = random.randint(0, 36)
+    coul = ("🟢 Vert" if n == 0 else
+            "🔴 Rouge" if n in ROULETTE_ROUGES else "⚫ Noir")
+    if plein is not None:
+        gagne, mult, lib = (n == plein), 36.0, f"le **{plein}**"
+    else:
+        lib, mult, test = ROULETTE_MISES[p]
+        gagne = test(n)
+    net = casino_payer(uid, int(m * mult) if gagne else 0, m)
+    e = discord.Embed(
+        title=f"🎡  {n}  —  {coul}",
+        description=(f"Tu misais sur {lib if plein is not None else lib}.\n\n"
+                     + (f"✅ **+{net:,} pièces**" if net > 0
+                        else f"❌ **{net:,} pièces**")),
+        color=0x2ecc71 if gagne else 0xe74c3c)
+    e.set_footer(text=f"Mise : {m:,} pièces")
+    try:
+        await msg.edit(embed=e)
+    except Exception:
+        await ctx.send(embed=e)
+
+# ── 📈 CRASH ──
+# Le multiplicateur monte par paliers réels. Le joueur voit la courbe
+# progresser et doit encaisser AVANT le crash. Le point de rupture est
+# tiré au départ mais jamais révélé : la décision est réelle.
+CRASH_PALIERS = [1.2, 1.4, 1.7, 2.0, 2.5, 3.0, 4.0, 5.5, 8.0, 12.0]
+CRASH_PAS = 2.2               # secondes entre deux paliers
+CRASH_RTP = 0.94              # 6 % pour la maison
+
+def crash_tirer_point():
+    """Point de rupture. Loi en 1/x tronquée : les gros multiplicateurs
+    sont rares, la maison garde 6 % sur le long terme."""
+    u = random.random()
+    if u < 0.04:
+        return 1.0            # crash immédiat
+    return max(1.0, CRASH_RTP / (1 - u))
+
+class CrashView(ui.View):
+    def __init__(self, uid, mise, point, timeout=90):
+        super().__init__(timeout=timeout)
+        self.uid = str(uid)
+        self.mise = mise
+        self.point = point
+        self.palier = 0
+        self.fini = False
+        self.encaisse = None
+        self.message = None
+
+    @property
+    def mult(self):
+        return CRASH_PALIERS[self.palier - 1] if self.palier else 1.0
+
+    async def interaction_check(self, itx):
+        if str(itx.user.id) != self.uid:
+            await itx.response.send_message("Ce n'est pas ta partie.", ephemeral=True)
+            return False
+        return True
+
+    @ui.button(label="Encaisser", emoji="💰", style=discord.ButtonStyle.success)
+    async def encaisser(self, itx, _b):
+        if self.fini:
+            return await itx.response.send_message(
+                "Trop tard — c'est déjà terminé.", ephemeral=True)
+        self.fini = True                      # verrou avant tout paiement
+        self.encaisse = self.mult
+        for it in self.children:
+            it.disabled = True
+        gain = int(self.mise * self.encaisse)
+        net = casino_payer(self.uid, gain, self.mise)
+        await itx.response.edit_message(embed=discord.Embed(
+            title=f"💰  ENCAISSÉ À ×{self.encaisse:g}",
+            description=(f"Tu sors avec **{gain:,} pièces**.\n"
+                         f"{'💰 **+' + format(net, ',') + '**' if net > 0 else '💸 **' + format(net, ',') + '**'}"),
+            color=0x2ecc71), view=self)
+
+    def embed(self, etat="monte"):
+        if etat == "crash":
+            return discord.Embed(
+                title=f"💥  CRASH À ×{self.point:.2f}",
+                description=(f"Tu es resté trop longtemps.\n\n💸 **−{self.mise:,} pièces**"
+                             if self.encaisse is None else "Tu étais déjà sorti."),
+                color=0xe74c3c)
+        barre = "▰" * self.palier + "▱" * (len(CRASH_PALIERS) - self.palier)
+        return discord.Embed(
+            title=f"📈  ×{self.mult:g}",
+            description=(f"`{barre}`\n\n"
+                         f"Gain actuel : **{int(self.mise * self.mult):,} pièces**\n"
+                         f"*Encaisse… ou attends le palier suivant.*"),
+            color=0xf39c12 if self.mult < 3 else 0xe67e22)
+
+    async def on_timeout(self):
+        """Sans décision, la partie est perdue — la règle est annoncée."""
+        if not self.fini:
+            self.fini = True
+            casino_payer(self.uid, 0, self.mise)
+
+@bot.command(name="crash", aliases=["fusee"])
+async def crash_cmd(ctx, mise: str = "50"):
+    """Le multiplicateur monte — encaisse avant le crash. .crash <mise|all>"""
+    uid = str(ctx.author.id)
+    m, err, plaf = casino_engager(uid, mise, "crash")
+    if err:
+        return await ctx.send(f"❌ {err}")
+    if plaf:
+        await ctx.send(f"ℹ️ Mise plafonnée à **{CASINO_MISE_MAX:,}**.", delete_after=6)
+    point = crash_tirer_point()
+    vue = CrashView(uid, m, point)
+    vue.message = await ctx.send(embed=discord.Embed(
+        title="📈  CRASH",
+        description=(f"Mise : **{m:,} pièces**\n\n"
+                     f"Le multiplicateur va monter. Encaisse avant qu'il ne casse.\n"
+                     f"*Si tu ne fais rien, tu perds ta mise.*"),
+        color=0xf39c12), view=vue)
+    await asyncio.sleep(2)
+    # Un palier toutes les 2,2 s : lisible, et sans marteler l'API Discord.
+    for i, mult in enumerate(CRASH_PALIERS, 1):
+        if vue.fini:
+            return
+        if point < mult:
+            vue.fini = True
+            for it in vue.children:
+                it.disabled = True
+            casino_payer(uid, 0, m)
+            try: await vue.message.edit(embed=vue.embed("crash"), view=vue)
+            except Exception: pass
+            return
+        vue.palier = i
+        try: await vue.message.edit(embed=vue.embed(), view=vue)
+        except Exception: pass
+        await asyncio.sleep(CRASH_PAS)
+    # Palier maximum atteint sans encaisser : on paie le plafond.
+    if not vue.fini:
+        vue.fini = True
+        for it in vue.children:
+            it.disabled = True
+        gain = int(m * CRASH_PALIERS[-1])
+        net = casino_payer(uid, gain, m)
+        try:
+            await vue.message.edit(embed=discord.Embed(
+                title=f"🚀  PLAFOND ×{CRASH_PALIERS[-1]:g}",
+                description=f"La fusée est sortie de l'écran.\n\n💰 **+{net:,} pièces**",
+                color=0xf1c40f), view=vue)
+        except Exception:
+            pass
+
+
+# ── 🃏 HIGHER / LOWER ──
+# Paquet réel. Une bonne réponse augmente le multiplicateur ; on encaisse
+# quand on veut. L'égalité rend la manche sans casser la série.
+# Paliers calculés sur la probabilité réelle de gagner une manche (p ≈ 0,77).
+# Les valeurs d'origine donnaient un RTP de 127 % : le jeu imprimait de l'argent.
+HL_PALIERS = [1.22, 1.59, 2.06, 2.68, 3.48, 4.52, 5.87, 7.62]
+
+class HLView(ui.View):
+    def __init__(self, uid, mise, timeout=CASINO_TIMEOUT):
+        super().__init__(timeout=timeout)
+        self.uid = str(uid)
+        self.mise = mise
+        self.paquet = paquet_neuf()
+        self.carte = self.paquet.pop()
+        self.serie = 0
+        self.fini = False
+        self.message = None
+
+    @property
+    def mult(self):
+        return HL_PALIERS[min(self.serie, len(HL_PALIERS)) - 1] if self.serie else 0.0
+
+    async def interaction_check(self, itx):
+        if str(itx.user.id) != self.uid:
+            await itx.response.send_message("Ce n'est pas ta partie.", ephemeral=True)
+            return False
+        if self.fini:
+            await itx.response.send_message("La partie est terminée.", ephemeral=True)
+            return False
+        return True
+
+    def embed(self, texte=None, coul=0x9b59b6):
+        e = discord.Embed(title="🃏  HIGHER / LOWER", color=coul)
+        e.add_field(name="Carte visible", value=f"# {carte_txt(self.carte)}", inline=False)
+        if self.serie:
+            e.add_field(name="🔥 Série",
+                        value=f"**{self.serie}** d'affilée · ×{self.mult:g} "
+                              f"→ **{int(self.mise * self.mult):,} pièces**", inline=False)
+        if texte:
+            e.description = texte
+        e.set_footer(text=f"Mise : {self.mise:,} pièces  ·  As bas, Roi haut")
+        return e
+
+    async def deviner(self, itx, plus_haut):
+        if self.fini:      # garde interne, en plus d'interaction_check
+            return await itx.response.send_message("La partie est terminée.", ephemeral=True)
+        suivante = self.paquet.pop()
+        a, b = hl_rang(self.carte), hl_rang(suivante)
+        ancienne = self.carte
+        self.carte = suivante
+        if b == a:
+            return await itx.response.edit_message(
+                embed=self.embed(f"➖ {carte_txt(ancienne)} → {carte_txt(suivante)} — "
+                                 f"égalité, la manche est rejouée.", 0x95a5a6), view=self)
+        juste = (b > a) if plus_haut else (b < a)
+        if not juste:
+            self.fini = True
+            for it in self.children:
+                it.disabled = True
+            casino_payer(self.uid, 0, self.mise)
+            return await itx.response.edit_message(
+                embed=self.embed(f"❌ {carte_txt(ancienne)} → {carte_txt(suivante)}.\n\n"
+                                 f"💸 **−{self.mise:,} pièces**", 0xe74c3c), view=self)
+        self.serie += 1
+        self.encaisser.disabled = False
+        if self.serie >= len(HL_PALIERS):
+            self.fini = True
+            for it in self.children:
+                it.disabled = True
+            gain = int(self.mise * HL_PALIERS[-1])
+            net = casino_payer(self.uid, gain, self.mise)
+            try:
+                memoriser("casino.biggest_win", uid=self.uid, valeur=net, unique=False,
+                          tag=f"hl:{net}")
+            except Exception:
+                pass
+            return await itx.response.edit_message(
+                embed=self.embed(f"🏆 **Série complète — {len(HL_PALIERS)} d'affilée !**\n\n"
+                                 f"💰 **+{net:,} pièces**", 0xf1c40f), view=self)
+        await itx.response.edit_message(
+            embed=self.embed(f"✅ {carte_txt(ancienne)} → {carte_txt(suivante)}", 0x2ecc71),
+            view=self)
+
+    @ui.button(label="Plus haute", emoji="⬆️", style=discord.ButtonStyle.primary)
+    async def haut(self, itx, _b): await self.deviner(itx, True)
+
+    @ui.button(label="Plus basse", emoji="⬇️", style=discord.ButtonStyle.primary)
+    async def bas(self, itx, _b): await self.deviner(itx, False)
+
+    @ui.button(label="Encaisser", emoji="💰", style=discord.ButtonStyle.success, disabled=True)
+    async def encaisser(self, itx, _b):
+        if self.fini:
+            return await itx.response.send_message("Déjà encaissé.", ephemeral=True)
+        if not self.serie:
+            return await itx.response.send_message("Rien à encaisser.", ephemeral=True)
+        self.fini = True
+        for it in self.children:
+            it.disabled = True
+        gain = int(self.mise * self.mult)
+        net = casino_payer(self.uid, gain, self.mise)
+        await itx.response.edit_message(
+            embed=self.embed(f"💰 Tu sors après **{self.serie}** bonnes réponses.\n\n"
+                             f"**+{net:,} pièces**", 0x2ecc71), view=self)
+
+    async def on_timeout(self):
+        """Abandonner encaisse la série en cours — on ne punit pas une
+        déconnexion, mais la mise n'est jamais bloquée."""
+        if self.fini:
+            return
+        self.fini = True
+        casino_payer(self.uid, int(self.mise * self.mult) if self.serie else 0, self.mise)
+        for it in self.children:
+            it.disabled = True
+        try:
+            if self.message:
+                await self.message.edit(
+                    embed=self.embed("⏰ Temps écoulé — série encaissée automatiquement.",
+                                     0x95a5a6), view=self)
+        except Exception:
+            pass
+
+@bot.command(name="higherlower", aliases=["hl", "plusoumoins"])
+async def hl_cmd(ctx, mise: str = "50"):
+    """Plus haute ou plus basse — .hl <mise|all>"""
+    uid = str(ctx.author.id)
+    m, err, plaf = casino_engager(uid, mise, "hl")
+    if err:
+        return await ctx.send(f"❌ {err}")
+    if plaf:
+        await ctx.send(f"ℹ️ Mise plafonnée à **{CASINO_MISE_MAX:,}**.", delete_after=6)
+    vue = HLView(uid, m)
+    vue.message = await ctx.send(
+        embed=vue.embed("La carte suivante sera-t-elle **plus haute** ou **plus basse** ?"),
+        view=vue)
+
+
+# ── 🎰 HUB CASINO ──
+@bot.command(name="casino", aliases=["jeux-argent"])
+async def casino_cmd(ctx):
+    """Le Casino du QG — .casino"""
+    uid = str(ctx.author.id)
+    e = discord.Embed(
+        title="🎰  CASINO DU QG",
+        description=(f"💰 Ton solde : **{economy_data[uid]['coins']:,} pièces**\n"
+                     f"🎁 Cagnotte jackpot : **{jackpot_cagnotte:,} pièces**\n\n"
+                     f"*Mise entre **{CASINO_MISE_MIN}** et "
+                     f"**{CASINO_MISE_MAX:,}** pièces. `all` pour tout miser.*"),
+        color=0xc0392b)
+    e.add_field(name="🎰 `.slot <mise>`",
+                value="Trois symboles. Une paire paie, un triplé rapporte gros.", inline=False)
+    e.add_field(name="🃏 `.blackjack <mise>`",
+                value="21 contre le croupier. Tirer, rester, doubler.", inline=False)
+    e.add_field(name="🎡 `.roulette <pari> <mise>`",
+                value="Rouge, noir, pair, impair — ou un numéro plein à ×36.", inline=False)
+    e.add_field(name="📈 `.crash <mise>`",
+                value="Le multiplicateur monte. Encaisse avant la rupture.", inline=False)
+    e.add_field(name="🃏 `.hl <mise>`",
+                value="Plus haute ou plus basse ? Huit bonnes réponses, ×14.", inline=False)
+    e.add_field(name="🏦 `.banque`",
+                value="Mettre de côté ce que tu ne veux pas risquer.", inline=False)
+    e.set_footer(text="La maison garde un léger avantage. Joue ce que tu peux perdre.")
+    await ctx.send(embed=e)
 
 @bot.command(name="slot")
 async def slot_cmd(ctx, mise: str = "50"):
@@ -15176,12 +15805,41 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "7.6.0"
+BOT_VERSION = "7.7.0"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "7.7.0": {
+   "titre": "LE CASINO OUVRE VRAIMENT 🎰",
+   "ajouts": [
+     "🎰 **`.casino`** — la vitrine : ton solde, la cagnotte, et les cinq jeux.",
+     "🃏 **`.blackjack`** — du vrai 21. Paquet de 52 cartes, As qui vaut 1 ou 11, "
+     "croupier qui tire jusqu'à 17, blackjack naturel payé 3:2. "
+     "Tirer, rester, doubler. *(alias `.bj`)*",
+     "🎡 **`.roulette`** — européenne, **un seul zéro**. Rouge, noir, pair, "
+     "impair, manque, passe… ou un numéro plein à **×36**.",
+     "📈 **`.crash`** — le multiplicateur monte palier par palier. Tu vois la "
+     "courbe progresser et tu décides quand sortir. Si tu attends trop, tu perds tout.",
+     "🃏 **`.hl`** — plus haute ou plus basse ? Chaque bonne réponse fait monter "
+     "le multiplicateur. Huit d'affilée et tu sors à **×7,62**. "
+     "Les égalités ne cassent pas la série.",
+   ],
+   "correctifs": [
+     "💰 **Une seule logique de mise pour tous les jeux** : minimum 10, maximum "
+     "25 000, `all` accepté. Les montants négatifs, nuls ou fantaisistes sont "
+     "refusés partout.",
+     "🔐 **La mise est prélevée au lancement, jamais au résultat.** Impossible de "
+     "miser, dépenser ses pièces ailleurs, puis encaisser de l'argent qui "
+     "n'existe plus.",
+     "🎮 Une seule partie à la fois : on ne lance pas trois jeux en parallèle.",
+     "⏰ **Une partie abandonnée se résout toute seule.** Au Blackjack le croupier "
+     "joue, au Higher/Lower la série est encaissée. Aucune mise ne reste bloquée.",
+     "🃏 Les gains du Higher/Lower ont été recalculés : les valeurs initiales "
+     "rendaient le jeu rentable pour le joueur, ce qui aurait créé de l'argent.",
+   ],
+ },
  "7.6.0": {
    "titre": "GIRLS ONLY 2.0 💅",
    "ajouts": [
