@@ -6589,12 +6589,34 @@ async def shop_cmd(ctx, recherche: str = None):
             b = ui.Button(label=f"Acheter ({tot:,})", emoji="💳", row=2,
                           style=discord.ButtonStyle.success, disabled=not assez)
             async def buy(itx):
-                ok, achetes, total, err = await boutique_checkout(itx, uid)
-                if not ok:
-                    return await itx.response.send_message(f"❌ {err}", ephemeral=True)
-                self.page = "accueil"; self._build()
-                await itx.response.edit_message(embed=self.embed(), view=self)
-                await itx.followup.send(embed=ticket_embed(itx, achetes, total))
+                # Le bouton est neutralisé AVANT tout traitement : Discord peut
+                # livrer deux clics rapides, et le verrou serveur ne doit pas
+                # être la seule barrière.
+                if getattr(self, "_achat_en_cours", False):
+                    return await itx.response.send_message(
+                        "⏳ Ton achat est déjà en cours.", ephemeral=True)
+                self._achat_en_cours = True
+                try:
+                    ok, achetes, total, err = await boutique_checkout(itx, uid)
+                    if not ok:
+                        self._achat_en_cours = False
+                        return await itx.response.send_message(f"❌ {err}", ephemeral=True)
+                    self.page = "accueil"
+                    self._achat_en_cours = False
+                    self._build()
+                    await itx.response.edit_message(embed=self.embed(), view=self)
+                    await itx.followup.send(embed=ticket_embed(itx, achetes, total))
+                except Exception as e:
+                    # Le checkout a déjà tout remboursé si besoin ; ici on
+                    # évite seulement l'écran « interaction échouée » muet.
+                    self._achat_en_cours = False
+                    print(f"[Boutique] réponse d'achat : {type(e).__name__}: {e}")
+                    try:
+                        await itx.followup.send(
+                            "⚠️ L'affichage a échoué, mais ton achat a bien été "
+                            "traité. Vérifie ton solde avec `.shop`.", ephemeral=True)
+                    except Exception:
+                        pass
             b.callback = buy; self.add_item(b)
             b = ui.Button(label="Vider", emoji="🗑️", row=2, style=discord.ButtonStyle.danger)
             async def clr(itx):
@@ -6737,6 +6759,7 @@ panier_data = {}        # {uid: {"items": {id: qte}, "maj": ts}}
 favoris_data = {}       # {uid: [id, ...]}
 ventes_data = []        # [{"i": id, "q": qte, "d": ts}] — achats FINALISÉS seulement
 boutique_verrou = set() # uid en cours de checkout
+boutique_dernier_achat = {}  # {uid: ts} — pour reconnaître un second clic
 
 def boutique_item(iid):
     """L'article, depuis la source de vérité. None s'il n'existe plus."""
@@ -7253,14 +7276,23 @@ async def boutique_effet(ctx, uid, item):
     await ctx.send(embed=discord.Embed(title="🛒 Achat réussi !", description=f"✅ **{item['nom']}** acheté !", color=0x2ecc71))
 
 # ── 💳 CHECKOUT ATOMIQUE ──
+def source_membre(source):
+    """Le membre derrière un déclencheur, qu'il vienne d'une commande ou d'un bouton.
+
+    Un `Context` expose `.author`, une `Interaction` expose `.user`. Confondre
+    les deux a coûté 4 000 pièces à un membre : le débit passait, puis
+    l'AttributeError coupait tout avant l'attribution."""
+    return getattr(source, "author", None) or getattr(source, "user", None)
+
 class _CheckoutStub:
     """Reçoit les messages de boutique_effet pendant un achat groupé.
     Sans lui, chaque article enverrait son propre embed de confirmation :
-    le ticket de caisse remplace ces douze messages."""
-    def __init__(self, ctx, uid):
-        self.author = ctx.author
-        self.guild = ctx.guild
-        self.channel = ctx.channel
+    le ticket de caisse remplace ces douze messages.
+    Accepte indifféremment un Context ou une Interaction."""
+    def __init__(self, source, uid):
+        self.author = source_membre(source)
+        self.guild = getattr(source, "guild", None)
+        self.channel = getattr(source, "channel", None)
         self.uid = uid
         self.captures = []
     async def send(self, *a, **k):
@@ -7281,6 +7313,11 @@ async def boutique_checkout(ctx, uid):
     try:
         lignes = panier_lignes(uid)          # relecture, prix du catalogue actuel
         if not lignes:
+            # Un panier vide juste après un achat, c'est un second clic arrivé
+            # trop tard : le dire clairement plutôt que d'inquiéter le membre.
+            import time as _t
+            if _t.time() - boutique_dernier_achat.get(uid, 0) < 10:
+                return False, [], 0, "Ton achat vient d'être validé — inutile de recliquer."
             return False, [], 0, "Ton panier est vide."
         # Une seule ligne invalide bloque toute la commande : pas de partiel.
         for it, _q, _st, pb in lignes:
@@ -7292,34 +7329,47 @@ async def boutique_checkout(ctx, uid):
             return False, [], 0, f"Il te manque **{manque:,} pièces**."
 
         economy_data[uid]["coins"] -= total          # débit unique
-        stub = _CheckoutStub(ctx, uid)
         achetes, echecs = [], []
-        for it, q, st, _p in lignes:
-            for _ in range(q):
-                try:
-                    await boutique_effet(stub, uid, it)
-                except Exception as e:
-                    echecs.append((it, str(e)))
-                    break
-            else:
-                achetes.append((it, q, st))
-                vente_noter(it["id"], q)
+        # À partir d'ici, TOUT est protégé. Le moindre imprévu — y compris une
+        # panne du mécanisme lui-même, pas seulement d'un effet — rembourse
+        # intégralement. Sans ce filet, une exception laissait le membre débité
+        # sans rien recevoir.
+        try:
+            stub = _CheckoutStub(ctx, uid)
+            for it, q, st, _p in lignes:
+                for _ in range(q):
+                    try:
+                        await boutique_effet(stub, uid, it)
+                    except Exception as e:
+                        echecs.append((it, str(e)))
+                        break
+                else:
+                    achetes.append((it, q, st))
+        except Exception as e:
+            economy_data[uid]["coins"] += total
+            save_all_data()
+            print(f"[Boutique] checkout interrompu ({type(e).__name__}: {e}) — remboursé")
+            return False, [], 0, ("L'achat n'a pas abouti. **Tu n'as rien perdu** "
+                                  "et ton panier est intact.")
         if echecs:
-            # Attribution incomplète : on rembourse intégralement et on garde
-            # le panier tel quel. Aucun achat partiel ne reste appliqué.
+            # Attribution incomplète : remboursement intégral, panier conservé.
             economy_data[uid]["coins"] += total
             save_all_data()
             it, err = echecs[0]
-            return False, [], 0, (f"**{it['nom']}** n'a pas pu être attribué "
-                                  f"— rien n'a été débité.")
-        for it, _q, _st in achetes:
-            panier_retirer(uid, it["id"], tout=True)   # vidage APRÈS succès
+            return False, [], 0, (f"**{it['nom']}** n'a pas pu être attribué — "
+                                  f"rien n'a été débité.")
+        # Le succès est acquis : on enregistre les ventes, on vide, on sauvegarde.
+        import time as _t
+        for it, q, _st in achetes:
+            vente_noter(it["id"], q)
+            panier_retirer(uid, it["id"], tout=True)   # vidage APRÈS attribution
+        boutique_dernier_achat[uid] = _t.time()
         save_all_data()
         return True, achetes, total, None
     finally:
         boutique_verrou.discard(uid)
 
-def ticket_embed(ctx, achetes, total):
+def ticket_embed(source, achetes, total):
     lignes = []
     for it, q, st in achetes:
         q_txt = f" ×{q}" if q > 1 else ""
@@ -7330,8 +7380,9 @@ def ticket_embed(ctx, achetes, total):
                      + "\n" + "─" * 18
                      + f"\n**TOTAL : {total:,} pièces**"),
         color=0x2ecc71)
+    m = source_membre(source)
     e.set_footer(text=f"💰 Solde restant : "
-                      f"{economy_data[str(ctx.author.id)]['coins']:,} pièces")
+                      f"{economy_data[str(m.id)]['coins']:,} pièces")
     return e
 
 @bot.command(name="acheter")
@@ -16591,12 +16642,26 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "7.8.0"
+BOT_VERSION = "7.8.1"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "7.8.1": {
+   "titre": "Correctif d'achat 🛒",
+   "ajouts": [],
+   "correctifs": [
+     "🛒 **Un achat depuis le bouton du panier pouvait débiter les pièces sans "
+     "rien livrer.** Une erreur s'affichait, le solde baissait, et l'objet "
+     "n'arrivait jamais. C'est corrigé.",
+     "💰 **Le remboursement est désormais garanti.** Si quoi que ce soit échoue "
+     "après le débit, les pièces reviennent intégralement et le panier reste "
+     "en place.",
+     "🖱️ Deux clics rapides sur Acheter ne produisent qu'un seul achat, et le "
+     "second clic te dit clairement que c'est déjà passé.",
+   ],
+ },
  "7.8.0": {
    "titre": "BOUTIQUE 2.0 🛍️",
    "ajouts": [
