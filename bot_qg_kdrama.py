@@ -1246,6 +1246,12 @@ def build_help_pages(guild, is_admin=False):
         "`.crash <mise>` — Encaisse avant la rupture\n"
         "`.higherlower <mise>` — Plus haute ou plus basse ? *(alias `.hl`)*"
     ), inline=False)
+    e.add_field(name="🛍️ Boutique", value=(
+        "`.shop` — Rayons, panier, favoris, possessions 🛒\n"
+        "`.shop <article>` — La fiche complète d'un article\n"
+        "`.acheter <id>` — Achat direct, sans passer par le panier\n"
+        "`.macustom` — Personnaliser ton profil ⚙️"
+    ), inline=False)
     pages.append(("💰", "Économie", e))
 
     # ══════════════ 4 — GACHA ══════════════
@@ -1728,6 +1734,15 @@ GUIDE_PAGES = [
         "`.travailler` — gagner des pièces",
         "`.banque` — mettre de côté *(avec intérêts)*",
         "`.boutique` — dépenser",
+     ]),
+    ("shop", "🛍️", "Boutique", "🛍️  BOUTIQUE",
+     ("Des rayons, une fiche par article, un panier et des favoris.\n"
+      "Tu remplis, tu regardes le total, tu achètes quand tu veux — "
+      "aucune pièce n'est réservée avant."), [
+        "`.shop` — entrer dans la boutique",
+        "`.shop <article>` — voir une fiche",
+        "`.macustom` — équiper et régler ton profil",
+        "`.cadeau @membre` — offrir à quelqu'un",
      ]),
     ("casino", "🎰", "Casino", "🎰  CASINO",
      ("Cinq jeux, cinq façons de perdre ses pièces.\n"
@@ -3444,7 +3459,7 @@ SHOP_ITEMS = [
     {"id": "fav_slot_10",  "nom": "🔓 Slots Favoris (10)", "prix": 15000, "cat": "gacha_boost", "description": "Passe ta limite de cartes favorites à 10 (nécessite le slot 5)"},
     {"id": "claim_10",     "nom": "⚡ Claim 10 min",        "prix": 20000, "cat": "gacha_boost", "description": "Réduit ton cooldown de claim à 10 min — permanent"},
     {"id": "fav_slot_5",   "nom": "🔓 Slots Favoris (5)",   "prix": 5000, "cat": "gacha_boost", "description": "Passe ta limite de cartes favorites de 3 à 5"},
-    {"id": "boost_rarete", "nom": "🎯 Boost Rareté",        "prix": 3500, "cat": "gacha_boost", "description": "Chances Épique+ fortement augmentées pour 5 rolls", "daily": True},
+    {"id": "boost_rarete", "nom": "🎯 Boost Rareté",        "prix": 3500, "cat": "gacha_boost", "description": "Tes **5 prochains rolls** : Commun bien plus rares, Épique et Légendaire nettement plus fréquents", "daily": True},
     {"id": "claim_15",     "nom": "⚡ Claim 15 min",        "prix": 12000, "cat": "gacha_boost", "description": "Réduit ton cooldown de claim à 15 min — permanent"},
     {"id": "cadeau",       "nom": "🎁 Cadeau Mystère",      "prix": 6000,  "cat": "gacha_boost", "description": "Une carte surprise : 78 % Rare · 19 % Épique · 2,8 % Légendaire · **0,2 % Mythique**"},
     {"id": "claim_20",     "nom": "⚡ Claim 20 min",        "prix": 6000,  "cat": "gacha_boost", "description": "Réduit ton cooldown de claim à 20 min — permanent"},
@@ -3961,6 +3976,11 @@ RARETE_POIDS = {
     "Commun":     6690,
 }
 
+# 🎯 Boost Rareté : facteurs appliqués aux poids pendant les 5 rolls.
+# Les Commun restent possibles, mais nettement plus rares.
+BOOST_RARETE_POIDS = {"Commun": 0.14, "Rare": 1.6, "Épique": 6.0,
+                      "Légendaire": 7.0, "Mythique": 5.0}
+
 def gacha_tirer(uid=None):
     """Tire une carte aléatoire selon les probabilités"""
     pool = get_obtainable_card_pool()
@@ -3970,14 +3990,23 @@ def gacha_tirer(uid=None):
         communs = [k for k in pool if ANIME_CARDS_DB[k]["rarete"] == "Commun"]
         if communs:
             return random.choice(communs)
-    # Si boost rareté actif
-    if uid and rarity_boost.get(uid, 0) > 0:
-        rare_pool = [k for k in pool if ANIME_CARDS_DB[k]["rarete"] in ("Rare","Épique","Légendaire","Mythique")]
-        if rare_pool and random.random() < 0.4:
-            rarity_boost[uid] -= 1
-            return random.choice(rare_pool)
-    # Nuit de Chasse : Mythique ×3 et Légendaire ×2
+    # ── 🎯 Boost Rareté ──
+    # Avant : 40 % de chance de forcer un tirage UNIFORME parmi les Rare+,
+    # et la charge n'était consommée qu'à ce moment-là. Deux conséquences :
+    #   · « 5 rolls » durait en moyenne 12,5 rolls
+    #   · une Mythique devenait aussi probable qu'une Rare (×4 218)
+    # Maintenant : une charge par roll, toujours, et les poids sont
+    # repondérés — les Commun se raréfient sans que les Mythiques explosent.
+    boost_actif = bool(uid and rarity_boost.get(uid, 0) > 0)
+    if boost_actif:
+        rarity_boost[uid] -= 1
+        if rarity_boost[uid] <= 0:
+            rarity_boost.pop(uid, None)
     poids = dict(RARETE_POIDS)
+    if boost_actif:
+        for r, f in BOOST_RARETE_POIDS.items():
+            poids[r] = max(1, int(poids[r] * f))
+    # Nuit de Chasse : Mythique ×3 et Légendaire ×2
     if nuit_chasse_active:
         poids["Mythique"] *= 3
         poids["Légendaire"] *= 2
@@ -4728,10 +4757,16 @@ async def ga_cmd(ctx):
     try: missions_progress[uid]["rolls"] += 1
     except: pass
     if aimant_actif.pop(uid, None):
+        # Tirage PONDÉRÉ parmi les Rare+ : un choix uniforme rendait une
+        # Mythique aussi probable qu'une Rare.
         pool_rare = [k for k, cc in ANIME_CARDS_DB.items()
                      if k not in RETIRED_CARD_MAP
                      if cc["rarete"] in ("Rare", "Épique", "Légendaire", "Mythique")]
-        key = random.choice(pool_rare) if pool_rare else gacha_tirer(uid)
+        if pool_rare:
+            poids_r = [RARETE_POIDS[ANIME_CARDS_DB[k]["rarete"]] for k in pool_rare]
+            key = random.choices(pool_rare, weights=poids_r, k=1)[0]
+        else:
+            key = gacha_tirer(uid)
     else:
         key = gacha_tirer(uid)
     c = ANIME_CARDS_DB[key]
@@ -6259,41 +6294,637 @@ async def retirerole_cmd(ctx):
         color=0xff6b9d)
     await ctx.send(embed=embed, view=RetireRoleView(ctx.author, possedes))
 
-@bot.command(name="shop", aliases=["boutique", "magasin"])
-async def shop_cmd(ctx):
-    """Boutique — .shop"""
-    if SALON_BOUTIQUE_ID and ctx.channel.id != SALON_BOUTIQUE_ID:
-        salon = ctx.guild.get_channel(SALON_BOUTIQUE_ID)
-        mention = salon.mention if salon else "le salon boutique"
-        return await ctx.send(f"🛒 Boutique dans {mention} !", delete_after=5)
-    pages = build_shop_pages()
-    if not pages:
-        return await ctx.send("❌ Boutique vide !")
-    view = PageView(pages, ctx.author, timeout=120) if len(pages) > 1 else None
-    await ctx.send(embed=pages[0], view=view)
+# ── 🏪 HABILLAGE — un pack saisonnier peut tout remplacer ici ──
+# Aucun mois n'est codé en dur : la Boutique lit AKARI_MODE, rien d'autre.
+BOUTIQUE_HABILLAGE = {
+    "normal": {
+        "titre": "🛍️  BOUTIQUE AKARI",
+        "intro": "Tout ce qui se vend au QG. Prends ton temps.",
+        "couleur": 0xe91e63,
+        "separateur": "─" * 18,
+        "image": None,
+        "label_une": "✨ À LA UNE",
+        "label_selection": "🪟 SÉLECTION DE LA SEMAINE",
+        "collection": None,     # un pack peut mettre en avant une collection
+    },
+}
 
-@bot.command(name="acheter")
-async def acheter_cmd(ctx, item_id: str = None):
-    """Acheter un item — .acheter <id>"""
-    if not item_id: return await ctx.send("❌ `.acheter <id>` — Consulte `.shop`")
+def boutique_habillage():
+    h = dict(BOUTIQUE_HABILLAGE["normal"])
+    h.update(BOUTIQUE_HABILLAGE.get(AKARI_MODE, {}))
+    return h
+
+@bot.command(name="shop", aliases=["boutique", "magasin"])
+async def shop_cmd(ctx, recherche: str = None):
+    """La Boutique du QG — .shop [article]"""
+    if SALON_BOUTIQUE_ID and ctx.channel.id != SALON_BOUTIQUE_ID:
+        salon = ctx.guild.get_channel(SALON_BOUTIQUE_ID) if ctx.guild else None
+        if salon:
+            return await ctx.send(f"🛍️ La boutique se tient dans {salon.mention} !",
+                                  delete_after=10)
     uid = str(ctx.author.id)
-    iid_low = item_id.lower()
-    item = next((i for i in SHOP_ITEMS if i["id"] == iid_low), None)
-    if not item and iid_low in PETS_DB:
-        p = PETS_DB[iid_low]
-        item = {"id": iid_low, "nom": f"{p['emoji']} {p['nom']}",
-                "prix": PETS_PRIX[p["rarete"]], "cat": "pets", "description": p["desc"]}
-    if not item: return await ctx.send(f"❌ Item `{item_id}` introuvable ! Consulte `.shop`")
-    if economy_data[uid]["coins"] < item["prix"]:
-        return await ctx.send(f"❌ Il te manque **{item['prix']-economy_data[uid]['coins']} pièces** !")
+    H = boutique_habillage()
+
+    # ── Fiches ──
+    def fiche(iid):
+        it = boutique_item(iid)
+        if not it:
+            return discord.Embed(description="❌ Cet article n'existe plus.", color=0xe74c3c)
+        typ = boutique_type(iid)
+        emo, ray, _c, _d = BOUTIQUE_RAYONS[boutique_rayon_de(it.get("cat"))]
+        e = discord.Embed(title=it["nom"],
+                          description=it.get("description") or "*Pas de description.*",
+                          color=H["couleur"])
+        e.add_field(name="🏷️ Rayon", value=f"{emo} {ray}", inline=True)
+        e.add_field(name="💰 Prix", value=f"**{it['prix']:,}** pièces", inline=True)
+        e.add_field(name="📦 Type",
+                    value={"cosmetique": "Cosmétique", "permanent": "Permanent",
+                           "consommable": "Consommable"}[typ], inline=True)
+        if typ == "consommable":
+            n = inventaire[uid].get(iid, 0)
+            if n:
+                e.add_field(name="🎒 Tu en as", value=f"**{n}**", inline=True)
+        else:
+            e.add_field(name="🎒 Possession",
+                        value="✅ Possédé" if boutique_possede(uid, iid) else "🔒 Non possédé",
+                        inline=True)
+        if it.get("daily"):
+            e.add_field(name="⏳ Limite", value="1 achat par jour", inline=True)
+        for ccle, (cemo, cnom, ids, _cd) in BOUTIQUE_COLLECTIONS.items():
+            if iid in ids:
+                ok = sum(1 for x in ids if boutique_possede(uid, x))
+                e.add_field(name="📦 Collection",
+                            value=f"{cemo} **{cnom}** — {ok}/{len(ids)}", inline=False)
+        if boutique_est_nouveau(iid):
+            e.set_author(name="🆕 NOUVEAU")
+        e.set_footer(text=f"`.acheter {iid}` pour l'acheter directement")
+        return e
+
+    def emb_accueil():
+        nb, tot = panier_total(uid)
+        e = discord.Embed(title=H["titre"],
+                          description=f"*{H['intro']}*\n\n"
+                                      f"💰 Solde : **{economy_data[uid]['coins']:,} pièces**",
+                          color=H["couleur"])
+        if H.get("image"):
+            e.set_image(url=H["image"])
+        une = boutique_une()
+        if une:
+            e.add_field(name=H["label_une"],
+                        value=f"{une['nom']} — **{une['prix']:,}**\n"
+                              f"*{une.get('description','')}*", inline=False)
+        nouv = [i for i in SHOP_ITEMS if boutique_est_nouveau(i["id"])]
+        if nouv:
+            e.add_field(name="🆕 NOUVEAUTÉS",
+                        value=" · ".join(i["nom"] for i in nouv[:4]), inline=False)
+        pop = ventes_populaires(3)
+        if pop:
+            e.add_field(
+                name="🔥 POPULAIRE AU QG",
+                value="\n".join(
+                    f"{boutique_item(i)['nom']} — **{n}** achat{'s' if n > 1 else ''}"
+                    for i, n in pop), inline=False)
+        sel = boutique_selection()
+        if sel:
+            e.add_field(name=H["label_selection"],
+                        value="\n".join(f"{i['nom']} — **{i['prix']:,}**" for i in sel),
+                        inline=False)
+        e.add_field(name="🛒 Panier",
+                    value=(f"**{nb}** article(s) · **{tot:,}** pièces" if nb
+                           else "*vide*"), inline=False)
+        e.set_footer(text="Choisis un rayon ci-dessous  ·  `.shop <article>` pour une fiche")
+        return e
+
+    def emb_rayon(cle):
+        emo, nom, _cats, desc = BOUTIQUE_RAYONS[cle]
+        arts = boutique_articles(cle)
+        e = discord.Embed(title=f"{emo}  {nom.upper()}", description=f"*{desc}*",
+                          color=H["couleur"])
+        for it in arts[:12]:
+            marques = []
+            if boutique_est_nouveau(it["id"]): marques.append("🆕")
+            if boutique_type(it["id"]) != "consommable" and boutique_possede(uid, it["id"]):
+                marques.append("✅")
+            if it["id"] in favoris_get(uid): marques.append("❤️")
+            e.add_field(name=f"{it['nom']} {' '.join(marques)}".strip(),
+                        value=f"**{it['prix']:,}** · `{it['id']}`", inline=True)
+        if len(arts) > 12:
+            e.set_footer(text=f"+{len(arts)-12} autres — `.shop <id>` pour une fiche")
+        else:
+            e.set_footer(text="`.shop <id>` pour la fiche complète d'un article")
+        return e
+
+    def emb_panier():
+        lignes = panier_lignes(uid)
+        nb, tot = panier_total(uid)
+        e = discord.Embed(title="🛒  TON PANIER", color=H["couleur"])
+        if not lignes:
+            e.description = "*Ton panier est vide.*\n\nParcours les rayons pour le remplir."
+            return e
+        corps = []
+        for it, q, st, pb in lignes:
+            q_txt = f" ×{q}" if q > 1 else ""
+            alerte = f"  ⚠️ *{pb}*" if pb else ""
+            corps.append(f"{it['nom']}{q_txt} — **{st:,}**{alerte}")
+        e.description = ("\n".join(corps) + f"\n{H['separateur']}\n"
+                         f"**TOTAL : {tot:,} pièces**\n"
+                         f"💰 Ton solde : {economy_data[uid]['coins']:,}")
+        if tot > economy_data[uid]["coins"]:
+            e.set_footer(text=f"Il te manque {tot - economy_data[uid]['coins']:,} pièces")
+        else:
+            e.set_footer(text=f"{nb} article(s) — aucune pièce n'est réservée avant l'achat")
+        return e
+
+    def emb_favoris():
+        f = favoris_get(uid)
+        e = discord.Embed(title="❤️  MES FAVORIS", color=H["couleur"])
+        if not f:
+            e.description = ("*Aucun favori.*\n\nOuvre la fiche d'un article "
+                             "et mets-le de côté pour plus tard.")
+            return e
+        corps = []
+        for iid in f:
+            it = boutique_item(iid)
+            if it:
+                corps.append(f"{it['nom']} — **{it['prix']:,}** · `{iid}`")
+            else:
+                corps.append(f"`{iid}` — *n'est plus disponible*")
+        e.description = "\n".join(corps)
+        e.set_footer(text="Un favori ne réserve rien — c'est juste une envie")
+        return e
+
+    def emb_collections():
+        e = discord.Embed(title="📦  COLLECTIONS",
+                          description="*Des ensembles à réunir. Aucun bonus — "
+                                      "juste le plaisir de compléter.*",
+                          color=H["couleur"])
+        for _cle, (cemo, cnom, ids, cdesc) in BOUTIQUE_COLLECTIONS.items():
+            lignes = []
+            ok = 0
+            for iid in ids:
+                it = boutique_item(iid)
+                if not it:
+                    continue
+                a = boutique_possede(uid, iid)
+                ok += 1 if a else 0
+                lignes.append(f"{'✅' if a else '🔒'} {it['nom']}")
+            e.add_field(name=f"{cemo} {cnom} — {ok}/{len(ids)}",
+                        value=f"*{cdesc}*\n" + "\n".join(lignes), inline=False)
+        return e
+
+    def emb_possessions():
+        e = discord.Embed(title="🎒  MES POSSESSIONS", color=H["couleur"])
+        cosmo = profil_custom.get(uid, {})
+        poss = [iid for iid in BOUTIQUE_COSMETIQUES if boutique_possede(uid, iid)]
+        e.add_field(name=f"🎨 Cosmétiques — {len(poss)}",
+                    value=" · ".join(f"`{x}`" for x in poss) or "*aucun*", inline=False)
+        conso = {k: v for k, v in inventaire[uid].items() if v > 0 and boutique_item(k)}
+        e.add_field(name=f"🎒 Consommables — {len(conso)}",
+                    value=("\n".join(f"{boutique_item(k)['nom']} ×**{v}**"
+                                     for k, v in list(conso.items())[:10])
+                           or "*aucun*"), inline=False)
+        eq = []
+        if cosmo.get("theme"):    eq.append(f"🎨 Thème `{cosmo['theme']}`")
+        if cosmo.get("banniere"): eq.append("🏳️ Bannière personnalisée")
+        if titre_affiche(uid):    eq.append(f"👑 {titre_affiche(uid)}")
+        if pins_affiches(uid):    eq.append(f"📌 {len(pins_affiches(uid))} pin(s)")
+        e.add_field(name="✨ Équipé actuellement",
+                    value="\n".join(eq) or "*rien pour l'instant*", inline=False)
+        e.set_footer(text="`.macustom` pour gérer tout ça")
+        return e
+
+    # ── Vue ──
+    class ShopView(ui.View):
+        def __init__(self, page="accueil", article=None):
+            super().__init__(timeout=300)
+            self.page = page
+            self.article = article
+            self._build()
+
+        async def interaction_check(self, itx):
+            if str(itx.user.id) != uid:
+                await itx.response.send_message(
+                    "Ouvre ta propre boutique avec `.shop`.", ephemeral=True)
+                return False
+            return True
+
+        def embed(self):
+            if self.page == "fiche" and self.article: return fiche(self.article)
+            if self.page == "panier":       return emb_panier()
+            if self.page == "favoris":      return emb_favoris()
+            if self.page == "collections":  return emb_collections()
+            if self.page == "possessions":  return emb_possessions()
+            if self.page in BOUTIQUE_RAYONS: return emb_rayon(self.page)
+            return emb_accueil()
+
+        async def refresh(self, itx):
+            self._build()
+            await itx.response.edit_message(embed=self.embed(), view=self)
+
+        def _build(self):
+            self.clear_items()
+            # Rayon ou article
+            if self.page == "fiche" and self.article:
+                self._fiche_boutons()
+            else:
+                opts = [discord.SelectOption(label=n, emoji=e, value=k, description=d[:95])
+                        for k, (e, n, _c, d) in BOUTIQUE_RAYONS.items()]
+                sel = ui.Select(placeholder="🏪 Choisir un rayon…", options=opts, row=0)
+                async def cb(itx):
+                    self.page = sel.values[0]; self.article = None
+                    await self.refresh(itx)
+                sel.callback = cb
+                self.add_item(sel)
+                arts = boutique_articles(self.page) if self.page in BOUTIQUE_RAYONS else []
+                if arts:
+                    o2 = [discord.SelectOption(label=i["nom"][:100], value=i["id"],
+                                               description=f"{i['prix']:,} pièces")
+                          for i in arts[:25]]
+                    s2 = ui.Select(placeholder="🏷️ Voir un article…", options=o2, row=1)
+                    async def cb2(itx):
+                        self.article = s2.values[0]; self.page = "fiche"
+                        await self.refresh(itx)
+                    s2.callback = cb2
+                    self.add_item(s2)
+            nb, _t = panier_total(uid)
+            self._nav(nb)
+
+        def _nav(self, nb):
+            r = 3
+            b = ui.Button(label="Accueil", emoji="🏪", row=r,
+                          style=discord.ButtonStyle.secondary)
+            async def home(itx):
+                self.page, self.article = "accueil", None
+                await self.refresh(itx)
+            b.callback = home; self.add_item(b)
+            b = ui.Button(label=f"Panier ({nb})" if nb else "Panier", emoji="🛒", row=r,
+                          style=discord.ButtonStyle.primary if nb else discord.ButtonStyle.secondary)
+            async def pan(itx):
+                self.page, self.article = "panier", None
+                await self.refresh(itx)
+            b.callback = pan; self.add_item(b)
+            b = ui.Button(label="Favoris", emoji="❤️", row=r, style=discord.ButtonStyle.secondary)
+            async def fav(itx):
+                self.page, self.article = "favoris", None
+                await self.refresh(itx)
+            b.callback = fav; self.add_item(b)
+            b = ui.Button(label="Possessions", emoji="🎒", row=r,
+                          style=discord.ButtonStyle.secondary)
+            async def pos(itx):
+                self.page, self.article = "possessions", None
+                await self.refresh(itx)
+            b.callback = pos; self.add_item(b)
+            b = ui.Button(label="Collections", emoji="📦", row=r,
+                          style=discord.ButtonStyle.secondary)
+            async def col(itx):
+                self.page, self.article = "collections", None
+                await self.refresh(itx)
+            b.callback = col; self.add_item(b)
+            if self.page == "panier" and nb:
+                self._panier_boutons()
+
+        def _panier_boutons(self):
+            _n, tot = panier_total(uid)
+            assez = economy_data[uid]["coins"] >= tot
+            b = ui.Button(label=f"Acheter ({tot:,})", emoji="💳", row=2,
+                          style=discord.ButtonStyle.success, disabled=not assez)
+            async def buy(itx):
+                ok, achetes, total, err = await boutique_checkout(itx, uid)
+                if not ok:
+                    return await itx.response.send_message(f"❌ {err}", ephemeral=True)
+                self.page = "accueil"; self._build()
+                await itx.response.edit_message(embed=self.embed(), view=self)
+                await itx.followup.send(embed=ticket_embed(itx, achetes, total))
+            b.callback = buy; self.add_item(b)
+            b = ui.Button(label="Vider", emoji="🗑️", row=2, style=discord.ButtonStyle.danger)
+            async def clr(itx):
+                panier_vider(uid); save_all_data()
+                await self.refresh(itx)
+            b.callback = clr; self.add_item(b)
+            lignes = panier_lignes(uid)
+            if lignes:
+                o = [discord.SelectOption(label=f"Retirer {it['nom']}"[:100], value=it["id"])
+                     for it, _q, _s, _p in lignes[:25]]
+                s = ui.Select(placeholder="🗑️ Retirer un article…", options=o, row=1)
+                async def cb(itx):
+                    panier_retirer(uid, s.values[0]); save_all_data()
+                    await self.refresh(itx)
+                s.callback = cb; self.add_item(s)
+
+        def _fiche_boutons(self):
+            iid = self.article
+            it = boutique_item(iid)
+            typ = boutique_type(iid)
+            possede = typ != "consommable" and boutique_possede(uid, iid)
+            r = 0
+            if not possede:
+                b = ui.Button(label="Ajouter au panier", emoji="🛒", row=r,
+                              style=discord.ButtonStyle.success)
+                async def add(itx):
+                    ok, msg = panier_ajouter(uid, iid)
+                    save_all_data()
+                    self._build()
+                    await itx.response.edit_message(embed=self.embed(), view=self)
+                    await itx.followup.send(("🛒 " if ok else "❌ ") + msg, ephemeral=True)
+                b.callback = add; self.add_item(b)
+                if typ == "consommable":
+                    for lab, n in (("+1", 1), ("+5", 5)):
+                        b = ui.Button(label=lab, row=r, style=discord.ButtonStyle.secondary)
+                        async def more(itx, k=n):
+                            ok, msg = panier_ajouter(uid, iid, k)
+                            save_all_data(); self._build()
+                            await itx.response.edit_message(embed=self.embed(), view=self)
+                            await itx.followup.send(("🛒 " if ok else "❌ ") + msg,
+                                                    ephemeral=True)
+                        b.callback = more; self.add_item(b)
+            est_fav = iid in favoris_get(uid)
+            b = ui.Button(label="Retirer des favoris" if est_fav else "Favori",
+                          emoji="💔" if est_fav else "❤️", row=1,
+                          style=discord.ButtonStyle.secondary)
+            async def favb(itx):
+                _e, msg = favoris_bascule(uid, iid); save_all_data()
+                self._build()
+                await itx.response.edit_message(embed=self.embed(), view=self)
+                await itx.followup.send("❤️ " + msg, ephemeral=True)
+            b.callback = favb; self.add_item(b)
+            if iid in BOUTIQUE_COSMETIQUES:
+                b = ui.Button(label="Aperçu", emoji="👁️", row=1,
+                              style=discord.ButtonStyle.secondary)
+                async def prev(itx):
+                    # Aperçu : rendu temporaire, aucune écriture.
+                    await itx.response.send_message(
+                        embed=profil_apercu(itx.user, {iid: True}), ephemeral=True)
+                b.callback = prev; self.add_item(b)
+            if iid not in BOUTIQUE_NON_OFFRABLES:
+                b = ui.Button(label="Offrir", emoji="🎁", row=1,
+                              style=discord.ButtonStyle.secondary)
+                async def offr(itx):
+                    await itx.response.send_message(
+                        f"🎁 Pour offrir **{it['nom']}**, achète-le puis utilise "
+                        f"`.cadeau @membre <montant>` — ou offre directement des "
+                        f"pièces pour qu'il choisisse.", ephemeral=True)
+                b.callback = offr; self.add_item(b)
+
+    if recherche:
+        r = recherche.lower().strip()
+        it = boutique_item(r) or next(
+            (i for i in SHOP_ITEMS if normalize_str(recherche) in normalize_str(i["nom"])), None)
+        if not it:
+            return await ctx.send(embed=discord.Embed(
+                description=f"❌ Aucun article ne correspond à `{recherche}`.\n"
+                            f"*`.shop` pour parcourir les rayons.*", color=0xe74c3c))
+        v = ShopView("fiche", it["id"])
+        return await ctx.send(embed=v.embed(), view=v)
+    v = ShopView()
+    await ctx.send(embed=v.embed(), view=v)
+
+# ============================================================
+#  🛍️ BOUTIQUE 2.0 — socle
+#  SHOP_ITEMS reste la source de vérité des articles (id, nom, prix,
+#  cat, description). On ajoute AUTOUR une couche de métadonnées :
+#  aucun article existant n'est modifié ni déplacé.
+# ============================================================
+BOUTIQUE_SCHEMA = 1
+PANIER_EXPIRATION = 72 * 3600   # 3 jours : assez pour revenir le week-end,
+                                # assez court pour que les prix restent valables
+PANIER_MAX_LIGNES = 12
+PANIER_QTE_MAX = 10
+VENTES_FENETRE = 7 * 86400
+NOUVEAU_DUREE = 21 * 86400
+
+# Rayons : regroupent les catégories RÉELLES de SHOP_ITEMS.
+BOUTIQUE_RAYONS = {
+    "perso":   ("🎨", "Personnalisation", ("cosmetique",),
+                "Thèmes, bannières, citations — ton profil te ressemble."),
+    "roles":   ("🎭", "Rôles",            ("role",),
+                "Une couleur bien à toi dans la liste des membres."),
+    "gacha":   ("🎴", "Gacha",            ("gacha_boost", "gacha_pvp", "gacha_def"),
+                "Rolls, boosts et coups tordus entre collectionneurs."),
+    "girly":   ("💅", "Girls Only",       ("girly",),
+                "Le rayon réservé au salon Girls Only."),
+    "divers":  ("📦", "Divers",           ("divers",),
+                "Tout ce qui ne rentrait nulle part ailleurs."),
+}
+
+# Types : ce qui détermine les boutons proposés sur une fiche.
+#   permanent   → possédé ou non, jamais deux fois
+#   consommable → empilable, quantité libre
+#   cosmetique  → permanent + équipable
+BOUTIQUE_COSMETIQUES = {"badge", "couleur", "citation", "banniere", "cadre", "titre",
+                        "emojiperso", "theme"}
+# Les rôles sont permanents : on ne rachète pas une couleur qu'on porte déjà.
+BOUTIQUE_ROLES = {i["id"] for i in SHOP_ITEMS if i.get("cat") == "role"}
+BOUTIQUE_PERMANENTS = (BOUTIQUE_COSMETIQUES | BOUTIQUE_ROLES
+                       | {"fav_slot_5", "fav_slot_10", "tirelire"})
+# Un cosmétique ou un rôle s'applique au compte : il ne se transmet pas.
+BOUTIQUE_NON_OFFRABLES = BOUTIQUE_PERMANENTS
+
+# Collections : uniquement des regroupements que le catalogue justifie déjà.
+BOUTIQUE_COLLECTIONS = {
+    "profil": ("🎨", "Panoplie du Profil",
+               ["theme", "banniere", "citation", "emojiperso", "badge", "titre"],
+               "Tout ce qui rend ton profil unique."),
+    "chance": ("🍀", "Superstitions",
+               ["trefle", "amulette", "oracle", "oeil"],
+               "Ceux qui y croient jurent que ça marche."),
+}
+
+# Dates d'introduction. Les articles d'origine sont volontairement absents :
+# marquer 73 articles « nouveaux » d'un coup n'aurait aucun sens.
+BOUTIQUE_INTRO = {}
+
+panier_data = {}        # {uid: {"items": {id: qte}, "maj": ts}}
+favoris_data = {}       # {uid: [id, ...]}
+ventes_data = []        # [{"i": id, "q": qte, "d": ts}] — achats FINALISÉS seulement
+boutique_verrou = set() # uid en cours de checkout
+
+def boutique_item(iid):
+    """L'article, depuis la source de vérité. None s'il n'existe plus."""
+    return next((i for i in SHOP_ITEMS if i["id"] == str(iid).lower()), None)
+
+def boutique_type(iid):
+    if iid in BOUTIQUE_COSMETIQUES: return "cosmetique"
+    if iid in BOUTIQUE_PERMANENTS:  return "permanent"
+    return "consommable"
+
+def boutique_rayon_de(cat):
+    for cle, (_e, _n, cats, _d) in BOUTIQUE_RAYONS.items():
+        if cat in cats:
+            return cle
+    return "divers"
+
+def boutique_articles(rayon):
+    cats = BOUTIQUE_RAYONS.get(rayon, (None, None, (), None))[2]
+    return [i for i in SHOP_ITEMS if i.get("cat") in cats]
+
+def boutique_possede(uid, iid):
+    """Un permanent est-il déjà acquis ? Lit les stockages existants."""
+    uid = str(uid)
+    if iid in BOUTIQUE_COSMETIQUES:
+        return bool(profil_custom.get(uid, {}).get(f"_a_{iid}")) or _cosmo_check(uid, iid)
+    if iid in ("fav_slot_5", "fav_slot_10", "tirelire"):
+        return inventaire[uid].get(iid, 0) > 0
+    if iid in BOUTIQUE_ROLES:
+        # Un rôle acheté est marqué ici : la vérification Discord se fait
+        # à l'attribution, pas à chaque affichage de fiche.
+        return inventaire[uid].get(iid, 0) > 0
+    return False
+
+def boutique_est_nouveau(iid):
+    import time as _t
+    d = BOUTIQUE_INTRO.get(iid)
+    return bool(d) and (_t.time() - d) < NOUVEAU_DUREE
+
+# ── 🛒 PANIER — aucune pièce n'est réservée à l'ajout ──
+def panier_get(uid):
+    """Panier courant. Expiration paresseuse : pas de tâche de fond."""
+    import time as _t
+    uid = str(uid)
+    p = panier_data.get(uid)
+    if not p or _t.time() - p.get("maj", 0) > PANIER_EXPIRATION:
+        p = {"items": {}, "maj": _t.time()}
+        panier_data[uid] = p
+    return p
+
+def panier_ajouter(uid, iid, qte=1):
+    """(ok, message). Ne débite rien : le solde est vu au checkout."""
+    import time as _t
+    uid, iid = str(uid), str(iid).lower()
+    it = boutique_item(iid)
+    if not it:
+        return False, "Cet article n'existe plus."
+    p = panier_get(uid)
+    typ = boutique_type(iid)
+    if typ != "consommable":
+        if boutique_possede(uid, iid):
+            return False, "Tu possèdes déjà cet article."
+        if iid in p["items"]:
+            return False, "Il est déjà dans ton panier — un seul exemplaire suffit."
+        qte = 1
+    if iid not in p["items"] and len(p["items"]) >= PANIER_MAX_LIGNES:
+        return False, f"Ton panier est plein ({PANIER_MAX_LIGNES} articles)."
+    nouvelle = p["items"].get(iid, 0) + max(1, int(qte))
+    if typ == "consommable" and nouvelle > PANIER_QTE_MAX:
+        return False, f"Maximum **{PANIER_QTE_MAX}** exemplaires par article."
+    p["items"][iid] = 1 if typ != "consommable" else nouvelle
+    p["maj"] = _t.time()
+    return True, f"**{it['nom']}** ajouté au panier."
+
+def panier_retirer(uid, iid, tout=True, qte=1):
+    import time as _t
+    uid, iid = str(uid), str(iid).lower()
+    p = panier_get(uid)
+    if iid not in p["items"]:
+        return False
+    if tout or p["items"][iid] <= qte:
+        p["items"].pop(iid)
+    else:
+        p["items"][iid] -= qte
+    p["maj"] = _t.time()
+    return True
+
+def panier_vider(uid):
+    import time as _t
+    panier_data[str(uid)] = {"items": {}, "maj": _t.time()}
+
+def panier_total(uid):
+    """(nombre de lignes, total en pièces). Prix relus du catalogue."""
+    p = panier_get(uid)
+    total = 0
+    for iid, q in p["items"].items():
+        it = boutique_item(iid)
+        if it:
+            total += it["prix"] * q
+    return len(p["items"]), total
+
+def panier_lignes(uid):
+    """[(item, qte, sous_total, probleme_ou_None)] — état réel à l'instant T."""
+    out = []
+    for iid, q in panier_get(uid)["items"].items():
+        it = boutique_item(iid)
+        if not it:
+            out.append(({"id": iid, "nom": f"`{iid}`", "prix": 0}, q, 0,
+                        "n'existe plus au catalogue"))
+            continue
+        pb = None
+        if boutique_type(iid) != "consommable" and boutique_possede(uid, iid):
+            pb = "tu le possèdes déjà"
+        out.append((it, q, it["prix"] * q, pb))
+    return out
+
+# ── ❤️ FAVORIS — ne bloquent jamais de pièces ──
+def favoris_get(uid):
+    return favoris_data.setdefault(str(uid), [])
+
+def favoris_bascule(uid, iid):
+    """(est_favori_maintenant, message)."""
+    iid = str(iid).lower()
+    f = favoris_get(uid)
+    if iid in f:
+        f.remove(iid)
+        return False, "Retiré de tes favoris."
+    if not boutique_item(iid):
+        return False, "Cet article n'existe plus."
+    if len(f) >= 25:
+        return False, "Tu as déjà 25 favoris — fais le tri."
+    f.append(iid)
+    return True, "Ajouté à tes favoris."
+
+# ── 🔥 VENTES — uniquement des achats finalisés ──
+def vente_noter(iid, qte=1):
+    import time as _t
+    ventes_data.append({"i": str(iid), "q": int(qte), "d": _t.time()})
+    if len(ventes_data) > 4000:
+        del ventes_data[:len(ventes_data) - 4000]
+
+def ventes_populaires(n=3):
+    """Les articles les plus achetés sur 7 jours. Liste vide si aucune vente."""
+    import time as _t
+    limite = _t.time() - VENTES_FENETRE
+    compte = {}
+    for v in ventes_data:
+        if v["d"] >= limite and boutique_item(v["i"]):
+            compte[v["i"]] = compte.get(v["i"], 0) + v["q"]
+    return sorted(compte.items(), key=lambda x: (-x[1], x[0]))[:n]
+
+def boutique_semaine():
+    import time as _t
+    return int((_t.time() + ACT_TZ * 3600) // 86400 + 4) // 7
+
+def boutique_selection(n=4):
+    """Sélection hebdomadaire : stable toute la semaine, déterministe,
+    variée en rayons. N'empêche jamais d'acheter les autres articles."""
+    import hashlib
+    rng = random.Random(int(hashlib.md5(f"sel{boutique_semaine()}".encode())
+                            .hexdigest()[:8], 16))
+    par_rayon = {}
+    for it in SHOP_ITEMS:
+        par_rayon.setdefault(boutique_rayon_de(it.get("cat")), []).append(it)
+    rayons = sorted(par_rayon)
+    rng.shuffle(rayons)
+    out = []
+    for r in rayons:
+        if len(out) >= n:
+            break
+        out.append(rng.choice(sorted(par_rayon[r], key=lambda x: x["id"])))
+    return out
+
+def boutique_une():
+    """L'article à la une : stable sur la semaine, distinct de la sélection."""
+    import hashlib
+    rng = random.Random(int(hashlib.md5(f"une{boutique_semaine()}".encode())
+                            .hexdigest()[:8], 16))
+    sel = {i["id"] for i in boutique_selection()}
+    cands = sorted((i for i in SHOP_ITEMS if i["id"] not in sel), key=lambda x: x["id"])
+    return rng.choice(cands) if cands else None
+
+async def boutique_effet(ctx, uid, item):
+    """Applique l'effet d'un article DÉJÀ payé.
+
+    Extrait tel quel de `.acheter` pour que le checkout du panier applique
+    exactement les mêmes effets — une seule chaîne, pas deux qui divergent.
+    Le débit est de la responsabilité de l'appelant."""
     now = _time_module.time()
-    if item.get("daily"):
-        last = daily_item_usage[uid].get(item["id"], 0)
-        if now - last < 86400:
-            h = int((86400-(now-last))//3600)
-            return await ctx.send(f"⏳ Limité 1x/jour ! Disponible dans **{h}h**")
-        daily_item_usage[uid][item["id"]] = now
-    economy_data[uid]["coins"] -= item["prix"]
     iid = item["id"]
     if iid in ROLES_BOUTIQUE:
         nom_role, couleur_role = ROLES_BOUTIQUE[iid]
@@ -6620,6 +7251,113 @@ async def acheter_cmd(ctx, item_id: str = None):
             color=0x2ecc71))
 
     await ctx.send(embed=discord.Embed(title="🛒 Achat réussi !", description=f"✅ **{item['nom']}** acheté !", color=0x2ecc71))
+
+# ── 💳 CHECKOUT ATOMIQUE ──
+class _CheckoutStub:
+    """Reçoit les messages de boutique_effet pendant un achat groupé.
+    Sans lui, chaque article enverrait son propre embed de confirmation :
+    le ticket de caisse remplace ces douze messages."""
+    def __init__(self, ctx, uid):
+        self.author = ctx.author
+        self.guild = ctx.guild
+        self.channel = ctx.channel
+        self.uid = uid
+        self.captures = []
+    async def send(self, *a, **k):
+        self.captures.append(k.get("embed") or (a[0] if a else ""))
+        return None
+
+async def boutique_checkout(ctx, uid):
+    """Achète tout le panier, ou rien.
+
+    Retourne (ok, lignes_achetées, total, message_erreur).
+    Séquence : verrou → relecture → prix recalculés → validations →
+    débit UNIQUE → attribution → sauvegarde → vidage → ticket.
+    Le panier n'est vidé qu'APRÈS attribution réussie."""
+    uid = str(uid)
+    if uid in boutique_verrou:
+        return False, [], 0, "Un achat est déjà en cours."
+    boutique_verrou.add(uid)
+    try:
+        lignes = panier_lignes(uid)          # relecture, prix du catalogue actuel
+        if not lignes:
+            return False, [], 0, "Ton panier est vide."
+        # Une seule ligne invalide bloque toute la commande : pas de partiel.
+        for it, _q, _st, pb in lignes:
+            if pb:
+                return False, [], 0, f"**{it['nom']}** — {pb}."
+        total = sum(st for _i, _q, st, _p in lignes)
+        if economy_data[uid]["coins"] < total:
+            manque = total - economy_data[uid]["coins"]
+            return False, [], 0, f"Il te manque **{manque:,} pièces**."
+
+        economy_data[uid]["coins"] -= total          # débit unique
+        stub = _CheckoutStub(ctx, uid)
+        achetes, echecs = [], []
+        for it, q, st, _p in lignes:
+            for _ in range(q):
+                try:
+                    await boutique_effet(stub, uid, it)
+                except Exception as e:
+                    echecs.append((it, str(e)))
+                    break
+            else:
+                achetes.append((it, q, st))
+                vente_noter(it["id"], q)
+        if echecs:
+            # Attribution incomplète : on rembourse intégralement et on garde
+            # le panier tel quel. Aucun achat partiel ne reste appliqué.
+            economy_data[uid]["coins"] += total
+            save_all_data()
+            it, err = echecs[0]
+            return False, [], 0, (f"**{it['nom']}** n'a pas pu être attribué "
+                                  f"— rien n'a été débité.")
+        for it, _q, _st in achetes:
+            panier_retirer(uid, it["id"], tout=True)   # vidage APRÈS succès
+        save_all_data()
+        return True, achetes, total, None
+    finally:
+        boutique_verrou.discard(uid)
+
+def ticket_embed(ctx, achetes, total):
+    lignes = []
+    for it, q, st in achetes:
+        q_txt = f" ×{q}" if q > 1 else ""
+        lignes.append(f"{it['nom']}{q_txt} — **{st:,}**")
+    e = discord.Embed(
+        title="🧾  BOUTIQUE AKARI",
+        description=("\n".join(lignes)
+                     + "\n" + "─" * 18
+                     + f"\n**TOTAL : {total:,} pièces**"),
+        color=0x2ecc71)
+    e.set_footer(text=f"💰 Solde restant : "
+                      f"{economy_data[str(ctx.author.id)]['coins']:,} pièces")
+    return e
+
+@bot.command(name="acheter")
+async def acheter_cmd(ctx, item_id: str = None):
+    """Acheter un item — .acheter <id>"""
+    if not item_id: return await ctx.send("❌ `.acheter <id>` — Consulte `.shop`")
+    uid = str(ctx.author.id)
+    iid_low = item_id.lower()
+    item = next((i for i in SHOP_ITEMS if i["id"] == iid_low), None)
+    if not item and iid_low in PETS_DB:
+        p = PETS_DB[iid_low]
+        item = {"id": iid_low, "nom": f"{p['emoji']} {p['nom']}",
+                "prix": PETS_PRIX[p["rarete"]], "cat": "pets", "description": p["desc"]}
+    if not item: return await ctx.send(f"❌ Item `{item_id}` introuvable ! Consulte `.shop`")
+    if economy_data[uid]["coins"] < item["prix"]:
+        return await ctx.send(f"❌ Il te manque **{item['prix']-economy_data[uid]['coins']} pièces** !")
+    now = _time_module.time()
+    if item.get("daily"):
+        last = daily_item_usage[uid].get(item["id"], 0)
+        if now - last < 86400:
+            h = int((86400-(now-last))//3600)
+            return await ctx.send(f"⏳ Limité 1x/jour ! Disponible dans **{h}h**")
+        daily_item_usage[uid][item["id"]] = now
+    economy_data[uid]["coins"] -= item["prix"]
+    return await boutique_effet(ctx, uid, item)
+
 
 # ============================================================
 #  SOCIAL — MARIAGE, ANNIVERSAIRE, AVATAR, SNIPE
@@ -13491,6 +14229,7 @@ async def profil_cmd(ctx, membre: discord.Member = None):
     uid = str(target.id)
     soi = target == ctx.author
     if soi:
+        profil_migrer_cadres(uid)          # migration silencieuse, non destructive
         for _p in verifier_pins(uid):
             await donner_pin(uid, _p, ctx.channel)
 
@@ -13501,6 +14240,7 @@ async def profil_cmd(ctx, membre: discord.Member = None):
     nb_cartes = len(gacha_collections.get(uid, {}))
     nb_succes = len(achievements_data.get(uid, set()))
     cosmo = profil_custom.get(uid, {})
+    vis = lambda b: profil_visible(uid, b)
 
     if lvl >= 50:   bord, rang, coul_r = "👑", "LÉGENDE", 0xf1c40f
     elif lvl >= 35: bord, rang, coul_r = "💎", "MYTHIQUE", 0xe74c3c
@@ -13508,23 +14248,25 @@ async def profil_cmd(ctx, membre: discord.Member = None):
     elif lvl >= 15: bord, rang, coul_r = "⭐", "CONFIRMÉ", 0x3498db
     elif lvl >= 8:  bord, rang, coul_r = "✦", "INITIÉ", 0x2ecc71
     else:           bord, rang, coul_r = "▪️", "NOUVEAU", 0x95a5a6
-    cadre = PROFIL_CADRES.get(cosmo.get("cadre"))
-    sep = cadre[2] if cadre else bord * 13
+
+    # Un seul système : le thème porte couleur ET séparateur.
+    t_nom, t_coul, t_sep = profil_theme(uid)
+    sep = t_sep or bord * 13
+    couleur = cosmo.get("couleur") or t_coul or coul_r
     signature = cosmo.get("emoji", "")
-    couleur = cosmo.get("couleur", coul_r)
     ratio = min(1.0, xp / max(needed, 1))
     barre = "▰" * int(ratio * 12) + "▱" * (12 - int(ratio * 12))
 
-    # ── En-tête : nom · titre équipé · pins équipés ──
-    titre = titre_affiche(uid) or cosmo.get("titre", "")
+    # ── En-tête ── pseudo, avatar, niveau et XP restent toujours visibles.
+    titre = (titre_affiche(uid) or cosmo.get("titre", "")) if vis("titre") else ""
     corps = [sep, f"### {signature} {target.display_name} {signature}".rstrip()]
     if titre:
         corps.append(f"**{titre}**")
     corps.append(f"{rang}  ·  Niveau **{lvl}**  ·  {get_tier(lvl)}")
-    equipes = pins_affiches(uid)
+    equipes = pins_affiches(uid) if vis("pins") else []
     if equipes:
         corps.append("　".join(PINS[p][0] for p in equipes))
-    if cosmo.get("citation"):
+    if vis("citation") and cosmo.get("citation"):
         corps.append(f"*« {cosmo['citation'][:140]} »*")
     corps.append(sep)
     corps.append(f"`{barre}`  **{xp} / {needed} XP**")
@@ -13534,34 +14276,37 @@ async def profil_cmd(ctx, membre: discord.Member = None):
                      icon_url=target.display_avatar.url)
     embed.set_thumbnail(url=target.display_avatar.url)
 
-    # ── Six stats au plus : seulement celles qui racontent quelque chose ──
-    style_emo, style_nom, _sd = ARENE_STYLES[arene_style(uid)]
-    embed.add_field(name="💰 Fortune", value=f"**{coins:,}**", inline=True)
-    embed.add_field(name="🎴 Collection", value=f"**{nb_cartes}** cartes", inline=True)
-    embed.add_field(name="🎖️ Succès", value=f"**{nb_succes}** / {len(ACHIEVEMENTS)}", inline=True)
-    embed.add_field(name="⚔️ Style", value=f"{style_emo} **{style_nom}**", inline=True)
-    depuis = getattr(target, "joined_at", None)
-    if depuis:
-        jours = max(0, (discord.utils.utcnow() - depuis).days)
-        embed.add_field(name="🕰️ Au QG",
-                        value=f"**{jours // 365} an(s)**" if jours >= 365 else f"**{jours} jour(s)**",
-                        inline=True)
+    if vis("stats"):
+        style_emo, style_nom, _sd = ARENE_STYLES[arene_style(uid)]
+        embed.add_field(name="💰 Fortune", value=f"**{coins:,}**", inline=True)
+        embed.add_field(name="🎴 Collection", value=f"**{nb_cartes}** cartes", inline=True)
+        embed.add_field(name="🎖️ Succès",
+                        value=f"**{nb_succes}** / {len(ACHIEVEMENTS)}", inline=True)
+        embed.add_field(name="⚔️ Style", value=f"{style_emo} **{style_nom}**", inline=True)
+        depuis = getattr(target, "joined_at", None)
+        if depuis:
+            jours = max(0, (discord.utils.utcnow() - depuis).days)
+            embed.add_field(
+                name="🕰️ Au QG",
+                value=f"**{jours // 365} an(s)**" if jours >= 365 else f"**{jours} jour(s)**",
+                inline=True)
     if equipes:
         embed.add_field(name="📌 Pins",
                         value="\n".join(f"{PINS[p][0]} **{PINS[p][1]}**" for p in equipes),
                         inline=True)
 
-    # ── Compagnon : l'essentiel, pas ses quatorze barres ──
-    pid, pdb, pstate = get_active_pet(uid)
-    if pid:
-        embed.add_field(
-            name="🐾 Compagnon",
-            value=(f"**{pet_nom_decore(uid, pdb)}** — {pdb.get('rarete', '')}\n"
-                   f"Niveau {pstate['level']} · évo. {pet_evolution(pstate['level'])[1]}"),
-            inline=False)
+    if vis("pet"):
+        pid, pdb, pstate = get_active_pet(uid)
+        if pid:
+            embed.add_field(
+                name="🐾 Compagnon",
+                value=(f"**{pet_nom_decore(uid, pdb)}** — {pdb.get('rarete', '')}\n"
+                       f"Niveau {pstate['level']} · évo. {pet_evolution(pstate['level'])[1]}"),
+                inline=False)
 
-    # ── Vitrine : les cartes dont on est fier, trois au plus ──
-    vit = [k for k in cosmo.get("vitrine", []) if k in ANIME_CARDS_DB][:3]
+    # ── Vitrine : concise. Elle n'occupe plus le grand visuel. ──
+    vit = [k for k in cosmo.get("vitrine", []) if k in ANIME_CARDS_DB][:3] \
+          if vis("vitrine") else []
     if vit:
         embed.add_field(
             name="🌟 Vitrine",
@@ -13569,17 +14314,20 @@ async def profil_cmd(ctx, membre: discord.Member = None):
                             f"**{ANIME_CARDS_DB[k]['nom']}** — *{ANIME_CARDS_DB[k]['serie']}*"
                             for k in vit), inline=False)
 
-    if uid in mariages and ctx.guild:
+    if vis("social") and uid in mariages and ctx.guild:
         conjoint = ctx.guild.get_member(int(mariages[uid]))
         if conjoint:
             embed.add_field(name="💍 Marié(e) à", value=conjoint.display_name, inline=True)
 
-    embed.set_footer(text="`.pins` pour la vitrine  ·  `.activite` pour l'activité"
-                     if soi else f"Profil de {target.display_name}")
-    if vit and ANIME_CARDS_DB[vit[0]].get("image"):
-        embed.set_image(url=ANIME_CARDS_DB[vit[0]]["image"])
-    await ctx.send(embed=embed)
+    # ── LE grand visuel : la bannière, et elle seule. ──
+    # La vitrine ne pose plus jamais d'image : elle écrasait la bannière,
+    # et remplir l'espace avec une carte Gacha n'a jamais été demandé.
+    if vis("banniere") and cosmo.get("banniere"):
+        embed.set_image(url=cosmo["banniere"])
 
+    embed.set_footer(text="`.macustom` pour personnaliser  ·  `.shop` pour la boutique"
+                     if soi else f"Profil de {target.display_name}")
+    await ctx.send(embed=embed)
 
 
 # ============================================================
@@ -15843,12 +16591,53 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "7.7.1"
+BOT_VERSION = "7.8.0"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "7.8.0": {
+   "titre": "BOUTIQUE 2.0 🛍️",
+   "ajouts": [
+     "🛍️ **`.shop` devient une vraie boutique** — cinq rayons, une fiche par "
+     "article, et tout se fait sans quitter le message.",
+     "🛒 **Un panier.** Tu remplis, tu vois le total, tu achètes quand tu veux. "
+     "Aucune pièce n'est réservée avant l'achat, et ton panier t'attend "
+     "trois jours.",
+     "🧾 **Un ticket de caisse** récapitule tout après l'achat.",
+     "❤️ **Des favoris** — pour mettre un article de côté sans t'engager.",
+     "🔥 **Populaire au QG** — les articles réellement les plus achetés cette "
+     "semaine. Pas un chiffre inventé.",
+     "🪟 **Une sélection hebdomadaire** à la une, qui change chaque semaine. "
+     "Les autres articles restent tous disponibles.",
+     "📦 **Collections** — des ensembles à réunir, sans aucun bonus à la clé. "
+     "Juste le plaisir de compléter.",
+     "🎒 **Mes possessions** — ce que tu as, ce que tu portes, d'un coup d'œil.",
+     "⚙️ **`.macustom` devient le centre de personnalisation** : thème, "
+     "aperçu, et le réglage de ce que ton profil montre.",
+     "👁️ **Tu choisis ce qui s'affiche** sur ton profil — bannière, citation, "
+     "pins, vitrine, compagnon, statistiques. **Masquer ne supprime rien** : "
+     "tout revient dès que tu réaffiches.",
+   ],
+   "correctifs": [
+     "🏳️ **Ta bannière ne s'affichait pas.** Le profil ne la lisait tout "
+     "simplement plus. C'est réparé, et elle est désormais **le** grand visuel "
+     "du profil.",
+     "🎴 La vitrine Gacha n'écrase plus rien : elle reste une liste lisible, et "
+     "aucune carte n'est étalée en grand sans que tu l'aies demandé.",
+     "🎨 **Cadres et thèmes ont fusionné.** Un thème donne maintenant la couleur "
+     "*et* les séparateurs. Ton ancien cadre est automatiquement converti — "
+     "aucun achat n'est perdu, et `.setcadre` t'explique où aller.",
+     "🎯 **Le Boost Rareté ne faisait pas ce qu'il annonçait.** Il durait en "
+     "moyenne 12 rolls au lieu de 5, et rendait une Mythique aussi probable "
+     "qu'une Rare. Il couvre désormais **exactement tes 5 prochains rolls**, "
+     "avec des Commun bien plus rares et des chances honnêtes.",
+     "🧲 L'Aimant garantit toujours du Rare ou mieux, mais respecte enfin les "
+     "raretés entre elles.",
+     "🎭 Les rôles de la boutique ne peuvent plus être achetés deux fois.",
+   ],
+ },
  "7.7.1": {
    "titre": "Le Slot rééquilibré 🎰",
    "ajouts": [
@@ -18052,6 +18841,118 @@ PROFIL_THEMES = {
     "neon":     ("⚡ Néon",          0x9b59b6, "cyber"),
 }
 
+# ============================================================
+#  🎨 THÈMES UNIFIÉS — le Cadre disparaît côté UX
+#  Un thème portait déjà (nom, couleur, cadre) : la fusion consistait
+#  surtout à donner un thème aux 4 cadres qui n'en avaient pas.
+#  AUCUNE possession n'est détruite — voir profil_migrer_cadres().
+# ============================================================
+PROFIL_THEMES_EXTRA = {
+    "etoiles":  ("✨ Poussière d'Étoiles", 0xf6e58d, "etoiles"),
+    "coeur":    ("💗 Tendre",              0xff9ff3, "coeur"),
+    "arcade":   ("🕹️ Arcade",              0x00d2d3, "arcade"),
+    "foret":    ("🍃 Sous-Bois",           0x6ab04c, "foret"),
+}
+# Chaque ancien cadre trouve son thème. Table déterministe, jamais devinée.
+CADRE_VERS_THEME = {}
+
+def _profil_fusionner_themes():
+    """Complète PROFIL_THEMES et construit la table de migration."""
+    for k, v in PROFIL_THEMES_EXTRA.items():
+        PROFIL_THEMES.setdefault(k, v)
+    for tcle, (_n, _c, cadre) in PROFIL_THEMES.items():
+        CADRE_VERS_THEME.setdefault(cadre, tcle)
+    for ccle in PROFIL_CADRES:
+        CADRE_VERS_THEME.setdefault(ccle, None)   # cadre sans équivalent : signalé
+
+_profil_fusionner_themes()
+
+def profil_migrer_cadres(uid):
+    """Migration Cadre → Thème pour un membre. Idempotente, non destructive.
+
+    · le cadre équipé devient le thème correspondant, si aucun thème n'est déjà mis
+    · le déblocage « cadre » devient un déblocage « theme »
+    · la clé `cadre` d'origine est CONSERVÉE telle quelle (rien n'est effacé)
+    Retourne la liste de ce qui a été migré."""
+    uid = str(uid)
+    c = profil_custom.setdefault(uid, {})
+    faits = []
+    if c.get("cadre_debloque") and not c.get("theme_debloque"):
+        c["theme_debloque"] = True
+        faits.append("droit d'accès aux thèmes")
+    anc = c.get("cadre")
+    if anc and not c.get("theme"):
+        t = CADRE_VERS_THEME.get(anc)
+        if t:
+            c["theme"] = t
+            faits.append(f"cadre `{anc}` → thème `{t}`")
+    return faits
+
+def profil_theme(uid):
+    """(nom, couleur, separateur) du thème équipé, ou le rendu par défaut.
+    Lit le thème ; à défaut l'ancien cadre, pour ne rien perdre avant migration."""
+    c = profil_custom.get(str(uid), {})
+    tcle = c.get("theme")
+    if tcle and tcle in PROFIL_THEMES:
+        nom, coul, cadre = PROFIL_THEMES[tcle]
+        sep = PROFIL_CADRES.get(cadre, (None, None, None))[2]
+        return nom, coul, sep
+    ccle = c.get("cadre")
+    if ccle and ccle in PROFIL_CADRES:
+        _e, nom, sep = PROFIL_CADRES[ccle]
+        return nom, None, sep
+    return None, None, None
+
+# ============================================================
+#  👁️ VISIBILITÉ DES BLOCS DU PROFIL
+#  Masquer ≠ supprimer : la donnée reste, seul l'affichage change.
+# ============================================================
+# Le pseudo, l'avatar, le niveau et l'XP restent toujours visibles :
+# sans eux l'embed n'a plus de sujet ni de repère de progression,
+# et `.profil` cesserait d'être une carte de membre.
+PROFIL_BLOCS = {
+    "banniere":  ("🏳️", "Bannière"),
+    "titre":     ("👑", "Titre"),
+    "citation":  ("💬", "Citation"),
+    "pins":      ("📌", "Pins"),
+    "vitrine":   ("🎴", "Vitrine Gacha"),
+    "pet":       ("🐾", "Compagnon"),
+    "social":    ("💍", "Mariage"),
+    "stats":     ("📊", "Statistiques"),
+}
+
+def profil_visible(uid, bloc):
+    """Un bloc est affiché par défaut ; il faut un choix explicite pour le masquer."""
+    return not profil_custom.get(str(uid), {}).get("masque", {}).get(bloc)
+
+def profil_basculer(uid, bloc):
+    """Affiche/masque un bloc. Retourne le nouvel état (True = affiché)."""
+    uid = str(uid)
+    c = profil_custom.setdefault(uid, {})
+    m = c.setdefault("masque", {})
+    if m.get(bloc):
+        m.pop(bloc)          # on retire la marque : le contenu n'a jamais bougé
+        return True
+    m[bloc] = True
+    return False
+
+def profil_apercu(membre, essai=None):
+    """Rendu temporaire du profil, éventuellement avec un article non possédé.
+    N'écrit RIEN : aucune sauvegarde, aucun équipement."""
+    uid = str(membre.id)
+    nom, coul, _sep = profil_theme(uid)
+    e = discord.Embed(
+        title=f"👁️  Aperçu — {membre.display_name}",
+        description=("*Ceci est une simulation. Rien n'a été modifié.*"
+                     + (f"\n\nThème : **{nom}**" if nom else "")),
+        color=coul or 0x95a5a6)
+    if essai:
+        e.add_field(name="🧪 Article testé",
+                    value=" · ".join(f"`{k}`" for k in essai), inline=False)
+    e.set_thumbnail(url=membre.display_avatar.url)
+    e.set_footer(text="Aucune donnée enregistrée")
+    return e
+
 
 # ============================================================
 #  🎖️ PINS — des décorations qui se méritent
@@ -18419,27 +19320,29 @@ async def mood_cmd(ctx, *, texte: str = None):
     save_all_data()
     await ctx.send(embed=discord.Embed(description=f"🎵 Humeur définie :\n*« {texte[:80]} »*", color=0x9b59b6))
 
-@bot.command(name="setcadre", aliases=["setframe"])
-async def setcadre_cmd(ctx, cadre: str = None):
-    """Le cadre décoratif de ton profil — .setcadre <nom>"""
+@bot.command(name="setcadre", aliases=["cadre", "setframe"])
+async def setcadre_cmd(ctx, *, cle: str = None):
+    """Les cadres ont fusionné avec les thèmes — .setcadre"""
     uid = str(ctx.author.id)
-    if not _cosmo_check(uid, "cadre"):
-        return await ctx.send("🔒 Achète le **🖼️ Cadre décoratif** dans `.shop` → page 🎨 Personnalisation.")
-    if not cadre or cadre.lower() not in PROFIL_CADRES:
-        apercu = "\n".join(f"`{k}` — {v[1]}" for k, v in PROFIL_CADRES.items())
-        return await ctx.send(embed=discord.Embed(
-            title="🖼️ Cadres disponibles",
-            description=f"{apercu}\n\n*`.setcadre sakura` par exemple · `.setcadre aucun` pour retirer.*",
-            color=0xff6fd8))
-    if cadre.lower() in ("aucun", "none", "retirer"):
-        profil_custom[uid].pop("cadre", None)
+    migres = profil_migrer_cadres(uid)
+    if migres:
         save_all_data()
-        return await ctx.send("🖼️ Cadre retiré.")
-    profil_custom[uid]["cadre"] = cadre.lower()
-    save_all_data()
-    e, label, sep = PROFIL_CADRES[cadre.lower()]
-    await ctx.send(embed=discord.Embed(
-        description=f"{sep}\n🖼️ Cadre **{label}** appliqué !\n{sep}", color=0xff6fd8))
+    e = discord.Embed(
+        title="🎨  Les cadres sont devenus des thèmes",
+        description=("Cadre et Thème faisaient presque la même chose. "
+                     "Il n'y a plus qu'un seul réglage.\n\n"
+                     "Un **thème** donne à ton profil sa couleur *et* ses séparateurs."),
+        color=0x9b59b6)
+    if migres:
+        e.add_field(name="🔄 Ton ancien cadre a été conservé",
+                    value="\n".join(f"• {m}" for m in migres), inline=False)
+    t_nom, _c, _s = profil_theme(uid)
+    e.add_field(name="✨ Ton thème actuel", value=f"**{t_nom or '*aucun*'}**", inline=False)
+    e.add_field(name="➡️ Pour en changer",
+                value="`.settheme <nom>` — ou `.macustom` pour tout gérer d'un coup",
+                inline=False)
+    await ctx.send(embed=e)
+
 
 @bot.command(name="settitre", aliases=["settitle"])
 async def settitre_cmd(ctx, *, texte: str = None):
@@ -18490,27 +19393,160 @@ async def settheme_cmd(ctx, nom: str = None):
         title=f"🌈 Thème {label}",
         description=f"{sep}\nTon profil adopte cette ambiance.\n{sep}", color=couleur))
 
-@bot.command(name="macustom", aliases=["mescosmetiques", "customisation"])
+@bot.command(name="macustom", aliases=["personnalisation", "customisation",
+                                       "moncustom", "mescosmetiques"])
 async def macustom_cmd(ctx):
-    """Ce que tu as débloqué — .macustom"""
+    """Le centre de personnalisation de ton profil — .macustom"""
     uid = str(ctx.author.id)
-    co = profil_custom.get(uid, {})
-    items = [("badge","📛 Badge",".setbadge"),("couleur","🎨 Couleur",".setcouleur"),
-             ("citation","💬 Citation",".setcitation"),("banniere","🏳️ Bannière",".setbanniere"),
-             ("cadre","🖼️ Cadre",".setcadre"),("titre","📜 Titre",".settitre"),
-             ("emojiperso","✨ Emoji signature",".setemoji"),("theme","🌈 Thème",".settheme")]
-    lignes = []
-    for cle, nom, cmd in items:
-        if co.get(cle + "_debloque"):
-            actuel = co.get("emoji" if cle == "emojiperso" else cle)
-            etat = f"→ **{actuel}**" if actuel else "*(non configuré)*"
-            lignes.append(f"✅ {nom} — `{cmd}` {etat}")
-        else:
-            lignes.append(f"🔒 {nom} — *à acheter dans `.shop`*")
-    await ctx.send(embed=discord.Embed(
-        title=f"🎨 Personnalisation de {ctx.author.display_name}",
-        description="\n".join(lignes) + "\n\n*Page **🎨 Personnalisation** dans `.shop`.*",
-        color=co.get("couleur", 0xff6fd8)))
+    migres = profil_migrer_cadres(uid)
+    if migres:
+        save_all_data()
+
+    def emb_accueil():
+        c = profil_custom.get(uid, {})
+        t_nom, t_coul, _s = profil_theme(uid)
+        e = discord.Embed(
+            title="⚙️  PERSONNALISATION",
+            description="*Ce que tu possèdes, ce que tu portes, ce que tu montres.*",
+            color=t_coul or 0x9b59b6)
+        e.add_field(
+            name="✨ Équipé",
+            value=(f"🎨 Thème : **{t_nom or '*aucun*'}**\n"
+                   f"👑 Titre : **{titre_affiche(uid) or '*aucun*'}**\n"
+                   f"🏳️ Bannière : {'**oui**' if c.get('banniere') else '*aucune*'}\n"
+                   f"💬 Citation : {'**oui**' if c.get('citation') else '*aucune*'}\n"
+                   f"📌 Pins : **{len(pins_affiches(uid))}**/3\n"
+                   f"🎴 Vitrine : **{len(c.get('vitrine', []))}**/3"),
+            inline=False)
+        masques = [PROFIL_BLOCS[b][1] for b in PROFIL_BLOCS if not profil_visible(uid, b)]
+        e.add_field(name="🙈 Masqué sur ton profil",
+                    value=" · ".join(masques) if masques
+                          else "*rien — tout s'affiche*", inline=False)
+        if migres:
+            e.add_field(name="🔄 Migration effectuée",
+                        value="\n".join(f"• {m}" for m in migres)
+                              + "\n*Rien n'a été perdu.*", inline=False)
+        e.set_footer(text="Les blocs masqués gardent leur contenu — tu peux les "
+                          "réafficher quand tu veux")
+        return e
+
+    def emb_visibilite():
+        e = discord.Embed(
+            title="👁️  AFFICHER / MASQUER",
+            description=("Choisis ce qui apparaît sur ton `.profil`.\n\n"
+                         "**Masquer ne supprime rien** : ta vitrine, ta citation et "
+                         "ta bannière restent enregistrées et reviennent dès que tu "
+                         "les réaffiches."),
+            color=0x9b59b6)
+        lignes = []
+        for b, (emo, nom) in PROFIL_BLOCS.items():
+            on = profil_visible(uid, b)
+            lignes.append(f"{'✅' if on else '🙈'} {emo} **{nom}** — "
+                          f"{'affiché' if on else 'masqué'}")
+        e.add_field(name="État actuel", value="\n".join(lignes), inline=False)
+        e.set_footer(text="Le pseudo, l'avatar, le niveau et l'XP restent toujours visibles")
+        return e
+
+    def emb_themes():
+        c = profil_custom.get(uid, {})
+        debloque = bool(c.get("theme_debloque") or c.get("cadre_debloque"))
+        e = discord.Embed(
+            title="🎨  THÈMES",
+            description=("Un thème donne à ton profil sa **couleur** et ses "
+                         "**séparateurs**.\n\n"
+                         + ("*Tu as accès aux thèmes.*" if debloque
+                            else "🔒 *Achète le **🎨 Thème de profil** dans `.shop`.*")),
+            color=0x9b59b6)
+        actuel = c.get("theme")
+        e.add_field(
+            name=f"{len(PROFIL_THEMES)} thèmes",
+            value=" · ".join(f"**{n.split(' ', 1)[-1]}**" if k == actuel
+                             else n.split(" ", 1)[-1]
+                             for k, (n, _c, _cd) in list(PROFIL_THEMES.items())[:12]),
+            inline=False)
+        return e
+
+    class CustomView(ui.View):
+        def __init__(self, page="accueil"):
+            super().__init__(timeout=300)
+            self.page = page
+            self._build()
+
+        async def interaction_check(self, itx):
+            if str(itx.user.id) != uid:
+                await itx.response.send_message("Tape `.macustom` pour la tienne.",
+                                                ephemeral=True)
+                return False
+            return True
+
+        def embed(self):
+            return {"visibilite": emb_visibilite, "themes": emb_themes}.get(
+                self.page, emb_accueil)()
+
+        async def refresh(self, itx):
+            self._build()
+            await itx.response.edit_message(embed=self.embed(), view=self)
+
+        def _build(self):
+            self.clear_items()
+            if self.page == "visibilite":
+                opts = [discord.SelectOption(
+                            label=nom, emoji=emo, value=b,
+                            description="affiché" if profil_visible(uid, b) else "masqué")
+                        for b, (emo, nom) in PROFIL_BLOCS.items()]
+                s = ui.Select(placeholder="👁️ Basculer un bloc…", options=opts, row=0)
+                async def cb(itx):
+                    b = s.values[0]
+                    etat = profil_basculer(uid, b)
+                    save_all_data()
+                    self._build()
+                    await itx.response.edit_message(embed=self.embed(), view=self)
+                    await itx.followup.send(
+                        f"{'✅ Affiché' if etat else '🙈 Masqué'} — "
+                        f"**{PROFIL_BLOCS[b][1]}**"
+                        + ("" if etat else " *(le contenu est conservé)*"),
+                        ephemeral=True)
+                s.callback = cb
+                self.add_item(s)
+            elif self.page == "themes":
+                c = profil_custom.get(uid, {})
+                if c.get("theme_debloque") or c.get("cadre_debloque"):
+                    opts = [discord.SelectOption(label=n[:100], value=k,
+                                                 default=(c.get("theme") == k))
+                            for k, (n, _c, _cd) in list(PROFIL_THEMES.items())[:25]]
+                    s = ui.Select(placeholder="🎨 Choisir un thème…", options=opts, row=0)
+                    async def cb(itx):
+                        profil_custom.setdefault(uid, {})["theme"] = s.values[0]
+                        save_all_data()
+                        self._build()
+                        await itx.response.edit_message(embed=self.embed(), view=self)
+                        await itx.followup.send(
+                            f"🎨 Thème **{PROFIL_THEMES[s.values[0]][0]}** équipé.",
+                            ephemeral=True)
+                    s.callback = cb
+                    self.add_item(s)
+            for lab, emo, p in (("Accueil", "⚙️", "accueil"),
+                                ("Thèmes", "🎨", "themes"),
+                                ("Afficher/Masquer", "👁️", "visibilite")):
+                b = ui.Button(label=lab, emoji=emo, row=2,
+                              style=discord.ButtonStyle.primary if self.page == p
+                                    else discord.ButtonStyle.secondary)
+                async def cb(itx, pp=p):
+                    self.page = pp
+                    await self.refresh(itx)
+                b.callback = cb
+                self.add_item(b)
+            b = ui.Button(label="Aperçu", emoji="🔎", row=2,
+                          style=discord.ButtonStyle.success)
+            async def prev(itx):
+                await itx.response.send_message(embed=profil_apercu(itx.user),
+                                                ephemeral=True)
+            b.callback = prev
+            self.add_item(b)
+
+    v = CustomView()
+    await ctx.send(embed=v.embed(), view=v)
+
 
 @bot.command(name="setbadge")
 async def setbadge_cmd(ctx, *, texte: str = None):
@@ -41710,6 +42746,10 @@ def save_all_data():
             "girls_jours": {p: {u: sorted(v) for u, v in m.items()}
                             for p, m in girls_jours.items()},
             "cadeaux": cadeaux_data,
+            "boutique_schema": BOUTIQUE_SCHEMA,
+            "panier": panier_data,
+            "favoris": favoris_data,
+            "ventes": ventes_data,
             "titres": {k: list(v) for k, v in titres_data.items()},
             "titre_equipe": dict(titre_equipe),
             "pins_equipes": {k: list(v) for k, v in pins_equipes.items()},
@@ -41840,6 +42880,17 @@ def load_all_data():
                 print(f"[Mémoire] chargement impossible, mémoire vide : {type(_e).__name__}")
                 memoire_data.clear(); memoire_vus.clear()
             try:
+                for _k, _p in (data.get("panier") or {}).items():
+                    if isinstance(_p, dict) and isinstance(_p.get("items"), dict):
+                        panier_data[_k] = {"items": {k2: int(v2) for k2, v2 in
+                                                     _p["items"].items()},
+                                           "maj": float(_p.get("maj", 0))}
+                for _k, _f in (data.get("favoris") or {}).items():
+                    if isinstance(_f, list):
+                        favoris_data[_k] = [str(x) for x in _f][:25]
+                _v = data.get("ventes") or []
+                ventes_data.extend(x for x in _v
+                                   if isinstance(x, dict) and "i" in x and "d" in x)
                 anniv_meta.update(data.get("anniv_meta", {}))
                 akari_meta.update(data.get("akari", {}))
                 _r = data.get("ritual") or {}
