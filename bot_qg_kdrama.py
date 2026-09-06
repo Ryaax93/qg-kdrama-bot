@@ -1610,7 +1610,7 @@ def build_help_pages(guild, is_admin=False):
     e.add_field(name="▶️ Lancer maintenant", value=(
         "`.lancerevent` — Voir tous les events lançables\n"
         "`.lancerevent <nom>` — Démarrer un event immédiatement\n"
-        "`.stopervent` — Arrêter l'event en cours\n"
+        "`.stopevent` — Arrêter un event en cours 🛑\n"
         "`.boss` — Faire apparaître un boss\n"
         "`.raidstop` — Arrêter le boss/raid en cours"
     ), inline=False)
@@ -3501,10 +3501,10 @@ SHOP_ITEMS = [
     {"id": "couleur",  "nom": "🎨 Couleur de profil",  "prix": 10000, "cat": "cosmetique", "description": "La couleur de tes embeds de profil *(`.setcouleur <hex>`)*"},
     {"id": "citation", "nom": "💬 Citation de profil", "prix": 8000,  "cat": "cosmetique", "description": "Une phrase affichée sous ton pseudo *(`.setcitation <texte>`)*"},
     {"id": "banniere", "nom": "🏳️ Bannière de profil", "prix": 15000, "cat": "cosmetique", "description": "Une image en bas de ton profil *(`.setbanniere <url>`)*"},
-    {"id": "cadre",    "nom": "🖼️ Cadre décoratif",   "prix": 9000,  "cat": "cosmetique", "description": "Encadre ton profil de motifs — 12 styles *(`.setcadre`)*"},
+    {"id": "cadre",    "nom": "🖼️ Cadre décoratif",   "prix": 9000,  "cat": "cosmetique", "description": "Fusionné avec le 🌈 Thème de profil — plus vendu séparément"},
     {"id": "titre",    "nom": "📜 Titre personnalisé", "prix": 11000, "cat": "cosmetique", "description": "Une ligne de titre au-dessus de ton nom *(`.settitre <texte>`)*"},
     {"id": "emojiperso","nom": "✨ Emoji signature",   "prix": 6000,  "cat": "cosmetique", "description": "Un emoji affiché partout à côté de ton nom *(`.setemoji <emoji>`)*"},
-    {"id": "theme",    "nom": "🌈 Thème de profil",    "prix": 14000, "cat": "cosmetique", "description": "8 ambiances complètes : cadre + couleur + séparateurs *(`.settheme`)*"},
+    {"id": "theme",    "nom": "🌈 Thème de profil",    "prix": 14000, "cat": "cosmetique", "description": "12 ambiances : couleur et séparateurs de ton profil *(`.macustom`)*"},
 
     # ═══ 💌 SOCIAL & FUN ═══
     {"id": "lettre",   "nom": "💌 Lettre Anonyme",     "prix": 2000, "cat": "divers", "description": "Envoie un message **anonyme** dans un salon *(`.lettre <salon> <texte>`)*"},
@@ -6184,7 +6184,11 @@ async def jackpot_cmd(ctx):
     ))
 
 def build_shop_pages():
-    """Construit les pages de la boutique — utilisé par .shop et .setsalon boutique"""
+    """Pages du panneau affiché dans le salon boutique.
+
+    Vitrine informative : `.shop` reste le parcours d'achat complet.
+    Elle applique le même filtre de disponibilité que la Boutique 2.0 —
+    sans lui, le panneau proposait encore les saisonniers hors saison."""
     cats = {
         "role":        ("🎭 Rôles Prestige",      0xf1c40f),
         "girly":       ("💗 Rôles Girly",          0xff6fd8),
@@ -6212,6 +6216,8 @@ def build_shop_pages():
                 for pid, p in PETS_DB.items():
                     if p["rarete"] != rar:
                         continue
+                    if not boutique_disponible(pid):
+                        continue          # exclusifs et hors-saison écartés
                     effet = {"coins": f"💰 +{p['base']} % de pièces",
                              "xp":    f"⭐ +{p['base']} % d'XP",
                              "roll":  f"🎰 {p['base']} % de roll gratuit"}[p["type"]]
@@ -6220,11 +6226,15 @@ def build_shop_pages():
                     embed.add_field(
                         name=f"{RARETE_EMOJI.get(rar, '▫️')} {rar} — {PETS_PRIX[rar]:,} pièces",
                         value="\n".join(lignes), inline=False)
-            embed.set_footer(text=f"{len(PETS_DB)} compagnons • QG Kdrama 🌸")
+            n_dispo = sum(1 for pid in PETS_DB if boutique_disponible(pid))
+            embed.set_footer(text=f"{n_dispo} compagnons en vente • "
+                                  f"`.shop` pour tout parcourir 🌸")
             pages.append(embed)
             continue
 
-        items = [i for i in SHOP_ITEMS if i["cat"] == cat_id]
+        # Le panneau ne doit pas proposer ce que la Boutique refuse de vendre.
+        items = [i for i in SHOP_ITEMS
+                 if i["cat"] == cat_id and boutique_disponible(i["id"])]
         if not items:
             continue
         embed = discord.Embed(
@@ -6337,9 +6347,8 @@ async def shop_cmd(ctx, recherche: str = None):
                           color=H["couleur"])
         e.add_field(name="🏷️ Rayon", value=f"{emo} {ray}", inline=True)
         e.add_field(name="💰 Prix", value=f"**{it['prix']:,}** pièces", inline=True)
-        e.add_field(name="📦 Type",
-                    value={"cosmetique": "Cosmétique", "permanent": "Permanent",
-                           "consommable": "Consommable"}[typ], inline=True)
+        n_emo, n_lib, n_exp = boutique_nature(iid)
+        e.add_field(name="📦 Type", value=f"{n_emo} **{n_lib}**\n*{n_exp}*", inline=True)
         if typ == "consommable":
             n = inventaire[uid].get(iid, 0)
             if n:
@@ -6350,11 +6359,25 @@ async def shop_cmd(ctx, recherche: str = None):
                         inline=True)
         if it.get("daily"):
             e.add_field(name="⏳ Limite", value="1 achat par jour", inline=True)
+        if est_compagnon(iid):
+            # Le détail vient de PETS_DB : aucune donnée n'est recopiée ici.
+            p = PETS_DB[iid]
+            e.add_field(name="✨ Bonus permanent",
+                        value=pet_bonus_texte(p, 1), inline=False)
+            e.add_field(name="📈 Progression",
+                        value="**+1 %** par niveau — il monte quand tu discutes",
+                        inline=False)
+            e.set_footer(text="`.pet` pour t'en occuper une fois adopté")
         for ccle, (cemo, cnom, ids, _cd) in BOUTIQUE_COLLECTIONS.items():
             if iid in ids:
                 ok = sum(1 for x in ids if boutique_possede(uid, x))
                 e.add_field(name="📦 Collection",
                             value=f"{cemo} **{cnom}** — {ok}/{len(ids)}", inline=False)
+        if not boutique_disponible(iid):
+            e.add_field(name="🔒 Indisponible",
+                        value=boutique_raison_indispo(iid)
+                              + "\n*Si tu le possèdes déjà, tu le gardes.*", inline=False)
+            e.color = 0x7f8c8d
         if boutique_est_nouveau(iid):
             e.set_author(name="🆕 NOUVEAU")
         e.set_footer(text=f"`.acheter {iid}` pour l'acheter directement")
@@ -6368,12 +6391,18 @@ async def shop_cmd(ctx, recherche: str = None):
                           color=H["couleur"])
         if H.get("image"):
             e.set_image(url=H["image"])
-        une = boutique_une()
-        if une:
-            e.add_field(name=H["label_une"],
-                        value=f"{une['nom']} — **{une['prix']:,}**\n"
-                              f"*{une.get('description','')}*", inline=False)
-        nouv = [i for i in SHOP_ITEMS if boutique_est_nouveau(i["id"])]
+        # La rotation ne touche QUE cette page. Tout article non mis en
+        # avant reste achetable dans son rayon.
+        jour, sem = boutique_vitrine()
+        if jour:
+            e.add_field(name="⭐ SÉLECTION DU JOUR",
+                        value="\n".join(f"{i['nom']} — **{i['prix']:,}**" for i in jour),
+                        inline=False)
+        if sem:
+            e.add_field(name=H["label_selection"],
+                        value="\n".join(f"{i['nom']} — **{i['prix']:,}**" for i in sem),
+                        inline=False)
+        nouv = boutique_nouveautes()
         if nouv:
             e.add_field(name="🆕 NOUVEAUTÉS",
                         value=" · ".join(i["nom"] for i in nouv[:4]), inline=False)
@@ -6384,35 +6413,46 @@ async def shop_cmd(ctx, recherche: str = None):
                 value="\n".join(
                     f"{boutique_item(i)['nom']} — **{n}** achat{'s' if n > 1 else ''}"
                     for i, n in pop), inline=False)
-        sel = boutique_selection()
-        if sel:
-            e.add_field(name=H["label_selection"],
-                        value="\n".join(f"{i['nom']} — **{i['prix']:,}**" for i in sel),
-                        inline=False)
         e.add_field(name="🛒 Panier",
                     value=(f"**{nb}** article(s) · **{tot:,}** pièces" if nb
                            else "*vide*"), inline=False)
-        e.set_footer(text="Choisis un rayon ci-dessous  ·  `.shop <article>` pour une fiche")
+        e.set_footer(text=f"{len(boutique_catalogue_complet())} articles au catalogue — "
+                          f"tout reste disponible dans les rayons")
         return e
 
-    def emb_rayon(cle):
+    PAR_PAGE = 9
+
+    def emb_rayon(cle, sous=None, page=0):
         emo, nom, _cats, desc = BOUTIQUE_RAYONS[cle]
-        arts = boutique_articles(cle)
-        e = discord.Embed(title=f"{emo}  {nom.upper()}", description=f"*{desc}*",
-                          color=H["couleur"])
-        for it in arts[:12]:
+        arts = boutique_articles(cle, sous)
+        titre = f"{emo}  {nom.upper()}"
+        sous_def = BOUTIQUE_SOUS.get(cle, [])
+        if sous:
+            s = next((x for x in sous_def if x[0] == sous), None)
+            if s:
+                titre += f"  ·  {s[1]} {s[2]}"
+        pages = max(1, (len(arts) + PAR_PAGE - 1) // PAR_PAGE)
+        page = max(0, min(page, pages - 1))
+        e = discord.Embed(title=titre, description=f"*{desc}*", color=H["couleur"])
+        if not arts:
+            e.description += "\n\n*Ce rayon est vide pour le moment.*"
+            return e, pages, page
+        for it in arts[page * PAR_PAGE:(page + 1) * PAR_PAGE]:
             marques = []
+            if not boutique_disponible(it["id"]):
+                s = article_saison(it["id"])
+                marques.append(BOUTIQUE_SAISONS.get(s, ("🔒",))[0] + "🔒")
             if boutique_est_nouveau(it["id"]): marques.append("🆕")
             if boutique_type(it["id"]) != "consommable" and boutique_possede(uid, it["id"]):
                 marques.append("✅")
             if it["id"] in favoris_get(uid): marques.append("❤️")
             e.add_field(name=f"{it['nom']} {' '.join(marques)}".strip(),
                         value=f"**{it['prix']:,}** · `{it['id']}`", inline=True)
-        if len(arts) > 12:
-            e.set_footer(text=f"+{len(arts)-12} autres — `.shop <id>` pour une fiche")
-        else:
-            e.set_footer(text="`.shop <id>` pour la fiche complète d'un article")
-        return e
+        pied = f"{len(arts)} article(s)"
+        if pages > 1:
+            pied += f"  ·  page {page + 1}/{pages}"
+        e.set_footer(text=pied + "  ·  `.shop <id>` pour une fiche")
+        return e, pages, page
 
     def emb_panier():
         lignes = panier_lignes(uid)
@@ -6473,24 +6513,49 @@ async def shop_cmd(ctx, recherche: str = None):
         return e
 
     def emb_possessions():
+        p = possessions_lire(uid)
         e = discord.Embed(title="🎒  MES POSSESSIONS", color=H["couleur"])
-        cosmo = profil_custom.get(uid, {})
-        poss = [iid for iid in BOUTIQUE_COSMETIQUES if boutique_possede(uid, iid)]
-        e.add_field(name=f"🎨 Cosmétiques — {len(poss)}",
-                    value=" · ".join(f"`{x}`" for x in poss) or "*aucun*", inline=False)
-        conso = {k: v for k, v in inventaire[uid].items() if v > 0 and boutique_item(k)}
-        e.add_field(name=f"🎒 Consommables — {len(conso)}",
-                    value=("\n".join(f"{boutique_item(k)['nom']} ×**{v}**"
-                                     for k, v in list(conso.items())[:10])
-                           or "*aucun*"), inline=False)
-        eq = []
-        if cosmo.get("theme"):    eq.append(f"🎨 Thème `{cosmo['theme']}`")
-        if cosmo.get("banniere"): eq.append("🏳️ Bannière personnalisée")
-        if titre_affiche(uid):    eq.append(f"👑 {titre_affiche(uid)}")
-        if pins_affiches(uid):    eq.append(f"📌 {len(pins_affiches(uid))} pin(s)")
+        vide = True
+        if p["cosmetiques"]:
+            vide = False
+            e.add_field(name=f"🎨 Cosmétiques — {len(p['cosmetiques'])}",
+                        value=" · ".join(n for _i, n in p["cosmetiques"]), inline=False)
+        if p.get("roles"):
+            vide = False
+            e.add_field(name=f"🎭 Rôles — {len(p['roles'])}",
+                        value=" · ".join(n for _i, n in p["roles"]), inline=False)
+        if p["consommables"]:
+            vide = False
+            e.add_field(
+                name=f"🎒 Consommables — {sum(n for _i, _n, n in p['consommables'])}",
+                value="\n".join(f"{nom} ×**{n}**"
+                                for _i, nom, n in p["consommables"][:10]), inline=False)
+        if p["attente"]:
+            vide = False
+            e.add_field(name="⏳ Prêt à se déclencher",
+                        value="\n".join(f"{emo} **{nom}** — {quand}"
+                                        for emo, nom, quand in p["attente"]), inline=False)
+        if p["charges"]:
+            vide = False
+            e.add_field(name="🔢 Charges restantes",
+                        value="\n".join(f"{emo} **{nom}** — **{n}** {u}{'s' if n > 1 else ''}"
+                                        for emo, nom, n, u in p["charges"]), inline=False)
+        if p["temporaires"]:
+            vide = False
+            e.add_field(name="⏱️ Actif en ce moment",
+                        value="\n".join(f"{emo} **{nom}** — {eff} *(encore {d})*"
+                                        for emo, nom, eff, d in p["temporaires"]), inline=False)
+        if p["permanents"]:
+            vide = False
+            e.add_field(name="🔓 Améliorations définitives",
+                        value="\n".join(f"{emo} **{nom}** — {v} *(de base : {b})*"
+                                        for emo, nom, v, b in p["permanents"]), inline=False)
         e.add_field(name="✨ Équipé actuellement",
-                    value="\n".join(eq) or "*rien pour l'instant*", inline=False)
-        e.set_footer(text="`.macustom` pour gérer tout ça")
+                    value="\n".join(p["equipe"]) or "*rien pour l'instant*", inline=False)
+        if vide and not p["equipe"]:
+            e.description = ("*Tu ne possèdes rien pour l'instant.*\n\n"
+                             "Les achats apparaîtront ici, rangés selon ce qu'ils font.")
+        e.set_footer(text="`.macustom` pour équiper  ·  `.inventaire` pour utiliser un objet")
         return e
 
     # ── Vue ──
@@ -6499,6 +6564,8 @@ async def shop_cmd(ctx, recherche: str = None):
             super().__init__(timeout=300)
             self.page = page
             self.article = article
+            self.sous = None        # sous-rayon courant
+            self.num = 0            # page courante dans le rayon
             self._build()
 
         async def interaction_check(self, itx):
@@ -6514,7 +6581,11 @@ async def shop_cmd(ctx, recherche: str = None):
             if self.page == "favoris":      return emb_favoris()
             if self.page == "collections":  return emb_collections()
             if self.page == "possessions":  return emb_possessions()
-            if self.page in BOUTIQUE_RAYONS: return emb_rayon(self.page)
+            if self.page in BOUTIQUE_RAYONS:
+                e, pages, num = emb_rayon(self.page, self.sous, self.num)
+                self.num = num
+                self._pages = pages
+                return e
             return emb_accueil()
 
         async def refresh(self, itx):
@@ -6527,25 +6598,61 @@ async def shop_cmd(ctx, recherche: str = None):
             if self.page == "fiche" and self.article:
                 self._fiche_boutons()
             else:
-                opts = [discord.SelectOption(label=n, emoji=e, value=k, description=d[:95])
+                opts = [discord.SelectOption(
+                            label=f"{n} ({len(boutique_articles(k))})", emoji=e,
+                            value=k, description=d[:95],
+                            default=(k == self.page))
                         for k, (e, n, _c, d) in BOUTIQUE_RAYONS.items()]
                 sel = ui.Select(placeholder="🏪 Choisir un rayon…", options=opts, row=0)
                 async def cb(itx):
-                    self.page = sel.values[0]; self.article = None
+                    self.page = sel.values[0]
+                    self.article = None; self.sous = None; self.num = 0
                     await self.refresh(itx)
                 sel.callback = cb
                 self.add_item(sel)
-                arts = boutique_articles(self.page) if self.page in BOUTIQUE_RAYONS else []
+                # Sous-rayons : seulement là où le rayon est trop chargé.
+                sous_def = BOUTIQUE_SOUS.get(self.page, [])
+                if sous_def:
+                    o3 = [discord.SelectOption(
+                              label=f"Tout ({len(boutique_articles(self.page))})",
+                              emoji="📚", value="__tout__", default=self.sous is None)]
+                    o3 += [discord.SelectOption(
+                               label=f"{nm} ({len(boutique_articles(self.page, k))})",
+                               emoji=em, value=k, default=(self.sous == k))
+                           for k, em, nm, _cc in sous_def]
+                    s3 = ui.Select(placeholder="🗂️ Affiner…", options=o3, row=1)
+                    async def cb3(itx):
+                        v = s3.values[0]
+                        self.sous = None if v == "__tout__" else v
+                        self.num = 0
+                        await self.refresh(itx)
+                    s3.callback = cb3
+                    self.add_item(s3)
+                arts = (boutique_articles(self.page, self.sous)
+                        if self.page in BOUTIQUE_RAYONS else [])
                 if arts:
+                    debut = self.num * PAR_PAGE
+                    visibles = arts[debut:debut + PAR_PAGE] or arts[:PAR_PAGE]
                     o2 = [discord.SelectOption(label=i["nom"][:100], value=i["id"],
                                                description=f"{i['prix']:,} pièces")
-                          for i in arts[:25]]
-                    s2 = ui.Select(placeholder="🏷️ Voir un article…", options=o2, row=1)
+                          for i in visibles[:25]]
+                    s2 = ui.Select(placeholder="🏷️ Voir un article…", options=o2, row=2)
                     async def cb2(itx):
                         self.article = s2.values[0]; self.page = "fiche"
                         await self.refresh(itx)
                     s2.callback = cb2
                     self.add_item(s2)
+                    if len(arts) > PAR_PAGE:
+                        for lab, emo2, delta in (("Précédent", "◀️", -1), ("Suivant", "▶️", 1)):
+                            b = ui.Button(label=lab, emoji=emo2, row=4,
+                                          style=discord.ButtonStyle.secondary)
+                            async def cbp(itx, d=delta):
+                                total = max(1, (len(boutique_articles(self.page, self.sous))
+                                                + PAR_PAGE - 1) // PAR_PAGE)
+                                self.num = (self.num + d) % total
+                                await self.refresh(itx)
+                            b.callback = cbp
+                            self.add_item(b)
             nb, _t = panier_total(uid)
             self._nav(nb)
 
@@ -6555,6 +6662,7 @@ async def shop_cmd(ctx, recherche: str = None):
                           style=discord.ButtonStyle.secondary)
             async def home(itx):
                 self.page, self.article = "accueil", None
+                self.sous, self.num = None, 0
                 await self.refresh(itx)
             b.callback = home; self.add_item(b)
             b = ui.Button(label=f"Panier ({nb})" if nb else "Panier", emoji="🛒", row=r,
@@ -6639,7 +6747,7 @@ async def shop_cmd(ctx, recherche: str = None):
             typ = boutique_type(iid)
             possede = typ != "consommable" and boutique_possede(uid, iid)
             r = 0
-            if not possede:
+            if not possede and boutique_disponible(iid):
                 b = ui.Button(label="Ajouter au panier", emoji="🛒", row=r,
                               style=discord.ButtonStyle.success)
                 async def add(itx):
@@ -6715,18 +6823,47 @@ VENTES_FENETRE = 7 * 86400
 NOUVEAU_DUREE = 21 * 86400
 
 # Rayons : regroupent les catégories RÉELLES de SHOP_ITEMS.
+# `sous` découpe les gros rayons en pages lisibles. Un rayon sans `sous`
+# s'affiche d'un bloc.
 BOUTIQUE_RAYONS = {
-    "perso":   ("🎨", "Personnalisation", ("cosmetique",),
+    "perso":   ("🎨", "Prestige & Style", ("cosmetique",),
                 "Thèmes, bannières, citations — ton profil te ressemble."),
     "roles":   ("🎭", "Rôles",            ("role",),
                 "Une couleur bien à toi dans la liste des membres."),
-    "gacha":   ("🎴", "Gacha",            ("gacha_boost", "gacha_pvp", "gacha_def"),
-                "Rolls, boosts et coups tordus entre collectionneurs."),
     "girly":   ("💅", "Girls Only",       ("girly",),
                 "Le rayon réservé au salon Girls Only."),
-    "divers":  ("📦", "Divers",           ("divers",),
+    "gacha":   ("🎴", "Gacha",            ("gacha_boost", "gacha_pvp", "gacha_def"),
+                "Rolls, boosts et coups tordus entre collectionneurs."),
+    "pets":    ("🐾", "Compagnons",       (),
+                "Un compagnon donne un bonus permanent qui grandit avec lui."),
+    "divers":  ("📦", "Boosts & Utilitaires", ("divers",),
                 "Tout ce qui ne rentrait nulle part ailleurs."),
 }
+
+# Sous-rayons : uniquement là où le nombre d'articles l'exige.
+BOUTIQUE_SOUS = {
+    "gacha": [("boosts",  "🎰", "Boosts",     ("gacha_boost",)),
+              ("sabotage","⚔️", "Sabotage",   ("gacha_pvp",)),
+              ("defense", "🛡️", "Protection", ("gacha_def",))],
+    "pets":  [("commun",     "▫️", "Communs",     ("Commun",)),
+              ("rare",       "🔹", "Rares",       ("Rare",)),
+              ("epique",     "🔮", "Épiques",     ("Épique",)),
+              ("legendaire", "🌟", "Légendaires", ("Légendaire",)),
+              ("mythique",   "💠", "Mythiques",   ("Mythique",))],
+}
+
+def pet_en_article(pid):
+    """Un compagnon vu comme un article de boutique.
+
+    PETS_DB et PETS_PRIX restent la source de vérité : rien n'est copié,
+    l'article est reconstruit à la demande — exactement comme le fait déjà
+    `.acheter` depuis toujours."""
+    p = PETS_DB.get(pid)
+    if not p:
+        return None
+    return {"id": pid, "nom": f"{p['emoji']} {p['nom']}",
+            "prix": PETS_PRIX[p["rarete"]], "cat": "pets",
+            "description": p["desc"], "rarete": p["rarete"]}
 
 # Types : ce qui détermine les boutons proposés sur une fiche.
 #   permanent   → possédé ou non, jamais deux fois
@@ -6735,7 +6872,13 @@ BOUTIQUE_RAYONS = {
 BOUTIQUE_COSMETIQUES = {"badge", "couleur", "citation", "banniere", "cadre", "titre",
                         "emojiperso", "theme"}
 # Les rôles sont permanents : on ne rachète pas une couleur qu'on porte déjà.
-BOUTIQUE_ROLES = {i["id"] for i in SHOP_ITEMS if i.get("cat") == "role"}
+# `girly` est une catégorie de rôles au même titre que `role` — l'oublier
+# laissait racheter dix-huit rôles Discord en boucle.
+BOUTIQUE_ROLES = {i["id"] for i in SHOP_ITEMS if i.get("cat") in ("role", "girly")}
+# Un compagnon s'adopte une fois. PETS_DB est déclaré plus bas dans le
+# fichier : on l'interroge à l'exécution plutôt que d'en figer une copie.
+def est_compagnon(iid):
+    return str(iid).lower() in PETS_DB
 BOUTIQUE_PERMANENTS = (BOUTIQUE_COSMETIQUES | BOUTIQUE_ROLES
                        | {"fav_slot_5", "fav_slot_10", "tirelire"})
 # Un cosmétique ou un rôle s'applique au compte : il ne se transmet pas.
@@ -6762,22 +6905,41 @@ boutique_verrou = set() # uid en cours de checkout
 boutique_dernier_achat = {}  # {uid: ts} — pour reconnaître un second clic
 
 def boutique_item(iid):
-    """L'article, depuis la source de vérité. None s'il n'existe plus."""
-    return next((i for i in SHOP_ITEMS if i["id"] == str(iid).lower()), None)
+    """L'article, depuis sa source de vérité. None s'il n'existe plus.
+    Les compagnons vivent dans PETS_DB, pas dans SHOP_ITEMS."""
+    iid = str(iid).lower()
+    it = next((i for i in SHOP_ITEMS if i["id"] == iid), None)
+    return it if it else pet_en_article(iid)
 
 def boutique_type(iid):
     if iid in BOUTIQUE_COSMETIQUES: return "cosmetique"
     if iid in BOUTIQUE_PERMANENTS:  return "permanent"
+    if est_compagnon(iid):          return "permanent"
     return "consommable"
 
 def boutique_rayon_de(cat):
+    """Le rayon d'une catégorie. Les compagnons portent cat='pets' et n'ont
+    pas de catégorie SHOP_ITEMS : sans ce cas, leur fiche annonçait
+    « Boosts & Utilitaires »."""
+    if cat == "pets":
+        return "pets"
     for cle, (_e, _n, cats, _d) in BOUTIQUE_RAYONS.items():
         if cat in cats:
             return cle
     return "divers"
 
-def boutique_articles(rayon):
+def boutique_articles(rayon, sous=None):
+    """Les articles d'un rayon, éventuellement d'un seul de ses sous-rayons."""
+    if rayon == "pets":
+        raretes = None
+        if sous:
+            raretes = next((r for cle, _e, _n, r in BOUTIQUE_SOUS["pets"] if cle == sous), None)
+        return [pet_en_article(pid) for pid, p in PETS_DB.items()
+                if raretes is None or p["rarete"] in raretes]
     cats = BOUTIQUE_RAYONS.get(rayon, (None, None, (), None))[2]
+    if sous:
+        cats = next((cc for cle, _e, _n, cc in BOUTIQUE_SOUS.get(rayon, [])
+                     if cle == sous), cats)
     return [i for i in SHOP_ITEMS if i.get("cat") in cats]
 
 def boutique_possede(uid, iid):
@@ -6787,6 +6949,8 @@ def boutique_possede(uid, iid):
         return bool(profil_custom.get(uid, {}).get(f"_a_{iid}")) or _cosmo_check(uid, iid)
     if iid in ("fav_slot_5", "fav_slot_10", "tirelire"):
         return inventaire[uid].get(iid, 0) > 0
+    if est_compagnon(iid):
+        return iid in pets_data.get(uid, {}).get("owned", {})
     if iid in BOUTIQUE_ROLES:
         # Un rôle acheté est marqué ici : la vérification Discord se fait
         # à l'attribution, pas à chaque affichage de fiche.
@@ -6816,6 +6980,11 @@ def panier_ajouter(uid, iid, qte=1):
     it = boutique_item(iid)
     if not it:
         return False, "Cet article n'existe plus."
+    if not boutique_disponible(iid):
+        return False, boutique_raison_indispo(iid)
+    bloc = boutique_blocage(uid, iid)
+    if bloc:
+        return False, bloc
     p = panier_get(uid)
     typ = boutique_type(iid)
     if typ != "consommable":
@@ -6872,6 +7041,8 @@ def panier_lignes(uid):
         pb = None
         if boutique_type(iid) != "consommable" and boutique_possede(uid, iid):
             pb = "tu le possèdes déjà"
+        elif boutique_blocage(uid, iid):
+            pb = boutique_blocage(uid, iid)
         out.append((it, q, it["prix"] * q, pb))
     return out
 
@@ -6909,6 +7080,202 @@ def ventes_populaires(n=3):
         if v["d"] >= limite and boutique_item(v["i"]):
             compte[v["i"]] = compte.get(v["i"], 0) + v["q"]
     return sorted(compte.items(), key=lambda x: (-x[1], x[0]))[:n]
+
+# ── 🕰️ Date de référence de la vitrine ──
+# ACT_TZ est un décalage FIXE de +2 h : juste en été, faux en hiver.
+# La vitrine s'appuie donc sur la vraie zone Europe/Paris, qui gère
+# le passage à l'heure d'hiver toute seule.
+try:
+    from zoneinfo import ZoneInfo as _ZI
+    _TZ_PARIS = _ZI("Europe/Paris")
+except Exception:
+    _TZ_PARIS = None
+
+def paris_maintenant(ts=None):
+    """L'heure de Paris. Repli sur ACT_TZ si zoneinfo manque à l'appel."""
+    import datetime as _dt, time as _t
+    ts = ts if ts is not None else _t.time()
+    if _TZ_PARIS is not None:
+        return _dt.datetime.fromtimestamp(ts, _TZ_PARIS)
+    return _dt.datetime.utcfromtimestamp(ts + ACT_TZ * 3600)
+
+def paris_jour(ts=None):
+    """Numéro de jour, stable pour tous les membres et après redémarrage."""
+    return paris_maintenant(ts).toordinal()
+
+def paris_semaine(ts=None):
+    """(année ISO, semaine ISO) — la semaine démarre le lundi à Paris."""
+    iso = paris_maintenant(ts).isocalendar()
+    return iso[0], iso[1]
+
+# ============================================================
+#  🍂 DISPONIBILITÉ SAISONNIÈRE — source unique
+#  Aucun `if month == 10` nulle part : la saison active se déduit
+#  d'AKARI_MODE, exactement comme l'habillage du Guide et de la Boutique.
+#  On bloque LA VENTE, jamais la propriété.
+# ============================================================
+BOUTIQUE_SAISONS = {
+    "halloween": ("🎃", "Halloween"),
+    "hiver":     ("❄️", "Hiver"),
+    "printemps": ("🌸", "Printemps"),
+    "ete":       ("🌞", "Été"),
+}
+
+# Quelles saisons un mode ouvre-t-il ? Le mode normal n'en ouvre aucune.
+# Un futur pack déclarera les siennes via AKARI_PACKS[mode]["_saisons"] :
+# rien n'est à modifier ici pour ajouter Blackwood ou Wintervale.
+AKARI_MODE_SAISONS = {
+    "normal": (),
+}
+
+# Articles saisonniers, établis sur des preuves du code — voir le rapport.
+BOUTIQUE_SAISONNIER = {
+    "halloween": "halloween",   # 🎃 Âme d'Halloween
+    "hiver":     "hiver",       # ❄️ Esprit d'Hiver — aussi offert au 12e jour de l'Avent
+    "printemps": "printemps",   # 🌸 Fleur de Printemps
+    "ete":       "ete",         # 🌞 Éclat d'Été
+}
+
+# ── Articles hors vente, en toute saison ──
+# Exister au catalogue et être vendable sont deux choses distinctes.
+# Le 🦌 Renne du QG est la récompense du 24 décembre du calendrier de
+# l'Avent : « un compagnon qu'on ne trouve nulle part ailleurs ». Il reste
+# dans PETS_DB, l'Avent continue de l'attribuer, ses propriétaires le
+# gardent — mais la Boutique ne le vend jamais.
+BOUTIQUE_HORS_VENTE = {
+    # 🖼️ Cadre décoratif : depuis la fusion, un thème apporte déjà couleur ET
+    # séparateurs. Vendre les deux revenait à facturer deux fois la même chose.
+    # Les anciens acheteurs conservent leur accès — voir profil_migrer_cadres().
+    "cadre": "🎨 Fusionné avec le **🌈 Thème de profil** — c'est lui qu'il "
+             "faut prendre désormais.",
+    "renne": "🎄 Récompense exclusive du **Calendrier de l'Avent** — "
+             "il ne se vend nulle part.",
+}
+
+def saisons_actives():
+    """Les saisons ouvertes en ce moment. Lit AKARI_MODE, puis le pack.
+    Un pack saisonnier prime sur la table par défaut."""
+    pack = AKARI_PACKS.get(AKARI_MODE, {})
+    if isinstance(pack, dict) and "_saisons" in pack:
+        return tuple(pack["_saisons"])
+    return AKARI_MODE_SAISONS.get(AKARI_MODE, ())
+
+def article_saison(iid):
+    """La saison d'un article, ou None s'il est disponible toute l'année."""
+    return BOUTIQUE_SAISONNIER.get(str(iid).lower())
+
+def saison_ouverte(cle):
+    return cle in saisons_actives()
+
+def boutique_disponible(iid):
+    """Un article peut-il être ACHETÉ en ce moment ?
+
+    La propriété n'est jamais concernée : un membre qui possède déjà
+    l'article le garde et l'utilise hors saison. Seule la vente s'arrête."""
+    iid = str(iid).lower()
+    if boutique_item(iid) is None:
+        return False
+    if iid in BOUTIQUE_HORS_VENTE:
+        return False                      # jamais, quelle que soit la saison
+    s = article_saison(iid)
+    return True if s is None else saison_ouverte(s)
+
+def boutique_blocage(uid, iid):
+    """Empêchement propre à ce membre, ou None s'il peut acheter.
+
+    Distinct de boutique_disponible(), qui ne regarde que l'article.
+    Consulté AVANT tout débit et avant la limite quotidienne : un achat
+    refusé ne doit rien coûter, ni en pièces ni en droit du jour."""
+    uid, iid = str(uid), str(iid).lower()
+    if iid == "boost_rarete":
+        n = rarity_boost.get(uid, 0)
+        if n > 0:
+            return (f"Tu as encore **{n} roll{'s' if n > 1 else ''} boosté"
+                    f"{'s' if n > 1 else ''}**. Utilise-les avant de racheter "
+                    f"ce boost.")
+    return None
+
+def boutique_raison_indispo(iid):
+    """Phrase expliquant pourquoi un article n'est pas achetable."""
+    iid = str(iid).lower()
+    if iid in BOUTIQUE_HORS_VENTE:
+        return BOUTIQUE_HORS_VENTE[iid]
+    s = article_saison(iid)
+    if s and not saison_ouverte(s):
+        emo, nom = BOUTIQUE_SAISONS.get(s, ("🗓️", s))
+        return f"{emo} Disponible uniquement pendant la saison **{nom}**."
+    if boutique_item(iid) is None:
+        return "Cet article n'existe plus."
+    return "Cet article n'est pas disponible en ce moment."
+
+def boutique_catalogue_complet():
+    """Les 104 articles réellement proposables, compagnons compris."""
+    out = []
+    for r in BOUTIQUE_RAYONS:
+        out.extend(boutique_articles(r))
+    return out
+
+def _vitrine_tirage(graine, n, exclus=()):
+    """Tire n articles distincts, un par rayon en priorité, de façon
+    déterministe pour une graine donnée. Ne touche à aucune donnée."""
+    import hashlib
+    rng = random.Random(int(hashlib.md5(graine.encode()).hexdigest()[:12], 16))
+    par_rayon = {}
+    for r in BOUTIQUE_RAYONS:
+        arts = [i for i in boutique_articles(r)
+                if i["id"] not in exclus and boutique_disponible(i["id"])]
+        if arts:
+            par_rayon[r] = sorted(arts, key=lambda x: x["id"])
+    rayons = sorted(par_rayon)
+    rng.shuffle(rayons)
+    out, vus = [], set()
+    # Un passage par rayon, puis on complète si besoin — jamais deux fois
+    # le même article, jamais quatre articles du même rayon.
+    for r in rayons:
+        if len(out) >= n:
+            break
+        choix = rng.choice(par_rayon[r])
+        if choix["id"] not in vus:
+            out.append(choix); vus.add(choix["id"])
+    if len(out) < n:
+        reste = sorted((i for arts in par_rayon.values() for i in arts
+                        if i["id"] not in vus), key=lambda x: x["id"])
+        rng.shuffle(reste)
+        out.extend(reste[:n - len(out)])
+    return out
+
+def boutique_selection_jour(n=3, ts=None):
+    """⭐ Sélection du jour. Identique pour tout le serveur, stable
+    jusqu'à minuit heure de Paris. Ne modifie AUCUNE donnée d'article :
+    ce qui n'y figure pas reste achetable dans son rayon."""
+    return _vitrine_tirage(f"jour:{paris_jour(ts)}", n)
+
+def boutique_selection_semaine(n=4, ts=None):
+    """🔥 Sélection de la semaine. Sa graine ne dépend QUE de la semaine :
+    la faire dépendre aussi du jour la rendait instable du lundi au dimanche.
+    On tire deux articles de plus que nécessaire, pour pouvoir écarter à
+    l'affichage ceux déjà présents dans la sélection du jour sans que la
+    liste ne rétrécisse."""
+    a, s = paris_semaine(ts)
+    return _vitrine_tirage(f"semaine:{a}-{s:02d}", n + 2)
+
+def boutique_vitrine(ts=None):
+    """(sélection du jour, sélection de la semaine) prêtes à afficher.
+    Les doublons visuels sont retirés côté hebdo, pas côté graine."""
+    jour = boutique_selection_jour(ts=ts)
+    ids = {i["id"] for i in jour}
+    sem = [i for i in boutique_selection_semaine(ts=ts) if i["id"] not in ids][:4]
+    return jour, sem
+
+def boutique_nouveautes(ts=None):
+    """🆕 Nouveautés — uniquement si une date d'introduction fiable existe.
+    BOUTIQUE_INTRO est vide : aucune date n'a été inventée, donc rien
+    ne s'affiche tant que le catalogue n'en fournira pas."""
+    import time as _t
+    now = ts if ts is not None else _t.time()
+    return [i for i in boutique_catalogue_complet()
+            if BOUTIQUE_INTRO.get(i["id"])
+            and now - BOUTIQUE_INTRO[i["id"]] < NOUVEAU_DUREE]
 
 def boutique_semaine():
     import time as _t
@@ -6967,6 +7334,10 @@ async def boutique_effet(ctx, uid, item):
         except discord.Forbidden:
             economy_data[uid]["coins"] += item["prix"]
             return await ctx.send("❌ Je ne peux pas t'attribuer ce rôle — mon rôle est trop bas dans la liste.")
+        # Trace de l'achat : Discord reste la référence, mais la Boutique a
+        # besoin de savoir que le rôle est acquis pour refuser un second
+        # ajout au panier au lieu de le découvrir après le débit.
+        inventaire[uid][iid] = 1
         return await ctx.send(embed=discord.Embed(
             title="🎉 Nouveau rôle !",
             description=f"**{nom_role}** est à toi — regarde ta couleur dans la liste des membres.",
@@ -7257,11 +7628,15 @@ async def boutique_effet(ctx, uid, item):
         profil_custom[uid][iid + "_debloque"] = True
         commandes = {"badge": ".setbadge <texte>", "couleur": ".setcouleur <hex>",
                      "citation": ".setcitation <texte>", "banniere": ".setbanniere <url>",
-                     "cadre": ".setcadre", "titre": ".settitre <texte>",
+                     "cadre": ".macustom", "titre": ".settitre <texte>",
                      "emojiperso": ".setemoji <emoji>", "theme": ".settheme"}
+        if iid == "theme":
+            profil_custom[uid]["cadre_debloque"] = True   # les deux clés se valent
         return await ctx.send(embed=discord.Embed(
             title="🎨 Personnalisation débloquée !",
-            description=f"Configure-la avec `{commandes[iid]}`\nElle apparaîtra sur ton `.profil`.",
+            description=(f"Configure-la avec `{commandes[iid]}`\n"
+                         f"Elle apparaîtra sur ton `.profil`.\n\n"
+                         f"*`.macustom` regroupe tout au même endroit.*"),
             color=0xff6fd8))
 
     # ── Items offensifs : rangés dans l'inventaire ──
@@ -7276,6 +7651,153 @@ async def boutique_effet(ctx, uid, item):
     await ctx.send(embed=discord.Embed(title="🛒 Achat réussi !", description=f"✅ **{item['nom']}** acheté !", color=0x2ecc71))
 
 # ── 💳 CHECKOUT ATOMIQUE ──
+# ============================================================
+#  🎒 POSSESSIONS — lecture des systèmes réels
+#  Aucune donnée n'est dupliquée : tout est lu là où le bot l'écrit
+#  déjà. Les familles ci-dessous ont été établies empiriquement, en
+#  achetant chaque article et en observant ce qui change réellement.
+# ============================================================
+
+# ⏳ Effets qui attendent leur déclencheur — drapeau booléen ou compteur
+POSS_EN_ATTENTE = {
+    "double_daily":    ("📅", "Double Daily",      "ton prochain `.daily` rapportera le double"),
+    "aimant_actif":    ("🧲", "Aimant",            "ton prochain roll sera Rare ou mieux"),
+    "megaphone_actif": ("📣", "Mégaphone",         "ton prochain message sera annoncé"),
+    "fanfare_actif":   ("🎺", "Fanfare",           "ton prochain niveau sera annoncé"),
+}
+# 🔢 Effets à charges — la valeur EST le nombre d'utilisations restantes
+POSS_CHARGES = {
+    "rarity_boost":  ("🎯", "Boost Rareté", "roll"),
+    "oracle_actif":  ("🔮", "Oracle",        "consultation"),
+    "oeil_destin":   ("👁️", "Œil du Destin", "usage"),
+}
+# ⏱️ Protections et bonus limités dans le temps — la valeur est un horodatage de fin
+POSS_TEMPORAIRES = {
+    "shield_active":   ("🛡️", "Bouclier",        "tes cartes sont protégées"),
+    "amulette_active": ("🍀", "Amulette",        "protection contre le sabotage"),
+    "cadenas_perso":   ("🔒", "Cadenas Personnel", "personne ne peut te voler"),
+    "double_xp_users": ("⚡", "Double XP",       "ton XP est doublé"),
+    "trefle_actif":    ("🍀", "Trèfle",          "tes gains d'events sont doublés"),
+}
+# 🔓 Améliorations définitives — comparées à leur valeur de départ
+POSS_PERMANENTS = {
+    "fav_slots":       ("⭐", "Slots Favoris",   3),
+    "claim_reduction": ("⏱️", "Claim accéléré",  0),
+}
+
+def poss_duree(restant):
+    restant = int(max(0, restant))
+    if restant >= 3600:
+        return f"{restant // 3600} h {(restant % 3600) // 60:02d}"
+    if restant >= 60:
+        return f"{restant // 60} min"
+    return f"{restant} s"
+
+def possessions_lire(uid):
+    """Toutes les possessions d'un membre, lues dans les systèmes d'origine.
+    Retourne un dict de listes prêtes à afficher — aucune écriture."""
+    import time as _t
+    uid = str(uid)
+    now = _t.time()
+    out = {"cosmetiques": [], "consommables": [], "attente": [], "roles": [],
+           "charges": [], "temporaires": [], "permanents": [], "equipe": []}
+
+    # 🎨 Cosmétiques — profil_custom
+    for iid in sorted(BOUTIQUE_COSMETIQUES):
+        if boutique_possede(uid, iid):
+            it = boutique_item(iid)
+            out["cosmetiques"].append((iid, it["nom"] if it else iid))
+
+    # 🎭 Rôles acquis — marqués à l'achat, portés côté Discord
+    out.setdefault("roles", [])
+    for iid in sorted(BOUTIQUE_ROLES):
+        if inventaire[uid].get(iid, 0) > 0:
+            it = boutique_item(iid)
+            out["roles"].append((iid, it["nom"] if it else iid))
+
+    # 🎒 Consommables réellement stockés — les rôles n'en sont pas
+    for iid, n in sorted(inventaire[uid].items()):
+        if n > 0 and iid not in BOUTIQUE_ROLES and boutique_item(iid):
+            out["consommables"].append((iid, boutique_item(iid)["nom"], n))
+
+    # ⏳ En attente d'un déclencheur
+    for cle, (emo, nom, quand) in POSS_EN_ATTENTE.items():
+        if globals().get(cle, {}).get(uid):
+            out["attente"].append((emo, nom, quand))
+
+    # 🔢 Charges restantes
+    for cle, (emo, nom, unite) in POSS_CHARGES.items():
+        n = globals().get(cle, {}).get(uid, 0)
+        if n:
+            out["charges"].append((emo, nom, int(n), unite))
+
+    # ⏱️ Temporaires encore actifs
+    for cle, (emo, nom, effet) in POSS_TEMPORAIRES.items():
+        fin = globals().get(cle, {}).get(uid, 0)
+        if fin and fin > now:
+            out["temporaires"].append((emo, nom, effet, poss_duree(fin - now)))
+
+    # 🔓 Améliorations définitives, comparées à la valeur de départ
+    for cle, (emo, nom, base) in POSS_PERMANENTS.items():
+        v = globals().get(cle, {}).get(uid, base)
+        if v != base:
+            out["permanents"].append((emo, nom, v, base))
+
+    # ✨ Ce qui est équipé
+    c = profil_custom.get(uid, {})
+    t_nom, _tc, _ts = profil_theme(uid)
+    if t_nom:                 out["equipe"].append(f"🎨 Thème **{t_nom}**")
+    if titre_affiche(uid):    out["equipe"].append(f"👑 {titre_affiche(uid)}")
+    if c.get("banniere"):     out["equipe"].append("🏳️ Bannière personnalisée")
+    if c.get("citation"):     out["equipe"].append("💬 Citation")
+    if c.get("emoji"):        out["equipe"].append(f"✨ Signature {c['emoji']}")
+    if pins_affiches(uid):    out["equipe"].append(f"📌 {len(pins_affiches(uid))} pin(s)")
+    if c.get("vitrine"):      out["equipe"].append(f"🎴 Vitrine ({len(c['vitrine'])} carte(s))")
+    return out
+
+# Ce qu'un article fait vraiment — affiché AVANT l'achat sur sa fiche.
+BOUTIQUE_NATURE = {}
+for _c in BOUTIQUE_COSMETIQUES:      BOUTIQUE_NATURE[_c] = ("🎨", "Cosmétique",
+                                          "s'équipe sur ton profil")
+for _c in BOUTIQUE_ROLES:            BOUTIQUE_NATURE[_c] = ("🎭", "Rôle",
+                                          "un rôle Discord définitif")
+for _c, (_e, _n, _q) in POSS_EN_ATTENTE.items():  pass
+BOUTIQUE_NATURE.update({
+    "boost_daily":  ("⏳", "En attente",  "s'appliquera à ton prochain `.daily`"),
+    "aimant":       ("⏳", "En attente",  "s'appliquera à ton prochain roll"),
+    "megaphone":    ("⏳", "En attente",  "s'appliquera à ton prochain message"),
+    "fanfare":      ("⏳", "En attente",  "s'appliquera à ton prochain niveau"),
+    "boost_rarete": ("🔢", "À charges",   "5 rolls, une charge par roll"),
+    "oracle":       ("🔢", "À charges",   "3 consultations"),
+    "oeil":         ("🔢", "À charges",   "3 usages"),
+    "shield":       ("⏱️", "Temporaire",  "2 heures de protection"),
+    "protection":   ("⏱️", "Temporaire",  "protection limitée dans le temps"),
+    "amulette":     ("⏱️", "Temporaire",  "20 minutes"),
+    "cadenasp":     ("⏱️", "Temporaire",  "24 heures"),
+    "double_xp":    ("⏱️", "Temporaire",  "1 heure d'XP doublé"),
+    "trefle":       ("⏱️", "Temporaire",  "1 heure de gains d'events doublés"),
+    "fav_slot_5":   ("🔓", "Permanent",   "augmente définitivement tes slots favoris"),
+    "fav_slot_10":  ("🔓", "Permanent",   "augmente définitivement tes slots favoris"),
+    "claim_10":     ("🔓", "Permanent",   "réduit définitivement ton délai de claim"),
+    "claim_15":     ("🔓", "Permanent",   "réduit définitivement ton délai de claim"),
+    "claim_20":     ("🔓", "Permanent",   "réduit définitivement ton délai de claim"),
+    "rolls_5":      ("⚡", "Immédiat",    "+5 rolls tout de suite — rien à stocker"),
+    "cafe":         ("⚡", "Immédiat",    "recharge tes rolls tout de suite"),
+    "double_rien":  ("⚡", "Immédiat",    "effet appliqué à l'achat"),
+    "potionxp":     ("⚡", "Immédiat",    "+500 XP tout de suite"),
+    "cadeau":       ("⚡", "Immédiat",    "ouvert à l'achat"),
+    "tirelire":     ("⚡", "Immédiat",    "versé à l'achat"),
+    "reroll_pet":   ("⚡", "Immédiat",    "appliqué à l'achat"),
+})
+
+def boutique_nature(iid):
+    """(emoji, libellé, explication) — 🎒 Consommable par défaut."""
+    if iid in BOUTIQUE_NATURE:
+        return BOUTIQUE_NATURE[iid]
+    if est_compagnon(iid):
+        return ("🐾", "Compagnon", "s'adopte une fois — bonus permanent qui grandit")
+    return ("🎒", "Consommable", "se garde dans ton inventaire jusqu'à usage")
+
 def source_membre(source):
     """Le membre derrière un déclencheur, qu'il vienne d'une commande ou d'un bouton.
 
@@ -7323,6 +7845,12 @@ async def boutique_checkout(ctx, uid):
         for it, _q, _st, pb in lignes:
             if pb:
                 return False, [], 0, f"**{it['nom']}** — {pb}."
+            if not boutique_disponible(it["id"]):
+                # Un panier vieux d'avant le changement de saison ne doit pas
+                # passer : la vérification est ici, pas seulement à l'ajout.
+                return False, [], 0, (f"**{it['nom']}** — "
+                                      f"{boutique_raison_indispo(it['id'])}\n"
+                                      f"*Retire-le de ton panier pour continuer.*")
         total = sum(st for _i, _q, st, _p in lignes)
         if economy_data[uid]["coins"] < total:
             manque = total - economy_data[uid]["coins"]
@@ -7373,7 +7901,8 @@ def ticket_embed(source, achetes, total):
     lignes = []
     for it, q, st in achetes:
         q_txt = f" ×{q}" if q > 1 else ""
-        lignes.append(f"{it['nom']}{q_txt} — **{st:,}**")
+        _e, _l, exp = boutique_nature(it["id"])
+        lignes.append(f"{it['nom']}{q_txt} — **{st:,}**\n　*{exp}*")
     e = discord.Embed(
         title="🧾  BOUTIQUE AKARI",
         description=("\n".join(lignes)
@@ -7397,6 +7926,9 @@ async def acheter_cmd(ctx, item_id: str = None):
         item = {"id": iid_low, "nom": f"{p['emoji']} {p['nom']}",
                 "prix": PETS_PRIX[p["rarete"]], "cat": "pets", "description": p["desc"]}
     if not item: return await ctx.send(f"❌ Item `{item_id}` introuvable ! Consulte `.shop`")
+    _bloc = boutique_blocage(uid, item["id"])
+    if _bloc:
+        return await ctx.send(f"❌ {_bloc}")
     if economy_data[uid]["coins"] < item["prix"]:
         return await ctx.send(f"❌ Il te manque **{item['prix']-economy_data[uid]['coins']} pièces** !")
     now = _time_module.time()
@@ -8053,8 +8585,11 @@ async def run_invasion(channel, guild):
     """⚠️ Invasion — boss dans un salon dédié (les .attaque en rafale polluent sinon)"""
     if guild.id in active_boss:
         return await channel.send("⚔️ Un boss est déjà en cours sur le serveur !")
-    salon = await create_event_channel(guild, "🐉・invasion-boss")
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     ping = get_event_ping(guild, "everyone") if cible is channel else ""
     if not await spawn_boss(cible, guild, ping):
         return
@@ -8082,8 +8617,11 @@ async def run_coffre(channel, gain=None, guild=None, palier=None):
         p = random.choices(COFFRE_PALIERS, weights=[x[7] for x in COFFRE_PALIERS])[0]
     cle, nom, emo, gmin, gmax, couleur, ping, _poids = p
     gain = gain or random.randint(gmin, gmax)
-    salon = await create_event_channel(guild, f"{emo}・{cle}") if guild else None
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     coffre_actif[cible.id] = {"contenu": gain, "expires": _t.time() + 300}
     embed = discord.Embed(title=f"{emo} {nom.upper()} !",
         description=(f"Tape `.ouvrir` pour récupérer les **{gain:,} pièces**.\n"
@@ -8534,6 +9072,7 @@ async def run_banquier(channel, guild):
     """🎩 Le Banquier — Deal or No Deal, dans un salon dédié"""
     salon = await create_event_channel(guild, "🎩・le-banquier")
     if not salon:
+        # Le wrapper a déjà créé le salon dédié — `channel` EST ce salon.
         salon = channel
 
     annonce = discord.Embed(
@@ -8562,7 +9101,7 @@ async def run_banquier(channel, guild):
             description="😴 Personne ne s'est présenté — le banquier referme son bureau.",
             color=0x95a5a6))
         if salon is not channel:
-            await close_event_channel(salon, 60)
+            pass  # fermeture assurée par lancer_event_standard()
         return
 
     joueur = view.candidat
@@ -8652,7 +9191,7 @@ async def run_banquier(channel, guild):
                        else f"😎 Bien joué — il gagne **{abs(ecart):,} pièces** de plus que sa valise !")),
                 color=0xf1c40f))
             if salon is not channel:
-                await close_event_channel(salon, 180)
+                pass  # fermeture assurée par lancer_event_standard()
             return
         await salon.send(embed=discord.Embed(
             description=f"🚫 **NO DEAL !** {joueur.display_name} continue… 😤", color=0xe74c3c))
@@ -8673,7 +9212,7 @@ async def run_banquier(channel, guild):
                else "💔 **Il aurait mieux fait d'accepter…**")),
         color=0xf1c40f if (offre_finale and contenu >= offre_finale) else 0xe74c3c))
     if salon is not channel:
-        await close_event_channel(salon, 180)
+        pass  # fermeture assurée par lancer_event_standard()
 
 # ============================================================
 #  🏛️ LES ENCHÈRES — lot en rotation, compte à rebours relancé
@@ -8775,6 +9314,7 @@ async def run_encheres(channel, guild):
 
     salon = await create_event_channel(guild, "🏛️・encheres")
     if not salon:
+        # Le wrapper a déjà créé le salon dédié — `channel` EST ce salon.
         salon = channel
 
     annonce = discord.Embed(
@@ -8827,7 +9367,7 @@ async def run_encheres(channel, guild):
         await salon.send(embed=discord.Embed(
             description="🔨 **Aucune offre** — le lot retourne dans les réserves.", color=0x95a5a6))
         if salon is not channel:
-            await close_event_channel(salon, 60)
+            pass  # fermeture assurée par lancer_event_standard()
         return
 
     gagnant = etat["gagnant"]
@@ -8837,7 +9377,7 @@ async def run_encheres(channel, guild):
         await salon.send(embed=discord.Embed(
             description=f"❌ {gagnant.mention} n'a plus les fonds — la vente est annulée.", color=0xe74c3c))
         if salon is not channel:
-            await close_event_channel(salon, 60)
+            pass  # fermeture assurée par lancer_event_standard()
         return
 
     economy_data[uid]["coins"] -= prix
@@ -8884,7 +9424,7 @@ async def run_encheres(channel, guild):
                      f"*{etat['nb']} enchères · {len(etat['participants'])} participants*"),
         color=couleur))
     if salon is not channel:
-        await close_event_channel(salon, 180)
+        pass  # fermeture assurée par lancer_event_standard()
 
 # ============================================================
 #  NOUVEAUX EVENTS — Fonctions réutilisables (auto + manuel)
@@ -8958,8 +9498,11 @@ class DebatView(ui.View):
 async def run_debat(channel, guild, duree=3600):
     """🎤 Débat 2.0 — camps, discussion, dépouillement."""
     d = random.choice(DEBATS)
-    salon = await create_event_channel(guild, "🎤・debat-du-jour") if guild else None
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, d["theme"], discord.Embed(
             title="🎤 DÉBAT DU JOUR",
@@ -9040,7 +9583,8 @@ async def run_debat(channel, guild, duree=3600):
             color=0x2ecc71)
     concl.set_footer(text=f"{total} participant(s) · aucune pièce en jeu, juste la fierté")
     await cible.send(embed=concl)
-    if salon: await close_event_channel(salon, 300)
+    # Fermeture confiée au wrapper : lancer_event_standard() supprime
+    # le salon une seule fois, dans son finally.
 
 
 async def run_loterie(channel, guild):
@@ -9075,7 +9619,7 @@ async def run_loterie(channel, guild):
         await channel.send(embed=discord.Embed(
             description="🍀 Loterie annulée — aucun participant !", color=0x95a5a6))
         if channel is not salon_principal:
-            await close_event_channel(channel, 60)
+            pass  # fermeture assurée par lancer_event_standard()
         return
     # Tirage pondéré par nombre de tickets
     tickets_pool = []
@@ -9093,7 +9637,7 @@ async def run_loterie(channel, guild):
         description=f"🎉 Félicitations {nom} !\n💰 Tu remportes la cagnotte de **{cagnotte:,} pièces** !\n\n*{len(tickets_pool)} tickets vendus à {len(data['participants'])} joueurs*",
         color=0xf1c40f))
     if channel is not salon_principal:
-        await close_event_channel(channel, 180)
+        pass  # fermeture assurée par lancer_event_standard()
 
 @bot.command(name="loto", aliases=["loterie", "ticket_loto"])
 async def loto_cmd(ctx):
@@ -9136,8 +9680,11 @@ async def run_chiffre_mystere(channel, guild):
     """🔢 Chiffre Mystère — devinez le nombre, indices plus chaud / plus froid"""
     secret = random.randint(1, 100)
     gain = random.randint(500, 1200)
-    salon = await create_event_channel(guild, "🔢・chiffre-mystere")
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
             title="🔢 CHIFFRE MYSTÈRE",
@@ -9172,7 +9719,7 @@ async def run_chiffre_mystere(channel, guild):
                             f"en {essais} essai(s).",
                 color=0x2ecc71))
             if salon:
-                await close_event_channel(salon, 90)
+                pass  # fermeture assurée par lancer_event_standard()
             return
         ecart = abs(n - secret)
         chaud = "🔥 très chaud" if ecart <= 3 else ("🌡️ chaud" if ecart <= 10 else ("❄️ froid" if ecart <= 25 else "🧊 glacial"))
@@ -9180,13 +9727,16 @@ async def run_chiffre_mystere(channel, guild):
     await cible.send(embed=discord.Embed(
         description=f"⏰ Temps écoulé ! Le nombre était **{secret}**.", color=0xe74c3c))
     if salon:
-        await close_event_channel(salon, 90)
+        pass  # fermeture assurée par lancer_event_standard()
 
 async def run_pluie_pieces(channel, guild):
     """💸 Pluie de Pièces — tout le monde clique, tout le monde gagne"""
     duree = 60
-    salon = await create_event_channel(guild, "💸・pluie-de-pieces")
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     gagnants = {}
 
     class PluieView(ui.View):
@@ -9227,14 +9777,17 @@ async def run_pluie_pieces(channel, guild):
                      if gagnants else "Personne n'a rien attrapé… dommage !"),
         color=0x95a5a6))
     if salon:
-        await close_event_channel(salon, 90)
+        pass  # fermeture assurée par lancer_event_standard()
 
 async def run_morpion_geant(channel, guild):
     """🎲 Le Chiffre du Jour — 3 tirages, le plus proche gagne"""
     secret = random.randint(1, 50)
     gain = random.randint(600, 1400)
-    salon = await create_event_channel(guild, "🎲・chiffre-du-jour")
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
             title="🎲 LE CHIFFRE DU JOUR",
@@ -9277,7 +9830,7 @@ async def run_morpion_geant(channel, guild):
             description=f"{détail}\n\n🏆 **{nom_g}** remporte **{gain:,} pièces** !",
             color=0xf1c40f))
     if salon:
-        await close_event_channel(salon, 120)
+        pass  # fermeture assurée par lancer_event_standard()
 
 # ============================================================
 #  PING INTELLIGENT + DONNÉES DES EVENTS
@@ -9558,8 +10111,11 @@ async def run_tap_race(channel, guild):
     """🏁 Tap Race 2.0 — 4 segments, une allure à choisir avant chacun."""
     places = 4
     gain = random.randint(1500, 3500)
-    salon = await create_event_channel(guild, "🏁・tap-race", sans_reactions=True) if guild else None
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
             title="🏁 TAP RACE !",
@@ -9593,7 +10149,8 @@ async def run_tap_race(channel, guild):
                          else f"Seul **{coureurs[0].display_name}** s'est présenté. "
                               f"Une course à un, ça s'appelle un footing."),
             color=0x95a5a6))
-        if salon: await close_event_channel(salon, 60)
+        # Fermeture confiée au wrapper : lancer_event_standard() supprime
+        # le salon une seule fois, dans son finally.
         return
 
     etat = {"noms": {str(u.id): u.display_name for u in coureurs},
@@ -9682,7 +10239,8 @@ async def run_tap_race(channel, guild):
         title="🏁 ARRIVÉE",
         description="\n".join(lignes),
         color=0x2ecc71).set_footer(text="4 segments · l'endurance décide autant que les clics"))
-    if salon: await close_event_channel(salon, 120)
+    # Fermeture confiée au wrapper : lancer_event_standard() supprime
+    # le salon une seule fois, dans son finally.
 
 
 # ============================================================
@@ -9730,8 +10288,11 @@ class AscenseurCandidatView(ui.View):
 
 async def run_ascenseur(channel, guild):
     """🎢 L'Ascenseur — chaque étage double la mise, un étage est piégé"""
-    salon = await create_event_channel(guild, "🎢・l-ascenseur")
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
             title="🎢 L'ASCENSEUR",
@@ -9757,7 +10318,7 @@ async def run_ascenseur(channel, guild):
         await cible.send(embed=discord.Embed(
             description="😴 Personne n'a osé entrer dans l'ascenseur.", color=0x95a5a6))
         if salon:
-            await close_event_channel(salon, 90)
+            pass  # fermeture assurée par lancer_event_standard()
         return
 
     candidat = vue_c.candidat
@@ -9879,8 +10440,11 @@ async def run_reflexe(channel, guild, variante=None):
     """⚡ Réflexe — signal GO · emoji cible · faux départ."""
     v = variante if variante in REFLEXE_VARIANTES else random.choice(REFLEXE_VARIANTES)
     gain = random.randint(500, 1400)
-    salon = await create_event_channel(guild, "⚡・reflexe") if guild else None
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
             title="⚡ RÉFLEXE", description=f"Test de réflexe — **{gain:,} pièces** au plus rapide.",
@@ -9934,7 +10498,8 @@ async def run_reflexe(channel, guild, variante=None):
         msg = await bot.wait_for("message", check=check, timeout=20)
     except asyncio.TimeoutError:
         await cible.send(embed=discord.Embed(description="⏰ Personne n'a réagi.", color=0xe74c3c))
-        if salon: await close_event_channel(salon, 60)
+        # Fermeture confiée au wrapper : lancer_event_standard() supprime
+        # le salon une seule fois, dans son finally.
         return None
     ms = int((asyncio.get_event_loop().time() - debut) * 1000)
     uid = str(msg.author.id)
@@ -9945,7 +10510,8 @@ async def run_reflexe(channel, guild, variante=None):
     await cible.send(embed=discord.Embed(
         description=f"⚡ **{msg.author.display_name}** — **{ms} ms**\n💰 +{gain:,} pièces",
         color=0x2ecc71))
-    if salon: await close_event_channel(salon, 60)
+    # Fermeture confiée au wrapper : lancer_event_standard() supprime
+    # le salon une seule fois, dans son finally.
     return msg.author
 
 async def run_premier_clic(channel, guild):
@@ -9963,7 +10529,7 @@ async def run_intrus(channel, guild):
 async def _fin_intrus(cible, salon, embed):
     await cible.send(embed=embed)
     if salon:
-        await close_event_channel(salon, 90)
+        pass  # fermeture assurée par lancer_event_standard()
 
 # ============================================================
 #  🎪 EVENTS — série 3
@@ -9972,8 +10538,11 @@ async def run_qui_suis_je(channel, guild):
     """🎭 Qui suis-je ? — indices qui tombent un par un"""
     perso = random.choice(PERSONNAGES)
     gain_max = random.randint(900, 1600)
-    salon = await create_event_channel(guild, "🎭・qui-suis-je")
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
             title="🎭 QUI SUIS-JE ?",
@@ -10016,13 +10585,13 @@ async def run_qui_suis_je(channel, guild):
                              f"*({perso['univers']})* en {idx+1} indice(s) !\n💰 +{gain:,} pièces"),
                 color=0x2ecc71))
             if salon:
-                await close_event_channel(salon, 90)
+                pass  # fermeture assurée par lancer_event_standard()
             return
     await cible.send(embed=discord.Embed(
         description=f"⏰ Personne n'a trouvé — c'était **{perso['nom']}** *({perso['univers']})*",
         color=0xe74c3c))
     if salon:
-        await close_event_channel(salon, 90)
+        pass  # fermeture assurée par lancer_event_standard()
 
 COFFRE_ENIGMES = [
     ("Suite logique : 2 · 4 · 8 · 16 · ?", "32"),
@@ -10043,8 +10612,11 @@ async def run_braquage_coffre(channel, guild):
     """🏦 Braquage du Coffre — trouvez le code avant les autres"""
     total = random.choice([8000, 10000, 12000, 15000, 20000])
     enigmes = random.sample(COFFRE_ENIGMES, 3)
-    salon = await create_event_channel(guild, "🏦・braquage-du-coffre")
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
             title="🔐 BRAQUAGE DU COFFRE",
@@ -10101,7 +10673,7 @@ async def run_braquage_coffre(channel, guild):
         await cible.send(embed=discord.Embed(
             description="🔒 Le coffre est resté fermé… personne n'a craqué un seul code.", color=0x95a5a6))
     if salon:
-        await close_event_channel(salon, 120)
+        pass  # fermeture assurée par lancer_event_standard()
 
 class RisqueView(ui.View):
     """Risque ou Sécurité — doubler ou encaisser"""
@@ -10436,8 +11008,11 @@ class VraiFauxView(ui.View):
 
 async def run_vraifaux(channel, guild):
     """🧠 Vrai ou Faux — 5 affirmations, le premier bon bouton gagne"""
-    salon = await create_event_channel(guild, "🧠・vrai-ou-faux")
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
             title="🧠 VRAI OU FAUX !",
@@ -10476,7 +11051,7 @@ async def run_vraifaux(channel, guild):
             description="\n".join(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{n}** — {s}/5"
                                   for i, (n, s) in enumerate(cl[:5])), color=0x9b59b6))
     if salon:
-        await close_event_channel(salon, 90)
+        pass  # fermeture assurée par lancer_event_standard()
 
 async def run_enigme(channel, guild):
     """Compatibilité — délègue au moteur commun Défis Éclair."""
@@ -10539,8 +11114,11 @@ class SapinView(ui.View):
 
 async def run_sapin_noel(channel, guild):
     """🎄 Le Sapin du QG — chacun déballe un cadeau"""
-    salon = await create_event_channel(guild, "🎄・sapin-du-qg")
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
             title="🎄 LE SAPIN DU QG",
@@ -10573,7 +11151,7 @@ async def run_sapin_noel(channel, guild):
             description="🎄 Personne n'est venu chercher son cadeau… le Père Noël est déçu.",
             color=0x95a5a6))
     if salon:
-        await close_event_channel(salon, 120)
+        pass  # fermeture assurée par lancer_event_standard()
 
 BONBONS_HALLOWEEN = [
     ("🍬", "Bonbon acidulé", 400), ("🍭", "Sucette géante", 800),
@@ -10623,8 +11201,11 @@ class PorteHalloweenView(ui.View):
 
 async def run_halloween(channel, guild):
     """🎃 Des Bonbons ou un Sort — 3 portes par personne"""
-    salon = await create_event_channel(guild, "🎃・bonbons-ou-un-sort")
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
             title="🎃 DES BONBONS OU UN SORT !",
@@ -10659,7 +11240,7 @@ async def run_halloween(channel, guild):
         await cible.send(embed=discord.Embed(
             description="🎃 Personne n'a osé frapper aux portes. Sage décision.", color=0x95a5a6))
     if salon:
-        await close_event_channel(salon, 120)
+        pass  # fermeture assurée par lancer_event_standard()
 
 # ============================================================
 #  💣 BOMBE MYSTÈRE
@@ -10847,8 +11428,11 @@ def _bombe_embed(etat):
 
 async def run_bombe(channel, guild):
     """💣 Bombe 2.0 — la bombe circule, chacun décide, un seul survivant."""
-    salon = await create_event_channel(guild, "💣・bombe") if guild else None
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
             title="🚨 UNE BOMBE DANS LE QG !",
@@ -10870,7 +11454,8 @@ async def run_bombe(channel, guild):
             description=("Personne n'a osé." if not insc.joueurs
                          else "Il faut être au moins **deux** — une bombe ne se passe pas tout seul."),
             color=0x95a5a6))
-        if salon: await close_event_channel(salon, 60)
+        # Fermeture confiée au wrapper : lancer_event_standard() supprime
+        # le salon une seule fois, dans son finally.
         return
 
     ordre = insc.joueurs[:]
@@ -10963,7 +11548,8 @@ async def run_bombe(channel, guild):
         await cible.send(embed=discord.Embed(
             title="💀 Personne",
             description="Tout le monde a sauté. Akari note ça quelque part.", color=0x95a5a6))
-        if salon: await close_event_channel(salon, 90)
+        # Fermeture confiée au wrapper : lancer_event_standard() supprime
+        # le salon une seule fois, dans son finally.
         return
 
     # Cagnotte UNIQUE — 70 % au vainqueur, 30 % partagés entre les autres survivants
@@ -10986,7 +11572,7 @@ async def run_bombe(channel, guild):
         description=("\n".join(lignes) +
                      f"\n\n*{etat['tour']} tours · {len(ordre)} démineurs au départ.*"),
         color=0x2ecc71).set_footer(text=f"Cagnotte totale : {cagnotte:,} pièces"))
-    if salon: await close_event_channel(salon, 120)
+    pass  # fermeture assurée par lancer_event_standard()
 
 
 # ============================================================
@@ -11023,8 +11609,11 @@ async def run_defi_eclair(channel, guild, mode=None):
     M = DEFIS_MODES[cle]
     titre, corps, reponses, revelation = M["fournisseur"]()
     gain = random.randint(*M["gain"])
-    salon = await create_event_channel(guild, M["salon"]) if guild else None
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, M["ping"], discord.Embed(
             title=f"{M['emoji']} {M['nom'].upper()}",
@@ -11060,7 +11649,7 @@ async def run_defi_eclair(channel, guild, mode=None):
     if not gagnant:
         await cible.send(embed=discord.Embed(
             description=f"⏰ Temps écoulé — {revelation}", color=0xe74c3c))
-    if salon: await close_event_channel(salon, 90)
+    pass  # fermeture assurée par lancer_event_standard()
     return gagnant
 
 MOTS_PREMIER_DEFI = [
@@ -11230,8 +11819,11 @@ def _train_embed(etat):
 
 async def run_train_fou(channel, guild):
     """🚂 Train Fou — huit stations, un vote à chacune, tout ou rien."""
-    salon = await create_event_channel(guild, "🚂・train-fou") if guild else None
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
             title="🚂 LE TRAIN FOU ENTRE EN GARE",
@@ -11253,7 +11845,8 @@ async def run_train_fou(channel, guild):
             description=("Personne n'est monté." if not insc.joueurs
                          else "Un seul passager. Le chef de gare a annulé le départ."),
             color=0x95a5a6))
-        if salon: await close_event_channel(salon, 60)
+        # Fermeture confiée au wrapper : lancer_event_standard() supprime
+        # le salon une seule fois, dans son finally.
         return
 
     ordre = insc.joueurs[:]
@@ -11353,7 +11946,7 @@ async def run_train_fou(channel, guild):
     if recap:
         await cible.send(embed=discord.Embed(
             title="🚂 Le voyage", description="\n".join(recap), color=0x2c3e50))
-    if salon: await close_event_channel(salon, 150)
+    pass  # fermeture assurée par lancer_event_standard()
 
 # ============================================================
 #  💼 LE DEAL — deux joueurs, un lot, deux valeurs secrètes
@@ -11439,8 +12032,11 @@ class DealOffreView(ui.View):
 
 async def run_le_deal(channel, guild):
     """💼 Le Deal — deux acheteurs, un lot, des valeurs secrètes différentes."""
-    salon = await create_event_channel(guild, "💼・le-deal") if guild else None
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
             title="💼 LE DEAL",
@@ -11462,7 +12058,8 @@ async def run_le_deal(channel, guild):
             description=("Personne à la table." if not insc.joueurs
                          else "On ne négocie pas tout seul."),
             color=0x95a5a6))
-        if salon: await close_event_channel(salon, 60)
+        # Fermeture confiée au wrapper : lancer_event_standard() supprime
+        # le salon une seule fois, dans son finally.
         return
 
     duo = random.sample(insc.joueurs, 2)
@@ -11566,7 +12163,7 @@ async def run_le_deal(channel, guild):
             color=coul)
     concl.set_footer(text=f"{emo} {lot}")
     await cible.send(embed=concl)
-    if salon: await close_event_channel(salon, 150)
+    pass  # fermeture assurée par lancer_event_standard()
 
 # ============================================================
 #  🃏 CARTE ROUGE — annoncer, mentir, accuser
@@ -11671,8 +12268,11 @@ def _rouge_embed(etat):
 
 async def run_carte_rouge(channel, guild):
     """🃏 Carte Rouge — annoncer, mentir, accuser."""
-    salon = await create_event_channel(guild, "🃏・carte-rouge") if guild else None
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
             title="🃏 CARTE ROUGE",
@@ -11695,7 +12295,8 @@ async def run_carte_rouge(channel, guild):
                          else f"**{len(insc.joueurs)}** joueur(s) — il en faut **trois**. "
                               f"On ne bluffe pas à deux, on se regarde."),
             color=0x95a5a6))
-        if salon: await close_event_channel(salon, 60)
+        # Fermeture confiée au wrapper : lancer_event_standard() supprime
+        # le salon une seule fois, dans son finally.
         return
 
     ordre = insc.joueurs[:]
@@ -11807,7 +12408,7 @@ async def run_carte_rouge(channel, guild):
         description="\n".join(lignes),
         color=0x2ecc71 if meilleur > 0 else 0x95a5a6
     ).set_footer(text=f"{manches} manches · {len(ordre)} joueurs"))
-    if salon: await close_event_channel(salon, 120)
+    pass  # fermeture assurée par lancer_event_standard()
 
 # ============================================================
 #  🧠 MÉMOIRE INVERSÉE — on ne redemande jamais la même chose
@@ -11849,8 +12450,11 @@ def _mem_question(seq):
 
 async def run_memoire_inversee(channel, guild):
     """🧠 Mémoire Inversée — quatre manches, questions qui changent d'angle."""
-    salon = await create_event_channel(guild, "🧠・memoire-inversee") if guild else None
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
             title="🧠 MÉMOIRE INVERSÉE",
@@ -11938,7 +12542,8 @@ async def run_memoire_inversee(channel, guild):
             title="🧠 Personne n'a trouvé",
             description="Quatre manches, zéro bonne réponse. Akari est perplexe.",
             color=0x95a5a6))
-        if salon: await close_event_channel(salon, 90)
+        # Fermeture confiée au wrapper : lancer_event_standard() supprime
+        # le salon une seule fois, dans son finally.
         return
     cl = sorted(scores.items(), key=lambda x: -x[1])
     lignes = []
@@ -11951,7 +12556,7 @@ async def run_memoire_inversee(channel, guild):
         lignes.append(f"{med} **{noms[u]}** — {s} pts" + (f" · +{gain:,} pièces" if gain else ""))
     await cible.send(embed=discord.Embed(
         title="🧠 CLASSEMENT FINAL", description="\n".join(lignes), color=0x2ecc71))
-    if salon: await close_event_channel(salon, 120)
+    pass  # fermeture assurée par lancer_event_standard()
 
 # ============================================================
 #  🧠 PETIT BAC — produire, pas répondre
@@ -11966,8 +12571,11 @@ PETITBAC_LETTRES = "ABCDEFGHIJLMNOPRSTV"
 
 async def run_petit_bac(channel, guild):
     """🧠 Petit Bac — une lettre, quatre catégories, l'originalité paie."""
-    salon = await create_event_channel(guild, "🧠・petit-bac") if guild else None
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
             title="🧠 PETIT BAC",
@@ -12055,7 +12663,8 @@ async def run_petit_bac(channel, guild):
         await cible.send(embed=discord.Embed(
             title="🧠 Petit Bac annulé",
             description="Personne n'a rendu de copie.", color=0x95a5a6))
-        if salon: await close_event_channel(salon, 90)
+        # Fermeture confiée au wrapper : lancer_event_standard() supprime
+        # le salon une seule fois, dans son finally.
         return
     cl = sorted(total.items(), key=lambda x: -x[1])
     meilleur = cl[0][1]
@@ -12077,7 +12686,7 @@ async def run_petit_bac(channel, guild):
         title="🧠 PETIT BAC — classement final",
         description="\n".join(lignes),
         color=0x2ecc71).set_footer(text="2 points par réponse unique · 1 si partagée"))
-    if salon: await close_event_channel(salon, 120)
+    pass  # fermeture assurée par lancer_event_standard()
 
 EVENTS_CATALOGUE = {
     "defieclair": {"nom":"⚡ Défis Éclair","fn":"run_defi_eclair","salon":True,"duree":"1 à 3 min","fam":"event",
@@ -12129,11 +12738,11 @@ EVENTS_CATALOGUE = {
     "coffre": {"nom":"📦 Coffre","fn":"run_coffre","salon":True,"duree":"5 min","fam":"event",
         "desc":"Simple, renforcé ou scellé. Le premier à taper .ouvrir rafle tout.","gain":"300 à 4 500 pièces"},
     "colis": {"nom":"🧰 Coffre Renforcé","fn":"run_colis","salon":True,"duree":"5 min","fam":"mode","parent":"coffre","desc":"Palier renforcé du Coffre.","gain":"900 à 2 200 pièces"},
-    "cartemystere": {"nom":"🎴 Carte Mystère","fn":"run_carte_mystere","salon":False,"duree":"1 min","fam":"event",
+    "cartemystere": {"nom":"🎴 Carte Mystère","fn":"run_carte_mystere","salon":True,"duree":"1 min","fam":"event",
         "desc":"Une carte Épique ou mieux tombe — premier au cœur, premier servi.","gain":"une carte rare"},
     "debatdujour": {"nom":"🎤 Débat du Jour","fn":"run_debat","salon":True,"duree":"1 h","fam":"event",
         "desc":"Deux camps s'affrontent, le serveur vote.","gain":"aucun — fierté uniquement"},
-    "jackpot": {"nom":"💰 Jackpot","fn":"run_jackpot","salon":False,"duree":"instantané","fam":"casino",
+    "jackpot": {"nom":"💰 Jackpot","fn":"run_jackpot","salon":True,"duree":"instantané","fam":"casino",
         "desc":"Le premier à écrire !jackpot empoche toute la cagnotte.","gain":"1 500 à 5 000 pièces"},
     "loterie": {"nom":"🍀 Loterie","fn":"run_loterie","salon":True,"duree":"5 min","fam":"casino",
         "desc":"Tickets à 100 pièces, un seul gagnant rafle la cagnotte.","gain":"toute la cagnotte"},
@@ -12152,6 +12761,322 @@ EVENTS_CATALOGUE = {
     "marchenoir": {"nom":"🕶️ Marché Noir","fn":"run_marche_noir","salon":False,"duree":"24 h","fam":"modificateur",
         "desc":"Trois cartes rares achetables — cher, mais garanties.","gain":"cartes Épique à Mythique"},
 }
+
+# ============================================================
+#  🎪 SOCLE DES EVENTS — registre central et wrapper
+#  Un event jouable = un salon temporaire dédié. Le salon Event
+#  sert à annoncer, jamais à jouer. Si le salon ne peut pas être
+#  créé, l'event avorte : aucun repli.
+# ============================================================
+EVENTS_SCHEMA = 1
+EVENT_FERMETURE_DELAI = 45      # secondes avant suppression du salon
+
+# {guild_id: {cle: {...}}} — la source de vérité de ce qui tourne.
+events_actifs = {}
+
+# Salons créés par un event, persistés pour survivre à un redémarrage.
+# {channel_id: {"g": guild_id, "cle": event, "t": ts}}
+event_salons_suivis = {}
+
+# Les modificateurs n'occupent pas de salon et peuvent coexister
+# avec un event jouable. Ils sont enregistrés mais ne bloquent rien.
+EVENT_FAMILLES_EXCLUSIVES = {"event", "casino", "combat", "saisonnier", "mode"}
+# `emission` (Secret Story) est délibérément absente : son salon vit entre les
+# manches, parfois des heures. Elle est suivie et pilotable, mais ne monopolise
+# pas le verrou. Sa propre unicité est garantie par ss_session_active().
+
+def event_actifs_guild(gid):
+    return events_actifs.setdefault(int(gid), {})
+
+def event_exclusif_en_cours(gid):
+    """La clé de l'event bloquant en cours, ou None."""
+    for cle, info in event_actifs_guild(gid).items():
+        if info.get("exclusif"):
+            return cle
+    return None
+
+def event_enregistrer(gid, cle, nom, salon=None, task=None, fam="event", exclusif=None):
+    """Inscrit un event au registre. Retourne sa fiche."""
+    import time as _t
+    if exclusif is None:
+        exclusif = fam in EVENT_FAMILLES_EXCLUSIVES
+    fiche = {"cle": cle, "nom": nom, "fam": fam, "exclusif": bool(exclusif),
+             "salon_id": getattr(salon, "id", None), "task": task,
+             "vues": [], "etat": "en_cours", "debut": _t.time()}
+    event_actifs_guild(gid)[cle] = fiche
+    if salon is not None:
+        event_salons_suivis[salon.id] = {"g": int(gid), "cle": cle, "t": _t.time()}
+    return fiche
+
+def event_attacher_vue(gid, cle, vue):
+    """Mémorise une View pour pouvoir l'arrêter proprement plus tard."""
+    f = event_actifs_guild(gid).get(cle)
+    if f is not None and vue is not None:
+        f["vues"].append(vue)
+    return vue
+
+def event_desenregistrer(gid, cle):
+    """Retire l'event du registre et cesse de suivre son salon."""
+    f = event_actifs_guild(gid).pop(cle, None)
+    if f and f.get("salon_id"):
+        event_salons_suivis.pop(f["salon_id"], None)
+    return f
+
+def event_arreter_vues(fiche):
+    """Stoppe les Views d'un event. Ne lève jamais."""
+    n = 0
+    for v in (fiche or {}).get("vues", []):
+        try:
+            v.stop(); n += 1
+        except Exception:
+            pass
+    return n
+
+async def lancer_event_standard(guild, salon_annonce, cle, fn=None):
+    """Déroule un event du début à la fin, salon compris.
+
+    annonce → salon → registre → run_* → fermeture → désinscription.
+    Le run_* reçoit un salon GARANTI : il n'a plus à gérer de repli.
+    Retourne (ok, message d'erreur ou None)."""
+    ev = EVENTS_CATALOGUE.get(cle)
+    if not ev:
+        return False, f"Event `{cle}` inconnu."
+    fn = fn or globals().get(ev["fn"])
+    if not fn:
+        return False, f"La fonction `{ev['fn']}` est introuvable."
+    gid = guild.id
+    fam = ev.get("fam", "event")
+
+    # ── Garde-fou : un seul event bloquant à la fois ──
+    if cle in event_actifs_guild(gid):
+        return False, f"**{ev['nom']}** est déjà en cours."
+    if fam in EVENT_FAMILLES_EXCLUSIVES:
+        occupe = event_exclusif_en_cours(gid)
+        if occupe:
+            autre = EVENTS_CATALOGUE.get(occupe, {}).get("nom", occupe)
+            return False, f"**{autre}** occupe déjà le serveur. Attends la fin."
+
+    # ── Salon dédié, ou rien ──
+    salon = None
+    if ev.get("salon"):
+        salon = await create_event_channel(guild, f"🎪・{cle}")
+        if salon is None:
+            # Pas de repli : jouer dans le salon Event est exclu.
+            return False, ("Impossible de créer le salon de l'event. "
+                           "Vérifie ma permission **Gérer les salons**.")
+
+    event_enregistrer(gid, cle, ev["nom"], salon=salon, fam=fam)
+    try:
+        if salon is not None and salon_annonce is not None:
+            await annoncer_event(guild, salon_annonce, ev.get("ping", "everyone"),
+                                 discord.Embed(title=ev["nom"],
+                                               description=ev.get("desc", ""),
+                                               color=0x9b59b6), salon)
+        cible = salon if salon is not None else salon_annonce
+        # La coroutine tourne dans une task nommée : `.stopevent` a besoin
+        # d'un objet à annuler, pas seulement d'un drapeau à lever.
+        tache = asyncio.create_task(fn(cible, guild), name=f"event:{gid}:{cle}")
+        fiche = event_actifs_guild(gid).get(cle)
+        if fiche is not None:
+            fiche["task"] = tache
+        await tache
+        return True, None
+    except asyncio.CancelledError:
+        # Arrêt d'urgence : le finally nettoie, on ne remonte pas l'erreur.
+        print(f"[Event] {cle} annulé par un arrêt d'urgence")
+        return False, None
+    except Exception as e:
+        print(f"[Event] {cle} interrompu : {type(e).__name__}: {e}")
+        return False, f"**{ev['nom']}** s'est interrompu."
+    finally:
+        fiche = event_actifs_guild(gid).get(cle)
+        event_arreter_vues(fiche)
+        event_desenregistrer(gid, cle)
+        if salon is not None:
+            # Un arrêt admin ne fait pas patienter : le salon part tout de suite.
+            urgence = bool((fiche or {}).get("stopping"))
+            try:
+                if urgence:
+                    asyncio.create_task(_event_supprimer_salon(salon))
+                else:
+                    asyncio.create_task(close_event_channel(salon, EVENT_FERMETURE_DELAI))
+            except Exception:
+                pass
+
+# ── 🛑 ARRÊT D'URGENCE ──
+async def _event_supprimer_salon(salon):
+    """Suppression immédiate, sans compte à rebours. Ne lève jamais."""
+    if salon is None:
+        return False
+    try:
+        await salon.delete(reason="Arrêt d'urgence d'un event")
+        return True
+    except Exception:
+        return False          # déjà supprimé, ou permission retirée
+    finally:
+        event_salons_suivis.pop(getattr(salon, "id", 0), None)
+        salons_temporaires.pop(getattr(salon, "id", 0), None)
+
+def event_est_stoppe(gid, cle):
+    """Un run_* peut interroger ceci avant de verser quoi que ce soit."""
+    f = event_actifs_guild(gid).get(cle)
+    return f is None or bool(f.get("stopping"))
+
+async def event_stopper(guild, cle):
+    """Arrête un event standard enregistré. Retourne (ok, libellé).
+
+    Ordre : marquer → Views → task → salon → suivi → désinscription.
+    Marquer d'abord empêche toute récompense décidée pendant l'arrêt."""
+    gid = guild.id
+    f = event_actifs_guild(gid).get(cle)
+    if f is None:
+        return False, None
+    if f.get("stopping"):
+        return False, None          # un autre .stopevent s'en occupe déjà
+    f["stopping"] = True            # ① plus aucune attribution légitime
+    nom = f.get("nom", cle)
+    event_arreter_vues(f)           # ② les boutons deviennent inertes
+    t = f.get("task")               # ③ on coupe la coroutine
+    if t is not None and not t.done():
+        t.cancel()
+        # CancelledError hérite de BaseException : un `except Exception`
+        # la laisserait remonter et ferait échouer l'arrêt lui-même.
+        try:
+            await asyncio.wait_for(asyncio.shield(t), timeout=3)
+        except BaseException:
+            pass                    # annulée, ou déjà finie : les deux conviennent
+    salon = guild.get_channel(f.get("salon_id")) if f.get("salon_id") else None
+    await _event_supprimer_salon(salon)          # ④ immédiat
+    event_desenregistrer(gid, cle)               # ⑤ relançable
+    return True, nom
+
+async def event_stopper_secretstory(guild):
+    """Arrêt d'urgence de l'émission. Distinct d'une fin normale : pas de
+    bilan, pas de délai. Les secrets en jeu retournent en réserve."""
+    gid = guild.id
+    f = event_actifs_guild(gid).get("secretstory")
+    salon_id = (f or {}).get("salon_id") or SS_SESSION.get("channel_id")
+    if f is not None:
+        f["stopping"] = True
+        event_arreter_vues(f)
+        t = f.get("task")
+        if t is not None and not t.done():
+            t.cancel()
+    try:
+        for s in SS_SECRETS.values():
+            if s.get("statut") == "en_jeu":
+                s["statut"] = "validated"       # rendu à la réserve, jamais perdu
+        SS_SESSION["etat"] = "FINISHED"
+        ss_reset_session()
+        save_all_data()
+    except Exception as e:
+        print(f"[SS] arrêt d'urgence : {type(e).__name__}: {e}")
+    salon = guild.get_channel(salon_id) if salon_id else None
+    await _event_supprimer_salon(salon)
+    event_desenregistrer(gid, "secretstory")
+    return True, "👁️ Secret Story"
+
+def event_stoppables(guild):
+    """[(cle, libellé, type)] de tout ce qui peut être arrêté maintenant."""
+    out = []
+    for cle, f in event_actifs_guild(guild.id).items():
+        if f.get("stopping"):
+            continue
+        genre = "emission" if cle == "secretstory" else "event"
+        out.append((cle, f.get("nom", cle), genre))
+    for c in list(modif_actifs):
+        m = MODIFICATEURS.get(c) or {}
+        out.append((f"modif:{c}", m.get("nom", c), "modificateur"))
+    # Systèmes historiques hors registre, conservés pour compatibilité.
+    if jackpot_cagnotte:
+        out.append(("legacy:jackpot", "💰 Cagnotte Jackpot", "legacy"))
+    if guild.id in active_boss:
+        out.append(("legacy:boss", "⚔️ Boss", "legacy"))
+    if guild.id in loterie_data:
+        out.append(("legacy:loterie", "🍀 Loterie", "legacy"))
+    if guild.id in active_brackets:
+        out.append(("legacy:tournoi", "🏆 Tournoi", "legacy"))
+    if coffre_actif:
+        out.append(("legacy:coffre", "📦 Coffres", "legacy"))
+    return out
+
+async def event_stopper_un(guild, cle):
+    """Arrête n'importe quelle entrée renvoyée par event_stoppables()."""
+    global jackpot_cagnotte
+    if cle == "secretstory":
+        return await event_stopper_secretstory(guild)
+    if cle.startswith("modif:"):
+        c = cle.split(":", 1)[1]
+        nom = (MODIFICATEURS.get(c) or {}).get("nom", c)
+        try:
+            modif_eteindre(c)
+            var = (MODIFICATEURS.get(c) or {}).get("var")
+            if var:
+                globals()[var] = False
+        except Exception as e:
+            print(f"[Modif] extinction {c} : {type(e).__name__}: {e}")
+        return True, nom
+    if cle.startswith("legacy:"):
+        quoi = cle.split(":", 1)[1]
+        if quoi == "jackpot":
+            jackpot_cagnotte = 0
+            return True, "💰 Cagnotte Jackpot"
+        if quoi == "boss":
+            st = active_boss.get(guild.id, {}).get("salon_temp")
+            active_boss.pop(guild.id, None)
+            if st:
+                await _event_supprimer_salon(guild.get_channel(st))
+            return True, "⚔️ Boss"
+        if quoi == "loterie":
+            loterie_data.pop(guild.id, None); return True, "🍀 Loterie"
+        if quoi == "tournoi":
+            active_brackets.pop(guild.id, None); return True, "🏆 Tournoi"
+        if quoi == "coffre":
+            coffre_actif.clear(); return True, "📦 Coffres"
+        return False, None
+    return await event_stopper(guild, cle)
+
+# ── 🧹 Salons orphelins ──
+# On ne supprime QUE des salons dont on peut prouver l'origine :
+# suivis en persistance, ou portant le topic posé par create_event_channel.
+EVENT_TOPIC_MARQUEUR = "Salon temporaire — supprimé à la fin de l'event"
+
+async def event_nettoyer_orphelins(guild):
+    """Supprime les salons d'events laissés par une session interrompue.
+    Retourne (supprimés, ignorés). Jamais un salon non prouvé."""
+    import time as _t
+    supprimes, ignores = [], []
+    cat = discord.utils.get(guild.categories, name=EVENT_CATEGORY_NAME)
+    candidats = list(cat.text_channels) if cat else []
+    for cid, info in list(event_salons_suivis.items()):
+        if info.get("g") != guild.id:
+            continue
+        ch = guild.get_channel(cid)
+        if ch is not None and ch not in candidats:
+            candidats.append(ch)
+        if ch is None:
+            event_salons_suivis.pop(cid, None)
+    encore_actifs = {f.get("salon_id") for f in event_actifs_guild(guild.id).values()}
+    for ch in candidats:
+        if ch.id in encore_actifs:
+            ignores.append(ch.name)                 # un event tourne dedans
+            continue
+        prouve = (ch.id in event_salons_suivis
+                  or (ch.topic or "").startswith(EVENT_TOPIC_MARQUEUR))
+        if not prouve:
+            ignores.append(ch.name)                 # origine non prouvée : on n'y touche pas
+            continue
+        try:
+            await ch.delete(reason="Salon d'event orphelin")
+            supprimes.append(ch.name)
+        except Exception as e:
+            print(f"[Event] orphelin {ch.name} : {type(e).__name__}")
+            ignores.append(ch.name)
+        finally:
+            event_salons_suivis.pop(ch.id, None)
+            salons_temporaires.pop(ch.id, None)
+    return supprimes, ignores
+
 
 EVENTS_MIGRATION = {"classement": None, "heuremaudite": "defieclair"}
 
@@ -12236,50 +13161,94 @@ async def lancerevent_cmd(ctx, nom: str = None):
     ev = EVENTS_CATALOGUE.get(cle)
     if not ev:
         return await ctx.send(f"❌ Event `{nom}` inconnu — tape `.lancerevent` pour la liste.")
-    channel = (ctx.guild.get_channel(SALON_EVENT_ID) if SALON_EVENT_ID else None) or ctx.channel
+    annonce = (ctx.guild.get_channel(SALON_EVENT_ID) if SALON_EVENT_ID else None) or ctx.channel
     fn = globals().get(ev["fn"])
     if not fn:
         return await ctx.send(f"❌ La fonction `{ev['fn']}` est introuvable.")
-    try:
-        if ev["fn"] == "run_coffre":
-            await fn(channel, guild=ctx.guild)
-        else:
-            await fn(channel, ctx.guild)
-    except Exception as e:
-        print(f"[lancerevent] {ev['fn']} : {e}")
-        await ctx.send(f"❌ Erreur au lancement de **{ev['nom']}**.")
+    if ev["fn"] == "run_coffre":
+        _brut = fn
+        async def fn(_ch, _g): return await _brut(_ch, guild=_g)
+    ok, err = await lancer_event_standard(ctx.guild, annonce, cle, fn=fn)
+    if not ok:
+        await ctx.send(f"❌ {err}")
 
 
-@bot.command(name="stopervent", aliases=["stopevent"])
+@bot.command(name="stopevent", aliases=["stopervent", "stopevents"])
 @commands.has_permissions(manage_guild=True)
-async def stopervent_cmd(ctx):
-    """Arrête tous les events en cours — .stopervent"""
-    global nuit_chasse_active, double_xp_event_actif, casino_boost_actif, jackpot_cagnotte
-    arretes = []
-    arretes.extend(modif_tout_eteindre())
-    if jackpot_cagnotte:
-        jackpot_cagnotte = 0; arretes.append("💰 Jackpot")
-    if marche_noir_actif:
-        marche_noir_actif.clear(); arretes.append("🕶️ Marché Noir")
-    if coffre_actif:
-        coffre_actif.clear(); arretes.append("📦 Coffres")
-    if ctx.guild.id in active_boss:
-        _st = active_boss[ctx.guild.id].get("salon_temp")
-        del active_boss[ctx.guild.id]; arretes.append("⚔️ Boss")
-        if _st:
-            _ch = ctx.guild.get_channel(_st)
-            if _ch:
-                asyncio.create_task(close_event_channel(_ch, 30))
-    if ctx.guild.id in loterie_data:
-        del loterie_data[ctx.guild.id]; arretes.append("🍀 Loterie")
-    if ctx.guild.id in active_brackets:
-        del active_brackets[ctx.guild.id]; arretes.append("🏆 Tournoi")
-    if not arretes:
-        return await ctx.send("✅ Aucun event n'était en cours.")
-    await ctx.send(embed=discord.Embed(
-        title="🛑 Events arrêtés",
-        description="\n".join(f"• {a}" for a in arretes),
-        color=0xe74c3c))
+async def stopevent_cmd(ctx, quoi: str = None):
+    """Arrêt d'urgence d'un event en cours — .stopevent"""
+    actifs = event_stoppables(ctx.guild)
+    if not actifs:
+        return await ctx.send("✅ Aucun event actif.")
+
+    async def arreter(cle):
+        ok, nom = await event_stopper_un(ctx.guild, cle)
+        return nom if ok else None
+
+    # Ciblage direct : `.stopevent trainfou`
+    if quoi:
+        q = quoi.lower().strip()
+        trouve = next((c for c, _n, _t in actifs
+                       if c == q or c.endswith(":" + q)), None)
+        if not trouve:
+            return await ctx.send(
+                f"❌ `{q}` n'est pas actif. Tape `.stopevent` pour la liste.")
+        nom = await arreter(trouve)
+        return await ctx.send(embed=discord.Embed(
+            title="🛑 Event arrêté", description=f"• {nom}", color=0xe74c3c))
+
+    # Un seul système : arrêt direct.
+    if len(actifs) == 1:
+        nom = await arreter(actifs[0][0])
+        return await ctx.send(embed=discord.Embed(
+            title="🛑 Event arrêté", description=f"• {nom}", color=0xe74c3c))
+
+    # Plusieurs : l'admin choisit. Arrêter Secret Story parce qu'un Train Fou
+    # tourne serait un dégât collatéral inacceptable.
+    EMO = {"emission": "👁️", "event": "🎪", "modificateur": "✨", "legacy": "🕹️"}
+
+    class StopView(ui.View):
+        def __init__(self):
+            super().__init__(timeout=60)
+            opts = [discord.SelectOption(label=nom[:100], value=cle,
+                                         emoji=EMO.get(genre, "🎪"),
+                                         description={"emission": "émission en cours",
+                                                      "modificateur": "modificateur global",
+                                                      "legacy": "système hérité"}.get(genre))
+                    for cle, nom, genre in actifs[:24]]
+            opts.append(discord.SelectOption(label="Tout arrêter", value="__tout__",
+                                             emoji="🛑",
+                                             description="arrête les systèmes listés"))
+            sel = ui.Select(placeholder="🛑 Que faut-il arrêter ?", options=opts,
+                            max_values=1)
+            async def cb(itx):
+                if itx.user.id != ctx.author.id:
+                    return await itx.response.send_message(
+                        "Cette décision n'est pas la tienne.", ephemeral=True)
+                for it in self.children:
+                    it.disabled = True
+                v = sel.values[0]
+                cibles = [c for c, _n, _t in actifs] if v == "__tout__" else [v]
+                stoppes = []
+                for c in cibles:
+                    nom = await arreter(c)
+                    if nom:
+                        stoppes.append(nom)
+                self.stop()
+                await itx.response.edit_message(embed=discord.Embed(
+                    title="🛑 Arrêté" if stoppes else "⚠️ Rien à arrêter",
+                    description="\n".join(f"• {n}" for n in stoppes) or "*déjà terminé*",
+                    color=0xe74c3c), view=self)
+            sel.callback = cb
+            self.add_item(sel)
+
+    e = discord.Embed(
+        title="🛑 Plusieurs systèmes sont actifs",
+        description="\n".join(f"{EMO.get(g, '🎪')} **{n}**" for _c, n, g in actifs)
+                    + "\n\n*Choisis ce que tu veux arrêter.*",
+        color=0xe67e22)
+    await ctx.send(embed=e, view=StopView())
+
 
 @bot.command(name="setsalon")
 @commands.has_permissions(administrator=True)
@@ -19512,6 +20481,43 @@ async def macustom_cmd(ctx):
         e.set_footer(text="Le pseudo, l'avatar, le niveau et l'XP restent toujours visibles")
         return e
 
+    # Ce qu'un membre peut réellement équiper, et comment on le retire.
+    COSMOS = {
+        "titre":      ("📝", "Titre",           "titre",    ".settitre <texte>"),
+        "badge":      ("🏷️", "Badge",           "badge",    ".setbadge <texte>"),
+        "citation":   ("💬", "Citation",        "citation", ".setcitation <texte>"),
+        "emoji":      ("✨", "Emoji signature", "emoji",    ".setemoji <emoji>"),
+        "couleur":    ("🎨", "Couleur",         "couleur",  ".setcouleur <hex>"),
+        "banniere":   ("🏳️", "Bannière",        "banniere", ".setbanniere <url>"),
+    }
+
+    def cosmo_debloque(cle):
+        c = profil_custom.get(uid, {})
+        if cle == "theme":
+            return bool(c.get("theme_debloque") or c.get("cadre_debloque"))
+        return bool(c.get(cle + "_debloque") or c.get("emojiperso_debloque")
+                    if cle == "emoji" else c.get(cle + "_debloque"))
+
+    def emb_cosmetiques():
+        c = profil_custom.get(uid, {})
+        e = discord.Embed(
+            title="🎒  MES PERSONNALISATIONS",
+            description="*Ce que tu possèdes, et ce que tu portes.*",
+            color=0x9b59b6)
+        lignes = []
+        t_nom, _tc, _ts = profil_theme(uid)
+        lignes.append(f"{'✅' if cosmo_debloque('theme') else '🔒'} 🌈 **Thème** — "
+                      + (f"*{t_nom}*" if t_nom else "*aucun équipé*"))
+        for cle, (emo, nom, champ, cmd) in COSMOS.items():
+            a = cosmo_debloque(cle)
+            val = c.get(champ)
+            etat = (f"*{str(val)[:28]}*" if val else "*rien de réglé*") if a \
+                   else f"*non possédé — `.shop`*"
+            lignes.append(f"{'✅' if a else '🔒'} {emo} **{nom}** — {etat}")
+        e.add_field(name="État", value="\n".join(lignes), inline=False)
+        e.set_footer(text="Retirer un élément ne fait pas perdre l'achat")
+        return e
+
     def emb_themes():
         c = profil_custom.get(uid, {})
         debloque = bool(c.get("theme_debloque") or c.get("cadre_debloque"))
@@ -19545,8 +20551,8 @@ async def macustom_cmd(ctx):
             return True
 
         def embed(self):
-            return {"visibilite": emb_visibilite, "themes": emb_themes}.get(
-                self.page, emb_accueil)()
+            return {"visibilite": emb_visibilite, "themes": emb_themes,
+                    "cosmetiques": emb_cosmetiques}.get(self.page, emb_accueil)()
 
         async def refresh(self, itx):
             self._build()
@@ -19576,21 +20582,56 @@ async def macustom_cmd(ctx):
             elif self.page == "themes":
                 c = profil_custom.get(uid, {})
                 if c.get("theme_debloque") or c.get("cadre_debloque"):
-                    opts = [discord.SelectOption(label=n[:100], value=k,
-                                                 default=(c.get("theme") == k))
-                            for k, (n, _c, _cd) in list(PROFIL_THEMES.items())[:25]]
+                    opts = [discord.SelectOption(
+                                label="Aucun thème", emoji="🚫", value="__aucun__",
+                                description="revenir au rendu par défaut",
+                                default=not c.get("theme"))]
+                    opts += [discord.SelectOption(label=n[:100], value=k,
+                                                  default=(c.get("theme") == k))
+                             for k, (n, _c, _cd) in list(PROFIL_THEMES.items())[:24]]
                     s = ui.Select(placeholder="🎨 Choisir un thème…", options=opts, row=0)
                     async def cb(itx):
-                        profil_custom.setdefault(uid, {})["theme"] = s.values[0]
+                        v = s.values[0]
+                        cc = profil_custom.setdefault(uid, {})
+                        if v == "__aucun__":
+                            cc.pop("theme", None)      # retiré, pas perdu :
+                            msg = "🚫 Thème retiré — ton accès reste acquis."
+                        else:
+                            cc["theme"] = v
+                            msg = f"🎨 Thème **{PROFIL_THEMES[v][0]}** équipé."
+                        save_all_data()
+                        self._build()
+                        await itx.response.edit_message(embed=self.embed(), view=self)
+                        await itx.followup.send(msg, ephemeral=True)
+                    s.callback = cb
+                    self.add_item(s)
+            if self.page == "cosmetiques":
+                c = profil_custom.get(uid, {})
+                mis = [(cle, v) for cle, v in COSMOS.items() if c.get(v[2])]
+                if mis:
+                    opts = [discord.SelectOption(
+                                label=f"Retirer {v[1]}"[:100], emoji=v[0], value=cle,
+                                description=str(c.get(v[2]))[:95])
+                            for cle, v in mis[:25]]
+                    s = ui.Select(placeholder="🚫 Retirer un élément…",
+                                  options=opts, row=0)
+                    async def cb_ret(itx):
+                        cle = s.values[0]
+                        champ = COSMOS[cle][2]
+                        # On efface la VALEUR, jamais le droit d'accès :
+                        # l'achat reste acquis, on pourra la remettre.
+                        profil_custom.setdefault(uid, {}).pop(champ, None)
                         save_all_data()
                         self._build()
                         await itx.response.edit_message(embed=self.embed(), view=self)
                         await itx.followup.send(
-                            f"🎨 Thème **{PROFIL_THEMES[s.values[0]][0]}** équipé.",
+                            f"🚫 **{COSMOS[cle][1]}** retiré — "
+                            f"tu peux le remettre avec `{COSMOS[cle][3]}`.",
                             ephemeral=True)
-                    s.callback = cb
+                    s.callback = cb_ret
                     self.add_item(s)
             for lab, emo, p in (("Accueil", "⚙️", "accueil"),
+                                ("Mes cosmétiques", "🎒", "cosmetiques"),
                                 ("Thèmes", "🎨", "themes"),
                                 ("Afficher/Masquer", "👁️", "visibilite")):
                 b = ui.Button(label=lab, emoji=emo, row=2,
@@ -21593,6 +22634,16 @@ async def ss_lancer(guild, salon=None, auto=False):
                            "guild": guild.id, "debut": time.time(), "manches": [],
                            "secret": None, "auto": bool(auto), "recompenses_versees": False})
         save_all_data()
+    # ── Registre central ──
+    # Secret Story s'y inscrit pour que `.stopevent` la retrouve et pour
+    # bloquer un second lancement, MAIS elle ne passe pas par le wrapper :
+    # son salon survit aux révélations et ne se ferme que sur décision
+    # de la régie, via ss_terminer().
+    # exclusif=False : l'émission dure parfois des heures entre deux manches.
+    # Elle empêche un second Secret Story (ss_session_active() s'en charge),
+    # mais ne doit pas geler le moteur d'events pendant tout ce temps.
+    event_enregistrer(guild.id, "secretstory", "👁️ Secret Story",
+                      salon=salon_tmp, fam="emission", exclusif=False)
     salon = salon_tmp
     try:
         await salon.send(embed=discord.Embed(
@@ -21868,6 +22919,11 @@ async def ss_terminer(salon):
         pass
     # ── Fermeture du salon temporaire ──
     cid = SS_SESSION.get("channel_id")
+    for _g in list(events_actifs):
+        _f = events_actifs[_g].get("secretstory")
+        if _f and _f.get("salon_id") == cid:
+            event_arreter_vues(_f)
+            event_desenregistrer(_g, "secretstory")
     ss_reset_session()
     save_all_data()
     if cid and salon is not None and getattr(salon, "id", None) == cid:
@@ -25593,8 +26649,11 @@ COURSE_IMPREVUS = [
 
 async def run_course_pets(channel, guild):
     """🏃 Course de Compagnons — inscription puis course en direct"""
-    salon = await create_event_channel(guild, "🏃・course-de-compagnons")
-    cible = salon or channel
+    # Le wrapper garantit déjà un salon dédié : `channel` EST ce salon.
+    # L'ancien repli « salon or channel » renvoyait le gameplay dans
+    # le salon Event quand la création échouait.
+    salon = channel
+    cible = channel
     gain = random.randint(1200, 2800)
     LIGNE = 30
 
@@ -25658,7 +26717,8 @@ async def run_course_pets(channel, guild):
     if len(insc.coureurs) < 2:
         await cible.send(embed=discord.Embed(
             description="😴 Pas assez de coureurs — course annulée.", color=0x95a5a6))
-        if salon: await close_event_channel(salon, 90)
+        # Fermeture confiée au wrapper : lancer_event_standard() supprime
+        # le salon une seule fois, dans son finally.
         return
 
     for n in ("🔴 **À vos marques…**", "🟠 **Prêts…**", "🟢 **PARTEZ !**"):
@@ -25720,7 +26780,7 @@ async def run_course_pets(channel, guild):
     gazette_fait("divers", f"**{gagnant['membre'].display_name}** a gagné la Course de Compagnons "
                            f"avec {gagnant['nom']}.", 3)
     save_all_data()
-    if salon: await close_event_channel(salon, 120)
+    pass  # fermeture assurée par lancer_event_standard()
 
 EXPEDITIONS = {
     "foret":   ("🌲 La Forêt de Bambous", 1, "Une balade tranquille entre les tiges."),
@@ -42811,6 +43871,8 @@ def save_all_data():
             "girls_jours": {p: {u: sorted(v) for u, v in m.items()}
                             for p, m in girls_jours.items()},
             "cadeaux": cadeaux_data,
+            "events_schema": EVENTS_SCHEMA,
+            "event_salons": event_salons_suivis,
             "boutique_schema": BOUTIQUE_SCHEMA,
             "panier": panier_data,
             "favoris": favoris_data,
@@ -42827,6 +43889,21 @@ def save_all_data():
             "double_daily": dict(double_daily),
             "profil_custom": {k: dict(v) for k, v in profil_custom.items()},
             "cadenas_perso": dict(cadenas_perso),
+            # ── Effets achetés qui ne survivaient pas au redémarrage ──
+            # Un Boost Rareté à 3 500 pièces disparaissait au premier
+            # redémarrage. Ces états sont désormais sauvegardés tels quels :
+            # aucune valeur n'est convertie, prolongée ni recalculée.
+            "boosts_charges": {"rarity_boost": dict(rarity_boost),
+                               "oracle_actif": dict(oracle_actif),
+                               "oeil_destin": dict(oeil_destin)},
+            "boosts_attente": {"aimant_actif": dict(aimant_actif),
+                               "megaphone_actif": dict(megaphone_actif),
+                               "fanfare_actif": dict(fanfare_actif)},
+            "boosts_temps": {"shield_active": dict(shield_active),
+                             "amulette_active": dict(amulette_active),
+                             "trefle_actif": dict(trefle_actif),
+                             "double_xp_users": dict(double_xp_users)},
+            "roll_data": {k: dict(v) for k, v in roll_data.items()},
             "version": dict(derniere_version),
             "migration_state": dict(migration_state),
             "petamitie": dict(petamitie),
@@ -42958,6 +44035,49 @@ def load_all_data():
                                    if isinstance(x, dict) and "i" in x and "d" in x)
                 anniv_meta.update(data.get("anniv_meta", {}))
                 akari_meta.update(data.get("akari", {}))
+                # Salons d'events : on retient d'où ils viennent pour pouvoir
+                # nettoyer ceux qu'une session interrompue a laissés derrière.
+                for _cid, _inf in (data.get("event_salons") or {}).items():
+                    if isinstance(_inf, dict) and "g" in _inf:
+                        event_salons_suivis[int(_cid)] = {"g": int(_inf["g"]),
+                                                          "cle": _inf.get("cle", "?"),
+                                                          "t": float(_inf.get("t", 0))}
+                # ── Effets achetés : on relit, sans rien prolonger ──
+                # Une protection dont l'échéance est passée reste expirée :
+                # les fonctions de lecture comparent déjà à l'heure courante.
+                try:
+                    _cibles = {"rarity_boost": rarity_boost, "oracle_actif": oracle_actif,
+                               "oeil_destin": oeil_destin, "aimant_actif": aimant_actif,
+                               "megaphone_actif": megaphone_actif,
+                               "fanfare_actif": fanfare_actif,
+                               "shield_active": shield_active,
+                               "amulette_active": amulette_active,
+                               "trefle_actif": trefle_actif,
+                               "double_xp_users": double_xp_users}
+                    for _grp in ("boosts_charges", "boosts_attente", "boosts_temps"):
+                        for _nom, _vals in (data.get(_grp) or {}).items():
+                            _d = _cibles.get(_nom)
+                            if _d is None or not isinstance(_vals, dict):
+                                continue
+                            for _u, _v in _vals.items():
+                                _d[_u] = _v
+                    for _u, _v in (data.get("roll_data") or {}).items():
+                        if isinstance(_v, dict):
+                            roll_data[_u].update(_v)
+                except Exception as _e:
+                    print(f"[Boosts] chargement partiel : {type(_e).__name__}")
+                # ── Migration Cadre → Thème, une fois pour tous les profils ──
+                # Idempotente : la relancer ne double rien. Non destructive :
+                # la clé `cadre` d'origine reste en place.
+                try:
+                    _mig = 0
+                    for _u in list(profil_custom):
+                        if profil_migrer_cadres(_u):
+                            _mig += 1
+                    if _mig:
+                        print(f"[Profil] {_mig} cadre(s) migré(s) vers les thèmes")
+                except Exception as _e:
+                    print(f"[Profil] migration cadres ignorée : {type(_e).__name__}")
                 _r = data.get("ritual") or {}
                 if isinstance(_r, dict):
                     ritual_etat["vues"] = [i for i in _r.get("vues", [])
@@ -43670,6 +44790,20 @@ async def on_ready():
             print(f"[Drama] {e}")
     for g in bot.guilds:
         await _refresh_invite_cache(g)
+    # ── Salons d'events laissés par une session interrompue ──
+    # Passe APRÈS load_all_data() (le suivi persistant est chargé) et APRÈS
+    # la restauration de Secret Story : une émission encore valide est
+    # réenregistrée avant, donc son salon est reconnu et épargné.
+    # Ne supprime que des salons prouvés : suivis en persistance, ou portant
+    # le topic posé par create_event_channel.
+    for g in bot.guilds:
+        try:
+            sup, ign = await event_nettoyer_orphelins(g)
+            if sup:
+                print(f"[Event] {len(sup)} salon(s) orphelin(s) supprimé(s) : "
+                      f"{', '.join(sup)}")
+        except Exception as e:
+            print(f"[Event] nettoyage des orphelins ignoré : {type(e).__name__}: {e}")
     check_anniversaires.start()
     scheduler_task.start()
 
