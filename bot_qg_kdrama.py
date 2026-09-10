@@ -22673,13 +22673,24 @@ async def ss_jouer_manche(guild, salon):
             save_all_data()
     # ── Hors du verrou : asyncio.Lock n'est pas réentrant ──
     if _plus_rien:
+        # L'émission NE se ferme PAS toute seule : le salon reste vivant
+        # jusqu'à ce que la régie décide de terminer.
         try:
-            await salon.send(embed=discord.Embed(
-                description="👁️ *La Voix n'a plus aucun secret à révéler ce soir.*",
-                color=0x2c2f33))
-        except Exception:
-            pass
-        return await ss_terminer(salon)
+            n_att = len(ss_en_attente())
+            e = discord.Embed(
+                title="👁️  PLUS DE SECRET PRÊT",
+                description=("*La Voix n'a plus rien à révéler pour l'instant.*\n"
+                             "**L'émission reste ouverte.**"),
+                color=0x2c2f33)
+            if n_att:
+                e.add_field(name="⏳ En attente de validation",
+                            value=f"**{n_att}** secret(s) — `.regie` → Secrets → Modérer",
+                            inline=False)
+            await salon.send(embed=e,
+                             view=SSRegieMancheView(getattr(salon, "guild", None), salon))
+        except Exception as ex:
+            print(f"[SS] attente : {type(ex).__name__}: {ex}")
+        return
     async with _SS_LOCK:
         secret["statut"] = "en_jeu"                   # sorti de la réserve le temps de la manche
         manche = {"secret": secret["id"], "owner": secret["owner"], "votes": {},
@@ -22736,9 +22747,19 @@ async def ss_jouer_manche(guild, salon):
         except Exception:
             pass
         secret["statut"] = "validated"                # rendu à la réserve
-        SS_SESSION["etat"] = "FINISHED"
+        # Une manche ratée n'est pas une fin d'émission : on repasse en
+        # attente, la régie décidera de réessayer ou de terminer.
+        SS_SESSION["etat"] = "ATTENTE"
+        SS_SESSION["secret"] = None
         save_all_data()
-        return await ss_terminer(salon)
+        try:
+            await salon.send(embed=discord.Embed(
+                description="*Manche annulée. L'émission reste ouverte.*",
+                color=0x2c2f33),
+                view=SSRegieMancheView(getattr(salon, "guild", None), salon))
+        except Exception:
+            pass
+        return
 
     vue = SSVoteView(manche, membres)
     try:
@@ -22835,7 +22856,15 @@ async def ss_reveler(guild, salon, secret, manche):
 
     # ── Régie : suivant ou terminer ──
     # La manche est close : on repasse en attente pour autoriser la suivante.
+    # Le secret quitte définitivement la réserve : « en_jeu » ne disait
+    # pas s'il avait été joué ou s'il attendait encore.
+    try:
+        secret["statut"] = "played"
+        secret["joue_le"] = time.time()
+    except Exception:
+        pass
     SS_SESSION["etat"] = "ATTENTE"
+    SS_SESSION["secret"] = None
     save_all_data()
     reste = len(ss_disponibles())
     vue = SSRegieMancheView(guild, salon)
@@ -23585,7 +23614,7 @@ class SSRegieMancheView(ui.View):
         finally:
             self.verrou = False
 
-    @ui.button(label="Terminer l'émission", emoji="⏹️", style=discord.ButtonStyle.danger)
+    @ui.button(label="Terminer l'émission", emoji="🎬", style=discord.ButtonStyle.danger)
     async def terminer(self, itx, button):
         if self.verrou or self.fait:
             try:
@@ -23594,19 +23623,56 @@ class SSRegieMancheView(ui.View):
             except Exception:
                 pass
             return
+        # Fin NORMALE et volontaire : on demande confirmation. Un clic isolé
+        # ne doit pas clore une émission que la régie voulait poursuivre.
+        parent = self
+
+        class ConfirmerFin(ui.View):
+            def __init__(self):
+                super().__init__(timeout=45)
+
+            async def interaction_check(self, i2):
+                if i2.user.id != itx.user.id:
+                    await i2.response.send_message(
+                        "Cette décision n'est pas la tienne.", ephemeral=True)
+                    return False
+                return True
+
+            @ui.button(label="Oui, terminer", emoji="🎬",
+                       style=discord.ButtonStyle.danger)
+            async def oui(self, i2, _b):
+                for x in self.children:
+                    x.disabled = True
+                await i2.response.edit_message(
+                    content="🎬 Émission terminée.", view=self)
+                self.stop()
+                parent.fait = "fin"
+                for x in parent.children:
+                    x.disabled = True
+                parent.stop()
+                try:
+                    await ss_terminer(parent.salon)
+                except Exception as e:
+                    print(f"[SS] fin d'émission : {type(e).__name__}: {e}")
+
+            @ui.button(label="Annuler", emoji="↩️",
+                       style=discord.ButtonStyle.secondary)
+            async def non(self, i2, _b):
+                for x in self.children:
+                    x.disabled = True
+                await i2.response.edit_message(
+                    content="↩️ L'émission continue.", view=self)
+                self.stop()
+                parent.verrou = False
+
         self.verrou = True
-        self.fait = "fin"
-        try:
-            for x in self.children:
-                x.disabled = True
-            if not itx.response.is_done():
-                await itx.response.edit_message(view=self)
-            self.stop()
-            await ss_terminer(self.salon)
-        except Exception as e:
-            print(f"[SS] fin d'émission : {type(e).__name__}: {e}")
-        finally:
-            self.verrou = False
+        reste = len(ss_disponibles())
+        await itx.response.send_message(
+            content=(f"🎬 **Terminer l'émission ?**\n"
+                     f"Le salon sera supprimé après le bilan."
+                     + (f"\n⚠️ **{reste}** secret(s) encore prêt(s) ne seront pas joués."
+                        if reste else "")),
+            view=ConfirmerFin(), ephemeral=True)
 
 class SortieView(ui.View):
     """Déroule n'importe quelle activité de ACTIVITES_V2 : scènes → choix → fin."""
@@ -34050,7 +34116,7 @@ SS_SESSION   = {}     # session en cours, volatile mais son état est persisté 
 SS_SEQ       = {"n": 0}
 _SS_LOCK     = asyncio.Lock()          # protège lancement / manche suivante
 SS_ETATS     = ("IDLE", "INVESTIGATION", "VOTING", "REVEAL", "ATTENTE", "FINISHED")
-SS_CHANNEL_DELETE_DELAY = 60      # secondes avant suppression du salon en fin d'émission
+SS_CHANNEL_DELETE_DELAY = 15      # court : le temps de lire le bilan, pas plus
 
 def ss_salon_session(guild):
     """Le salon temporaire de l'émission en cours, ou None."""
@@ -34113,7 +34179,15 @@ def ss_conditions_lancement(guild):
     if ss_session_active():
         return False, "Une émission est déjà en cours."
     if not ss_disponibles():
-        return False, "👁️ La Voix n'a actuellement aucun secret à révéler."
+        # Distinguer « rien du tout » de « rien de VALIDÉ » : le message
+        # d'origine faisait croire que les dépôts avaient été perdus.
+        n_att = len(ss_en_attente())
+        if n_att:
+            return False, (f"⏳ **{n_att} secret{'s' if n_att > 1 else ''}** "
+                           f"attend{'ent' if n_att > 1 else ''} encore ta validation.\n"
+                           f"Ouvre `.regie` → **Secrets** → **Modérer** pour "
+                           f"{'les' if n_att > 1 else 'le'} passer en revue.")
+        return False, "👁️ Aucun secret prêt pour le moment."
     perms = getattr(guild.me, "guild_permissions", None)
     if perms is not None and not perms.manage_channels:
         return False, ("Il me manque la permission **Gérer les salons** "
