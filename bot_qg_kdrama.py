@@ -19126,6 +19126,10 @@ class CadeauView(ui.View):
     def __init__(self, cid, timeout=None):
         super().__init__(timeout=timeout)
         self.cid = cid
+        # Sans custom_id, Discord ne sait plus router le clic après un
+        # redémarrage : le bouton restait affiché mais inerte.
+        # `cid` vaut « g<timestamp><seq> » — unique, court, sans collision.
+        self.ouvrir.custom_id = f"cadeau:{cid}"
 
     @ui.button(label="Ouvrir", emoji="🎁", style=discord.ButtonStyle.success)
     async def ouvrir(self, itx, bouton):
@@ -19135,7 +19139,15 @@ class CadeauView(ui.View):
                 "C'est ton cadeau — pour quelqu'un d'autre. Patience.", ephemeral=True)
         ok, res = cadeau_ouvrir(self.cid, itx.user.id)
         if not ok:
-            return await itx.response.send_message(f"❌ {res}", ephemeral=True)
+            # Déjà ouvert, expiré, pas le bon membre : on répond, on ne
+            # touche à rien. Un clic tardif ne consomme jamais le cadeau.
+            for x in self.children:
+                x.disabled = True
+            try:
+                await itx.response.edit_message(view=self)
+                return await itx.followup.send(f"❌ {res}", ephemeral=True)
+            except Exception:
+                return await itx.response.send_message(f"❌ {res}", ephemeral=True)
         bouton.disabled = True
         if res["type"] == "coins":
             reveal = f"💰 **{res['valeur']:,} pièces**"
@@ -44739,6 +44751,25 @@ async def on_ready():
     load_autorole()
     load_scheduled_events()
     bot.add_view(GirlsRoleView())
+    # ── 🎁 Cadeaux encore ouvrables ──
+    # Une View par cadeau valide, avec son custom_id : le bouton déjà
+    # affiché redevient cliquable. Aucun message n'est recréé, aucune
+    # récompense n'est attribuée ici.
+    try:
+        import time as _tc
+        _now = _tc.time()
+        _n = 0
+        for _cid, _g in list(cadeaux_data.items()):
+            if _g.get("ouvert"):
+                continue                               # rien à réactiver
+            if _now - _g.get("cree", 0) > CADEAU_EXPIRATION:
+                continue                               # expiré : laissé à cadeaux_purger()
+            bot.add_view(CadeauView(_cid))
+            _n += 1
+        if _n:
+            print(f"[Cadeaux] {_n} cadeau(x) de nouveau ouvrable(s)")
+    except Exception as _e:
+        print(f"[Cadeaux] restauration ignorée : {type(_e).__name__}: {_e}")
     # Migration du catalogue gacha (idempotente)
     try:
         _mig = migrer_catalogue_gacha()
