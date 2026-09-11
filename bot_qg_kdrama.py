@@ -10246,6 +10246,15 @@ async def run_tap_race(channel, guild):
 # ============================================================
 #  🎢 L'ASCENSEUR — monter étage par étage
 # ============================================================
+# 🛗 Ascenseur — la cagnotte doublait à chaque étage, ce qui faisait monter
+# l'espérance jusqu'au 8e : « monter » était presque toujours le bon calcul,
+# et le sommet valait un demi-million. Un multiplicateur plus sage et un
+# risque plus mordant rendent le sommet réellement improbable — et le gain
+# d'autant plus marquant quand il tombe.
+ASC_POT_DEPART = 500
+ASC_MULT = 1.75
+ASC_RISQUE_BASE, ASC_RISQUE_PAS, ASC_RISQUE_MAX = 0.12, 0.05, 0.62
+
 class AscenseurView(ui.View):
     def __init__(self, candidat, etage, cagnotte, timeout=40):
         super().__init__(timeout=timeout)
@@ -10322,7 +10331,7 @@ async def run_ascenseur(channel, guild):
         return
 
     candidat = vue_c.candidat
-    cagnotte, etage = 500, 0
+    cagnotte, etage = ASC_POT_DEPART, 0
     await cible.send(embed=discord.Embed(
         title=f"🎢 {candidat.display_name} entre dans l'ascenseur",
         description=f"Les portes se referment… **{cagnotte:,} pièces** en poche.\n\n*Le serveur retient son souffle.*",
@@ -10337,12 +10346,12 @@ async def run_ascenseur(channel, guild):
     ]
     while etage < 10:
         etage += 1
-        risque = min(0.55, 0.10 + etage * 0.045)
+        risque = min(ASC_RISQUE_MAX, ASC_RISQUE_BASE + etage * ASC_RISQUE_PAS)
         vue = AscenseurView(candidat, etage, cagnotte, timeout=40)
         await cible.send(f"{candidat.mention}", embed=discord.Embed(
             title=f"🎢 Étage {etage}  —  {cagnotte:,} pièces",
             description=(f"*{random.choice(AMBIANCE)}*\n\n"
-                         f"⬆️ **Monter** — la cagnotte passerait à **{cagnotte*2:,} pièces**\n"
+                         f"⬆️ **Monter** — la cagnotte passerait à **{int(cagnotte*ASC_MULT):,} pièces**\n"
                          f"   *…mais {int(risque*100)} % de chance de tout perdre*\n\n"
                          f"🚪 **Sortir** — tu repars avec **{cagnotte:,} pièces**\n\n"
                          f"⏰ 40 secondes pour décider"),
@@ -10361,14 +10370,17 @@ async def run_ascenseur(channel, guild):
 
         msg2 = await cible.send(embed=discord.Embed(description="⏳ **L'ascenseur monte…**", color=0xf1c40f))
         await asyncio.sleep(2.2)
+        # Une seule application du multiplicateur, après le tirage :
+        # sinon la cagnotte affichée dans le message d'échec serait fausse.
         if random.random() < risque:
             return await _fin_ascenseur(cible, salon, discord.Embed(
                 title="💥 LE CÂBLE LÂCHE !",
                 description=(f"L'ascenseur s'effondre à l'étage **{etage}**.\n\n"
-                             f"**{candidat.display_name}** perd tout — les **{cagnotte*2:,} pièces** "
-                             f"partent en fumée. 💸\n\n*Il aurait pu sortir avec {cagnotte:,}…*"),
+                             f"**{candidat.display_name}** perd tout — les "
+                             f"**{int(cagnotte * ASC_MULT):,} pièces** partent en fumée. 💸"
+                             f"\n\n*Il aurait pu sortir avec {cagnotte:,}…*"),
                 color=0xe74c3c))
-        cagnotte *= 2
+        cagnotte = int(cagnotte * ASC_MULT)
         try:
             await msg2.edit(embed=discord.Embed(
                 description=f"✅ **Étage {etage} atteint !** Cagnotte : **{cagnotte:,} pièces**", color=0x2ecc71))
@@ -10476,6 +10488,11 @@ async def run_reflexe(channel, guild, variante=None):
                 except asyncio.TimeoutError:
                     return
         t = asyncio.create_task(_sentinelle())
+        # Une task enfant ne meurt pas avec son parent : si l'event est arrêté
+        # ici, la sentinelle survivrait jusqu'à son timeout. Elle ne distribue
+        # rien, mais autant ne rien laisser tourner après un arrêt d'urgence.
+        event_attacher_vue(guild.id, "reflexe",
+                           type("_Sentinelle", (), {"stop": lambda _s: t.cancel()})())
         for _ in range(random.randint(1, 2)):
             await asyncio.sleep(random.uniform(2, 4))
             await cible.send(random.choice(["⏳ **Presque…**", "🔸 **PARTE—** non, rien.",
@@ -11734,7 +11751,13 @@ TRAIN_INCIDENTS = [
     ("🌧️", "L'orage", "La visibilité tombe. C'est plus dangereux.", "risque", 0.05),
     ("🎺", "Le contrôleur chante", "Personne ne comprend pourquoi. Le moral remonte.", "rien", 0),
 ]
-TRAIN_BASE, TRAIN_PAR_STATION, TRAIN_MAX = 900, 1.55, 9000
+# Le plafond de 9 000 était atteint dès la station 7 : le risque continuait
+# de monter, la récompense non. Descendre à la 5 devenait la seule option
+# sensée. Relever le plafond laisse la courbe monter jusqu'au terminus,
+# SANS toucher aux probabilités ni au pas de progression : l'espérance à
+# la station 5 reste identique, seules les deux dernières redeviennent
+# un pari défendable.
+TRAIN_BASE, TRAIN_PAR_STATION, TRAIN_MAX = 900, 1.55, 20000
 
 class TrainInscription(ui.View):
     def __init__(self, timeout=45):
@@ -12220,34 +12243,45 @@ class RougeAnnonceView(ui.View):
             self.add_item(b)
 
 class RougeReactionView(ui.View):
-    """Les autres croient ou accusent. Premier à accuser déclenche."""
+    """Chacun juge pour lui-même.
+
+    Avant, le premier à cliquer « MENTEUR » tranchait pour toute la table :
+    les autres n'avaient plus leur mot à dire, et une seule personne
+    encaissait ou payait. Désormais chaque joueur prend sa décision, peut
+    en changer jusqu'à la clôture, et est récompensé selon SON choix."""
     def __init__(self, autres, timeout=20):
         super().__init__(timeout=timeout)
         self.autres = set(autres)
-        self.accusateur = None
-        self.croyants = set()
+        self.decisions = {}          # {uid: "croire" | "accuser"}
+
+    @property
+    def accusateurs(self):
+        return [u for u, d in self.decisions.items() if d == "accuser"]
+
+    @property
+    def croyants(self):
+        return [u for u, d in self.decisions.items() if d == "croire"]
+
+    async def _noter(self, itx, choix, texte):
+        uid = str(itx.user.id)
+        if uid not in self.autres:
+            return await itx.response.send_message(
+                "Tu n'es pas dans la partie.", ephemeral=True)
+        avant = self.decisions.get(uid)
+        self.decisions[uid] = choix
+        suffixe = " *(tu as changé d'avis)*" if avant and avant != choix else ""
+        # Réponse privée : la table ne voit pas qui a décidé quoi.
+        await itx.response.send_message(texte + suffixe, ephemeral=True)
+        if len(self.decisions) >= len(self.autres):
+            self.stop()               # tout le monde s'est prononcé
 
     @ui.button(label="Je le crois", emoji="🤝", style=discord.ButtonStyle.secondary)
     async def croire(self, itx, _b):
-        uid = str(itx.user.id)
-        if uid not in self.autres:
-            return await itx.response.send_message("Tu n'es pas dans la partie.", ephemeral=True)
-        self.croyants.add(uid)
-        await itx.response.send_message("🤝 Tu le crois. On verra.", ephemeral=True)
-        if len(self.croyants) >= len(self.autres):
-            self.stop()
+        await self._noter(itx, "croire", "🤝 Tu le crois. On verra.")
 
     @ui.button(label="MENTEUR", emoji="🚨", style=discord.ButtonStyle.danger)
     async def accuser(self, itx, _b):
-        uid = str(itx.user.id)
-        if uid not in self.autres:
-            return await itx.response.send_message("Tu n'es pas dans la partie.", ephemeral=True)
-        if self.accusateur:
-            return await itx.response.send_message(
-                "Quelqu'un a déjà accusé — trop tard.", ephemeral=True)
-        self.accusateur = uid
-        await itx.response.send_message("🚨 Tu l'accuses. On retourne sa main.", ephemeral=True)
-        self.stop()
+        await self._noter(itx, "accuser", "🚨 Tu l'accuses.")
 
 def _rouge_embed(etat):
     lignes = []
@@ -12354,19 +12388,24 @@ async def run_carte_rouge(channel, guild):
 
             vrai = mains[u]
             ment = annonce != vrai
-            if rv.accusateur:
-                acc = rv.accusateur
-                if ment:
-                    etat["points"][acc] += 3
-                    etat["points"][u] -= 3
-                    etat["dernier"] = (f"🚨 **{insc.noms[acc]}** accuse — et il avait raison. "
-                                       f"**{insc.noms[u]}** avait **{vrai}** rouge(s), pas {annonce}. "
-                                       f"*(+2 / −2)*")
-                else:
-                    etat["points"][acc] -= 3
-                    etat["points"][u] += annonce + 2
-                    etat["dernier"] = (f"🚨 **{insc.noms[acc]}** accuse… **{insc.noms[u]}** disait vrai. "
-                                       f"**{vrai}** rouge(s). *(−2 / +2)*")
+            accs, croy = rv.accusateurs, rv.croyants
+            if accs:
+                # Chaque jugement est réglé séparément : avoir vu juste rapporte,
+                # s'être trompé coûte — indépendamment de ce que font les autres.
+                for _a in accs:
+                    etat["points"][_a] += 3 if ment else -3
+                for _c in croy:
+                    etat["points"][_c] += 2 if not ment else -2
+                etat["points"][u] += (-3 if ment else annonce + 2)
+                _bons = [insc.noms[x] for x in (accs if ment else croy)]
+                _mauv = [insc.noms[x] for x in (croy if ment else accs)]
+                _tete = (f"🔴 **{insc.noms[u]}** mentait — **{vrai}** rouge(s), pas {annonce}."
+                         if ment else
+                         f"❤️ **{insc.noms[u]}** disait vrai — **{vrai}** rouge(s).")
+                _l1 = f"\n🤝 L'ont cru : **{len(croy)}**　·　🚨 L'ont accusé : **{len(accs)}**"
+                _l2 = ("\n🎯 Bon flair : " + ", ".join(_bons)) if _bons else ""
+                _l3 = ("\n💀 Mauvaise lecture : " + ", ".join(_mauv)) if _mauv else ""
+                etat["dernier"] = _tete + _l1 + _l2 + _l3
             else:
                 # Le gain suit l'annonce : dire « zéro » ne rapporte rien,
                 # annoncer trois est lucratif mais attire les soupçons.
@@ -17611,12 +17650,29 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "7.9.0"
+BOT_VERSION = "7.9.1"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "7.9.1": {
+   "titre": "TROIS EVENTS REPENSÉS 🎮",
+   "ajouts": [],
+   "correctifs": [
+     "🔴 **Carte Rouge : chacun décide pour soi.** Le premier à crier "
+     "« menteur » ne tranche plus pour toute la table. Tu juges, tu peux "
+     "changer d'avis jusqu'à la fin du temps — et tu es payé selon **ton** "
+     "flair, pas celui du plus rapide.",
+     "🚂 **Train Fou : le terminus vaut enfin le voyage.** La cagnotte "
+     "plafonnait dès la septième station : le danger montait, la récompense "
+     "non. Les deux dernières redeviennent un vrai pari, sans que descendre "
+     "plus tôt rapporte moins qu'avant.",
+     "🛗 **Ascenseur : monter redevient un choix.** Chaque étage rapporte un "
+     "peu moins mais fait nettement plus peur. Le sommet est devenu "
+     "rarissime — celui qui y arrivera, tout le serveur s'en souviendra.",
+   ],
+ },
  "7.9.0": {
    "titre": "LES EVENTS SE TIENNENT MIEUX 🎪",
    "ajouts": [
