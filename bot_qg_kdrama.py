@@ -17611,12 +17611,40 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "7.8.1"
+BOT_VERSION = "7.9.0"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "7.9.0": {
+   "titre": "LES EVENTS SE TIENNENT MIEUX 🎪",
+   "ajouts": [
+     "🛑 **`.stopevent`** devient un vrai arrêt d'urgence. Il retrouve "
+     "n'importe quel event en cours, coupe ses boutons, supprime son salon "
+     "immédiatement — et te laisse choisir si plusieurs choses tournent "
+     "en même temps.",
+   ],
+   "correctifs": [
+     "🎪 **Chaque event a désormais son propre salon.** Si le salon ne peut "
+     "pas être créé, l'event s'annule proprement au lieu de se dérouler "
+     "dans le salon d'annonces.",
+     "🎴 La **Carte Mystère** et le **Jackpot** se jouaient encore dans le "
+     "salon d'annonces. Eux aussi ont leur salon maintenant.",
+     "🧹 Un salon d'event laissé par un redémarrage est nettoyé au "
+     "démarrage suivant — et seulement lui.",
+     "👁️ **Secret Story ne se ferme plus toute seule.** Une révélation ne "
+     "supprime plus le salon : l'émission continue jusqu'à ce que la régie "
+     "décide de l'arrêter, avec confirmation.",
+     "👁️ Quand tu lances l'émission alors que des secrets attendent d'être "
+     "validés, Akari te le dit clairement au lieu d'annoncer qu'il n'y a "
+     "aucun secret.",
+     "👁️ Une émission ouverte ne bloque plus le lancement des autres events.",
+     "🎁 **Le bouton « Ouvrir » d'un cadeau ne meurt plus au redémarrage.** "
+     "Un cadeau encore valide reste ouvrable, et un cadeau déjà ouvert ou "
+     "expiré te répond au lieu de ne rien faire.",
+   ],
+ },
  "7.8.1": {
    "titre": "Correctif d'achat 🛒",
    "ajouts": [],
