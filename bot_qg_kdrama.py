@@ -8832,32 +8832,96 @@ async def run_heure_maudite(channel, guild):
 # ============================================================
 EVENT_CATEGORY_NAME = "🎪 Events du QG"
 
+class EventChannelCreationError(RuntimeError):
+    """Création impossible : l'appelant doit annuler l'event, sans repli."""
+
 async def create_event_channel(guild, nom, sans_reactions=False):
-    """Crée un salon temporaire pour un event. Retourne le salon ou None.
-    sans_reactions=True empêche les membres d'ajouter des réactions
-    (les boutons et les interactions restent parfaitement fonctionnels)."""
-    cat = discord.utils.get(guild.categories, name=EVENT_CATEGORY_NAME)
-    if not cat:
+    """Crée le salon dédié ou lève EventChannelCreationError.
+
+    Préserve les accès de la catégorie. Aucun salon sans catégorie ni repli
+    vers un salon existant en cas d'erreur. `overwrites` est toujours un dict.
+    """
+    import copy as _copy
+    import logging as _logging
+    cat, surcharges = None, {}
+    phase = "recherche catégorie"
+
+    def permissions_diag(cible=None):
         try:
-            cat = await guild.create_category(EVENT_CATEGORY_NAME)
+            membre = guild.me
+            p = cible.permissions_for(membre) if cible else membre.guild_permissions
+            return {k: getattr(p, k, None) for k in (
+                "view_channel", "manage_channels", "manage_roles", "send_messages",
+                "embed_links", "read_message_history")}
         except Exception:
-            cat = None
-    surcharges = None
-    if sans_reactions:
-        surcharges = {
-            guild.default_role: discord.PermissionOverwrite(add_reactions=False),
-            guild.me: discord.PermissionOverwrite(add_reactions=True,
-                                                  manage_messages=True),
-        }
+            return "indisponibles"
+
     try:
+        if guild is None:
+            raise ValueError("Aucun serveur fourni pour la catégorie d'event")
+        cat = discord.utils.get(guild.categories, name=EVENT_CATEGORY_NAME)
+        if cat is None:
+            phase = "création catégorie"
+            cat = await guild.create_category(EVENT_CATEGORY_NAME)
+        phase = "validation catégorie"
+        if not isinstance(cat, discord.CategoryChannel) or cat.guild.id != guild.id:
+            raise ValueError("La catégorie d'event est invalide ou appartient à un autre serveur")
+
+        phase = "préparation overwrites"
+        # None n'est PAS une valeur valide : discord.py lève TypeError avant
+        # même l'appel HTTP. Copier les règles conserve les accès restreints,
+        # sans ouvrir une catégorie privée à @everyone ni modifier la catégorie.
+        surcharges = {cible: _copy.copy(regle) for cible, regle in cat.overwrites.items()}
+        if sans_reactions:
+            regle = surcharges.setdefault(guild.default_role, discord.PermissionOverwrite())
+            regle.add_reactions = False
+            if guild.me is None:
+                raise RuntimeError("Membre du bot absent du cache du serveur")
+            regle_bot = surcharges.setdefault(guild.me, discord.PermissionOverwrite())
+            regle_bot.add_reactions = True
+            regle_bot.manage_messages = True
+
+        phase = "création salon"
         ch = await guild.create_text_channel(nom, category=cat,
                                              overwrites=surcharges,
                                              topic="Salon temporaire — supprimé à la fin de l'event")
         marquer_salon_temporaire(ch)
         return ch
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
-        print(f"[Event] Salon '{nom}' non créé : {e}")
-        return None
+        status, code = getattr(e, "status", None), getattr(e, "code", None)
+        if isinstance(e, discord.Forbidden):
+            genre = "Forbidden"
+            detail = ("Discord refuse l'accès (Forbidden). Vérifie les permissions effectives "
+                      "du bot et les restrictions de la catégorie, pas seulement son rôle.")
+        elif isinstance(e, discord.NotFound):
+            genre = "catégorie/cible introuvable"
+            detail = "Catégorie ou cible Discord introuvable ; elle a pu être supprimée."
+        elif isinstance(e, discord.HTTPException):
+            genre = "HTTPException"
+            if code == 50035 and "parent_id" in str(e):
+                genre = "catégorie invalide (HTTPException)"
+                detail = "Discord rejette la catégorie cible (parent_id invalide)."
+            else:
+                detail = f"Discord n'a pas pu créer le salon (HTTP {status}, code {code})."
+        elif isinstance(e, ValueError) and "catégorie" in phase:
+            genre = "catégorie invalide"
+            detail = "Catégorie d'event invalide ou serveur introuvable."
+        else:
+            genre = "erreur inattendue"
+            detail = f"Erreur interne de création du salon ({type(e).__name__}), pas un diagnostic de permission."
+        _logging.getLogger("akari.events").error(
+            "[EventChannel] genre=%s phase=%s guild=%s nom=%r categorie=%s "
+            "discord.py=%s HTTP=%s code=%s permissions_serveur=%s permissions_categorie=%s "
+            "overwrites_type=%s exception=%s: %s",
+            genre, phase, getattr(guild, "id", None), nom, getattr(cat, "id", None),
+            getattr(discord, "__version__", "inconnue"), status, code,
+            permissions_diag(), permissions_diag(cat) if cat is not None else "absente",
+            type(surcharges).__name__, type(e).__name__, e, exc_info=True)
+        raise EventChannelCreationError(
+            f"Event annulé — {detail} Étape : {phase}. Cause détaillée dans les logs."
+        ) from e
 
 async def close_event_channel(channel, delai=60):
     """Prévient puis supprime le salon temporaire"""
@@ -9079,10 +9143,7 @@ def _banquier_tableau(montants_restants):
 
 async def run_banquier(channel, guild):
     """🎩 Le Banquier — Deal or No Deal, dans un salon dédié"""
-    salon = await create_event_channel(guild, "🎩・le-banquier")
-    if not salon:
-        # Le wrapper a déjà créé le salon dédié — `channel` EST ce salon.
-        salon = channel
+    salon = channel  # Salon unique créé par lancer_event_standard().
 
     annonce = discord.Embed(
         title="🎩 LE BANQUIER OUVRE SON BUREAU",
@@ -9306,25 +9367,33 @@ async def run_encheres(channel, guild):
             couleur = RARETE_COULEURS.get(cc["rarete"], 0xf1c40f)
             ping_type = "gacha"
 
+    # Objets que ce moteur sait déjà attribuer correctement. Les anciennes
+    # catégories "boost" / "pvp" ont été remplacées dans SHOP_ITEMS.
+    objets_encherissables = {
+        "rolls_5", "boost_rarete", "bombe_gacha", "cadenas",
+        "fantome", "vol_roll", "freeze", "curse",
+    }
+    candidats_items = [i for i in SHOP_ITEMS
+                        if i["id"] in objets_encherissables and i["prix"] >= 1000]
+    if type_lot == "item" and not candidats_items:
+        type_lot = "role"
+
     if type_lot == "role":
         lot_role, couleur = ROLES_BOUTIQUE[random.choice(ROLES_ENCHERE)]
         lot_nom = lot_role
         lot_desc = "Un rôle exclusif, attribué immédiatement au gagnant."
 
     if type_lot == "item":
-        candidats = [i for i in SHOP_ITEMS if i["cat"] in ("boost", "pvp") and i["prix"] >= 1000]
-        lot_item = random.choice(candidats)
+        lot_item = random.choice(candidats_items)
         lot_nom = lot_item["nom"]
         lot_desc = f"{lot_item.get('description','')}\n*Valeur boutique : {lot_item['prix']:,} pièces*"
         couleur = 0x9b59b6
 
-    depart = {"carte": 500, "role": 2000, "item": 400}[type_lot]
+    depart = (max(400, lot_item["prix"] // 4) if type_lot == "item"
+              else {"carte": 500, "role": 2000}[type_lot])
     increment = max(50, depart // 10)
 
-    salon = await create_event_channel(guild, "🏛️・encheres")
-    if not salon:
-        # Le wrapper a déjà créé le salon dédié — `channel` EST ce salon.
-        salon = channel
+    salon = channel  # Salon unique créé par lancer_event_standard().
 
     annonce = discord.Embed(
         title="🏛️ VENTE AUX ENCHÈRES",
@@ -9598,14 +9667,8 @@ async def run_debat(channel, guild, duree=3600):
 
 async def run_loterie(channel, guild):
     """🍀 Loterie du QG — tickets puis tirage, dans un salon dédié"""
+    # Le salon unique fourni par lancer_event_standard() est déjà prêt.
     salon_principal = channel
-    salon = await create_event_channel(guild, "🍀・loterie")
-    if salon:
-        await annoncer_event(guild, salon_principal, "everyone", discord.Embed(
-            title="🍀 LOTERIE DU QG !",
-            description="Achète tes tickets — **un seul gagnant rafle toute la cagnotte !**",
-            color=0xf1c40f), salon)
-        channel = salon
     ping = get_event_ping(guild, "everyone") if channel is salon_principal else ""
     gid = guild.id
     loterie_data[gid] = {"participants": {}, "cagnotte": 0, "active": True}
@@ -12907,11 +12970,13 @@ async def lancer_event_standard(guild, salon_annonce, cle, fn=None):
     # ── Salon dédié, ou rien ──
     salon = None
     if ev.get("salon"):
-        salon = await create_event_channel(guild, f"🎪・{cle}")
+        try:
+            salon = await create_event_channel(guild, f"🎪・{cle}")
+        except EventChannelCreationError as e:
+            return False, str(e)
         if salon is None:
             # Pas de repli : jouer dans le salon Event est exclu.
-            return False, ("Impossible de créer le salon de l'event. "
-                           "Vérifie ma permission **Gérer les salons**.")
+            return False, "Event annulé — le helper n'a retourné aucun salon temporaire."
 
     event_enregistrer(gid, cle, ev["nom"], salon=salon, fam=fam)
     try:
