@@ -1543,6 +1543,11 @@ def build_help_pages(guild, is_admin=False):
         "`.drama-start` · `.drama-next` · `.drama-cast` · `.drama-tropes`\n"
         "`.drama-stop` · `.drama-reset`"
     ), inline=False)
+    e.add_field(name="🍂 Ambiance du serveur", value=(
+        "`.ambiance` — Mode saisonnier en cours\n"
+        "`.ambiance auto` — Suivre le calendrier\n"
+        "`.ambiance normal|blackwood|wintervale` — Forcer un mode"
+    ), inline=False)
     pages.append(("🛡️", "Admin — Modération", e))
 
     # ══════════════ 8 — ADMIN : GACHA & CARTES ══════════════
@@ -1710,7 +1715,9 @@ GUIDE_HABILLAGE = {
 }
 
 def guide_habillage():
-    return GUIDE_HABILLAGE.get(AKARI_MODE) or GUIDE_HABILLAGE["normal"]
+    # saison_mode() résout calendrier + override et rafraîchit AKARI_MODE.
+    m = saison_mode() if "saison_mode" in globals() else AKARI_MODE
+    return GUIDE_HABILLAGE.get(m) or GUIDE_HABILLAGE["normal"]
 
 # (clé, emoji, libellé, titre, texte, commandes clés)
 GUIDE_PAGES = [
@@ -6320,8 +6327,9 @@ BOUTIQUE_HABILLAGE = {
 }
 
 def boutique_habillage():
+    m = saison_mode() if "saison_mode" in globals() else AKARI_MODE
     h = dict(BOUTIQUE_HABILLAGE["normal"])
-    h.update(BOUTIQUE_HABILLAGE.get(AKARI_MODE, {}))
+    h.update(BOUTIQUE_HABILLAGE.get(m, {}))
     return h
 
 @bot.command(name="shop", aliases=["boutique", "magasin"])
@@ -7155,7 +7163,8 @@ BOUTIQUE_HORS_VENTE = {
 def saisons_actives():
     """Les saisons ouvertes en ce moment. Lit AKARI_MODE, puis le pack.
     Un pack saisonnier prime sur la table par défaut."""
-    pack = AKARI_PACKS.get(AKARI_MODE, {})
+    pack = AKARI_PACKS.get(saison_mode() if "saison_mode" in globals()
+                           else AKARI_MODE, {})
     if isinstance(pack, dict) and "_saisons" in pack:
         return tuple(pack["_saisons"])
     return AKARI_MODE_SAISONS.get(AKARI_MODE, ())
@@ -13177,6 +13186,54 @@ async def event_cmd(ctx, nom: str = None):
         pages.append(e)
     await ctx.send(embed=pages[0], view=PageView(pages, ctx.author, timeout=180))
 
+
+@bot.command(name="ambiance", aliases=["da", "saisonda", "modesaison"])
+@commands.has_permissions(manage_guild=True)
+async def ambiance_cmd(ctx, choix: str = None):
+    """Direction artistique du serveur — .ambiance [auto|normal|blackwood|wintervale]"""
+    LIB = {m: f'{SAISON_PACKS[m]["emoji"]} {SAISON_PACKS[m]["nom"]}' for m in SAISON_MODES}
+
+    if choix:
+        c = choix.lower().strip()
+        if c == "auto":
+            saison_override["mode"] = None
+        elif c in SAISON_MODES:
+            saison_override["mode"] = c
+        else:
+            return await ctx.send(
+                "❌ Choix inconnu — `auto`, `normal`, `blackwood` ou `wintervale`.")
+        save_all_data()
+        m = saison_mode()          # prend effet immédiatement
+        e = discord.Embed(
+            title=f"{SAISON_PACKS[m]['emoji']}  Ambiance : {SAISON_PACKS[m]['nom']}",
+            description=("🔁 Retour au calendrier." if c == "auto"
+                         else "📌 Mode forcé — `.ambiance auto` pour reprendre le calendrier."),
+            color=saison_valeur("couleur"))
+        e.set_footer(text="Les messages déjà envoyés ne changent pas.")
+        return await ctx.send(embed=e)
+
+    m = saison_mode()
+    auto = saison_auto()
+    ov = saison_override.get("mode")
+    e = discord.Embed(
+        title=f"{SAISON_PACKS[m]['emoji']}  AMBIANCE DU QG",
+        description=f"Mode effectif : **{LIB[m]}**",
+        color=saison_valeur("couleur"))
+    e.add_field(name="🗓️ Calendrier", value=LIB[auto], inline=True)
+    e.add_field(name="📌 Override",
+                value=LIB[ov] if ov else "*aucun*", inline=True)
+    e.add_field(name="🕰️ Période", value=f"**{saison_periode()}**", inline=True)
+    if not ov:
+        suiv = saison_prochain_changement()
+        if suiv:
+            d, mode = suiv
+            e.add_field(name="⏭️ Prochain changement",
+                        value=f"{d.strftime('%d/%m/%Y')} → {LIB[mode]}", inline=False)
+    e.add_field(name="⚙️ Commandes",
+                value=("`.ambiance auto` · `.ambiance normal`\n"
+                       "`.ambiance blackwood` · `.ambiance wintervale`"), inline=False)
+    e.set_footer(text=saison_valeur("footer"))
+    await ctx.send(embed=e)
 
 @bot.command(name="lancerevent", aliases=["startevent"])
 @commands.has_permissions(manage_guild=True)
@@ -19253,6 +19310,114 @@ class CadeauView(ui.View):
 #  Une seule couche : aucun `if` de personnalité dispersé ailleurs.
 # ============================================================
 AKARI_MODE = "normal"          # un pack saisonnier pourra le remplacer
+
+# ============================================================
+#  🍂 SAISONS — direction artistique globale
+#  UNE seule résolution du mode. AKARI_MODE reste la variable que
+#  tout le code lit déjà (Guide, Boutique, phrases d'Akari) : on ne
+#  la remplace pas, on la tient à jour depuis un calendrier central.
+#  Une saison change la PRÉSENTATION, jamais l'économie ni le jeu.
+# ============================================================
+SAISON_MODES = ("normal", "blackwood", "wintervale")
+
+# Calendrier. Le seul endroit du bot où un mois décide d'une ambiance.
+SAISON_CALENDRIER = {10: "blackwood", 12: "wintervale"}
+
+# Override admin, persisté. None = on suit le calendrier.
+saison_override = {"mode": None}
+
+# Plages horaires de Blackwood, en heure de Paris.
+SAISON_PLAGES = ((7, 17, "DAY"), (17, 21, "DUSK"))   # le reste : NIGHT
+
+def saison_auto(ts=None):
+    """Le mode que le calendrier impose en ce moment, à Paris."""
+    return SAISON_CALENDRIER.get(paris_maintenant(ts).month, "normal")
+
+def saison_mode(ts=None):
+    """Le mode EFFECTIF. Source de vérité unique.
+
+    Rafraîchit AKARI_MODE au passage : les lecteurs existants
+    (guide_habillage, boutique_habillage, saisons_actives, phrases
+    d'Akari) continuent de fonctionner sans être modifiés."""
+    global AKARI_MODE
+    m = saison_override.get("mode") or saison_auto(ts)
+    if m not in SAISON_MODES:
+        m = "normal"
+    AKARI_MODE = m
+    return m
+
+def saison_periode(ts=None):
+    """DAY, DUSK ou NIGHT — heure de Paris, plages simples."""
+    h = paris_maintenant(ts).hour
+    for debut, fin, nom in SAISON_PLAGES:
+        if debut <= h < fin:
+            return nom
+    return "NIGHT"
+
+def saison_prochain_changement(ts=None):
+    """(date, mode) du prochain basculement automatique, ou None."""
+    import datetime as _dt
+    d = paris_maintenant(ts)
+    actuel = saison_auto(ts)
+    for n in range(1, 15):
+        m = ((d.month - 1 + n) % 12) + 1
+        an = d.year + ((d.month - 1 + n) // 12)
+        suivant = SAISON_CALENDRIER.get(m, "normal")
+        if suivant != actuel:
+            return _dt.date(an, m, 1), suivant
+    return None
+
+# ── Les packs ──
+# Chaque clé peut être une valeur simple, ou un dict par période.
+# Un système demande une valeur, jamais « suis-je à Blackwood ? ».
+SAISON_PACKS = {
+    "normal": {
+        "nom": "Normal", "emoji": "🌸",
+        "couleur": 0xff6b9d,
+        "separateur": "─" * 18,
+        "ornement": "🌸",
+        "footer": "QG Kdrama",
+        "ton": "chaleureux",
+    },
+    "blackwood": {
+        "nom": "Blackwood", "emoji": "🍂",
+        # Le jour on veut y vivre ; la nuit on regrette d'être resté.
+        "couleur": {"DAY": 0xc8791f, "DUSK": 0x8a5a3c, "NIGHT": 0x2b2018},
+        "separateur": {"DAY": "🍂 ─────────────── 🍂",
+                       "DUSK": "🕯️ ─────────────── 🕯️",
+                       "NIGHT": "· · ─────────────── · ·"},
+        "ornement": {"DAY": "🍂", "DUSK": "🕯️", "NIGHT": "🌑"},
+        "footer": {"DAY": "Blackwood — l'automne s'installe",
+                   "DUSK": "Blackwood — la pluie commence",
+                   "NIGHT": "Blackwood — tout le monde est rentré"},
+        "ton": {"DAY": "cosy", "DUSK": "feutré", "NIGHT": "inquiet"},
+    },
+    "wintervale": {
+        "nom": "Wintervale", "emoji": "❄️",
+        "couleur": 0x7fb3d5,
+        "separateur": "❄️ ─────────────── ❄️",
+        "ornement": "❄️",
+        "footer": "Wintervale",
+        "ton": "feutré",
+    },
+}
+
+def saison_pack(ts=None):
+    return SAISON_PACKS.get(saison_mode(ts), SAISON_PACKS["normal"])
+
+def saison_valeur(cle, defaut=None, ts=None):
+    """La valeur demandée pour la saison ET la période en cours.
+
+    Un appelant écrit `saison_valeur("couleur")` : il n'a pas à savoir
+    si Blackwood existe, ni s'il fait nuit."""
+    v = saison_pack(ts).get(cle)
+    if v is None:
+        return SAISON_PACKS["normal"].get(cle, defaut)
+    if isinstance(v, dict):
+        return v.get(saison_periode(ts), v.get("DAY", defaut))
+    return v
+
+
 AKARI_SUIVI_DEPUIS = "7.4.0"
 
 AKARI_COOLDOWN_GLOBAL = 6 * 3600     # une réaction toutes les 6 h par membre
@@ -19324,13 +19489,115 @@ AKARI_CONTEXTES = {
 # Un pack saisonnier remplacera ces entrées sans toucher au moteur.
 AKARI_PACKS = {"normal": {}}
 
+# ── 🍂 Habillages saisonniers ──
+# Ajoutés APRÈS coup : les moteurs du Guide et de la Boutique n'ont pas
+# bougé, ils lisent simplement une entrée de plus.
+GUIDE_HABILLAGE["blackwood"] = {
+    "titre": "🍂  BIENVENUE À BLACKWOOD",
+    "intro": ("Les feuilles s'entassent devant la porte et personne ne les ramasse.\n"
+              "Il fait bon à l'intérieur.\n\n"
+              "*Prends une tasse. Reste un moment.*"),
+    "couleur": 0xc8791f,
+}
+GUIDE_HABILLAGE["wintervale"] = {
+    "titre": "❄️  BIENVENUE À WINTERVALE",
+    "intro": ("La neige tient enfin. Les fenêtres sont embuées de l'intérieur.\n\n"
+              "*Entre, il fait chaud.*"),
+    "couleur": 0x7fb3d5,
+}
+BOUTIQUE_HABILLAGE["blackwood"] = {
+    "titre": "🕯️  LE COMPTOIR DE BLACKWOOD",
+    "intro": "La boutique sent la cannelle et le bois humide. Prends ton temps.",
+    "couleur": 0xc8791f,
+    "separateur": "🍂 ─────────────── 🍂",
+    "label_une": "🕯️ SOUS LA LAMPE",
+    "label_selection": "🍂 CE QUE L'ON SORT CETTE SEMAINE",
+}
+BOUTIQUE_HABILLAGE["wintervale"] = {
+    "titre": "❄️  LE COMPTOIR DE WINTERVALE",
+    "intro": "On a rentré le bois. La boutique est ouverte jusqu'à tard.",
+    "couleur": 0x7fb3d5,
+    "separateur": "❄️ ─────────────── ❄️",
+    "label_une": "🎁 EN VITRINE",
+    "label_selection": "❄️ LA SÉLECTION DE LA SEMAINE",
+}
+
+# ── 🌑 Akari à Blackwood ──
+# Le jour, elle est chaleureuse. La nuit, il lui arrive — rarement — de
+# dire quelque chose qu'on préférerait ne pas avoir lu.
+# Ces phrases restent explicitement fictionnelles : Akari ne prétend
+# jamais savoir où se trouve quelqu'un, ni ce qu'il fait.
+BLACKWOOD_JOUR = [
+    "🍂 Il fait bon dehors aujourd'hui. Profites-en.",
+    "☕ J'ai gardé une place près de la fenêtre.",
+    "📚 La bibliothèque sent le vieux papier. C'est agréable.",
+    "🕯️ Quelqu'un a allumé les bougies avant toi.",
+    "🌧️ Il pleut sur les feuilles. C'est le bon moment pour rester.",
+]
+BLACKWOOD_NUIT = [
+    "🌑 Tout le monde est rentré. Enfin, presque.",
+    "🕯️ La bougie du couloir s'est éteinte. Je ne l'ai pas touchée.",
+    "🚪 Cette porte était fermée tout à l'heure.",
+    "· · · Tu devrais vérifier derrière toi.",
+    "🌑 Ne te retourne pas tout de suite.",
+    "· · · Garde les yeux sur ton écran.",
+    "🍂 Il y a des pas dans les feuilles. Ils s'arrêtent quand j'écoute.",
+]
+AKARI_PACKS["blackwood"] = {
+    "_freq": 1.0,
+    "ambiance_blackwood": BLACKWOOD_JOUR,
+    "ambiance_blackwood_nuit": BLACKWOOD_NUIT,
+}
+AKARI_PACKS["wintervale"] = {"_freq": 1.0}
+
+# Mémoire courte : on ne répète pas, et on n'enchaîne jamais deux
+# phrases inquiétantes.
+blackwood_meta = {"vues": [], "derniere": 0.0, "derniere_creepy": 0.0}
+BLACKWOOD_COOLDOWN_GLOBAL = 3 * 3600      # une phrase toutes les 3 h au plus
+BLACKWOOD_CHANCE_NUIT = 0.06              # et seulement 6 % du temps
+
+def blackwood_phrase(uid=None, ts=None):
+    """Une phrase d'ambiance Blackwood, ou None — le cas le plus fréquent.
+
+    Ne parle jamais du monde réel du membre : ni sa pièce, ni sa caméra,
+    ni ce qu'il fait. L'ambiguïté reste celle d'une maison de fiction."""
+    import time as _t
+    if saison_mode(ts) != "blackwood":
+        return None
+    now = ts or _t.time()
+    if now - blackwood_meta.get("derniere", 0) < BLACKWOOD_COOLDOWN_GLOBAL:
+        return None
+    periode = saison_periode(ts)
+    if periode == "NIGHT":
+        if random.random() > BLACKWOOD_CHANCE_NUIT:
+            return None
+        # Jamais deux phrases inquiétantes d'affilée.
+        source = (BLACKWOOD_JOUR
+                  if now - blackwood_meta.get("derniere_creepy", 0) < BLACKWOOD_COOLDOWN_GLOBAL * 2
+                  else BLACKWOOD_NUIT)
+    else:
+        if random.random() > 0.03:
+            return None
+        source = BLACKWOOD_JOUR
+    vues = blackwood_meta.setdefault("vues", [])
+    dispo = [p for p in source if p not in vues] or list(source)
+    p = random.choice(dispo)
+    vues.append(p)
+    blackwood_meta["vues"] = vues[-8:]
+    blackwood_meta["derniere"] = now
+    if p in BLACKWOOD_NUIT:
+        blackwood_meta["derniere_creepy"] = now
+    return p
+
+
 def akari_variantes(contexte):
     """Variantes actives : le pack du mode courant prime sur le normal."""
     base = AKARI_CONTEXTES.get(contexte)
     if not base:
         return 1, []
     prio, phrases = base
-    pack = AKARI_PACKS.get(AKARI_MODE, {}).get(contexte)
+    pack = AKARI_PACKS.get(saison_mode() if "saison_mode" in globals()
+                           else AKARI_MODE, {}).get(contexte)
     if pack:
         prio = pack.get("prio", prio)
         phrases = pack.get("phrases", phrases)
@@ -19338,7 +19605,8 @@ def akari_variantes(contexte):
 
 def akari_freq():
     """Un pack saisonnier peut rendre Akari un peu plus ou moins bavarde."""
-    return AKARI_PACKS.get(AKARI_MODE, {}).get("_freq", 1.0)
+    return AKARI_PACKS.get(saison_mode() if "saison_mode" in globals()
+                           else AKARI_MODE, {}).get("_freq", 1.0)
 
 def akari_moment(ts=None):
     """Tranche horaire du QG, dans le fuseau réellement configuré."""
@@ -44041,6 +44309,7 @@ def save_all_data():
             "girls_jours": {p: {u: sorted(v) for u, v in m.items()}
                             for p, m in girls_jours.items()},
             "cadeaux": cadeaux_data,
+            "saison_override": saison_override.get("mode"),
             "events_schema": EVENTS_SCHEMA,
             "event_salons": event_salons_suivis,
             "boutique_schema": BOUTIQUE_SCHEMA,
@@ -44205,6 +44474,8 @@ def load_all_data():
                                    if isinstance(x, dict) and "i" in x and "d" in x)
                 anniv_meta.update(data.get("anniv_meta", {}))
                 akari_meta.update(data.get("akari", {}))
+                _ov = data.get("saison_override")
+                saison_override["mode"] = _ov if _ov in SAISON_MODES else None
                 # Salons d'events : on retient d'où ils viennent pour pouvoir
                 # nettoyer ceux qu'une session interrompue a laissés derrière.
                 for _cid, _inf in (data.get("event_salons") or {}).items():
