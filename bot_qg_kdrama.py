@@ -45725,13 +45725,19 @@ async def on_ready():
     print(f"✅ Serveurs : {len(bot.guilds)}")
 
 print("🚀 Démarrage du bot...")
-import traceback, time
-while True:
-    try:
-        bot.run(TOKEN)
-    except Exception as e:
-        print(f"❌ CRASH BOT: {e}")
-        traceback.print_exc()
-        print("🔄 Redémarrage dans 5 secondes...")
-        time.sleep(5)
-e.set_footer(text="Système actuel : .chronique")
+
+# ⚠️ NE PAS remettre de boucle de redémarrage ici.
+#
+# `bot.run()` appelle `asyncio.run(start())`, dont le `finally` ferme la
+# session aiohttp et la boucle d'événements. discord.Client est à usage
+# unique : rappeler `run()` sur le MÊME objet réutilise une session déjà
+# fermée et lève aussitôt « RuntimeError: Session is closed ».
+#
+# L'ancienne boucle réessayait toutes les 5 secondes et échouait à chaque
+# fois. Le process restait vivant — donc l'hébergeur ne le relançait pas,
+# et Discord affichait Akari en ligne alors que plus rien ne répondait.
+#
+# On laisse donc l'exception remonter : le traceback d'origine s'affiche
+# en entier, le process sort en erreur, et l'hébergeur redémarre un
+# process neuf — avec un objet bot neuf, seule façon correcte de repartir.
+bot.run(TOKEN)
