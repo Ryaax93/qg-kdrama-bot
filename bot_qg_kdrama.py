@@ -6536,6 +6536,13 @@ async def shop_cmd(ctx, recherche: str = None):
             vide = False
             e.add_field(name=f"🎨 Cosmétiques — {len(p['cosmetiques'])}",
                         value=" · ".join(n for _i, n in p["cosmetiques"]), inline=False)
+        # 🍂 Les souvenirs restent affichés hors saison : c'est leur raison
+        # d'être. Bloc séparé — ils ne sont ni consommables ni équipables.
+        _souv = souvenirs_rendu(uid)
+        if _souv:
+            vide = False
+            e.add_field(name=f"🍂 Souvenirs de Blackwood — {souvenirs_compte(uid, False)}",
+                        value=_souv, inline=False)
         if p.get("roles"):
             vide = False
             e.add_field(name=f"🎭 Rôles — {len(p['roles'])}",
@@ -6928,6 +6935,9 @@ def boutique_item(iid):
     return it if it else pet_en_article(iid)
 
 def boutique_type(iid):
+    # Les articles saisonniers Blackwood sont des permanents : une fois
+    # achetés, ils ne se rachètent pas, même la saison suivante.
+    if str(iid).startswith("bw_"):    return "permanent"
     if iid in BOUTIQUE_COSMETIQUES: return "cosmetique"
     if iid in BOUTIQUE_PERMANENTS:  return "permanent"
     if est_compagnon(iid):          return "permanent"
@@ -6970,6 +6980,10 @@ def boutique_possede(uid, iid):
     if iid in BOUTIQUE_ROLES:
         # Un rôle acheté est marqué ici : la vérification Discord se fait
         # à l'attribution, pas à chaque affichage de fiche.
+        return inventaire[uid].get(iid, 0) > 0
+    if str(iid).startswith("bw_"):
+        # Articles saisonniers : marqués dans l'inventaire, donc reconnus
+        # même hors saison. On les possède pour toujours.
         return inventaire[uid].get(iid, 0) > 0
     return False
 
@@ -7131,6 +7145,7 @@ def paris_semaine(ts=None):
 #  On bloque LA VENTE, jamais la propriété.
 # ============================================================
 BOUTIQUE_SAISONS = {
+    "blackwood": ("🍂", "Blackwood"),
     "halloween": ("🎃", "Halloween"),
     "hiver":     ("❄️", "Hiver"),
     "printemps": ("🌸", "Printemps"),
@@ -7142,6 +7157,9 @@ BOUTIQUE_SAISONS = {
 # rien n'est à modifier ici pour ajouter Blackwood ou Wintervale.
 AKARI_MODE_SAISONS = {
     "normal": (),
+    # Blackwood ouvre sa propre saison de boutique — et elle seule.
+    "blackwood": ("blackwood",),
+    "wintervale": (),
 }
 
 # Articles saisonniers, établis sur des preuves du code — voir le rapport.
@@ -7195,7 +7213,12 @@ def boutique_disponible(iid):
     if iid in BOUTIQUE_HORS_VENTE:
         return False                      # jamais, quelle que soit la saison
     s = article_saison(iid)
-    return True if s is None else saison_ouverte(s)
+    if s is not None and not saison_ouverte(s):
+        return False
+    # Certains articles n'ouvrent qu'en cours de mois — Chambre 13 en S4.
+    if iid in BLACKWOOD_ARTICLE_SEMAINE:
+        return blackwood_ouvert(BLACKWOOD_ARTICLE_SEMAINE[iid])
+    return True
 
 def boutique_blocage(uid, iid):
     """Empêchement propre à ce membre, ou None s'il peut acheter.
@@ -7331,6 +7354,19 @@ async def boutique_effet(ctx, uid, item):
     Extrait tel quel de `.acheter` pour que le checkout du panier applique
     exactement les mêmes effets — une seule chaîne, pas deux qui divergent.
     Le débit est de la responsabilité de l'appelant."""
+    # 🍂 Articles saisonniers Blackwood : purement cosmétiques. On marque
+    # la possession et on s'arrête — aucun effet, aucun bonus.
+    if str(item["id"]).startswith("bw_"):
+        inventaire[uid][item["id"]] = 1
+        if item["id"] in BLACKWOOD_MEUBLES:
+            _lieu = "ton refuge"
+        else:
+            _lieu = "ton profil"
+        return await ctx.send(embed=discord.Embed(
+            title="🍂 Acquis",
+            description=f"**{item['nom']}** est à toi.\n"
+                        f"*Tu le retrouveras sur {_lieu}.*",
+            color=season_color()))
     now = _time_module.time()
     iid = item["id"]
     if iid in ROLES_BOUTIQUE:
@@ -7709,6 +7745,1673 @@ def poss_duree(restant):
     if restant >= 60:
         return f"{restant // 60} min"
     return f"{restant} s"
+
+# ============================================================
+#  🍂 SOUVENIRS DE BLACKWOOD
+#  Ce qu'on rapporte d'une saison. Pas des consommables : on ne les
+#  dépense pas, on les garde. Stockés dans `inventaire` — quantité
+#  toujours 1, jamais incrémentée ni décrémentée.
+#
+#  Trois préfixes, trois durées de vie :
+#    bw_     récurrent   — peut revenir à chaque Blackwood
+#    bw26_   édition 2026 — jamais reproposé, conservé à vie
+#    bwtmp_  temporaire  — le temps d'un event, purgeable
+# ============================================================
+BLACKWOOD_EDITION = "blackwood_2026"
+SOUVENIR_PREFIXES = ("bw_", "bw26_", "bwtmp_")
+
+# Éditions déjà passées. Sert aux audits et empêche de reproposer
+# en 2027 un contenu marqué 2026.
+BLACKWOOD_EDITIONS_CONNUES = {BLACKWOOD_EDITION}
+
+# Table de définitions. Volontairement courte : le contenu réel
+# viendra avec la Boutique et PET.
+BLACKWOOD_SOUVENIRS = {
+    "bw_feuille_pressee": {
+        "emoji": "🍁", "nom": "Feuille pressée",
+        "description": "Ramassée un matin d'octobre, gardée entre deux pages.",
+        "categorie": "cosmetique", "edition": None, "temporaire": False,
+    },
+    "bw26_cle_rouillee": {
+        "emoji": "🔑", "nom": "Clé rouillée",
+        "description": "Elle n'ouvre rien de connu. Quelqu'un l'a pourtant gardée.",
+        "categorie": "lore", "edition": BLACKWOOD_EDITION, "temporaire": False,
+    },
+    "bw26_premiere_nuit": {
+        "emoji": "🕯️", "nom": "Première nuit",
+        "description": "Tu es resté éveillé jusqu'au bout. Octobre 2026.",
+        "categorie": "trophee", "edition": BLACKWOOD_EDITION, "temporaire": False,
+    },
+    "bw26_page_arrachee": {
+        "emoji": "📄", "nom": "Page arrachée",
+        "description": "Un seul mot est lisible. Ce n'est pas un mot français.",
+        "categorie": "lore", "edition": BLACKWOOD_EDITION, "temporaire": False,
+    },
+    "bw26_bouton_manteau": {
+        "emoji": "🔘", "nom": "Bouton de manteau",
+        "description": "En os. On n'en fabrique plus depuis longtemps.",
+        "categorie": "lore", "edition": BLACKWOOD_EDITION, "temporaire": False,
+    },
+    "bw26_photo_ancienne": {
+        "emoji": "🖼️", "nom": "Vieille photographie",
+        "description": "Une famille devant une maison. Ils sont sept, "
+                       "on compte huit ombres.",
+        "categorie": "lore", "edition": BLACKWOOD_EDITION, "temporaire": False,
+    },
+    "bw26_ruban_fane": {
+        "emoji": "🎀", "nom": "Ruban fané",
+        "description": "Noué avec soin autour de rien.",
+        "categorie": "lore", "edition": BLACKWOOD_EDITION, "temporaire": False,
+    },
+    "bw26_plume_sombre": {
+        "emoji": "🪶", "nom": "Plume sombre",
+        "description": "Trop grande pour un corbeau.",
+        "categorie": "lore", "edition": BLACKWOOD_EDITION, "temporaire": False,
+    },
+    "bwtmp_friandise": {
+        "emoji": "🍬", "nom": "Friandise",
+        "description": "Elle ne passera pas novembre.",
+        "categorie": "ephemere", "edition": BLACKWOOD_EDITION, "temporaire": True,
+    },
+}
+
+SOUVENIR_FAMILLES = (
+    ("trophee",    "🏆", "Trophées"),
+    ("lore",       "📜", "Objets"),
+    ("cosmetique", "🍁", "Souvenirs"),
+    ("ephemere",   "🍬", "Sur toi"),
+)
+
+def souvenir_def(sid):
+    """La définition d'un souvenir, ou None si l'identifiant est inconnu."""
+    return BLACKWOOD_SOUVENIRS.get(str(sid))
+
+def souvenir_valide(sid):
+    """Un identifiant bien formé ET déclaré."""
+    sid = str(sid)
+    return sid.startswith(SOUVENIR_PREFIXES) and sid in BLACKWOOD_SOUVENIRS
+
+def souvenir_permanent(sid):
+    """Ce souvenir est-il à conserver définitivement ?
+
+    Se fonde sur la définition, jamais sur le préfixe : un bw27_ déclaré
+    non temporaire sera protégé sans modifier une seule ligne ici."""
+    d = souvenir_def(sid)
+    return d is not None and not d.get("temporaire")
+
+def souvenir_possede(uid, sid):
+    return inventaire[str(uid)].get(str(sid), 0) > 0
+
+def souvenir_donner(uid, sid, sauver=True):
+    """Attribue un souvenir. Retourne (ok, libellé ou raison).
+
+    Idempotent : un souvenir déjà possédé n'est pas redonné et ne fait
+    pas échouer l'appelant en erreur — il renvoie simplement False avec
+    la raison. La quantité reste à 1 : ces objets ne s'empilent pas."""
+    uid, sid = str(uid), str(sid)
+    d = souvenir_def(sid)
+    if d is None:
+        return False, f"Souvenir inconnu : `{sid}`"
+    if not sid.startswith(SOUVENIR_PREFIXES):
+        return False, f"Identifiant mal formé : `{sid}`"
+    if souvenir_possede(uid, sid):
+        return False, "déjà possédé"
+    inventaire[uid][sid] = 1              # jamais +=, jamais -=
+    if sauver:
+        try:
+            save_all_data()
+        except Exception as e:
+            print(f"[Souvenirs] sauvegarde différée : {type(e).__name__}")
+    return True, f"{d['emoji']} {d['nom']}"
+
+def souvenirs_de(uid, inclure_temporaires=True):
+    """Les souvenirs d'un membre, groupés par famille et prêts à afficher.
+    Un identifiant orphelin — objet d'une édition passée retiré de la
+    table — est ignoré à l'affichage mais reste dans l'inventaire."""
+    uid = str(uid)
+    out = {cle: [] for cle, _e, _n in SOUVENIR_FAMILLES}
+    for sid, n in inventaire[uid].items():
+        if n <= 0 or not str(sid).startswith(SOUVENIR_PREFIXES):
+            continue
+        d = souvenir_def(sid)
+        if d is None:
+            continue
+        if d.get("temporaire") and not inclure_temporaires:
+            continue
+        out.setdefault(d["categorie"], []).append((sid, d))
+    for cle in out:
+        out[cle].sort(key=lambda x: x[1]["nom"])
+    return out
+
+def souvenirs_compte(uid, permanents_seulement=True):
+    s = souvenirs_de(uid, inclure_temporaires=not permanents_seulement)
+    return sum(len(v) for v in s.values())
+
+def souvenirs_rendu(uid, limite=8):
+    """Le bloc « Souvenirs de Blackwood », ou None si le membre n'en a pas.
+
+    Reste visible hors saison : ce sont des souvenirs, ils ne
+    disparaissent pas parce qu'on est en février."""
+    s = souvenirs_de(uid)
+    lignes = []
+    for cle, emo, titre in SOUVENIR_FAMILLES:
+        items = s.get(cle) or []
+        if not items:
+            continue
+        noms = [f"{d['emoji']} {d['nom']}" for _sid, d in items[:limite]]
+        reste = len(items) - len(noms)
+        val = " · ".join(noms) + (f"  *+{reste}*" if reste > 0 else "")
+        lignes.append(f"{emo} **{titre}** — {val}")
+    return "\n".join(lignes) if lignes else None
+
+def blackwood_purger_temporaires(uid=None):
+    """Retire les souvenirs éphémères. Retourne le nombre d'entrées ôtées.
+
+    Ne touche QUE les identifiants déclarés temporaires : ni bw_, ni
+    bw26_, ni quoi que ce soit hors de la table. Idempotente."""
+    cibles = {s for s, d in BLACKWOOD_SOUVENIRS.items()
+              if d.get("temporaire") and s.startswith("bwtmp_")}
+    if not cibles:
+        return 0
+    uids = [str(uid)] if uid is not None else list(inventaire)
+    n = 0
+    for u in uids:
+        for sid in list(inventaire[u]):
+            if sid in cibles:
+                inventaire[u].pop(sid, None)
+                n += 1
+    if n:
+        try:
+            save_all_data()
+        except Exception as e:
+            print(f"[Souvenirs] purge non sauvegardée : {type(e).__name__}")
+    return n
+
+def souvenir_edition(sid):
+    """L'édition d'un souvenir, ou None s'il est récurrent."""
+    d = souvenir_def(sid)
+    return (d or {}).get("edition")
+
+def souvenir_reproposable(sid):
+    """Peut-on encore l'attribuer comme contenu neuf cette année ?
+
+    Un souvenir d'édition passée ne l'est plus : en 2027, bw26_* restera
+    chez ses propriétaires mais ne sera plus distribué."""
+    ed = souvenir_edition(sid)
+    return ed is None or ed == BLACKWOOD_EDITION
+
+# ============================================================
+#  🍂 CONTENU BLACKWOOD — Boutique & PET
+#  Tout se greffe sur l'existant : SHOP_ITEMS, BOUTIQUE_SAISONNIER,
+#  PET_MEUBLES, EXPEDITIONS. Aucun nouveau système.
+#  Aucun bonus, aucun boost : la saison vend du décor, pas du pouvoir.
+# ============================================================
+
+# ── Semaine de Blackwood (1 à 4) ──
+# Une seule fonction décide. Les contenus qui s'ouvrent en cours de mois
+# l'interrogent, personne ne recalcule une date dans son coin.
+def blackwood_semaine(ts=None):
+    """1 à 4 pendant octobre, 0 hors saison."""
+    if saison_mode(ts) != "blackwood":
+        return 0
+    return min(4, (paris_maintenant(ts).day - 1) // 7 + 1)
+
+def blackwood_ouvert(depuis_semaine, ts=None):
+    """Un contenu daté est-il déjà accessible ?"""
+    s = blackwood_semaine(ts)
+    return s > 0 and s >= depuis_semaine
+
+# ── 🛍️ Articles saisonniers ──
+# Récurrents : ils reviendront en 2027. Préfixe bw_ conforme à 2.1.
+# Les identifiants restent des IDs SHOP_ITEMS ordinaires — Boutique 2.0
+# ne fait aucune hypothèse sur leur forme, seul le préfixe nous sert
+# à les reconnaître d'un coup d'œil.
+BLACKWOOD_ARTICLES = [
+    # 🎨 Thèmes de profil
+    {"id": "bw_th_feuilles", "nom": "🍁 Feuilles Mortes", "prix": 6000,
+     "cat": "cosmetique", "description": "Un profil couleur d'octobre, sans prétention."},
+    {"id": "bw_th_pluie", "nom": "🌧️ Fenêtre sous la pluie", "prix": 8000,
+     "cat": "cosmetique", "description": "On voit mal dehors. C'est reposant."},
+    {"id": "bw_th_biblio", "nom": "📚 Bibliothèque", "prix": 10000,
+     "cat": "cosmetique", "description": "Vieux papier, bois ciré, silence."},
+    {"id": "bw_th_citrouille", "nom": "🎃 Citrouille creusée", "prix": 9000,
+     "cat": "cosmetique", "description": "Elle sourit. C'est censé être rassurant."},
+    {"id": "bw_th_chambre13", "nom": "🚪 Chambre 13", "prix": 14000,
+     "cat": "cosmetique", "description": "Personne ne se rappelle qui y logeait."},
+    # 🎭 Rôles — décoratifs, aucun bonus
+    {"id": "bw_role_habitant", "nom": "🍂 Habitant de Blackwood", "prix": 5000,
+     "cat": "role", "description": "Tu es d'ici, maintenant."},
+    {"id": "bw_role_veilleur", "nom": "🕯️ Veilleur de nuit", "prix": 9000,
+     "cat": "role", "description": "Quelqu'un doit bien rester éveillé."},
+    {"id": "bw_role_curieux", "nom": "🔎 Curieux", "prix": 12000,
+     "cat": "role", "description": "Tu poses trop de questions. On l'a remarqué."},
+]
+
+# Semaine d'ouverture. Absent = disponible dès le 1er octobre.
+BLACKWOOD_ARTICLE_SEMAINE = {"bw_th_chambre13": 4}
+
+# 🐾 Décors de refuge. Effet "decor" : bonus_refuge() ne le connaît pas,
+# il ne rapporte donc rien — c'est voulu, ce sont des décorations.
+BLACKWOOD_MEUBLES = {
+    "bw_tapis_feuilles": ("🍁", "Tapis de feuilles", 3000, "decor", 0,
+                          "Il en ramène dans toute la maison. Tant pis."),
+    "bw_lanterne":       ("🏮", "Lanterne", 4500, "decor", 0,
+                          "Elle éclaire peu, mais elle éclaire."),
+    "bw_couverture":     ("🧣", "Couverture épaisse", 5000, "decor", 0,
+                          "Sent le grenier. Il l'adore."),
+    "bw_petite_citrouille": ("🎃", "Petite citrouille", 7000, "decor", 0,
+                             "Il la surveille du coin de l'œil."),
+}
+
+# Enregistrement : les articles deviennent des SHOP_ITEMS ordinaires,
+# et BOUTIQUE_SAISONNIER les ferme hors saison. Boutique 2.0 n'a pas
+# besoin de savoir qu'ils sont saisonniers.
+for _a in BLACKWOOD_ARTICLES:
+    if not any(x["id"] == _a["id"] for x in SHOP_ITEMS):
+        SHOP_ITEMS.append(dict(_a))
+    BOUTIQUE_SAISONNIER[_a["id"]] = "blackwood"
+
+def blackwood_article_dispo(iid, ts=None):
+    """Un article Blackwood est-il en vente maintenant ?"""
+    if saison_mode(ts) != "blackwood":
+        return False
+    return blackwood_ouvert(BLACKWOOD_ARTICLE_SEMAINE.get(iid, 1), ts)
+
+# ── 🐾 Destinations saisonnières ──
+# (nom, niveau, description). Même forme que EXPEDITIONS : le moteur
+# d'expédition les lit sans savoir qu'elles sont saisonnières.
+BLACKWOOD_EXPEDITIONS = {
+    "bw_chemin":     ("🍁 Le Chemin des Feuilles", 1,
+                      "Une allée bordée d'érables. Rien n'y arrive jamais."),
+    "bw_ferme":      ("🎃 La Ferme aux Citrouilles", 2,
+                      "Des rangées à perte de vue et une odeur de cidre."),
+    "bw_jardin":     ("🏡 Le Jardin du Manoir", 3,
+                      "Quelqu'un l'entretient. On ne sait pas qui."),
+    "bw_biblio":     ("📚 La Bibliothèque", 4,
+                      "On y parle bas. Même seul."),
+    "bw_cimetiere":  ("⚰️ Le Vieux Cimetière", 5,
+                      "Bien tenu, fleuri, paisible. Vraiment paisible."),
+    "bw_interdit":   ("🚪 Le Chemin Interdit", 6,
+                      "Un panneau tombé, une barrière ouverte. C'est tout."),
+}
+
+# Le Chemin Interdit n'a d'intérêt qu'à partir de la semaine 3.
+BLACKWOOD_EXPE_SEMAINE = {"bw_interdit": 3}
+
+def expeditions_disponibles(ts=None):
+    """Les 9 permanentes, plus les 6 saisonnières si Blackwood est actif.
+    Les permanentes ne sont jamais retirées."""
+    out = dict(EXPEDITIONS)
+    if saison_mode(ts) == "blackwood":
+        for k, v in BLACKWOOD_EXPEDITIONS.items():
+            if blackwood_ouvert(BLACKWOOD_EXPE_SEMAINE.get(k, 1), ts):
+                out[k] = v
+    return out
+
+# ── Textes par période ──
+# Le même lieu, trois sensations. Le malaise vient du familier qui
+# change, pas d'un effet d'horreur.
+BLACKWOOD_AMBIANCES = {
+    "bw_chemin": {
+        "DAY": "Le soleil passe entre les branches. {p} marche dans les feuilles.",
+        "DUSK": "La lumière baisse. {p} avance sans se presser.",
+        "NIGHT": "Les feuilles craquent sous ses pattes. C'est le seul bruit.",
+    },
+    "bw_ferme": {
+        "DAY": "Des familles choisissent leur citrouille. Ça sent le cidre chaud.",
+        "DUSK": "Les derniers visiteurs rentrent. On éteint les guirlandes.",
+        "NIGHT": "Les rangées sont vides. Les citrouilles sont toujours tournées "
+                 "vers l'allée.",
+    },
+    "bw_jardin": {
+        "DAY": "Les haies sont taillées au cordeau. {p} renifle les rosiers.",
+        "DUSK": "Une fenêtre du manoir s'allume à l'étage.",
+        "NIGHT": "Le jardin est impeccable. Personne n'y travaille jamais "
+                 "pendant la journée.",
+    },
+    "bw_biblio": {
+        "DAY": "{p} s'installe dans un rayon de soleil, entre deux rayonnages.",
+        "DUSK": "La bibliothécaire commence à ranger. Elle ne dit rien.",
+        "NIGHT": "Un livre est resté ouvert sur une table. À la même page qu'hier.",
+    },
+    "bw_cimetiere": {
+        "DAY": "Des fleurs fraîches sur presque toutes les tombes.",
+        "DUSK": "{p} s'assied un moment. Il ne veut pas repartir tout de suite.",
+        "NIGHT": "Les fleurs sont toujours fraîches. Toutes. Chaque nuit.",
+    },
+    "bw_interdit": {
+        # DAY volontairement pauvre : le lieu n'a rien à offrir en plein jour.
+        "DAY": "Un sentier boueux qui s'arrête après trois cents mètres. "
+               "{p} fait demi-tour.",
+        "DUSK": "Le sentier continue plus loin que ce matin. {p} hésite.",
+        "NIGHT": "Le chemin ne s'arrête plus. {p} revient couvert de terre "
+                 "sèche, alors qu'il a plu.",
+    },
+}
+
+def blackwood_ambiance(lieu, nom_pet, ts=None):
+    """Le texte de retour propre au lieu et à l'heure."""
+    bloc = BLACKWOOD_AMBIANCES.get(lieu)
+    if not bloc:
+        return None
+    return bloc.get(saison_periode(ts), bloc.get("DAY", "")).format(p=nom_pet)
+
+# ── Incidents ──
+# Deux choix, aucun meilleur que l'autre : ils orientent la trouvaille,
+# jamais sa valeur. Sinon le méta est trouvé en deux jours.
+BLACKWOOD_INCIDENTS = [
+    # Pas de « choix » ici : l'expédition est asynchrone — le compagnon
+    # part et revient des heures plus tard. Un vrai choix demanderait de
+    # réécrire petexpedition_cmd. L'incident est donc un événement narratif
+    # dont l'issue est tirée au départ, et raconté au retour. Aucun bouton
+    # décoratif n'est affiché.
+    {"id": "porte", "texte": "{p} s'arrête devant une porte entrouverte.",
+     "suites": ["Il pousse la porte du museau. La pièce est vide, propre, "
+                "et sent le renfermé.",
+                "Il passe devant sans ralentir. La porte se referme seule "
+                "derrière lui."]},
+    {"id": "bruit", "texte": "Quelque chose bouge dans les fourrés.",
+     "suites": ["C'était un chat. Enfin, il y avait un chat.",
+                "Le bruit s'arrête dès qu'il s'éloigne. Puis reprend."]},
+    {"id": "objet", "texte": "{p} gratte la terre et déterre quelque chose.",
+     "suites": ["Il le rapporte fièrement, plein de boue.",
+                "Il le repose exactement où il l'a trouvé. Il a l'air soulagé."]},
+    {"id": "silence", "texte": "D'un coup, plus un bruit. Même le vent.",
+     "suites": ["Après une minute, tout reprend. Comme si de rien n'était.",
+                "Il rentre au trot, sans se retourner une seule fois."]},
+]
+
+def blackwood_incident_possible(lieu, ts=None):
+    """40 % des sorties saisonnières produisent un incident.
+    Le Chemin des Feuilles n'en produit jamais : il faut un endroit sûr."""
+    if lieu not in BLACKWOOD_EXPEDITIONS or lieu == "bw_chemin":
+        return None
+    if random.random() > 0.40:
+        return None
+    return random.choice(BLACKWOOD_INCIDENTS)
+
+# ── Trouvailles ──
+# Des objets sans usage. Leur seule fonction est d'être reconnus plus
+# tard. Jamais requis pour comprendre quoi que ce soit.
+BLACKWOOD_TROUVAILLES = ["bw26_cle_rouillee", "bw26_page_arrachee",
+                         "bw26_bouton_manteau", "bw26_photo_ancienne",
+                         "bw26_ruban_fane", "bw26_plume_sombre"]
+
+# Probabilité de rapporter quelque chose, par période. La nuit paie
+# en trouvailles ce qu'elle ne paie pas en pièces.
+BLACKWOOD_CHANCE_TROUVAILLE = {"DAY": 0.06, "DUSK": 0.10, "NIGHT": 0.16}
+
+def blackwood_trouvaille(uid, lieu, ts=None):
+    """Tente une trouvaille. Retourne (sid, définition) ou None.
+    Ne redonne jamais un objet déjà possédé."""
+    if lieu not in BLACKWOOD_EXPEDITIONS:
+        return None
+    p = BLACKWOOD_CHANCE_TROUVAILLE.get(saison_periode(ts), 0.06)
+    if lieu == "bw_interdit" and saison_periode(ts) == "NIGHT":
+        p += 0.10                      # la seule vraie récompense du lieu
+    if random.random() > p:
+        return None
+    manquants = [s for s in BLACKWOOD_TROUVAILLES
+                 if souvenir_def(s) and not souvenir_possede(uid, s)]
+    if not manquants:
+        return None
+    sid = random.choice(manquants)
+    ok, _m = souvenir_donner(uid, sid)
+    return (sid, souvenir_def(sid)) if ok else None
+
+# ============================================================
+#  🍬 TRICK OR TREAT — l'event cozy de Blackwood
+#  Une rue, des portes écrites à la main, 3 visites par membre.
+#  Aucune punition, aucun tour, aucun quiz. On frappe, on discute.
+# ============================================================
+TOT_VISITES_MAX = 3
+TOT_DUREE = 12 * 60          # secondes
+
+# Chaque porte a un habitant, pas un barème. `anomalie` indique à partir
+# de quelle semaine la variante étrange remplace la scène normale.
+TOT_PORTES = [
+    {"n": 1, "emoji": "🏡", "titre": "La maison aux volets bleus",
+     "scene": "Une dame ouvre avant même que tu frappes. Elle te tend une "
+              "poignée de bonbons, puis une deuxième, puis insiste pour une "
+              "troisième. « Tu es trop maigre. »",
+     "pieces": (120, 260), "friandise": True},
+    {"n": 2, "emoji": "🕸️", "titre": "Celle qui en fait trop",
+     "scene": "Toiles d'araignée, fumée, haut-parleur qui hurle. Le père est "
+              "déguisé en vampire depuis 14 h et il commence à avoir chaud.",
+     "pieces": (150, 320), "friandise": True},
+    {"n": 3, "emoji": "🎮", "titre": "L'ado qui n'avait rien prévu",
+     "scene": "Il ouvre en chaussettes, regarde ton sac, disparaît trente "
+              "secondes et revient avec un paquet de chips entamé. C'est "
+              "l'intention qui compte.",
+     "pieces": (60, 140), "friandise": False},
+    {"n": 4, "emoji": "🐕", "titre": "La maison au gros chien",
+     "scene": "Le chien arrive en premier. Il est énorme, il bave, il est "
+              "ravi. Sa maîtresse crie « IL EST GENTIL ! » depuis la cuisine. "
+              "Il l'est.",
+     "pieces": (100, 240), "friandise": True},
+    {"n": 5, "emoji": "🕯️", "titre": "Celle avec la bougie à la fenêtre",
+     "scene": "Personne ne répond. La bougie brûle sur le rebord. Sur le "
+              "paillasson, un panier avec un mot : « Servez-vous, je reviens. »",
+     "pieces": (140, 280), "friandise": True,
+     "anomalie": 3,
+     "scene_etrange": "Le panier est là. Le mot aussi. C'est la même écriture "
+                      "que l'an dernier, et le même papier, à peine jauni."},
+    {"n": 6, "emoji": "🍎", "titre": "Les pommes d'amour",
+     "scene": "Ils en font depuis ce matin. Il y en a partout. On t'en met "
+              "une dans la main avant que tu aies dit bonsoir.",
+     "pieces": (110, 230), "friandise": True},
+    {"n": 7, "emoji": "🪟", "titre": "La maison silencieuse",
+     "scene": "Aucune décoration, aucune lumière. Tu frappes par acquit de "
+              "conscience. Rien. Tu redescends l'allée.",
+     "pieces": (0, 40), "friandise": False,
+     "anomalie": 2,
+     "scene_etrange": "Aucune lumière. Mais en repartant, tu entends le "
+                      "verrou se refermer. De l'intérieur."},
+    {"n": 8, "emoji": "👵", "titre": "Madame Aldworth",
+     "scene": "Elle connaît ton prénom. Elle connaît celui de ton compagnon. "
+              "Elle te donne des caramels enveloppés à la main et te dit de "
+              "rentrer avant qu'il fasse trop noir.",
+     "pieces": (180, 340), "friandise": True, "lore": 0.10},
+    {"n": 9, "emoji": "🎃", "titre": "Les vingt citrouilles",
+     "scene": "Ils en ont creusé vingt. Vingt. Chacune a un visage différent "
+              "et un prénom écrit au feutre en dessous.",
+     "pieces": (130, 270), "friandise": True,
+     "anomalie": 4,
+     "scene_etrange": "Il y en a vingt et une ce soir. La dernière n'a pas "
+                      "de prénom écrit dessous."},
+    # 🚪 Le numéro 13 est la seule porte qui évolue à chaque semaine.
+    # En S1 elle est simplement pittoresque : rien d'anormal, comme
+    # toutes les autres. Le glissement se fait ensuite, sans à-coup.
+    {"n": 10, "emoji": "🚪", "titre": "Le numéro 13",
+     "scene": "Un vieux monsieur en robe de chambre ouvre avant que tu "
+              "frappes. Il te donne une pièce de monnaie étrangère au lieu "
+              "d'un bonbon, te souhaite bonne chance, et referme.",
+     "pieces": (100, 220), "friandise": False, "lore": 0.05,
+     "paliers": {
+         2: "Le vieux monsieur ne répond pas. Sur la porte, un mot : "
+            "« Revenez plus tard, je suis à la cave. » L'encre est fraîche.",
+         3: "Personne. Le mot est toujours là, mais il n'est plus daté "
+            "d'aujourd'hui — il est daté de l'an dernier.",
+         4: "La maison est là, entre le 11 et le 15. Personne ne répond, "
+            "et personne dans la rue ne semble se souvenir de qui y habite.",
+     }},
+]
+
+def tot_portes_du_soir(ts=None):
+    """La rue telle qu'elle est ce soir. En semaine 4, moins de maisons
+    sont éclairées : on en retire deux, jamais la 13."""
+    sem = blackwood_semaine(ts)
+    portes = [dict(p) for p in TOT_PORTES]
+    for p in portes:
+        # Variante unique à partir d'une semaine donnée…
+        seuil = p.get("anomalie")
+        p["etrange"] = bool(seuil and sem >= seuil and p.get("scene_etrange"))
+        if p["etrange"]:
+            p["scene"] = p["scene_etrange"]
+        # …ou glissement progressif, palier par palier.
+        paliers = p.get("paliers")
+        if paliers:
+            atteints = [s for s in sorted(paliers) if sem >= s]
+            if atteints:
+                p["scene"] = paliers[atteints[-1]]
+                p["etrange"] = True
+                p["lore"] = 0.10 + 0.04 * len(atteints)
+    if sem >= 4:
+        eteintes = {3, 6}          # deux maisons n'ouvrent plus
+        portes = [p for p in portes if p["n"] not in eteintes]
+    return portes
+
+def tot_ambiance(ts=None):
+    """Le ton de la rue selon l'heure. Cozy même la nuit."""
+    return {"DAY": "Le quartier finit ses décorations. Ça sent la peinture "
+                   "et les feuilles mouillées.",
+            "DUSK": "C'est le bon moment. Les lampes s'allument une par une, "
+                    "les groupes se forment.",
+            "NIGHT": "Il ne reste plus grand monde dehors. Les maisons "
+                     "encore éclairées le sont vraiment."}.get(
+        saison_periode(ts), "Le quartier est décoré.")
+
+class TrickOrTreatView(ui.View):
+    """Une rue, un menu de portes. L'état est par membre, jamais partagé :
+    trente personnes peuvent frapper en même temps sans se gêner."""
+
+    def __init__(self, salon, portes, timeout=TOT_DUREE):
+        super().__init__(timeout=timeout)
+        self.salon = salon
+        self.portes = {p["n"]: p for p in portes}
+        self.visites = {}          # {uid: {numéros déjà visités}}
+        self.stoppe = False
+        opts = [discord.SelectOption(
+                    label=f"{p['n']}. {p['titre']}"[:100], value=str(p["n"]),
+                    emoji=p["emoji"])
+                for p in portes[:25]]
+        sel = ui.Select(placeholder="🚪 À quelle porte veux-tu frapper ?",
+                        options=opts)
+        sel.callback = self._frapper
+        self.add_item(sel)
+        self._sel = sel
+
+    async def _frapper(self, itx):
+        # `View.stop()` cesse d'attendre mais ne bloque pas les callbacks
+        # déjà routés par Discord. Après un arrêt d'urgence, une porte
+        # restait cliquable et versait des pièces. On vérifie les deux.
+        if self.stoppe or self.is_finished():
+            return await itx.response.send_message(
+                "La rue s'est vidée.", ephemeral=True)
+        uid = str(itx.user.id)
+        faites = self.visites.setdefault(uid, set())
+        num = int(self._sel.values[0])
+        if num in faites:
+            return await itx.response.send_message(
+                "Tu es déjà passé à cette porte ce soir.", ephemeral=True)
+        if len(faites) >= TOT_VISITES_MAX:
+            return await itx.response.send_message(
+                f"Tu as déjà fait tes **{TOT_VISITES_MAX}** maisons. "
+                f"Va comparer ton butin avec les autres.", ephemeral=True)
+        faites.add(num)                 # marqué AVANT tout gain
+        p = self.portes[num]
+        lo, hi = p["pieces"]
+        gain = random.randint(lo, hi) if hi else 0
+        if gain:
+            economy_data[uid]["coins"] += gain
+        lignes = []
+        if gain:
+            lignes.append(f"💰 **{gain} pièces**")
+        if p.get("friandise"):
+            souvenir_donner(uid, "bwtmp_friandise", sauver=False)
+            lignes.append("🍬 *une friandise de plus dans le sac*")
+        if p.get("lore") and random.random() < p["lore"]:
+            t = blackwood_trouvaille(uid, "bw_interdit")
+            if t:
+                lignes.append(f"{t[1]['emoji']} **{t[1]['nom']}** — "
+                              f"*tu ne sais pas pourquoi tu l'as pris*")
+        e = discord.Embed(
+            title=f"{p['emoji']}  {p['titre']}",
+            description=p["scene"],
+            color=season_color("alerte" if p.get("etrange") else "principal"))
+        if lignes:
+            e.add_field(name="\u200b", value="\n".join(lignes), inline=False)
+        e.set_footer(text=f"{len(faites)}/{TOT_VISITES_MAX} maisons visitées")
+        await itx.response.send_message(embed=e, ephemeral=True)
+
+    def bilan(self):
+        n_j = len(self.visites)
+        n_p = sum(len(v) for v in self.visites.values())
+        return n_j, n_p
+
+async def run_trick_or_treat(channel, guild):
+    """🍬 Trick or Treat — la rue de Blackwood."""
+    portes = tot_portes_du_soir()
+    e = discord.Embed(
+        title="🍬  TRICK OR TREAT",
+        description=(f"*{tot_ambiance()}*\n\n"
+                     f"**{len(portes)} maisons** ce soir. Tu peux en faire "
+                     f"**{TOT_VISITES_MAX}**.\n"
+                     f"Choisis dans le menu — ce que tu trouves ne regarde "
+                     f"que toi.\n\n*Vous avez 10 minutes.*"),
+        color=season_color())
+    e.set_footer(text=season_footer("Blackwood"))
+    vue = TrickOrTreatView(channel, portes)
+    event_attacher_vue(guild.id, "trickortreat", vue)
+    await channel.send(embed=e, view=vue)
+    await asyncio.sleep(TOT_DUREE)
+    vue.stoppe = True
+    for x in vue.children:
+        x.disabled = True
+    vue.stop()
+    n_j, n_p = vue.bilan()
+    if not event_est_stoppe(guild.id, "trickortreat"):
+        for _u, _p in vue.visites.items():
+            blackwood_progress(_u, "tot_soir", guild_id=guild.id, event="trickortreat")
+            blackwood_progress(_u, "tot_porte", n=len(_p),
+                               guild_id=guild.id, event="trickortreat")
+    fin = discord.Embed(
+        title="🍬  LA RUE SE VIDE",
+        description=(f"**{n_j}** habitant(s) sont sortis ce soir, "
+                     f"**{n_p}** portes ont été frappées.\n\n"
+                     f"*Comparez vos sacs.*" if n_j else
+                     "*Personne n'est sorti. Les bonbons resteront dans "
+                     "les paniers.*"),
+        color=season_color("neutre"))
+    await channel.send(embed=fin)
+
+# ============================================================
+#  🔎 DOSSIERS MYSTÈRES — le cœur narratif de Blackwood
+#  Moteur générique + contenu séparé. Le coupable est tiré parmi
+#  plusieurs candidats plausibles au lancement : reconnaître le
+#  décor ne donne pas la réponse.
+# ============================================================
+DOS_PHASE_SCENE = 150        # secondes
+DOS_PHASE_ENQUETE = 600
+DOS_PHASE_DEBAT = 240
+DOS_PHASE_VOTE = 180
+
+# Contenu. Un dossier ne connaît pas le moteur, le moteur ne connaît
+# aucune affaire en dur.
+BLACKWOOD_DOSSIERS = {
+    "dossier_01": {
+        "titre": "🔎 L'affaire de la bibliothèque",
+        "type": "rationnel",
+        "difficulte": 1,
+        "intro": ("Lundi matin, la bibliothèque de Blackwood a été retrouvée "
+                  "sens dessus dessous. Aucune fenêtre forcée, aucune serrure "
+                  "abîmée. Un seul livre manque : le registre communal de 1961.\n\n"
+                  "Quatre personnes avaient une clé."),
+        "suspects": {
+            "harriet": ("👵", "Harriet Vance", "Bibliothécaire depuis 31 ans."),
+            "marcus":  ("🧹", "Marcus Bell", "Fait le ménage tous les soirs."),
+            "elena":   ("📖", "Elena Roth", "Historienne, en résidence ce mois-ci."),
+            "tom":     ("🔧", "Tom Kesey", "Réparait le chauffage la semaine passée."),
+        },
+        "temoignages": {
+            "harriet": "« J'ai fermé à 18 h comme toujours. J'ai vérifié les "
+                       "trois portes. Le registre était sur son étagère, je "
+                       "l'ai vu en éteignant. »",
+            "marcus":  "« Je suis passé vers 21 h. Tout était en ordre. J'ai "
+                       "fini vers 22 h 30 et je suis rentré à pied. Il pleuvait "
+                       "des cordes, j'étais trempé. »",
+            "elena":   "« Je travaillais chez moi. J'ai rendu ma clé vendredi, "
+                       "d'ailleurs — je n'en avais plus besoin. »",
+            "tom":     "« Le chauffage, c'était mardi dernier. Depuis, je n'y "
+                       "ai pas remis les pieds. »",
+        },
+        "lieux": {
+            "entree": ("🚪 L'entrée", "Aucune trace d'effraction. Le paillasson "
+                       "est sec."),
+            "salle":  ("📚 La grande salle", "Des livres à terre, mais rangés "
+                       "par piles. Quelqu'un a cherché méthodiquement."),
+            "bureau": ("🗄️ Le bureau", "Le tiroir des clés est ouvert. Il y a "
+                       "quatre crochets. Trois clés."),
+        },
+        "objets": {
+            "registre": ("📕 L'emplacement du registre", "Un rectangle sans "
+                         "poussière sur l'étagère. Il a été pris récemment."),
+            "parapluie": ("☂️ Un parapluie", "Oublié près de l'entrée. Sec."),
+            "carnet": ("📓 Un carnet de notes", "Des références au cadastre de "
+                       "1961, écrites d'une main pressée."),
+        },
+        # Candidats plausibles : le coupable est l'un d'eux, tiré au lancement.
+        "candidats": ["elena", "marcus"],
+        "variantes": {
+            "elena": {
+                "indices": {
+                    "carnet": "L'écriture correspond aux notes de recherche "
+                              "d'Elena Roth, comparées à son formulaire "
+                              "d'inscription.",
+                    "bureau": "Le registre des clés indique quatre remises. "
+                              "Elena a signé la reprise de la sienne — mais "
+                              "pas la restitution.",
+                },
+                "contradiction": "Elena affirme avoir rendu sa clé vendredi. "
+                                 "Le registre des clés ne porte aucune "
+                                 "signature de restitution.",
+                "resolution": "**Elena Roth.** Elle n'a jamais rendu sa clé — "
+                              "le registre le prouve. Le carnet retrouvé sur "
+                              "place est de sa main, et porte des références au "
+                              "cadastre de 1961, exactement ce que contenait le "
+                              "registre volé. Elle cherchait quelque chose de "
+                              "précis, et elle savait où chercher.",
+            },
+            "marcus": {
+                "indices": {
+                    "parapluie": "Le parapluie oublié est sec. Or il pleuvait "
+                                 "à verse entre 21 h et 23 h.",
+                    "entree": "Le paillasson est sec lui aussi. Personne n'est "
+                              "entré pendant l'averse.",
+                },
+                "contradiction": "Marcus dit être parti vers 22 h 30 sous une "
+                                 "pluie battante, trempé. Mais ni le paillasson "
+                                 "ni son parapluie ne sont mouillés.",
+                "resolution": "**Marcus Bell.** Il n'était pas là pendant "
+                              "l'averse. Le paillasson et son parapluie sont "
+                              "secs — il est venu bien plus tard, une fois la "
+                              "pluie passée, et a inventé l'horaire pour se "
+                              "couvrir. Il connaissait l'emplacement du tiroir "
+                              "à clés : il le nettoie tous les soirs.",
+            },
+        },
+        "recompense": 400,
+    },
+}
+
+def dossier_preparer(cle):
+    """Monte une instance jouable : coupable tiré, indices fusionnés."""
+    d = BLACKWOOD_DOSSIERS.get(cle)
+    if not d:
+        return None
+    coupable = random.choice(d["candidats"])
+    var = d["variantes"][coupable]
+    objets = {k: list(v) for k, v in d.get("objets", {}).items()}
+    lieux = {k: list(v) for k, v in d.get("lieux", {}).items()}
+    for ref, texte in (var.get("indices") or {}).items():
+        if ref in objets:
+            objets[ref][1] += f"\n\n🔎 *{texte}*"
+        elif ref in lieux:
+            lieux[ref][1] += f"\n\n🔎 *{texte}*"
+    return {"cle": cle, "def": d, "coupable": coupable, "variante": var,
+            "objets": objets, "lieux": lieux, "votes": {}}
+
+class DossierView(ui.View):
+    """Consultation privée pendant l'enquête, puis accusation.
+    Tout ce qu'un joueur consulte lui est envoyé en éphémère : la mise
+    en commun se fait à la voix, pas par le bot."""
+
+    def __init__(self, aff, timeout):
+        super().__init__(timeout=timeout)
+        self.aff = aff
+        self.phase = "enquete"
+        d = aff["def"]
+        sus = ui.Select(placeholder="👤 Interroger un suspect",
+                        options=[discord.SelectOption(
+                            label=v[1], value=k, emoji=v[0], description=v[2][:100])
+                            for k, v in d["suspects"].items()])
+        sus.callback = self._suspect
+        self.add_item(sus); self._sus = sus
+        lieux = ui.Select(placeholder="📍 Examiner un lieu ou un objet",
+                          options=[discord.SelectOption(
+                              label=v[0][:100], value=f"l:{k}")
+                              for k, v in aff["lieux"].items()]
+                          + [discord.SelectOption(
+                              label=v[0][:100], value=f"o:{k}")
+                              for k, v in aff["objets"].items()])
+        lieux.callback = self._lieu
+        self.add_item(lieux); self._lieux = lieux
+
+    async def _suspect(self, itx):
+        if self.is_finished() or self.phase != "enquete":
+            return await itx.response.send_message(
+                "L'enquête est close.", ephemeral=True)
+        k = self._sus.values[0]
+        emo, nom, desc = self.aff["def"]["suspects"][k]
+        e = discord.Embed(title=f"{emo}  {nom}", description=f"*{desc}*",
+                          color=season_color("info"))
+        e.add_field(name="Déclaration",
+                    value=self.aff["def"]["temoignages"].get(k, "*Silence.*"),
+                    inline=False)
+        e.set_footer(text="Personne d'autre ne voit ce que tu consultes.")
+        await itx.response.send_message(embed=e, ephemeral=True)
+
+    async def _lieu(self, itx):
+        if self.is_finished() or self.phase != "enquete":
+            return await itx.response.send_message(
+                "L'enquête est close.", ephemeral=True)
+        v = self._lieux.values[0]
+        src = self.aff["lieux"] if v.startswith("l:") else self.aff["objets"]
+        nom, txt = src[v[2:]]
+        await itx.response.send_message(embed=discord.Embed(
+            title=nom, description=txt, color=season_color("neutre")),
+            ephemeral=True)
+
+    def passer_au_vote(self):
+        """Remplace les menus d'enquête par l'accusation."""
+        self.phase = "vote"
+        self.clear_items()
+        acc = ui.Select(placeholder="⚖️ Qui accuses-tu ?",
+                        options=[discord.SelectOption(
+                            label=v[1], value=k, emoji=v[0])
+                            for k, v in self.aff["def"]["suspects"].items()])
+        acc.callback = self._accuser
+        self.add_item(acc); self._acc = acc
+
+    async def _accuser(self, itx):
+        if self.is_finished():
+            return await itx.response.send_message(
+                "Le dossier est clos.", ephemeral=True)
+        if self.phase != "vote":
+            return await itx.response.send_message(
+                "Ce n'est pas le moment.", ephemeral=True)
+        uid = str(itx.user.id)
+        if uid in self.aff["votes"]:
+            nom = self.aff["def"]["suspects"][self.aff["votes"][uid]][1]
+            return await itx.response.send_message(
+                f"Tu as déjà accusé **{nom}**. On ne revient pas là-dessus.",
+                ephemeral=True)
+        k = self._acc.values[0]
+        self.aff["votes"][uid] = k
+        await itx.response.send_message(
+            f"⚖️ Tu accuses **{self.aff['def']['suspects'][k][1]}**.",
+            ephemeral=True)
+
+async def run_dossier(channel, guild, cle=None):
+    """🔎 Un Dossier Mystère de Blackwood."""
+    cle = cle or random.choice(list(BLACKWOOD_DOSSIERS))
+    aff = dossier_preparer(cle)
+    if not aff:
+        return await channel.send("❌ Aucun dossier disponible.")
+    d = aff["def"]
+
+    e = discord.Embed(title=d["titre"], description=d["intro"],
+                      color=season_color("info"))
+    e.add_field(name="👥 Suspects",
+                value="\n".join(f"{v[0]} **{v[1]}** — *{v[2]}*"
+                                for v in d["suspects"].values()), inline=False)
+    e.set_footer(text=season_footer("Lisez. L'enquête ouvre dans un instant."))
+    await channel.send(embed=e)
+    await asyncio.sleep(DOS_PHASE_SCENE)
+
+    vue = DossierView(aff, DOS_PHASE_ENQUETE + DOS_PHASE_DEBAT + DOS_PHASE_VOTE)
+    event_attacher_vue(guild.id, "dossier", vue)
+    await channel.send(embed=discord.Embed(
+        title="🔍  L'ENQUÊTE EST OUVERTE",
+        description=("Interrogez, fouillez. **Ce que vous consultez reste "
+                     "privé.**\n\nVous aurez ensuite quelques minutes pour "
+                     "confronter vos trouvailles."),
+        color=season_color()), view=vue)
+    await asyncio.sleep(DOS_PHASE_ENQUETE)
+
+    await channel.send(embed=discord.Embed(
+        title="💬  MISE EN COMMUN",
+        description=("L'enquête reste ouverte, mais il est temps de parler.\n"
+                     "*Qu'avez-vous trouvé que les autres n'ont pas vu ?*"),
+        color=season_color("or")))
+    await asyncio.sleep(DOS_PHASE_DEBAT)
+
+    vue.passer_au_vote()
+    await channel.send(embed=discord.Embed(
+        title="⚖️  L'ACCUSATION",
+        description=("Chacun accuse **pour soi**. Il n'y a pas de vote "
+                     "collectif : avoir raison seul vaut mieux que suivre "
+                     "les autres.\n\n*Une seule réponse, définitive.*"),
+        color=season_color("alerte")), view=vue)
+    await asyncio.sleep(DOS_PHASE_VOTE)
+
+    vue.phase = "fini"
+    for x in vue.children:
+        x.disabled = True
+    vue.stop()
+
+    coupable = aff["coupable"]
+    nom_c = d["suspects"][coupable][1]
+    bons = [u for u, k in aff["votes"].items() if k == coupable]
+    total = len(aff["votes"])
+    fin = discord.Embed(
+        title=f"🔎  {nom_c}",
+        description=aff["variante"]["resolution"],
+        color=season_color("alerte"))
+    fin.add_field(name="🧩 La contradiction",
+                  value=aff["variante"]["contradiction"], inline=False)
+    if total:
+        fin.add_field(name="⚖️ Les accusations",
+                      value=f"**{len(bons)}** sur **{total}** ont vu juste.",
+                      inline=False)
+    # Récompense modeste, versée une seule fois, jamais après un arrêt.
+    if not event_est_stoppe(guild.id, "dossier"):
+        for _u in aff["votes"]:
+            blackwood_progress(_u, "dossier_joue", guild_id=guild.id, event="dossier")
+        for _u in bons:
+            blackwood_progress(_u, "dossier_resolu", guild_id=guild.id, event="dossier")
+    if bons and not event_est_stoppe(guild.id, "dossier"):
+        gain = d.get("recompense", 400)
+        seul = len(bons) == 1 and total >= 3
+        for u in bons:
+            economy_data[u]["coins"] += int(gain * (1.5 if seul else 1))
+        fin.add_field(
+            name="🎯 Bon flair",
+            value=", ".join(f"<@{u}>" for u in bons[:15])
+                  + (f"\n*Seul contre tous — récompense majorée.*" if seul else ""),
+            inline=False)
+        save_all_data()
+    await channel.send(embed=fin)
+
+# ============================================================
+#  🚪 NE QUITTE PAS TA CHAMBRE
+#  Une nuit, huit tours, des règles qu'on n'explique jamais.
+#  Le moteur ne connaît aucun stimulus : il lit une banque et
+#  un « ruleset » tiré au lancement. Deux nuits ne se jouent pas
+#  de la même façon.
+# ============================================================
+NQ_TOURS = 8
+NQ_TEMPS_TOUR = 75           # secondes pour choisir
+NQ_BOUGIE_DEPART = 3
+
+# Chaque action porte des TRAITS. Le ruleset de la nuit désigne
+# lesquels sont dangereux. C'est tout le secret : rien n'est écrit
+# dans les stimuli eux-mêmes.
+NQ_TRAITS = ("bruit", "lumiere", "reponse", "ouverture", "immobile", "regard")
+
+# Une nuit tire 2 traits interdits parmi ceux-ci. Les combinaisons
+# gardent un sens : on ne mélange pas immobile ET ouverture.
+NQ_RULESETS = [
+    {"cle": "silence", "interdits": ("bruit", "reponse"),
+     "murmure": "Cette nuit, elle écoute."},
+    {"cle": "obscurite", "interdits": ("lumiere", "regard"),
+     "murmure": "Cette nuit, elle regarde."},
+    {"cle": "seuil", "interdits": ("ouverture", "reponse"),
+     "murmure": "Cette nuit, elle attend qu'on lui ouvre."},
+    {"cle": "veille", "interdits": ("immobile", "lumiere"),
+     "murmure": "Cette nuit, il ne faut pas s'endormir."},
+    {"cle": "discretion", "interdits": ("bruit", "regard"),
+     "murmure": "Cette nuit, mieux vaut ne rien voir."},
+]
+
+# Banque de stimuli. `actions` = (libellé, emoji, traits, coût bougie).
+# Un coût négatif restaure la bougie. `tour_min` retarde les plus durs.
+NQ_STIMULI = [
+    {"id": "coups", "tour_min": 1, "intensite": 1,
+     "texte": "Trois coups à la porte. Puis plus rien.",
+     "actions": [("Demander qui c'est", "🗣️", ("reponse", "bruit"), 0),
+                 ("Regarder par le judas", "👁️", ("regard",), 0),
+                 ("Ne pas bouger", "🤫", ("immobile",), 1)]},
+    {"id": "telephone", "tour_min": 1, "intensite": 1,
+     "texte": "Le téléphone sonne. L'écran affiche ton propre numéro.",
+     "actions": [("Décrocher", "📞", ("reponse",), 0),
+                 ("Débrancher", "🔌", ("bruit",), 0),
+                 ("Laisser sonner", "🤫", ("immobile",), 1)]},
+    {"id": "fenetre", "tour_min": 1, "intensite": 1,
+     "texte": "La fenêtre est entrouverte. Tu ne l'avais pas ouverte.",
+     "actions": [("La fermer", "🪟", ("bruit",), 0),
+                 ("Regarder dehors", "👁️", ("regard",), 0),
+                 ("Tirer le rideau", "🧵", (), 1)]},
+    {"id": "poignee", "tour_min": 2, "intensite": 2,
+     "texte": "La poignée descend lentement. Puis remonte.",
+     "actions": [("Bloquer la porte", "🚪", ("bruit", "ouverture"), 0),
+                 ("Reculer sans bruit", "🤫", ("immobile",), 1),
+                 ("Ouvrir d'un coup", "💥", ("ouverture", "bruit"), 0)]},
+    {"id": "lumiere", "tour_min": 2, "intensite": 2,
+     "texte": "L'ampoule grésille. Elle va lâcher.",
+     "actions": [("Allumer la lampe de chevet", "💡", ("lumiere",), -1),
+                 ("Rester dans le noir", "🌑", ("immobile",), 1),
+                 ("Chercher des allumettes", "🔥", ("bruit",), -1)]},
+    {"id": "mot", "tour_min": 2, "intensite": 2,
+     "texte": "Un papier plié glisse sous la porte.",
+     "actions": [("Le lire", "📄", ("regard",), 0),
+                 ("Le repousser dehors", "↩️", ("ouverture",), 0),
+                 ("L'ignorer", "🤫", ("immobile",), 1)]},
+    {"id": "couloir", "tour_min": 3, "intensite": 2,
+     "texte": "Des pas dans le couloir. Ils s'arrêtent devant chez toi.",
+     "actions": [("Retenir ton souffle", "🤫", ("immobile",), 1),
+                 ("Éteindre la lumière", "🌑", (), 1),
+                 ("Parler à travers la porte", "🗣️", ("reponse", "bruit"), 0)]},
+    {"id": "radio", "tour_min": 3, "intensite": 2,
+     "texte": "La radio s'allume seule. Une voix lit une liste de prénoms.",
+     "actions": [("Écouter jusqu'au bout", "👂", ("regard",), 0),
+                 ("L'éteindre", "🔇", ("bruit",), 0),
+                 ("Monter le son", "🔊", ("bruit", "reponse"), -1)]},
+    {"id": "horloge", "tour_min": 3, "intensite": 3,
+     "texte": "L'horloge indique 3 h 33. Elle l'indiquait déjà tout à l'heure.",
+     "actions": [("La décrocher", "🕰️", ("bruit",), 0),
+                 ("Ne plus la regarder", "🙈", ("immobile",), 1),
+                 ("La fixer", "👁️", ("regard",), 0)]},
+    {"id": "miroir", "tour_min": 4, "intensite": 3,
+     "texte": "Dans le miroir, ton reflet met une seconde de trop à bouger.",
+     "actions": [("Le recouvrir", "🧵", ("bruit",), 0),
+                 ("Le regarder franchement", "👁️", ("regard",), 0),
+                 ("Sortir de la pièce", "🚪", ("ouverture",), 0)]},
+    {"id": "voix", "tour_min": 5, "intensite": 3,
+     "texte": "Une voix, derrière la porte, appelle ton prénom. Elle le "
+              "prononce mal.",
+     "actions": [("Répondre", "🗣️", ("reponse", "bruit"), 0),
+                 ("Ne rien dire", "🤫", ("immobile",), 1),
+                 ("Souffler la bougie", "💨", (), 2)]},
+    {"id": "lit", "tour_min": 6, "intensite": 3,
+     "texte": "Quelque chose s'est assis au bord du lit. Le matelas s'enfonce.",
+     "actions": [("Ne pas se retourner", "🙈", ("immobile",), 1),
+                 ("Se retourner", "👁️", ("regard",), 0),
+                 ("Allumer tout", "💡", ("lumiere", "bruit"), -1)]},
+]
+
+def nq_ruleset(difficulte=1):
+    """Tire la configuration d'une nuit.
+
+    En S2 un seul trait est interdit : avec trois actions par stimulus,
+    il reste presque toujours deux issues sûres — le joueur attentif a
+    une vraie marge. En S4 les deux traits sont actifs."""
+    r = dict(random.choice(NQ_RULESETS))
+    r["difficulte"] = difficulte
+    if difficulte < 2:
+        r["interdits"] = (r["interdits"][0],)
+    return r
+
+def nq_danger(action_traits, ruleset):
+    """Cette action viole-t-elle une règle de la nuit ?"""
+    return any(t in ruleset["interdits"] for t in action_traits)
+
+def nq_stimuli_nuit(n, difficulte=1):
+    """Compose la nuit : intensité croissante, pas deux fois le même."""
+    dispo = sorted(NQ_STIMULI, key=lambda s: (s["intensite"], s["tour_min"]))
+    choisis = []
+    for tour in range(1, n + 1):
+        pool = [s for s in dispo if s["tour_min"] <= tour
+                and s["id"] not in {x["id"] for x in choisis}]
+        if not pool:
+            pool = [s for s in dispo if s["id"] not in {x["id"] for x in choisis}]
+        if not pool:
+            break
+        plafond = 1 if tour <= 2 else (2 if tour <= 5 else 3)
+        if difficulte >= 2 and tour >= 3:
+            plafond = min(3, plafond + 1)
+        cands = [s for s in pool if s["intensite"] <= plafond] or pool
+        choisis.append(random.choice(cands))
+    return choisis
+
+class NQEtat:
+    """L'état d'un joueur pour la nuit. Rien n'est partagé entre eux."""
+    __slots__ = ("uid", "bougie", "vivant", "erreurs", "indices", "choix", "tours_ok")
+
+    def __init__(self, uid):
+        self.uid = uid
+        self.bougie = NQ_BOUGIE_DEPART
+        self.vivant = True
+        self.erreurs = 0
+        self.indices = []
+        self.choix = None
+        self.tours_ok = 0
+
+class NQView(ui.View):
+    """Un tour. Les choix sont privés : personne ne voit ce que font
+    les autres avant la synthèse."""
+
+    def __init__(self, partie, stimulus, timeout):
+        super().__init__(timeout=timeout)
+        self.p = partie
+        self.st = stimulus
+        for lib, emo, traits, cout in stimulus["actions"]:
+            b = ui.Button(label=lib[:80], emoji=emo,
+                          style=discord.ButtonStyle.secondary)
+            b.callback = self._faire(traits, cout, lib)
+            self.add_item(b)
+
+    def _faire(self, traits, cout, lib):
+        async def cb(itx):
+            if self.is_finished() or self.p.get("clos"):
+                return await itx.response.send_message(
+                    "La nuit est finie.", ephemeral=True)
+            uid = str(itx.user.id)
+            e = self.p["joueurs"].get(uid)
+            if e is None:
+                e = self.p["joueurs"][uid] = NQEtat(uid)
+            if not e.vivant:
+                return await itx.response.send_message(
+                    "Tu n'es plus là pour agir.", ephemeral=True)
+            if e.choix is not None:
+                return await itx.response.send_message(
+                    "Tu as déjà décidé. On ne revient pas en arrière.",
+                    ephemeral=True)
+            e.choix = (traits, cout, lib)
+            await itx.response.send_message(
+                f"*{lib}.*\n\n*Tu attends.*", ephemeral=True)
+        return cb
+
+def nq_resoudre(partie, tour):
+    """Applique les conséquences du tour à chaque joueur.
+    Retourne les messages privés à envoyer."""
+    rs = partie["ruleset"]
+    msgs = {}
+    for uid, e in partie["joueurs"].items():
+        if not e.vivant:
+            continue
+        if e.choix is None:
+            # Ne rien faire n'est jamais gratuit : la bougie se consume
+            # toute seule. Sans ça, l'absence devenait la meilleure
+            # stratégie — mesuré à 70 % de survie avant correction.
+            traits, cout, lib = ("immobile",), 1, "Tu n'as rien fait."
+        else:
+            traits, cout, lib = e.choix
+        e.bougie = max(0, min(NQ_BOUGIE_DEPART, e.bougie - cout))
+        danger = nq_danger(traits, rs)
+        lignes = []
+        if danger:
+            e.erreurs += 1
+            trait = next(t for t in traits if t in rs["interdits"])
+            if tour <= 2:
+                # Indulgent : on apprend au lieu de mourir.
+                if trait not in e.indices:
+                    e.indices.append(trait)
+                lignes.append(f"⚠️ *Quelque chose a réagi. Tu ne sais pas "
+                              f"encore quoi.*")
+                lignes.append(f"🔎 *{NQ_INDICES.get(trait, '…')}*")
+            elif tour <= 4:
+                e.bougie = max(0, e.bougie - 1)
+                lignes.append("⚠️ *La flamme a vacillé. Tu as fait quelque "
+                              "chose qu'il ne fallait pas.*")
+            else:
+                e.vivant = False
+                lignes.append("🌑 **Tu n'aurais pas dû.**")
+        else:
+            e.tours_ok += 1
+            lignes.append("*Rien ne se passe. C'est déjà ça.*")
+        if e.vivant and e.bougie <= 0:
+            if tour <= 3:
+                e.bougie = 1
+                lignes.append("🕯️ *La bougie s'est éteinte. Tu la rallumes "
+                              "de justesse.*")
+            else:
+                e.vivant = False
+                lignes.append("🕯️ **La bougie s'est éteinte. Et elle est "
+                              "entrée.**")
+        e.choix = None
+        msgs[uid] = (lib, "\n".join(lignes), e.bougie, e.vivant)
+    return msgs
+
+# Ce qu'un joueur apprend quand il se trompe pendant les deux premiers tours.
+NQ_INDICES = {
+    "bruit":    "Le silence, tout à l'heure, était plus sûr.",
+    "reponse":  "Il ne fallait peut-être pas répondre.",
+    "lumiere":  "La lumière a attiré quelque chose.",
+    "regard":   "Tu n'aurais pas dû regarder.",
+    "ouverture": "Cette porte devait rester comme elle était.",
+    "immobile": "Rester figé ne t'a pas protégé.",
+}
+
+async def run_ne_quitte_pas_ta_chambre(channel, guild, difficulte=None):
+    """🚪 Ne quitte pas ta chambre — une nuit, huit tours."""
+    if difficulte is None:
+        difficulte = 2 if blackwood_semaine() >= 4 else 1
+    rs = nq_ruleset(difficulte)
+    partie = {"ruleset": rs, "joueurs": {}, "clos": False}
+    stimuli = nq_stimuli_nuit(NQ_TOURS, difficulte)
+
+    intro = discord.Embed(
+        title="🚪  NE QUITTE PAS TA CHAMBRE",
+        description=(
+            "*Tu es rentré. Tu as fermé à clé. Tu as allumé une bougie.*\n\n"
+            "Cette nuit a des règles. **Personne ne te les dira.**\n"
+            "Tu les comprendras en observant ce qui arrive — ou tu ne les "
+            "comprendras pas.\n\n"
+            f"🕯️ Tu commences avec **{NQ_BOUGIE_DEPART} flammes**.\n"
+            f"Les deux premiers tours pardonnent. Après, non.\n\n"
+            + ("*La nuit sera longue.*" if difficulte >= 2
+               else "*Reste jusqu'au matin.*")),
+        color=season_color("alerte"))
+    intro.set_footer(text=season_footer("Blackwood"))
+    await channel.send(embed=intro)
+    await asyncio.sleep(12)
+
+    for tour, st in enumerate(stimuli, start=1):
+        if partie["clos"] or event_est_stoppe(guild.id, "nequittepas"):
+            return
+        vivants = [e for e in partie["joueurs"].values() if e.vivant]
+        if tour > 1 and partie["joueurs"] and not vivants:
+            break
+        vue = NQView(partie, st, NQ_TEMPS_TOUR)
+        event_attacher_vue(guild.id, "nequittepas", vue)
+        e = discord.Embed(
+            title=f"🕯️  TOUR {tour} / {len(stimuli)}",
+            description=f"**{st['texte']}**",
+            color=season_color("alerte" if st["intensite"] >= 3 else "neutre"))
+        if tour == 1:
+            e.set_footer(text="Choisis. Tu as un peu plus d'une minute.")
+        elif vivants:
+            e.set_footer(text=f"🕯️ {len(vivants)} encore éveillé(s)")
+        await channel.send(embed=e, view=vue)
+        await asyncio.sleep(NQ_TEMPS_TOUR)
+        vue.stop()
+        if event_est_stoppe(guild.id, "nequittepas"):
+            return
+        msgs = nq_resoudre(partie, tour)
+        if tour == 2:
+            # La nuit laisse filtrer une de ses règles. Sans cela, un
+            # joueur qui n'a pas eu la malchance de se tromper n'a
+            # aucun moyen de comprendre.
+            _t = rs["interdits"][0]
+            await channel.send(embed=discord.Embed(
+                description=f"*« {NQ_INDICES.get(_t, '…')} »*",
+                color=season_color("neutre")))
+        morts = [u for u, m in msgs.items() if not m[3]]
+        survivants = [e for e in partie["joueurs"].values() if e.vivant]
+        syn = discord.Embed(
+            description=("*Le tour est passé.*" if not morts else
+                         f"🌑 **{len(morts)}** n'ont pas passé ce tour."),
+            color=season_color("neutre"))
+        if partie["joueurs"]:
+            syn.set_footer(text=f"🕯️ {len(survivants)} encore là")
+        await channel.send(embed=syn)
+        await asyncio.sleep(4)
+
+    partie["clos"] = True
+    if event_est_stoppe(guild.id, "nequittepas"):
+        return
+    survivants = [e for e in partie["joueurs"].values() if e.vivant]
+    parfaits = [e for e in survivants if e.erreurs == 0]
+    fin = discord.Embed(
+        title="🌅  LE JOUR SE LÈVE",
+        description=(f"*{rs['murmure']}*\n\n"
+                     + (f"**{len(survivants)}** ont tenu jusqu'au matin."
+                        if survivants else
+                        "*Personne n'a tenu jusqu'au matin.*")),
+        color=season_color("or" if survivants else "neutre"))
+    if parfaits:
+        fin.add_field(name="🕯️ Sans une seule erreur",
+                      value=", ".join(f"<@{e.uid}>" for e in parfaits[:15]),
+                      inline=False)
+    # Récompense modeste, versée une seule fois, jamais après un arrêt.
+    if not event_est_stoppe(guild.id, "nequittepas"):
+        for _e in survivants:
+            blackwood_progress(_e.uid, "nuit_survecue",
+                               guild_id=guild.id, event="nequittepas")
+            if _e.erreurs == 0:
+                blackwood_progress(_e.uid, "nuit_parfaite",
+                                   guild_id=guild.id, event="nequittepas")
+    if survivants and not event_est_stoppe(guild.id, "nequittepas"):
+        for e in survivants:
+            economy_data[e.uid]["coins"] += 500 if e.erreurs == 0 else 250
+        save_all_data()
+    await channel.send(embed=fin)
+
+# ============================================================
+#  🕯️ UNE NUIT, UNE SEULE VIE
+#  Élimination. Une tentative, une erreur suffit. Les éliminés
+#  restent et regardent — c'est ce qui rend la survie désirable.
+# ============================================================
+UN_EPREUVES_PAR_NUIT = 7
+UN_TEMPS_EPREUVE = 40
+UN_INSCRIPTION = 60
+
+# Banque : 16 épreuves, 4 familles. Chacune est déterministe et sa
+# solution est vérifiable. `gen` retourne (question, options, index bon).
+def _e_compter(mot, lettre):
+    return (f"Combien de **{lettre}** dans ce mot ?\n\n**{mot.upper()}**",
+            None, str(mot.lower().count(lettre)))
+
+UN_EPREUVES = [
+    # ── 👁️ Observation ──
+    {"id": "obs_lettre", "fam": "observation",
+     "gen": lambda: _e_compter(random.choice(
+         ["blackwood", "citrouille", "bibliotheque", "lanterne",
+          "cimetiere", "chandelier"]), random.choice("aeioulrst"))},
+    {"id": "obs_intrus", "fam": "observation",
+     "gen": lambda: (lambda s, i: (
+         "Lequel n'a rien à faire ici ?", s, s[i]))(
+         *(lambda base, intrus: (
+             random.sample(base, 3) + [intrus],
+             3))(["🍂", "🎃", "🕯️", "🌧️", "🍁"], "🌻"))},
+    {"id": "obs_ordre", "fam": "observation",
+     "gen": lambda: (lambda l: (
+         f"Quel emoji était en **troisième** position ?\n\n{' '.join(l)}",
+         l[:4] if l[2] in l[:4] else [l[2]] + l[:3], l[2]))(
+         random.sample(["🕯️", "🚪", "🪟", "🕰️", "📚", "🎃", "🍂", "🌑"], 5))},
+    {"id": "obs_diff", "fam": "observation",
+     "gen": lambda: (lambda a, b: (
+         f"Une seule ligne diffère. Laquelle ?\n\n"
+         + "\n".join(f"{i+1}. {x}" for i, x in enumerate(a)),
+         [str(i + 1) for i in range(4)], str(b + 1)))(
+         *(lambda base, pos: ([base if i != pos else base[::-1]
+                               for i in range(4)], pos))(
+             random.choice(["13 · 13 · 13", "🕯️🕯️🚪", "AAB BAA"]),
+             random.randrange(4)))},
+    # ── 🧠 Mémoire ──
+    {"id": "mem_suite", "fam": "memoire",
+     "gen": lambda: (lambda s: (
+         f"Retiens : **{' '.join(s)}**\n\n*Quel était le dernier ?*",
+         s, s[-1]))(
+         random.sample(["🕯️", "🚪", "🪟", "🕰️", "📚", "🎃"], 4))},
+    {"id": "mem_nombre", "fam": "memoire",
+     "gen": lambda: (lambda n: (
+         f"Retiens ce nombre : **{n}**\n\n*Quel est son chiffre du milieu ?*",
+         None, str(n)[1]))(random.randrange(100, 1000))},
+    {"id": "mem_absent", "fam": "memoire",
+     "gen": lambda: (lambda tous, vus: (
+         f"Voici ce que tu as vu :\n**{' '.join(vus)}**\n\n"
+         f"*Lequel manque ?*", tous, next(x for x in tous if x not in vus)))(
+         *(lambda t: (t, random.sample(t, 3)))(
+             random.sample(["🍂", "🕯️", "🎃", "🚪", "🪶"], 4)))},
+    {"id": "mem_prenom", "fam": "memoire",
+     "gen": lambda: (lambda l: (
+         f"Les habitants croisés ce soir :\n**{', '.join(l)}**\n\n"
+         f"*Qui venait juste après {l[1]} ?*", l, l[2]))(
+         random.sample(["Harriet", "Marcus", "Elena", "Tom", "Aldworth",
+                        "Vance", "Kesey"], 4))},
+    # ── 🧩 Logique ──
+    {"id": "log_suite", "fam": "logique",
+     "gen": lambda: (lambda a, r: (
+         f"Quelle est la suite ?\n\n**{a} · {a+r} · {a+2*r} · {a+3*r} · ?**",
+         None, str(a + 4 * r)))(random.randrange(2, 12), random.randrange(2, 9))},
+    {"id": "log_impair", "fam": "logique",
+     "gen": lambda: (lambda l: (
+         f"Un seul est impair.\n\n**{' · '.join(map(str, l))}**",
+         [str(x) for x in l], str(next(x for x in l if x % 2))))(
+         (lambda p, i: random.sample(p, 3) + [i])(
+             [2, 4, 6, 8, 10, 12, 14], random.choice([3, 5, 7, 9, 11])))},
+    {"id": "log_deduction", "fam": "logique",
+     "gen": lambda: (
+         "Trois portes. La 1 dit « la 2 ment ». La 2 dit « la 3 ment ». "
+         "La 3 dit « les deux autres mentent ».\n\n*Laquelle dit vrai ?*",
+         ["La 1", "La 2", "La 3", "Aucune"], "La 1")},
+    {"id": "log_heure", "fam": "logique",
+     "gen": lambda: (lambda h, d: (
+         f"Il est **{h} h**. L'horloge retarde de **{d} minutes**.\n\n"
+         f"*Quelle heure affiche-t-elle ?*", None,
+         f"{h-1 if d>0 else h}h{60-d:02d}" if d else f"{h}h00"))(
+         random.randrange(2, 6), random.choice([10, 15, 20, 25]))},
+    # ── ⚖️ Décision ──
+    {"id": "dec_bougie", "fam": "decision",
+     "gen": lambda: (
+         "Il te reste une allumette et deux choses à allumer : la bougie "
+         "de la chambre, ou la lampe du couloir.\n\n*Laquelle éclaire là "
+         "où tu es ?*", ["La bougie", "La lampe du couloir"], "La bougie")},
+    {"id": "dec_porte", "fam": "decision",
+     "gen": lambda: (
+         "Deux portes. Sur l'une : « Sortie ». Sur l'autre : « Ce n'est pas "
+         "la sortie ». Une seule pancarte dit vrai.\n\n*Tu prends laquelle ?*",
+         ["Celle marquée Sortie", "L'autre"], "L'autre")},
+    {"id": "dec_bruit", "fam": "decision",
+     "gen": lambda: (
+         "Tu entends respirer derrière toi. La respiration s'arrête quand "
+         "tu retiens la tienne.\n\n*Que fais-tu ?*",
+         ["Me retourner", "Retenir mon souffle", "Sortir en courant"],
+         "Retenir mon souffle")},
+    {"id": "dec_miroir", "fam": "decision",
+     "gen": lambda: (
+         "Le miroir du couloir te montre la pièce derrière toi. Il y a une "
+         "porte ouverte dans le reflet.\n\n*Et dans la vraie pièce ?*",
+         ["Elle est ouverte aussi", "Elle est fermée", "Il n'y a pas de porte"],
+         "Elle est fermée")},
+]
+
+def un_composer(n=UN_EPREUVES_PAR_NUIT):
+    """Une édition : n épreuves, familles variées, jamais deux fois la même."""
+    par_fam = {}
+    for e in UN_EPREUVES:
+        par_fam.setdefault(e["fam"], []).append(e)
+    ordre, choisies = [], []
+    fams = list(par_fam)
+    while len(choisies) < n:
+        random.shuffle(fams)
+        for f in fams:
+            pool = [e for e in par_fam[f] if e["id"] not in
+                    {x["id"] for x in choisies}]
+            if pool and len(choisies) < n:
+                choisies.append(random.choice(pool))
+    return choisies
+
+class UNView(ui.View):
+    """Une épreuve. Les éliminés voient les boutons mais ne peuvent
+    plus répondre : ils regardent, c'est le principe."""
+
+    def __init__(self, partie, options, bonne, timeout):
+        super().__init__(timeout=timeout)
+        self.p = partie
+        self.bonne = bonne
+        self.reponses = {}
+        for opt in (options or [])[:5]:
+            b = ui.Button(label=str(opt)[:80], style=discord.ButtonStyle.secondary)
+            b.callback = self._rep(str(opt))
+            self.add_item(b)
+
+    def _rep(self, val):
+        async def cb(itx):
+            if self.is_finished() or self.p.get("clos"):
+                return await itx.response.send_message(
+                    "L'épreuve est terminée.", ephemeral=True)
+            uid = str(itx.user.id)
+            if uid not in self.p["vivants"]:
+                return await itx.response.send_message(
+                    "Tu as été éliminé. Tu peux regarder." if uid in
+                    self.p["elimines"] else
+                    "Tu n'es pas dans la partie de ce soir.", ephemeral=True)
+            if uid in self.reponses:
+                return await itx.response.send_message(
+                    "Tu as déjà répondu. Une seule fois.", ephemeral=True)
+            self.reponses[uid] = val
+            await itx.response.send_message("*Réponse enregistrée.*",
+                                            ephemeral=True)
+        return cb
+
+class UNInscription(ui.View):
+    """Une seule inscription par membre, définitive pour cette édition."""
+
+    def __init__(self, partie, timeout):
+        super().__init__(timeout=timeout)
+        self.p = partie
+
+    @ui.button(label="Entrer", emoji="🕯️", style=discord.ButtonStyle.success)
+    async def entrer(self, itx, _b):
+        if self.is_finished() or self.p.get("clos"):
+            return await itx.response.send_message(
+                "Les portes sont fermées.", ephemeral=True)
+        uid = str(itx.user.id)
+        if uid in self.p["vivants"] or uid in self.p["elimines"]:
+            return await itx.response.send_message(
+                "Tu es déjà entré. Une seule fois par nuit.", ephemeral=True)
+        self.p["vivants"].add(uid)
+        await itx.response.send_message(
+            f"🕯️ *Tu entres. Vous êtes **{len(self.p['vivants'])}**.*",
+            ephemeral=True)
+
+async def run_une_nuit_une_vie(channel, guild):
+    """🕯️ Une nuit, une seule vie — élimination."""
+    partie = {"vivants": set(), "elimines": set(), "clos": False}
+    insc = UNInscription(partie, UN_INSCRIPTION)
+    event_attacher_vue(guild.id, "unenuit", insc)
+    await channel.send(embed=discord.Embed(
+        title="🕯️  UNE NUIT, UNE SEULE VIE",
+        description=("*Sept épreuves. Une erreur suffit.*\n\n"
+                     "Tu n'entres qu'une fois. Si tu tombes, tu restes — "
+                     "et tu regardes les autres continuer.\n\n"
+                     "**Une minute pour entrer.**"),
+        color=season_color("alerte")), view=insc)
+    await asyncio.sleep(UN_INSCRIPTION)
+    insc.stop()
+    if event_est_stoppe(guild.id, "unenuit"):
+        return
+    if len(partie["vivants"]) < 2:
+        partie["clos"] = True
+        return await channel.send(embed=discord.Embed(
+            description="*Personne n'est venu. La nuit passe sans témoin.*",
+            color=season_color("neutre")))
+
+    for i, ep in enumerate(un_composer(), start=1):
+        if partie["clos"] or event_est_stoppe(guild.id, "unenuit"):
+            return
+        if not partie["vivants"]:
+            break
+        question, options, bonne = ep["gen"]()
+        if options is None:
+            # Réponse numérique : on fabrique quatre propositions crédibles.
+            try:
+                n = int(bonne)
+                cands = {n, n + 1, max(0, n - 1), n + 2}
+            except ValueError:
+                cands = {bonne}
+            options = [str(x) for x in cands]
+            random.shuffle(options)
+        vue = UNView(partie, options, str(bonne), UN_TEMPS_EPREUVE)
+        event_attacher_vue(guild.id, "unenuit", vue)
+        await channel.send(embed=discord.Embed(
+            title=f"🕯️  ÉPREUVE {i}",
+            description=question,
+            color=season_color("neutre")).set_footer(
+                text=f"🕯️ {len(partie['vivants'])} survivant(s)"), view=vue)
+        await asyncio.sleep(UN_TEMPS_EPREUVE)
+        vue.stop()
+        if event_est_stoppe(guild.id, "unenuit"):
+            return
+        # Une mauvaise réponse OU l'absence de réponse élimine.
+        tombes = {u for u in partie["vivants"]
+                  if vue.reponses.get(u) != str(bonne)}
+        partie["vivants"] -= tombes
+        partie["elimines"] |= tombes
+        e = discord.Embed(
+            description=(f"*La bonne réponse était* **{bonne}**.\n\n"
+                         + (f"🌑 **{len(tombes)}** éliminé(s)."
+                            if tombes else "*Tout le monde a tenu.*")),
+            color=season_color("neutre"))
+        e.set_footer(text=f"🕯️ {len(partie['vivants'])} survivant(s)")
+        await channel.send(embed=e)
+        await asyncio.sleep(5)
+
+    partie["clos"] = True
+    if event_est_stoppe(guild.id, "unenuit"):
+        return
+    v = sorted(partie["vivants"])
+    if len(v) == 1:
+        titre, desc = "🕯️  LE DERNIER", f"<@{v[0]}> a tenu toute la nuit."
+    elif v:
+        titre, desc = ("🕯️  ILS ONT TENU",
+                       ", ".join(f"<@{u}>" for u in v[:15]))
+    else:
+        titre, desc = ("🌑  PERSONNE",
+                       "*La nuit n'a laissé personne. Ce sont des choses "
+                       "qui arrivent à Blackwood.*")
+    fin = discord.Embed(title=titre, description=desc,
+                        color=season_color("or" if v else "neutre"))
+    if partie["elimines"]:
+        fin.set_footer(text=f"🌑 {len(partie['elimines'])} tombé(s) cette nuit")
+    if not event_est_stoppe(guild.id, "unenuit"):
+        for _u in v:
+            blackwood_progress(_u, "flamme_survie", guild_id=guild.id, event="unenuit")
+        if len(v) == 1:
+            blackwood_progress(v[0], "flamme_derniere",
+                               guild_id=guild.id, event="unenuit")
+    if v and not event_est_stoppe(guild.id, "unenuit"):
+        for u in v:
+            economy_data[u]["coins"] += 800 if len(v) == 1 else 400
+        save_all_data()
+    await channel.send(embed=fin)
+
+# ============================================================
+#  🏆 PROGRESSION BLACKWOOD
+#  Un seul point d'entrée : blackwood_progress(). Les moteurs
+#  d'events signalent ce qui s'est passé, ils ne savent rien des
+#  missions ni des succès. Tout se branche sur ce qui existe :
+#  user_stats pour les compteurs, ACHIEVEMENTS pour les trophées,
+#  souvenir_donner pour les objets.
+# ============================================================
+
+# Compteurs saisonniers. Préfixés bw26_ : ils appartiennent à
+# l'édition et ne se mélangeront pas avec ceux de 2027.
+BW_STATS = {
+    "dossier_joue":     "bw26_dossier_joue",
+    "dossier_resolu":   "bw26_dossier_resolu",
+    "tot_porte":        "bw26_tot_porte",
+    "tot_soir":         "bw26_tot_soir",
+    "nuit_survecue":    "bw26_nuit_survecue",
+    "nuit_parfaite":    "bw26_nuit_parfaite",
+    "flamme_derniere":  "bw26_flamme_derniere",
+    "flamme_survie":    "bw26_flamme_survie",
+    "pet_expedition":   "bw26_pet_expedition",
+    "souvenir_lore":    "bw26_souvenir_lore",
+}
+
+# Destinations PET déjà visitées, pour la mission « Curiosité ».
+bw_destinations = {}      # {uid: {lieux}}
+
+def blackwood_progress(uid, action, **data):
+    """Signale une action Blackwood. Retourne les succès débloqués.
+
+    Sûr par construction : ne fait rien hors saison, ne fait rien
+    si l'event a été arrêté, n'écrit jamais deux fois le même trophée."""
+    uid = str(uid)
+    if saison_mode() != "blackwood":
+        return []
+    # Un event arrêté ne doit plus rien faire progresser.
+    guild_id = data.get("guild_id")
+    cle_ev = data.get("event")
+    if guild_id and cle_ev and event_est_stoppe(guild_id, cle_ev):
+        return []
+
+    stat = BW_STATS.get(action)
+    if stat:
+        n = int(data.get("n", 1))
+        try:
+            track_stat(uid, stat, n)
+        except Exception:
+            user_stats[uid][stat] = user_stats[uid].get(stat, 0) + n
+
+    # Destinations distinctes : un ensemble, pas un compteur.
+    if action == "pet_expedition" and data.get("lieu"):
+        vus = bw_destinations.setdefault(uid, set())
+        if data["lieu"] not in vus:
+            vus.add(data["lieu"])
+            try:
+                track_stat(uid, "bw26_pet_lieux", 1)
+            except Exception:
+                user_stats[uid]["bw26_pet_lieux"] = len(vus)
+
+    # Souvenirs de lore distincts : on recompte, on n'incrémente pas.
+    if action == "souvenir_lore":
+        n_lore = len(souvenirs_de(uid).get("lore") or [])
+        user_stats[uid]["bw26_souvenir_lore"] = n_lore
+
+    return blackwood_verifier_succes(uid)
+
+def blackwood_verifier_succes(uid):
+    """Débloque ce qui est mérité. Idempotent : unlock_achievement
+    refuse déjà un succès déjà obtenu."""
+    obtenus = []
+    for cle, d in BLACKWOOD_SUCCES.items():
+        seuil = d.get("seuil", 1)
+        if user_stats[str(uid)].get(d["stat"], 0) < seuil:
+            continue
+        # ⚠️ track_stat() débloque DÉJÀ les succès liés à la stat qu'il
+        # incrémente — mais il ignore les souvenirs. Se fier à « le succès
+        # vient-il d'être obtenu ? » laissait donc le souvenir de côté.
+        # On regarde l'état final : le succès est-il là ? Le souvenir
+        # manque-t-il ? souvenir_donner est idempotent, il tranche seul.
+        deja = cle in (achievements_data.get(str(uid)) or ())
+        try:
+            unlock_achievement(str(uid), cle)
+            if cle in (achievements_data.get(str(uid)) or ()):
+                if not deja:
+                    obtenus.append(cle)
+                sid = d.get("souvenir")
+                if sid and not souvenir_possede(uid, sid):
+                    souvenir_donner(uid, sid)
+        except Exception as e:
+            print(f"[Blackwood] succès {cle} : {type(e).__name__}: {e}")
+    return obtenus
+
+# ── 🏆 Les succès de Blackwood ──
+# Quatre récurrents (ils reviendront), quatre datés 2026.
+BLACKWOOD_SUCCES = {
+    "bw_trick_or_treat": {
+        "nom": "Une poignée de plus", "emoji": "🍬",
+        "desc": "Faire le tour du quartier un soir d'octobre",
+        "stat": "bw26_tot_soir", "seuil": 1, "reward": 150,
+        "cat": "🍂 Blackwood", "edition": None,
+    },
+    "bw_chemins": {
+        "nom": "Les chemins de Blackwood", "emoji": "🐾",
+        "desc": "Envoyer ton compagnon dans 4 lieux différents de la saison",
+        "stat": "bw26_pet_lieux", "seuil": 4, "reward": 250,
+        "cat": "🍂 Blackwood", "edition": None,
+        "souvenir": "bw_feuille_pressee",
+    },
+    "bw_enqueteur": {
+        "nom": "Le nez dans les dossiers", "emoji": "🔎",
+        "desc": "Participer à une enquête",
+        "stat": "bw26_dossier_joue", "seuil": 1, "reward": 150,
+        "cat": "🍂 Blackwood", "edition": None,
+    },
+    "bw_matin": {
+        "nom": "Jusqu'au matin", "emoji": "🚪",
+        "desc": "Passer une nuit entière sans quitter ta chambre",
+        "stat": "bw26_nuit_survecue", "seuil": 1, "reward": 300,
+        "cat": "🍂 Blackwood", "edition": None,
+    },
+    # ── Datés : ils ne seront jamais réattribués ──
+    "bw26_detective": {
+        "nom": "Détective de Blackwood", "emoji": "🕵️",
+        "desc": "Désigner le bon coupable — octobre 2026",
+        "stat": "bw26_dossier_resolu", "seuil": 1, "reward": 400,
+        "cat": "🍂 Blackwood", "edition": BLACKWOOD_EDITION,
+        "souvenir": "bw26_premiere_nuit",
+    },
+    "bw26_flamme": {
+        "nom": "Dernière flamme", "emoji": "🕯️",
+        "desc": "Être le dernier debout — octobre 2026",
+        "stat": "bw26_flamme_derniere", "seuil": 1, "reward": 500,
+        "cat": "🍂 Blackwood", "edition": BLACKWOOD_EDITION,
+    },
+    "bw26_sans_faute": {
+        "nom": "Pas une seule erreur", "emoji": "🌑",
+        "desc": "Traverser la nuit sans se tromper une fois — 2026",
+        "stat": "bw26_nuit_parfaite", "seuil": 1, "reward": 500,
+        "cat": "🍂 Blackwood", "edition": BLACKWOOD_EDITION,
+    },
+    "bw26_archiviste": {
+        "nom": "Archiviste 2026", "emoji": "📜",
+        "desc": "Réunir 4 objets de l'histoire de Blackwood",
+        "stat": "bw26_souvenir_lore", "seuil": 4, "reward": 400,
+        "cat": "🍂 Blackwood", "edition": BLACKWOOD_EDITION,
+    },
+}
+
+def blackwood_succes_actifs():
+    """Les succès de la saison en cours. En 2027, les bw26_ seront
+    encore consultables mais ne seront plus proposés."""
+    return {c: d for c, d in BLACKWOOD_SUCCES.items()
+            if d.get("edition") in (None, BLACKWOOD_EDITION)}
 
 def possessions_lire(uid):
     """Toutes les possessions d'un membre, lues dans les systèmes d'origine.
@@ -12857,6 +14560,22 @@ EVENTS_CATALOGUE = {
     "coffre": {"nom":"📦 Coffre","fn":"run_coffre","salon":True,"duree":"5 min","fam":"event",
         "desc":"Simple, renforcé ou scellé. Le premier à taper .ouvrir rafle tout.","gain":"300 à 4 500 pièces"},
     "colis": {"nom":"🧰 Coffre Renforcé","fn":"run_colis","salon":True,"duree":"5 min","fam":"mode","parent":"coffre","desc":"Palier renforcé du Coffre.","gain":"900 à 2 200 pièces"},
+    "unenuit": {"nom":"🕯️ Une nuit, une seule vie","fn":"run_une_nuit_une_vie",
+        "salon":True,"duree":"15 min","fam":"event","saison":"blackwood",
+        "desc":"Sept épreuves. Une erreur suffit. Une seule tentative.",
+        "gain":"tenir jusqu'au bout"},
+    "nequittepas": {"nom":"🚪 Ne quitte pas ta chambre","fn":"run_ne_quitte_pas_ta_chambre",
+        "salon":True,"duree":"18 min","fam":"event","saison":"blackwood",
+        "desc":"Une nuit, huit tours, des règles que personne ne t'expliquera.",
+        "gain":"le matin, si tu y arrives"},
+    "dossier": {"nom":"🔎 Dossier Mystère","fn":"run_dossier","salon":True,
+        "duree":"20 min","fam":"event","saison":"blackwood",
+        "desc":"Une affaire, des suspects, des contradictions. Chacun accuse pour soi.",
+        "gain":"la satisfaction d'avoir vu juste"},
+    "trickortreat": {"nom":"🍬 Trick or Treat","fn":"run_trick_or_treat","salon":True,
+        "duree":"12 min","fam":"event","saison":"blackwood",
+        "desc":"Une rue, des portes, des habitants. Trois maisons par personne.",
+        "gain":"des bonbons et un peu de monnaie"},
     "cartemystere": {"nom":"🎴 Carte Mystère","fn":"run_carte_mystere","salon":True,"duree":"1 min","fam":"event",
         "desc":"Une carte Épique ou mieux tombe — premier au cœur, premier servi.","gain":"une carte rare"},
     "debatdujour": {"nom":"🎤 Débat du Jour","fn":"run_debat","salon":True,"duree":"1 h","fam":"event",
@@ -12965,6 +14684,13 @@ async def lancer_event_standard(guild, salon_annonce, cle, fn=None):
         return False, f"La fonction `{ev['fn']}` est introuvable."
     gid = guild.id
     fam = ev.get("fam", "event")
+
+    # ── Saison : un event de saison ne se lance que pendant la sienne ──
+    _sai = ev.get("saison")
+    if _sai and saison_mode() != _sai:
+        return False, (f"**{ev['nom']}** appartient à la saison "
+                       f"**{SAISON_PACKS.get(_sai, {}).get('nom', _sai)}**. "
+                       f"Il n'est pas de saison.")
 
     # ── Garde-fou : un seul event bloquant à la fois ──
     if cle in event_actifs_guild(gid):
@@ -13745,7 +15471,7 @@ async def girlspanel_cmd(ctx):
                      f"Clique sur le bouton pour obtenir le rôle **{role.name if role else 'Girls Only'}** "
                      f"et accéder au salon.\n"
                      f"*Reclique dessus si tu veux le retirer.*"),
-        color=0xff9ec7)
+        color=girly_couleur())
     embed.set_footer(text="QG Kdrama • Girls Only 🌸")
     await ctx.send(embed=embed, view=GirlsRoleView())
 
@@ -14383,16 +16109,20 @@ async def trigger_scheduled_event(guild, event_name):
     channel = (guild.get_channel(SALON_EVENT_ID) if SALON_EVENT_ID else None) or guild.system_channel
     if not channel:
         return
-    dispatch = {k: globals().get(v["fn"]) for k, v in EVENTS_CATALOGUE.items()}
-    try:
-        if event_name == "coffre":
-            await run_coffre(channel, guild=guild)
-        elif event_name in dispatch:
-            await dispatch[event_name](channel, guild)
-        else:
-            print(f"[Scheduler] Event inconnu : {event_name}")
-    except Exception as e:
-        print(f"[Scheduler] Erreur déclenchement {event_name}: {e}")
+    # ⚠️ Le scheduler DOIT passer par le même wrapper que `.lancerevent`.
+    # Il appelait le run_* directement : pas de salon dédié, pas de
+    # registre, `.stopevent` incapable de le retrouver. Deux moteurs pour
+    # le même event, c'est exactement ce qu'Events 2.0 devait supprimer.
+    if event_name not in EVENTS_CATALOGUE:
+        print(f"[Scheduler] Event inconnu : {event_name}")
+        return
+    fn = globals().get(EVENTS_CATALOGUE[event_name]["fn"])
+    if event_name == "coffre" and fn:
+        _brut = fn
+        async def fn(_ch, _g): return await _brut(_ch, guild=_g)
+    ok, err = await lancer_event_standard(guild, channel, event_name, fn=fn)
+    if not ok and err:
+        print(f"[Scheduler] {event_name} non lancé : {err}")
 
 @tasks.loop(minutes=1)
 async def ss_scheduler():
@@ -15188,17 +16918,31 @@ active_arene = {}
 # ============================================================
 #  📌 PANNEAUX DE SALON — publiés automatiquement par .setsalon
 # ============================================================
+# Girls Only garde son identité rose en toute saison. Blackwood la réchauffe
+# vers un vieux rose automnal ; il ne la remplace jamais par de l'orange.
+GIRLY_SAISON = {"blackwood": {"DAY": 0xd98a9a, "DUSK": 0xa8697a, "NIGHT": 0x5c3a45},
+                "wintervale": 0xc9a0c9}
+
+def girly_couleur():
+    v = GIRLY_SAISON.get(saison_mode())
+    if v is None:
+        return 0xff9ec7                      # le rose d'origine
+    return v.get(saison_periode(), v.get("DAY")) if isinstance(v, dict) else v
+
 def panneau_girlsonly(guild):
     e = discord.Embed(
         title="🌸  Bienvenue dans le Girls Only",
         description="*Cet espace est réservé aux filles du serveur. Voilà tout ce qui s'y passe.*",
-        color=0xff9ec7)
+        color=girly_couleur())
     e.add_field(name="👗 Fit Check", value=(
         "`.fit <description de ta tenue>`\n"
         "Partage ton look du jour, les autres réagissent 💕"), inline=False)
     e.add_field(name="🌙 Ritual du Soir", value=(
         "Chaque soir à **21 h**, une question drama est postée ici.\n"
         "Rien à taper : réponds simplement dans le salon."), inline=False)
+    _amb = season_accent("girly", "intro")
+    if _amb:
+        e.description = f"*{_amb}*\n" + (e.description or "")
     e.add_field(name="💫 Star of the Week", value=(
         "Chaque **lundi à 10 h**, la fille la plus active de la semaine est mise à l'honneur."), inline=False)
     e.add_field(name="💎 Diamond Girl", value=(
@@ -15691,8 +17435,8 @@ async def profil_cmd(ctx, membre: discord.Member = None):
     if vis("banniere") and cosmo.get("banniere"):
         embed.set_image(url=cosmo["banniere"])
 
-    embed.set_footer(text="`.macustom` pour personnaliser  ·  `.shop` pour la boutique"
-                     if soi else f"Profil de {target.display_name}")
+    embed.set_footer(text=season_footer("`.macustom` pour personnaliser  ·  `.shop` pour la boutique"
+                     if soi else f"Profil de {target.display_name}"))
     await ctx.send(embed=embed)
 
 
@@ -15753,6 +17497,10 @@ ACHIEVEMENTS = {
     "poisse":       {"nom": "Maudit",            "emoji": "🐈‍⬛", "desc": "Perdre cinq fois d'affilée au .slot",           "stat": None, "seuil": None, "reward": 350,  "cat": "🕵️ Secrets", "secret": True},
     "pet_1":        {"nom": "Ami des Bêtes",      "emoji": "🐾", "desc": "Adopter un compagnon",           "stat": None,          "seuil": None,  "reward": 200,  "cat": "💖 Social"},
 }
+
+# Les succès de Blackwood rejoignent cette table plus bas dans le
+# fichier, une fois BLACKWOOD_SUCCES déclaré : `.succes` les affiche
+# alors sans une ligne de code en plus.
 
 def unlock_achievement(uid, ach_id, channel=None):
     """Débloque un succès (si pas déjà fait) + annonce + récompense"""
@@ -17958,12 +19706,39 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "7.9.1"
+BOT_VERSION = "7.10.0"
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "7.10.0": {
+   "titre": "BLACKWOOD 🍂",
+   "ajouts": [
+     "🍂 **Le QG change avec les saisons.** En octobre, il devient "
+     "**Blackwood** : les couleurs, les titres et les textes basculent "
+     "d'eux-mêmes. Et Blackwood n'est pas le même selon l'heure — "
+     "chaleureux l'après-midi, plus feutré au crépuscule, franchement "
+     "moins accueillant la nuit.",
+     "🕯️ **Une boutique et des chemins de saison.** Cinq thèmes, trois "
+     "rôles, quatre décors pour le refuge de ton compagnon — et six "
+     "destinations qui n'existent qu'en octobre, dont une qui ne vaut "
+     "vraiment le détour qu'après la nuit tombée.",
+     "🔎 **Quatre soirées à ne pas manquer.** Un **Dossier Mystère** où "
+     "chacun accuse pour soi. Le **Trick or Treat** et ses portes écrites "
+     "une par une. **Ne quitte pas ta chambre**, où les règles ne sont "
+     "jamais expliquées. Et **Une nuit, une seule vie** — une erreur suffit.",
+     "🏆 **Huit succès et des souvenirs.** Certains reviendront chaque "
+     "année. D'autres portent la date de 2026 et ne seront jamais "
+     "redistribués. Ce que tu rapportes d'octobre, tu le gardes.",
+   ],
+   "correctifs": [
+     "🔧 Le bot ne reste plus en ligne sans répondre après un incident : "
+     "il redémarre proprement.",
+     "🎪 Les events programmés créent désormais leur salon comme les "
+     "events lancés à la main — même chemin, mêmes garanties.",
+   ],
+ },
  "7.9.1": {
    "titre": "TROIS EVENTS REPENSÉS 🎮",
    "ajouts": [],
@@ -19003,9 +20778,11 @@ async def construire_gazette(guild):
 
     num = gazette_semaine["num"]
     embed = discord.Embed(
-        title=f"📰  LA GAZETTE DU QG  —  N°{num}",
+        title=(f"📰  LA GAZETTE DE BLACKWOOD  —  N°{num}"
+               if saison_mode() == "blackwood"
+               else f"📰  LA GAZETTE DU QG  —  N°{num}"),
         description=f"*{random.choice(GAZETTE_INTROS)}*",
-        color=0xf1c40f)
+        color=season_color("or"))
     if guild.icon:
         embed.set_thumbnail(url=guild.icon.url)
 
@@ -19097,7 +20874,9 @@ async def construire_gazette(guild):
 
     if rubriques == 0:
         embed.description = "*Semaine très calme au QG… personne n'a fait grand-chose.*"
-    embed.set_footer(text=f"Semaine {num} · {random.choice(GAZETTE_FINS).strip('*')}")
+    _ed = season_accent("gazette", "edition")
+    embed.set_footer(text=season_footer(
+        (f"Semaine {num} · {random.choice(GAZETTE_FINS).strip('*')}") + (f"  ·  {_ed}" if _ed else "")))
     return embed
 
 @tasks.loop(minutes=1)
@@ -25895,6 +27674,12 @@ def possede(uid, oid):
     return inventaire.get(uid, {}).get(oid, 0) > 0
 
 def retirer_objet(uid, oid, n=1):
+    # Un souvenir permanent ne se dépense pas. On interroge sa DÉFINITION,
+    # pas son préfixe : un futur bw27_ sera protégé sans qu'on ait à
+    # inscrire l'année quelque part. Les bwtmp_ restent retirables —
+    # c'est justement leur rôle.
+    if souvenir_permanent(oid):
+        return False
     if inventaire.get(uid, {}).get(oid, 0) < n:
         return False
     inventaire[uid][oid] -= n
@@ -27664,7 +29449,7 @@ async def petexpedition_cmd(ctx, lieu: str = None):
     expe = d.get("expedition")
     if expe and now >= expe["fin"]:
         d.pop("expedition", None)
-        nom_l, heures, _ = EXPEDITIONS[expe["lieu"]]
+        nom_l, heures, _ = expeditions_disponibles()[expe["lieu"]]
         chance = 0.35 + st["humeur"] / 220 + pst["level"] * 0.03
         chance += niveau_competence(uid, "orientation") * 0.02
         if pet_a_particularite(uid, "expe"):
@@ -27675,6 +29460,14 @@ async def petexpedition_cmd(ctx, lieu: str = None):
         recit = random.choice(EXPE_RECITS["succes" if reussi else "echec"]).format(
             p=f"**{pet_nom_decore(uid, pdb)}**")
         embed = discord.Embed(title=f"🎒 Retour de {nom_l}", description=f"*{recit}*", color=season_color("succes") if reussi else 0x95a5a6)
+        # 🍂 Blackwood : le lieu a une voix selon l'heure. Les expéditions
+        # permanentes ne sont pas concernées — elles gardent leur récit.
+        _amb = blackwood_ambiance(expe["lieu"], f"**{pet_nom_decore(uid, pdb)}**")
+        if _amb:
+            embed.description = f"*{_amb}*"
+            _inc = expe.get("incident")
+            if _inc:
+                embed.add_field(name="🍂 En chemin", value=_inc, inline=False)
         if reussi:
             pieces = random.randint(300, 700) * heures
             economy_data[uid]["coins"] += pieces
@@ -27682,6 +29475,15 @@ async def petexpedition_cmd(ctx, lieu: str = None):
             xp_p = 40 * heures
             l, lv = give_pet_xp(uid, xp_p)
             butin = [f"💰 **{pieces:,} pièces**", f"⭐ **+{xp_p} XP** pour {pdb['nom']}"]
+            # Une trouvaille de Blackwood : sans valeur, sans usage, mais on
+            # s'en souviendra peut-être dans deux semaines.
+            if expe["lieu"] in BLACKWOOD_EXPEDITIONS:
+                blackwood_progress(uid, "pet_expedition", lieu=expe["lieu"])
+            _tr = blackwood_trouvaille(uid, expe["lieu"])
+            if _tr:
+                _ts, _td = _tr
+                butin.append(f"{_td['emoji']} **{_td['nom']}** — *il l'a rapporté*")
+                blackwood_progress(uid, "souvenir_lore")
             if random.random() < 0.35:
                 _os = tirer_objet_serie(uid)
                 if _os and await ajouter_objet_serie(uid, _os, ctx.channel):
@@ -27745,14 +29547,14 @@ async def petexpedition_cmd(ctx, lieu: str = None):
         h, m = divmod(reste // 60, 60)
         return await ctx.send(embed=discord.Embed(
             description=(f"🎒 **{pet_nom_decore(uid, pdb)}** est parti explorer "
-                         f"**{EXPEDITIONS[expe['lieu']][0]}**.\n"
+                         f"**{expeditions_disponibles()[expe['lieu']][0]}**.\n"
                          f"⏳ Retour dans **{h}h{m:02d}**."),
             color=season_color("info")))
 
     # ── Départ ──
     cle = normalize_str(lieu or "").replace(" ", "")
-    if cle not in EXPEDITIONS:
-        lignes = "\n".join(f"{v[0]} — `{k}` · **{v[1]}h**\n└ *{v[2]}*" for k, v in EXPEDITIONS.items())
+    if cle not in expeditions_disponibles():
+        lignes = "\n".join(f"{v[0]} — `{k}` · **{v[1]}h**\n└ *{v[2]}*" for k, v in expeditions_disponibles().items())
         return await ctx.send(embed=discord.Embed(
             title="🎒 Expéditions",
             description=(f"Envoie ton compagnon explorer. Il revient avec un butin — "
@@ -27762,8 +29564,16 @@ async def petexpedition_cmd(ctx, lieu: str = None):
             color=season_color("info")))
     if st["energie"] < 30:
         return await ctx.send(f"😴 **{pdb['nom']}** est trop fatigué — fais-le `.dormir` d'abord.")
-    nom_l, heures, desc = EXPEDITIONS[cle]
+    nom_l, heures, desc = expeditions_disponibles()[cle]
+    # 🍂 L'incident est tiré au départ et mémorisé : il sera raconté
+    # au retour, avec la suite correspondant au choix par défaut.
+    _inc = blackwood_incident_possible(cle)
     d["expedition"] = {"lieu": cle, "fin": now + heures * 3600}
+    if _inc:
+        _suite = random.randrange(len(_inc["suites"]))
+        d["expedition"]["incident"] = (
+            _inc["texte"].format(p=f"**{pet_nom_decore(uid, pdb)}**")
+            + "\n" + _inc["suites"][_suite])
     st["energie"] = max(0, st["energie"] - 10)
     save_all_data()
     await ctx.send(embed=discord.Embed(
@@ -36096,6 +37906,12 @@ PET_MEUBLES = {
     "placardm":  ("🧹", "Placard à ménage",   3200, "saletes_lente", 30, "Le balai lui fait peur."),
 }
 
+# Les décors de refuge Blackwood rejoignent la table. Effet « decor » :
+# bonus_refuge() ne le connaît pas, ils ne rapportent donc rien — c'est
+# exactement ce qu'on veut, ce sont des décorations.
+for _k, _v in BLACKWOOD_MEUBLES.items():
+    PET_MEUBLES.setdefault(_k, _v)
+
 
 # ── 🏡 Pièces du refuge : chaque meuble appartient à une pièce ──
 PET_PIECES = {
@@ -36336,6 +38152,12 @@ async def refuge_cmd(ctx, action: str = None, *, objet: str = None):
         if cle not in PET_MEUBLES:
             cle = next((k for k, v in PET_MEUBLES.items()
                         if normalize_str(objet) in normalize_str(v[1])), None)
+        # Un décor saisonnier ne s'achète que pendant sa saison — comme
+        # les articles de la boutique. Une fois acquis, il reste.
+        if cle and cle in BLACKWOOD_MEUBLES and saison_mode() != "blackwood":
+            return await ctx.send(
+                f"🍂 **{PET_MEUBLES[cle][1]}** ne se trouve qu'à Blackwood, "
+                f"en octobre.")
         if not cle:
             return await ctx.send(f"❌ Meuble `{objet}` introuvable — tape `.refuge` pour la liste.")
         emo, nom, prix, typ, val, desc = PET_MEUBLES[cle]
@@ -42187,6 +44009,11 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
             color=0xf1c40f))
 
     itype = item_type.lower().strip()
+    if souvenir_permanent(itype):
+        _d = souvenir_def(itype)
+        return await ctx.send(
+            f"🍂 **{_d['nom']}** est un souvenir — "
+            f"il ne s'utilise pas, il se garde.")
     # Recherche souple par nom
     if itype not in inventaire.get(uid, {}):
         trouve = next((k for k in inventaire.get(uid, {})
@@ -45723,6 +47550,12 @@ async def on_ready():
     )
     print(f"✅ Bot QG Kdrama connecté : {bot.user}")
     print(f"✅ Serveurs : {len(bot.guilds)}")
+
+# ── 🍂 Les succès de Blackwood rejoignent la table des succès ──
+# Ici, tout en bas : ACHIEVEMENTS et BLACKWOOD_SUCCES existent tous deux.
+for _cle, _d in BLACKWOOD_SUCCES.items():
+    ACHIEVEMENTS.setdefault(_cle, {k: v for k, v in _d.items()
+                                   if k not in ("edition", "souvenir")})
 
 print("🚀 Démarrage du bot...")
 
