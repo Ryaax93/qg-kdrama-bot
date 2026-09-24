@@ -9270,18 +9270,27 @@ async def run_une_nuit_une_vie(channel, guild):
 
 # Compteurs saisonniers. Préfixés bw26_ : ils appartiennent à
 # l'édition et ne se mélangeront pas avec ceux de 2027.
-BW_STATS = {
-    "dossier_joue":     "bw26_dossier_joue",
-    "dossier_resolu":   "bw26_dossier_resolu",
-    "tot_porte":        "bw26_tot_porte",
-    "tot_soir":         "bw26_tot_soir",
-    "nuit_survecue":    "bw26_nuit_survecue",
-    "nuit_parfaite":    "bw26_nuit_parfaite",
-    "flamme_derniere":  "bw26_flamme_derniere",
-    "flamme_survie":    "bw26_flamme_survie",
-    "pet_expedition":   "bw26_pet_expedition",
-    "souvenir_lore":    "bw26_souvenir_lore",
-}
+# Les actions suivies. Le NOM du compteur n'est pas écrit ici : il se
+# déduit de l'édition en cours (voir bw_stat). Sans cela, une édition
+# 2027 hériterait des compteurs de 2026 et toutes ses missions seraient
+# déjà terminées avant la première action.
+BW_ACTIONS = ("dossier_joue", "dossier_resolu", "tot_porte", "tot_soir",
+              "nuit_survecue", "nuit_parfaite", "flamme_derniere",
+              "flamme_survie", "pet_expedition", "souvenir_lore",
+              "pet_lieux")
+
+def bw_prefixe(edition=None):
+    """« blackwood_2026 » → « bw26_ ». Une édition, un jeu de compteurs."""
+    an = str(edition or BLACKWOOD_EDITION).rsplit("_", 1)[-1]
+    return f"bw{an[-2:]}_" if an[-2:].isdigit() else "bw_"
+
+def bw_stat(action, edition=None):
+    """Le nom du compteur de cette action POUR L'ÉDITION donnée."""
+    return bw_prefixe(edition) + str(action)
+
+# Conservé pour les succès de l'édition 2026, dont les définitions
+# portent leur `stat` en dur : un succès obtenu reste obtenu.
+BW_STATS = {a: "bw26_" + a for a in BW_ACTIONS}
 
 # Destinations PET déjà visitées, pour la mission « Curiosité ».
 bw_destinations = {}      # {uid: {lieux}}
@@ -9300,7 +9309,7 @@ def blackwood_progress(uid, action, **data):
     if guild_id and cle_ev and event_est_stoppe(guild_id, cle_ev):
         return []
 
-    stat = BW_STATS.get(action)
+    stat = bw_stat(action) if action in BW_ACTIONS else None
     if stat:
         n = int(data.get("n", 1))
         try:
@@ -9314,14 +9323,14 @@ def blackwood_progress(uid, action, **data):
         if data["lieu"] not in vus:
             vus.add(data["lieu"])
             try:
-                track_stat(uid, "bw26_pet_lieux", 1)
+                track_stat(uid, bw_stat("pet_lieux"), 1)
             except Exception:
-                user_stats[uid]["bw26_pet_lieux"] = len(vus)
+                user_stats[uid][bw_stat("pet_lieux")] = len(vus)
 
     # Souvenirs de lore distincts : on recompte, on n'incrémente pas.
     if action == "souvenir_lore":
         n_lore = len(souvenirs_de(uid).get("lore") or [])
-        user_stats[uid]["bw26_souvenir_lore"] = n_lore
+        user_stats[uid][bw_stat("souvenir_lore")] = n_lore
 
     return blackwood_verifier_succes(uid)
 
@@ -9412,6 +9421,537 @@ def blackwood_succes_actifs():
     encore consultables mais ne seront plus proposés."""
     return {c: d for c, d in BLACKWOOD_SUCCES.items()
             if d.get("edition") in (None, BLACKWOOD_EDITION)}
+
+# ============================================================
+#  📋 MISSIONS DE BLACKWOOD
+#  Elles ne passent PAS par MISSIONS_POOL : missions_reset_si_besoin()
+#  remet tous ses compteurs à zéro toutes les 24 h, ce qui détruirait
+#  une progression mensuelle. On lit donc les compteurs bw26_* du
+#  socle 2.5.0, qui ne sont jamais remis à zéro.
+#
+#  Une action = une source de vérité : aucun hook nouveau n'est posé,
+#  tout vient déjà de blackwood_progress().
+# ============================================================
+
+# Claims par ÉDITION, pas par préfixe : un claim 2026 ne doit jamais
+# rendre la mission 2027 déjà réclamée.
+bw_missions_claims = {}     # {uid: {"blackwood_2026": [ids]}}
+
+# (id, emoji, libellé, ACTION, cible, pièces, xp)
+# On déclare l'action, pas le nom du compteur : bw_stat() le résout pour
+# l'édition en cours. L'action choisie garantit exactement ce que le
+# libellé affirme — participer n'est pas résoudre.
+BLACKWOOD_MISSIONS = [
+    # 🍂 Exploration — lieux DISTINCTS, pas nombre de sorties
+    ("bwm_chemins", "🍂", "Envoyer ton compagnon dans 3 lieux différents "
+     "de Blackwood", "pet_lieux", 3, 250, 60),
+    ("bwm_arpenteur", "🐾", "Faire 6 expéditions à Blackwood",
+     "pet_expedition", 6, 300, 80),
+    # 🔎 Mystères — participer ≠ résoudre
+    ("bwm_enquete", "🔎", "Participer à une enquête",
+     "dossier_joue", 1, 200, 50),
+    ("bwm_coupable", "🕵️", "Désigner le bon coupable",
+     "dossier_resolu", 1, 400, 100),
+    # 🎃 Vie de Blackwood
+    ("bwm_quartier", "🎃", "Sortir un soir de Trick or Treat",
+     "tot_soir", 1, 150, 40),
+    ("bwm_portes", "🚪", "Frapper à 6 portes dans le mois",
+     "tot_porte", 6, 250, 60),
+    # 🕯️ Nuits — survivre, pas participer
+    ("bwm_matin", "🌅", "Voir le matin se lever une fois",
+     "nuit_survecue", 1, 350, 90),
+    ("bwm_debout", "🕯️", "Être encore debout à la fin d'Une nuit",
+     "flamme_survie", 1, 350, 90),
+    # 📜 Collection
+    ("bwm_curieux", "📜", "Rapporter 3 objets de l'histoire de Blackwood",
+     "souvenir_lore", 3, 300, 80),
+]
+
+def bw_missions_claims_edition(uid):
+    """Les ids déjà réclamés par ce membre POUR L'ÉDITION EN COURS."""
+    return (bw_missions_claims.setdefault(str(uid), {})
+            .setdefault(BLACKWOOD_EDITION, []))
+
+def bw_mission_etat(uid, m):
+    """(progression, terminée, déjà réclamée) — lu dans les compteurs
+    persistants, jamais recalculé à l'ouverture du panneau."""
+    _id, _e, _lib, action, cible, _c, _x = m
+    # Le compteur est résolu pour l'ÉDITION EN COURS : une nouvelle
+    # édition repart de zéro, sans toucher à l'historique précédent.
+    prog = min(user_stats[str(uid)].get(bw_stat(action), 0), cible)
+    return prog, prog >= cible, _id in bw_missions_claims_edition(uid)
+
+def bw_missions_encaisser(uid):
+    """Encaisse les missions terminées et jamais réclamées.
+
+    Même ordre que les missions journalières : on MARQUE le claim avant
+    de créditer, sans aucun await entre les deux. En asyncio mono-thread
+    c'est atomique — deux clics simultanés ne peuvent pas passer tous
+    les deux. Retourne (libellés encaissés, pièces, xp)."""
+    uid = str(uid)
+    if saison_mode() != "blackwood":
+        return [], 0, 0
+    deja = bw_missions_claims_edition(uid)
+    gagnes, coins, xp = [], 0, 0
+    for m in BLACKWOOD_MISSIONS:
+        mid, emo, lib, action, cible, c, x = m
+        if mid in deja:
+            continue
+        if user_stats[uid].get(bw_stat(action), 0) < cible:
+            continue
+        deja.append(mid)          # ⚠️ marqué AVANT le crédit
+        economy_data[uid]["coins"] += c
+        coins += c
+        xp += x
+        gagnes.append(f"{emo} {lib}")
+    if gagnes:
+        try:
+            add_xp(uid, xp)
+        except Exception:
+            xp_data[uid]["xp"] = xp_data[uid].get("xp", 0) + xp
+        try:
+            save_all_data()
+        except Exception as e:
+            print(f"[Blackwood] missions non sauvegardées : {type(e).__name__}")
+    return gagnes, coins, xp
+
+def bw_missions_bloc(uid):
+    """Le bloc à ajouter dans `.missions`, ou None hors saison."""
+    if saison_mode() != "blackwood":
+        return None
+    lignes = []
+    finies = 0
+    for m in BLACKWOOD_MISSIONS:
+        mid, emo, lib, action, cible, c, x = m
+        prog, fait, claim = bw_mission_etat(uid, m)
+        if fait:
+            finies += 1
+        if claim:
+            marque = "✅"
+        elif fait:
+            marque = "🎁"
+        else:
+            marque = "▫️"
+        compteur = "" if cible == 1 else f"  `{prog}/{cible}`"
+        lignes.append(f"{marque} {emo} {lib}{compteur}")
+    entete = f"🍂 Missions de Blackwood — {finies}/{len(BLACKWOOD_MISSIONS)}"
+    return entete, "\n".join(lignes)
+
+# ============================================================
+#  🕯️ LA DERNIÈRE NUIT — FONDATIONS TECHNIQUES (3.2.1)
+#
+#  Machine d'états persistée. Aucune progression ne repose sur un
+#  sleep() : chaque phase porte une DEADLINE ABSOLUE, et un
+#  superviseur applique la transition due. Le bot peut mourir à
+#  n'importe quel instant et reprendre où il en était.
+#
+#  Le gameplay n'est PAS ici : les phases sont des placeholders.
+# ============================================================
+import os as _dn_os
+import time as _dn_time
+import json as _dn_json
+
+DN_CLE = "dernierenuit"
+DN_FICHIER = "data_derniere_nuit.json"
+
+# ── Les 12 phases + 2 terminaux ──
+DN_PHASES = ("LOBBY", "COZY", "MIDNIGHT", "SPLIT", "KNOCKS", "DOOR_RESOLVE",
+             "RETURN", "REVEAL", "VOTE", "SORTIR_CONF", "EPILOGUE", "CLEANUP")
+DN_TERMINAUX = ("FINISHED", "ABORTED")
+
+# La suite autorisée depuis chaque phase. Une seule sortie possible :
+# la machine est linéaire, ce qui rend la reprise déterministe.
+DN_SUITE = {
+    "LOBBY": "COZY", "COZY": "MIDNIGHT", "MIDNIGHT": "SPLIT",
+    "SPLIT": "KNOCKS", "KNOCKS": "DOOR_RESOLVE", "DOOR_RESOLVE": "RETURN",
+    "RETURN": "REVEAL", "REVEAL": "VOTE", "VOTE": "SORTIR_CONF",
+    "SORTIR_CONF": "EPILOGUE", "EPILOGUE": "CLEANUP", "CLEANUP": "FINISHED",
+}
+
+# ── Durées en secondes, centralisées pour que les tests puissent les
+#    écraser d'un bloc sans toucher à la logique. ──
+DN_DUREES = {
+    "LOBBY": 180, "COZY": 900, "MIDNIGHT": 40, "SPLIT": 1200,
+    "KNOCKS": 240, "DOOR_RESOLVE": 5, "RETURN": 360, "REVEAL": 720,
+    "VOTE": 300, "SORTIR_CONF": 30, "EPILOGUE": 180, "CLEANUP": 10,
+}
+DN_PHOTOPHORE_BONUS = 120      # +2 min d'Acte III par photophore
+DN_TICK = 5                    # cadence du superviseur
+
+# Mode test : placeholders visibles. Jamais activé en production,
+# aucune commande ne l'expose.
+DN_TEST_MODE = False
+
+dn_state = {}                  # vide = aucun finale actif
+_DN_LOCK = asyncio.Lock()
+dn_tick_task = None
+
+
+def dn_schema(run_id, guild_id):
+    """Le schéma complet, documenté. Rien de plus, rien « au cas où ».
+
+    PRÉSENCES et APPARTENANCES sont deux champs INDÉPENDANTS : le
+    manquant ne se déduit jamais d'une soustraction (micro-patch
+    3.0.5.1). Une présence de plus ne comble jamais une appartenance
+    absente."""
+    return {
+        "run_id": run_id, "guild_id": guild_id,
+        "phase": "LOBBY", "phase_started_at": 0.0, "phase_deadline": 0.0,
+        # salons et rôles créés par l'event
+        "salon_principal_id": None, "salons_secondaires": {},
+        "roles_temporaires": {},
+        # la photo ferme les inscriptions (arbitrage produit : option A)
+        "photo_message_id": None,
+        "participants": [],        # officiels — liste électorale
+        "spectateurs": [],         # arrivés après la photo, jamais promus
+        "groupes": {},             # {uid: "A"|"B"|"C"}
+        "photophores_par": [],     # source de vérité, le compte en dérive
+        # La Ligne
+        "ligne_budget": {}, "ligne_dernier_envoi": {}, "ligne_outbox": [],
+        # les trois coups : committés vs affichés
+        "knock_seq": 0, "knock_affiches": 0,
+        "porte_ouverte": None, "consequence_ouverture_appliquee": False,
+        # deux notions distinctes, jamais reliées par une formule
+        "presences": 0, "appartenances_absentes": 0,
+        # vote
+        "votes": {}, "vote_tour": 1, "resultat": None,
+        "sortants_candidats": [], "sortants_renonces": [],
+        "sortants_finaux": None,
+        # fin
+        "epilogue_envoye": {}, "cleanup_fait": False,
+    }
+
+
+# ── Persistance dédiée, atomique, indépendante de save_all_data ──
+
+def dn_sauver():
+    """Écrit l'état. .tmp + fsync + os.replace : un crash laisse soit
+    l'ancien fichier intact, soit le nouveau complet — jamais un
+    fichier à moitié écrit."""
+    if not dn_state:
+        return True
+    tmp = DN_FICHIER + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            _dn_json.dump(dn_state, f, ensure_ascii=False)
+            f.flush()
+            _dn_os.fsync(f.fileno())
+        _dn_os.replace(tmp, DN_FICHIER)
+        return True
+    except Exception as e:
+        print(f"[DN] Sauvegarde impossible : {type(e).__name__}: {e}")
+        try:
+            _dn_os.remove(tmp)
+        except Exception:
+            pass
+        return False
+
+
+def dn_charger():
+    """Relit l'état au démarrage. Un fichier absent est normal ; un
+    fichier corrompu ne doit SURTOUT PAS produire silencieusement un
+    finale vierge — on le met de côté et on repart à vide en le
+    signalant."""
+    dn_state.clear()
+    if not _dn_os.path.exists(DN_FICHIER):
+        return None
+    try:
+        with open(DN_FICHIER, encoding="utf-8") as f:
+            brut = f.read().strip()
+        if not brut:
+            print("[DN] Fichier d'état vide — aucun finale à reprendre.")
+            return None
+        d = _dn_json.loads(brut)
+        if not isinstance(d, dict) or "run_id" not in d or "phase" not in d:
+            raise ValueError("schéma inattendu")
+    except Exception as e:
+        try:
+            _dn_os.replace(DN_FICHIER, DN_FICHIER + ".corrompu")
+        except Exception:
+            pass
+        print(f"[DN] ⚠️ État illisible ({type(e).__name__}) — mis de côté "
+              f"dans {DN_FICHIER}.corrompu. Aucune reprise.")
+        return None
+    dn_state.update(d)
+    return d
+
+
+def dn_actif():
+    """Y a-t-il un finale en cours ? Un run terminé n'en est pas un."""
+    return bool(dn_state) and dn_state.get("phase") not in DN_TERMINAUX
+
+
+def dn_duree(phase):
+    """La durée d'une phase. REVEAL s'allonge avec les photophores —
+    seul effet des photophores, conforme au Patch 3.0.5 §E."""
+    base = DN_DUREES.get(phase, 60)
+    if phase == "REVEAL":
+        base += min(len(dn_state.get("photophores_par") or []), 8) \
+                * DN_PHOTOPHORE_BONUS
+    return base
+
+
+def dn_stoppe():
+    """L'event a-t-il été arrêté ? Vérifié avant CHAQUE mutation."""
+    gid = dn_state.get("guild_id")
+    if gid is None:
+        return True
+    return event_est_stoppe(gid, DN_CLE)
+
+
+def dn_fiche():
+    return event_actifs_guild(dn_state.get("guild_id") or 0).get(DN_CLE)
+
+
+# ── La seule fonction qui a le droit de changer de phase ──
+
+async def dn_transition(vers=None, force=False):
+    """Fait passer le finale à la phase suivante.
+
+    Ordre strict : on vérifie, on mute, on persiste, et SEULEMENT
+    ensuite on parle à Discord. Un échec Discord ne défait jamais une
+    transition déjà enregistrée."""
+    async with _DN_LOCK:
+        if not dn_state:
+            return False, "aucun run"
+        depuis = dn_state.get("phase")
+        if depuis in DN_TERMINAUX:
+            return False, f"run déjà {depuis}"
+        if not force and dn_stoppe():
+            return False, "event stoppé"
+        if not force and dn_fiche() is None:
+            return False, "fiche Events absente"
+
+        cible = vers or DN_SUITE.get(depuis)
+        if cible is None:
+            return False, f"pas de suite pour {depuis}"
+        if not force and vers is not None and vers != DN_SUITE.get(depuis) \
+                and vers not in DN_TERMINAUX:
+            return False, f"transition {depuis} → {vers} non autorisée"
+
+        # ── mutations métier ──
+        if depuis == "COZY":
+            # La photo ferme les inscriptions. Les présences sont figées
+            # ici ; l'appartenance absente ne dépend d'aucun calcul.
+            dn_state["presences"] = len(dn_state["participants"])
+            dn_state["appartenances_absentes"] = 1
+
+        dn_state["phase"] = cible
+        dn_state["phase_started_at"] = _dn_time.time()
+        dn_state["phase_deadline"] = (
+            0.0 if cible in DN_TERMINAUX
+            else _dn_time.time() + dn_duree(cible))
+        dn_sauver()                       # ← COMMIT avant tout Discord
+        return True, cible
+
+
+async def dn_effet_phase(phase):
+    """Effets Discord d'une phase. Placeholder en 3.2.1 : le contenu
+    narratif viendra plus tard. Rejouable sans dommage."""
+    if not DN_TEST_MODE:
+        return
+    sid = dn_state.get("salon_principal_id")
+    gid = dn_state.get("guild_id")
+    g = bot.get_guild(gid) if gid else None
+    ch = g.get_channel(sid) if (g and sid) else None
+    if ch is None:
+        return
+    try:
+        await ch.send(f"`[DN TEST] → {phase}`")
+    except Exception as e:
+        print(f"[DN] effet {phase} non envoyé : {type(e).__name__}")
+
+
+# ── Superviseur ──
+
+async def dn_superviseur():
+    """Vérifie l'échéance de la phase courante toutes les DN_TICK
+    secondes. C'est lui qui fait avancer le finale — jamais un sleep
+    dans le run_*.
+
+    Trois barrières l'empêchent de survivre à l'event : il teste
+    event_est_stoppe, il teste la présence de la fiche, et le run_*
+    l'annule dans son finally."""
+    while True:
+        try:
+            await asyncio.sleep(DN_TICK)
+            if not dn_state or dn_state.get("phase") in DN_TERMINAUX:
+                return
+            if dn_stoppe() or dn_fiche() is None:
+                return
+            dl = dn_state.get("phase_deadline") or 0
+            if dl and _dn_time.time() >= dl:
+                avant = dn_state.get("phase")
+                ok, res = await dn_transition()
+                if ok:
+                    await dn_effet_phase(res)
+                elif res in ("event stoppé", "fiche Events absente"):
+                    return
+                else:
+                    print(f"[DN] transition depuis {avant} refusée : {res}")
+        except asyncio.CancelledError:
+            return
+        except Exception as e:
+            print(f"[DN] superviseur : {type(e).__name__}: {e}")
+            await asyncio.sleep(DN_TICK)
+
+
+def dn_lancer_superviseur(guild):
+    """Démarre le superviseur et l'attache au lifecycle Events 2.0,
+    avec le pattern déjà utilisé par la sentinelle de run_reflexe."""
+    global dn_tick_task
+    dn_arreter_superviseur()
+    dn_tick_task = asyncio.create_task(dn_superviseur())
+    t = dn_tick_task
+    event_attacher_vue(guild.id, DN_CLE,
+                       type("_DNTick", (), {"stop": lambda _s: t.cancel()})())
+    return dn_tick_task
+
+
+def dn_arreter_superviseur():
+    global dn_tick_task
+    if dn_tick_task is not None and not dn_tick_task.done():
+        dn_tick_task.cancel()
+    dn_tick_task = None
+
+
+# ── Inscription ──
+
+def dn_inscrire(uid):
+    """Avant la photo : participant officiel. Après : spectateur.
+
+    Arbitrage produit (option A) : la photo ferme définitivement les
+    inscriptions. Un spectateur ne rejoint jamais participants, n'a
+    pas de groupe, ne vote pas, ne reçoit pas la récompense."""
+    uid = str(uid)
+    if uid in dn_state.get("participants", []):
+        return "deja"
+    if uid in dn_state.get("spectateurs", []):
+        return "deja_spectateur"
+    if dn_state.get("photo_message_id") is not None:
+        dn_state["spectateurs"].append(uid)
+        dn_sauver()
+        return "spectateur"
+    dn_state["participants"].append(uid)
+    dn_sauver()
+    return "participant"
+
+
+class DNRejoindreView(ui.View):
+    """Bouton d'inscription. Persistant : il doit survivre à un
+    redémarrage sans que personne ait à le recréer."""
+
+    def __init__(self, run_id):
+        super().__init__(timeout=None)
+        self.run_id = run_id
+        b = ui.Button(label="Rejoindre La Dernière Nuit", emoji="🕯️",
+                      style=discord.ButtonStyle.secondary,
+                      custom_id=f"dn:join:{run_id}")
+        b.callback = self._rejoindre
+        self.add_item(b)
+
+    async def _rejoindre(self, itx):
+        if not dn_actif() or dn_state.get("run_id") != self.run_id:
+            return await itx.response.send_message(
+                "Cette nuit est terminée.", ephemeral=True)
+        async with _DN_LOCK:
+            r = dn_inscrire(itx.user.id)
+        await itx.response.send_message({
+            "participant": "🕯️ *Tu entres.*",
+            "spectateur": "🕯️ *Tu arrives après. Tu peux regarder.*",
+            "deja": "Tu es déjà là.",
+            "deja_spectateur": "Tu regardes déjà.",
+        }[r], ephemeral=True)
+
+
+# ── Reprise au démarrage ──
+
+async def dn_reprendre():
+    """Rétablit un finale interrompu.
+
+    Stratégie de rattrapage volontairement prudente : on ne traverse
+    JAMAIS plusieurs phases d'un coup. On rétablit l'état, on rattache
+    le superviseur, et s'il manque des transitions il les appliquera
+    une par une, au rythme du tick. Un arrêt long ne doit pas faire
+    défiler cinq phases narratives en une seconde."""
+    d = dn_charger()
+    if not d:
+        return None
+    if d.get("phase") in DN_TERMINAUX:
+        print(f"[DN] Dernier run {d.get('run_id')} : {d.get('phase')}. "
+              f"Rien à reprendre.")
+        return None
+
+    gid = d.get("guild_id")
+    g = bot.get_guild(gid) if gid else None
+    if g is None:
+        print(f"[DN] ⚠️ Guild {gid} introuvable — run abandonné.")
+        dn_state["phase"] = "ABORTED"
+        dn_sauver()
+        return None
+
+    sid = d.get("salon_principal_id")
+    ch = g.get_channel(sid) if sid else None
+    if ch is None:
+        print(f"[DN] ⚠️ Salon principal {sid} disparu — run abandonné.")
+        dn_state["phase"] = "ABORTED"
+        dn_sauver()
+        return None
+
+    # Réintégration au registre Events 2.0 si la fiche a disparu.
+    if event_actifs_guild(gid).get(DN_CLE) is None:
+        event_enregistrer(gid, DN_CLE, "🕯️ La Dernière Nuit",
+                          salon=ch, fam="event")
+
+    try:
+        bot.add_view(DNRejoindreView(d["run_id"]))
+    except Exception as e:
+        print(f"[DN] vue d'inscription non restaurée : {type(e).__name__}")
+
+    dn_lancer_superviseur(g)
+    retard = _dn_time.time() - (d.get("phase_deadline") or 0)
+    print(f"[DN] Reprise de {d['run_id']} en phase {d['phase']} "
+          f"({'échéance dépassée' if retard > 0 else 'en cours'}).")
+    return d
+
+
+# ── Le run_*, volontairement court ──
+
+async def run_derniere_nuit(channel, guild):
+    """🕯️ La Dernière Nuit — 31 octobre.
+
+    Ce run_* ne joue rien lui-même : il installe l'état et laisse le
+    superviseur conduire. C'est ce qui rend le finale reprenable."""
+    try:
+        dn_state.clear()
+        dn_state.update(dn_schema(f"dn2026-{int(_dn_time.time())}", guild.id))
+        dn_state["salon_principal_id"] = channel.id
+        dn_state["phase_started_at"] = _dn_time.time()
+        dn_state["phase_deadline"] = _dn_time.time() + dn_duree("LOBBY")
+        dn_sauver()
+
+        vue = DNRejoindreView(dn_state["run_id"])
+        event_attacher_vue(guild.id, DN_CLE, vue)
+        try:
+            await channel.send(embed=discord.Embed(
+                title="🕯️  LA DERNIÈRE NUIT",
+                description="*Blackwood, 31 octobre.*",
+                color=season_color("alerte")), view=vue)
+        except Exception as ex:
+            print(f"[DN] message d'ouverture : {type(ex).__name__}")
+
+        dn_lancer_superviseur(guild)
+        # On attend que la machine atteigne un terminal, sans jamais
+        # porter nous-mêmes la progression.
+        while dn_actif() and not dn_stoppe():
+            await asyncio.sleep(DN_TICK)
+    finally:
+        # Une task enfant ne meurt pas avec son parent : on l'annule
+        # même si le run sort par exception.
+        dn_arreter_superviseur()
+        if dn_state and dn_state.get("phase") not in DN_TERMINAUX:
+            dn_state["phase"] = "ABORTED" if dn_stoppe() else "FINISHED"
+            dn_sauver()
 
 def possessions_lire(uid):
     """Toutes les possessions d'un membre, lues dans les systèmes d'origine.
@@ -14560,6 +15100,10 @@ EVENTS_CATALOGUE = {
     "coffre": {"nom":"📦 Coffre","fn":"run_coffre","salon":True,"duree":"5 min","fam":"event",
         "desc":"Simple, renforcé ou scellé. Le premier à taper .ouvrir rafle tout.","gain":"300 à 4 500 pièces"},
     "colis": {"nom":"🧰 Coffre Renforcé","fn":"run_colis","salon":True,"duree":"5 min","fam":"mode","parent":"coffre","desc":"Palier renforcé du Coffre.","gain":"900 à 2 200 pièces"},
+    "dernierenuit": {"nom":"🕯️ La Dernière Nuit","fn":"run_derniere_nuit",
+        "salon":True,"duree":"~90 min","fam":"event","saison":"blackwood",
+        "desc":"Le 31 octobre. Blackwood essaie de fermer.",
+        "gain":"y avoir été"},
     "unenuit": {"nom":"🕯️ Une nuit, une seule vie","fn":"run_une_nuit_une_vie",
         "salon":True,"duree":"15 min","fam":"event","saison":"blackwood",
         "desc":"Sept épreuves. Une erreur suffit. Une seule tentative.",
@@ -20765,8 +21309,252 @@ GAZETTE_FINS = [
     "*Merci à tous ceux qui ont fait vivre le QG cette semaine.*",
 ]
 
-async def construire_gazette(guild):
-    """Assemble le journal de la semaine"""
+# ============================================================
+#  📰 LA GAZETTE DE BLACKWOOD
+#  Un journal local. Les données du serveur restent vraies : ce
+#  bloc n'ajoute que des rubriques narratives autour d'elles.
+#  Le mois se lit à ce qui DISPARAÎT, pas à ce qu'on écrit.
+# ============================================================
+
+# Quelles rubriques narratives paraissent, selon la semaine.
+# S1 est le numéro le plus riche. S4 est presque vide.
+BW_GZ_RUBRIQUES = {
+    1: ["vie_locale", "commerces", "biblio", "meteo", "annonces", "agenda"],
+    2: ["vie_locale", "commerces", "biblio", "meteo", "annonces"],
+    3: ["vie_locale", "commerces", "biblio", "mairie"],
+    4: ["mairie", "commerces"],
+}
+
+BW_GZ_TITRES = {
+    "vie_locale": "🏘️ Vie locale",
+    "commerces":  "☕ Commerces",
+    "biblio":     "📚 Bibliothèque",
+    "meteo":      "🍂 Météo de Blackwood",
+    "annonces":   "📌 Petites annonces",
+    "agenda":     "🎃 Agenda",
+    "mairie":     "🏛️ Mairie",
+}
+
+# ── La banque ──
+# Écrites à la main, une par une. Chaque entrée est une brève qu'un
+# vrai journal de quartier pourrait publier.
+BW_GZ_BREVES = {
+1: {
+ "vie_locale": [
+  "Le ramassage des feuilles aura lieu mardi et vendredi. Les habitants "
+  "de la rue Hawthorne sont priés de dégager les trottoirs la veille.",
+  "L'école primaire organise son concours de citrouilles samedi. "
+  "Quarante-deux inscrits à ce jour, un record.",
+  "Les lampadaires de la place ont été remis en service après trois "
+  "semaines de travaux. Le quartier retrouve ses soirées éclairées.",
+ ],
+ "commerces": [
+  "☕ **Café de la Place** — Le menu d'automne revient cette semaine : "
+  "chocolat chaud, tarte aux pommes, brioche à la cannelle.",
+  "🌻 **Fleuriste Aldworth** — Monsieur Aldworth prépare sa vitrine "
+  "d'automne. Chrysanthèmes et branches de hêtre, comme chaque année.",
+  "🥖 **Boulangerie Kesey** — Fournée spéciale vendredi : pains aux "
+  "graines de courge. Réservation conseillée.",
+ ],
+ "biblio": [
+  "Heure du conte pour les plus jeunes, mercredi 15 h. Cette année, "
+  "des histoires d'automne — rien qui empêche de dormir, promis.",
+  "La salle de lecture reste ouverte jusqu'à 20 h tout le mois. "
+  "Le chauffage a été révisé.",
+ ],
+ "meteo": [
+  "Pluie fine jusqu'à jeudi, puis éclaircies. Douze degrés en journée. "
+  "Un temps à rester à l'intérieur avec quelque chose de chaud.",
+  "Brouillard le matin, soleil l'après-midi. Les couleurs sont à leur "
+  "meilleur cette semaine.",
+ ],
+ "annonces": [
+  "Cherche personne sérieuse pour promener un chien âgé, deux fois par "
+  "jour. S'adresser au 14 rue Hawthorne.",
+  "Vends bocaux de conserve, lot de vingt. Bon état. Faire offre.",
+ ],
+ "agenda": [
+  "🎃 **Samedi** — Concours de citrouilles, cour de l'école, 14 h.\n"
+  "🍂 **Dimanche** — Marché d'automne sur la place, toute la journée.",
+ ],
+},
+2: {
+ "vie_locale": [
+  "Le ramassage des feuilles de vendredi a été décalé à lundi. Les "
+  "services techniques n'ont pas précisé la raison.",
+  "Plusieurs habitants signalent que l'éclairage de la rue Hawthorne "
+  "s'éteint avant l'heure prévue. Une vérification est programmée.",
+  "Les inscriptions au concours de citrouilles sont closes. "
+  "Quarante-trois participants ont finalement été comptés.",
+ ],
+ "commerces": [
+  "☕ **Café de la Place** — Fermeture à 21 h au lieu de 22 h cette "
+  "semaine. Le patron s'en excuse auprès des habitués.",
+  "🌻 **Fleuriste Aldworth** — Monsieur Aldworth cherche quelqu'un pour "
+  "réparer l'enseigne de sa boutique. Elle grince depuis dimanche.",
+  "🥖 **Boulangerie Kesey** — Les fournées du soir sont suspendues "
+  "jusqu'à nouvel ordre.",
+ ],
+ "biblio": [
+  "La bibliothèque recherche toujours le propriétaire d'un parapluie "
+  "noir oublié mardi soir. Aucun visiteur ne se souvient l'avoir vu "
+  "avant la fermeture.",
+  "La salle de lecture fermera exceptionnellement trente minutes plus "
+  "tôt jeudi. Aucun changement annoncé pour vendredi.",
+ ],
+ "meteo": [
+  "Pluie continue toute la semaine. Neuf degrés. Pensez à rentrer ce "
+  "qui traîne dehors.",
+  "Ciel couvert, sans éclaircie annoncée. La luminosité baisse plus "
+  "vite que les années précédentes.",
+ ],
+ "annonces": [
+  "Perdu : trousseau de clés, environs de la place. Récompense.",
+  "La personne qui a laissé un panier devant le 13 est priée de se "
+  "manifester.",
+ ],
+},
+3: {
+ "vie_locale": [
+  "Le ramassage des feuilles est suspendu. Les habitants sont invités "
+  "à les laisser en tas devant chez eux.",
+  "Les lampadaires de la rue Hawthorne ne seront pas réparés cette "
+  "semaine. L'équipe technique n'est pas venue.",
+  "Les résultats du concours de citrouilles n'ont pas été affichés. "
+  "L'école indique qu'ils le seront prochainement.",
+ ],
+ "commerces": [
+  "☕ **Café de la Place** — Fermeture à 18 h. Le patron précise que "
+  "c'est temporaire.",
+  "🌻 **Fleuriste Aldworth** — La boutique fermera désormais avant la "
+  "tombée de la nuit.",
+  "🥖 **Boulangerie Kesey** — Ouvert le matin uniquement.",
+ ],
+ "biblio": [
+  "Le parapluie oublié n'a toujours pas été réclamé. Il a été rangé "
+  "dans la réserve.",
+  "Le registre municipal de 1961 est signalé manquant depuis lundi. "
+  "La bibliothécaire demande à ce qu'on le lui rapporte sans façons.",
+ ],
+ "mairie": [
+  "Fermeture à 17 h cette semaine.",
+  "Le conseil de quartier prévu jeudi est reporté.",
+ ],
+},
+4: {
+ "mairie": [
+  "Fermeture : 17 h.",
+  "Aucune permanence cette semaine.",
+ ],
+ "commerces": [
+  "☕ **Café de la Place** — Fermé.",
+  "🥖 **Boulangerie Kesey** — Ouvert le matin.",
+  "🌻 **Fleuriste Aldworth** — *aucune information transmise*",
+ ],
+},
+}
+
+# ── Fils rouges ──
+# Trois histoires qui traversent le mois sans jamais s'expliquer.
+# Elles sont déjà dans la banque ci-dessus ; cette table sert à les
+# documenter et à garantir qu'on n'en perde pas le fil.
+BW_GZ_FILS = {
+    "fleuriste":  {1: "commerces", 2: "commerces", 3: "commerces", 4: "commerces"},
+    "parapluie":  {2: "biblio", 3: "biblio"},
+    "lampadaires": {1: "vie_locale", 2: "vie_locale", 3: "vie_locale"},
+}
+
+# Anti-répétition : on retient les dernières brèves publiées. Persisté
+# avec le reste de la Gazette, donc un redémarrage ne les ramène pas.
+bw_gz_vues = []
+BW_GZ_MEMOIRE = 12
+
+def bw_gazette_breve(semaine, rubrique, consommer=True):
+    """Une brève non encore vue si possible, sinon la moins récente.
+
+    `consommer=False` pour un aperçu : `.gazette` construit le journal
+    sans le publier, il ne doit pas épuiser la banque pour autant."""
+    pool = (BW_GZ_BREVES.get(semaine) or {}).get(rubrique) or []
+    if not pool:
+        return None
+    frais = [b for b in pool if b not in bw_gz_vues]
+    choix = random.choice(frais or pool)
+    if consommer:
+        bw_gz_vues.append(choix)
+        del bw_gz_vues[:-BW_GZ_MEMOIRE]
+    return choix
+
+def bw_gazette_meteo_nuit(semaine):
+    """La période module, elle ne remplace jamais la semaine.
+    Une nuit de S1 reste chaleureuse."""
+    if saison_periode() != "NIGHT":
+        return None
+    return {1: "Les vitrines restent éclairées tard. Le café de la place "
+               "sert encore à cette heure-ci.",
+            2: "Il pleut sur les lampadaires. La rue est calme.",
+            3: "Peu de fenêtres allumées ce soir.",
+            4: "—"}.get(semaine)
+
+def bw_event_a_eu_lieu(cle):
+    """Un event Blackwood a-t-il RÉELLEMENT été joué ?
+
+    On ne lit que les compteurs écrits par blackwood_progress : si
+    personne n'a de trace, l'event n'a pas eu lieu et la Gazette n'en
+    parle pas. Aucun historique n'est inventé."""
+    stat = BW_STATS.get(cle)
+    if not stat:
+        return False
+    return any(s.get(stat, 0) > 0 for s in user_stats.values())
+
+# Traces autorisées. Des conséquences, jamais des explications : la
+# Gazette ne révèle aucune solution ni aucune règle de jeu.
+BW_GZ_TRACES = {
+    "dossier_resolu": ("📚 Bibliothèque",
+                       "Le registre municipal signalé manquant a été "
+                       "retrouvé. La bibliothécaire remercie les curieux."),
+    "tot_soir":       ("🏘️ Vie locale",
+                       "Plusieurs habitants remercient les visiteurs de "
+                       "vendredi soir. Il ne reste plus un bonbon."),
+    "nuit_survecue":  ("🏘️ Vie locale",
+                       "Rien à signaler cette nuit-là. C'est ce qui a été "
+                       "rapporté."),
+    "flamme_survie":  ("🏛️ Mairie",
+                       "La liste des présents a été mise à jour."),
+}
+
+def blackwood_gazette_sections(semaine=None, consommer=True):
+    """Les rubriques narratives du numéro. Retourne [(titre, texte)].
+
+    Ne touche à aucune donnée du serveur : ce sont des rubriques en
+    plus, jamais à la place."""
+    if saison_mode() != "blackwood":
+        return []
+    sem = semaine or blackwood_semaine()
+    if not sem:
+        return []
+    out = []
+    for cle in BW_GZ_RUBRIQUES.get(sem, []):
+        txt = bw_gazette_breve(sem, cle, consommer=consommer)
+        if not txt:
+            continue
+        if cle == "meteo":
+            nuit = bw_gazette_meteo_nuit(sem)
+            if nuit and nuit != "—":
+                txt = nuit
+        out.append((BW_GZ_TITRES[cle], txt))
+    # Traces d'events réellement joués — au plus une par numéro, pour
+    # que ça reste une mention discrète et pas un compte rendu.
+    joues = [c for c in BW_GZ_TRACES if bw_event_a_eu_lieu(c)]
+    if joues:
+        titre, texte = BW_GZ_TRACES[random.choice(joues)]
+        out.append((titre, texte))
+    return out
+
+async def construire_gazette(guild, publication=False):
+    """Assemble le journal de la semaine.
+
+    `publication=True` seulement quand le numéro part vraiment : un
+    aperçu ne consomme pas les brèves de la banque."""
     def nom(uid):
         m = guild.get_member(int(uid))
         return m.display_name if m else None
@@ -20860,6 +21648,12 @@ async def construire_gazette(guild):
         rubriques += 1
 
     # 📈 Le serveur en chiffres
+    # 🍂 Rubriques narratives de Blackwood. Elles s'ajoutent aux
+    # rubriques factuelles, elles ne remplacent jamais une donnée.
+    for _bt, _bv in blackwood_gazette_sections(consommer=publication):
+        embed.add_field(name=_bt, value=_bv, inline=False)
+        rubriques += 1
+
     total_msg = sum(s.get("messages", 0) for s in gazette_stats.values())
     total_ev = sum(s.get("events", 0) for s in gazette_stats.values())
     total_cartes = sum(s.get("cartes", 0) for s in gazette_stats.values())
@@ -20895,10 +21689,14 @@ async def gazette_task():
                  or guild.system_channel)
         if not salon:
             continue
+        # Les brèves ne sont consommées que si le numéro part vraiment :
+        # on note l'état avant, et on le restaure si l'envoi échoue.
+        _avant = list(bw_gz_vues)
         try:
-            embed = await construire_gazette(guild)
+            embed = await construire_gazette(guild, publication=True)
             await salon.send(get_event_ping(guild, "everyone"), embed=embed)
         except Exception as e:
+            bw_gz_vues[:] = _avant
             print(f"[Gazette] {e}")
     gazette_stats.clear()
     gazette_faits.clear()
@@ -44781,6 +45579,18 @@ async def missions_cmd(ctx):
             if restantes == 0 else
             f"💡 Encore {restantes} mission(s) — reviens ici pour encaisser au fur et à mesure."))
 
+    # 🍂 Missions de Blackwood — bloc séparé, progression mensuelle.
+    # L'encaissement suit le même principe que les journalières :
+    # marqué avant crédité, sans await entre les deux.
+    _bwg, _bwc, _bwx = bw_missions_encaisser(uid)
+    _bwb = bw_missions_bloc(uid)
+    if _bwb:
+        embed.add_field(name=_bwb[0], value=_bwb[1], inline=False)
+    if _bwg:
+        embed.add_field(
+            name=f"🎁 Encaissé — +{_bwc} pièces · +{_bwx} XP",
+            value="\n".join(_bwg), inline=False)
+
     await ctx.send(embed=embed)
 
 # ============================================================
@@ -46544,6 +47354,7 @@ def save_all_data():
             "records_qg": dict(records_qg),
             "gazette_schema": GAZETTE_SCHEMA,
             "gazette_editions": GAZETTE_EDITIONS,
+            "bw_gz_vues": bw_gz_vues,
             "anniv_meta": anniv_meta,
             "akari": akari_meta,
             "ritual": {"vues": ritual_etat.get("vues", []),
@@ -46556,6 +47367,7 @@ def save_all_data():
                             for p, m in girls_jours.items()},
             "cadeaux": cadeaux_data,
             "saison_override": saison_override.get("mode"),
+            "bw_missions_claims": bw_missions_claims,
             "skin_schema": SKIN_SCHEMA,
             "skin_snapshot": skin_snapshot,
             "skin_applique": skin_applique,
@@ -46729,6 +47541,9 @@ def load_all_data():
                 for _k, _v in (data.get("skin_applique") or {}).items():
                     if isinstance(_v, dict):
                         skin_applique[_k] = _v
+                for _u, _e in (data.get("bw_missions_claims") or {}).items():
+                    if isinstance(_e, dict):
+                        bw_missions_claims[_u] = {k: list(v) for k, v in _e.items()}
                 _ov = data.get("saison_override")
                 saison_override["mode"] = _ov if _ov in SAISON_MODES else None
                 # Salons d'events : on retient d'où ils viennent pour pouvoir
@@ -46795,6 +47610,7 @@ def load_all_data():
             except Exception as _e:
                 print(f"[Social] chargement partiel : {type(_e).__name__}")
             try:
+                bw_gz_vues[:] = list(data.get("bw_gz_vues") or [])[-BW_GZ_MEMOIRE:]
                 _ed = data.get("gazette_editions", [])
                 GAZETTE_EDITIONS.clear()
                 for _e in _ed if isinstance(_ed, list) else []:
@@ -47519,6 +48335,14 @@ async def on_ready():
                       f"{', '.join(sup)}")
         except Exception as e:
             print(f"[Event] nettoyage des orphelins ignoré : {type(e).__name__}: {e}")
+    # ── 🕯️ Un finale interrompu reprend où il s'était arrêté ──
+    # Après le nettoyage des orphelins : le salon du finale est alors
+    # connu et protégé, il ne sera pas supprimé comme un résidu.
+    try:
+        await dn_reprendre()
+    except Exception as e:
+        print(f"[DN] reprise impossible : {type(e).__name__}: {e}")
+
     # ── 🏚️ Le serveur suit la saison ──
     # Après le nettoyage des orphelins : les salons d'events sont alors
     # connus et protégés. Idempotent — si les noms sont déjà bons, aucun
