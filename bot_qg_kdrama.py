@@ -9552,7 +9552,11 @@ import time as _dn_time
 import json as _dn_json
 
 DN_CLE = "dernierenuit"
-DN_FICHIER = "data_derniere_nuit.json"
+# Volume persistant Railway : sans data_path, le fichier vivrait dans le
+# working directory et disparaîtrait au moindre redeploy. Le .tmp et le
+# .corrompu en dérivent, donc ils restent sur le même filesystem — c'est
+# ce qui rend os.replace() atomique.
+DN_FICHIER = data_path("data_derniere_nuit.json")
 
 # ── Les 12 phases + 2 terminaux ──
 DN_PHASES = ("LOBBY", "COZY", "MIDNIGHT", "SPLIT", "KNOCKS", "DOOR_RESOLVE",
@@ -9585,6 +9589,15 @@ DN_TEST_MODE = False
 dn_state = {}                  # vide = aucun finale actif
 _DN_LOCK = asyncio.Lock()
 dn_tick_task = None
+# Cause d'arrêt administrative, gardée par run_id : elle survit au
+# retrait de la fiche du registre (une fiche absente ne prouve pas un
+# `.stopevent`). En mémoire seulement : ABORTED est persisté juste après.
+dn_arrets_admin = set()
+# Runs terminés dans ce processus — arrêtés, abandonnés ou arrivés à leur
+# terme (dn_terminer_run) : jamais protégés ni repris ici, même si ABORTED
+# n'a pas pu être écrit. En mémoire seulement, comme dn_arrets_admin.
+dn_runs_clos = set()
+_dn_temoin = None              # témoin d'arrêt du processus (voir plus bas)
 
 
 def dn_schema(run_id, guild_id):
@@ -9601,7 +9614,8 @@ def dn_schema(run_id, guild_id):
         "salon_principal_id": None, "salons_secondaires": {},
         "roles_temporaires": {},
         # la photo ferme les inscriptions (arbitrage produit : option A)
-        "photo_message_id": None,
+        "inscriptions_fermees": False,   # état MÉTIER, indépendant de Discord
+        "photo_message_id": None,        # matérialisation Discord de la photo
         "participants": [],        # officiels — liste électorale
         "spectateurs": [],         # arrivés après la photo, jamais promus
         "groupes": {},             # {uid: "A"|"B"|"C"}
@@ -9705,8 +9719,18 @@ def dn_fiche():
 
 # ── La seule fonction qui a le droit de changer de phase ──
 
-async def dn_transition(vers=None, force=False):
-    """Fait passer le finale à la phase suivante.
+async def dn_transition(vers=None, terminal=None, run_id=None):
+    """LA SEULE FONCTION QUI ÉCRIT dn_state["phase"].
+
+    `vers` suit la chaîne linéaire et respecte tous les invariants.
+    `terminal="ABORTED"` est le seul raccourci : il contourne le
+    contrôle d'arrêt, parce qu'il faut bien pouvoir enregistrer un
+    ABORTED après que stopping=True a été posé. FINISHED signifie que
+    la machine a réellement terminé : il ne s'atteint que par la
+    chaîne normale CLEANUP → FINISHED.
+
+    `run_id`, s'il est fourni, lie la demande à UN run : si l'état a
+    changé de run pendant l'attente du lock, la demande est refusée.
 
     Ordre strict : on vérifie, on mute, on persiste, et SEULEMENT
     ensuite on parle à Discord. Un échec Discord ne défait jamais une
@@ -9714,25 +9738,41 @@ async def dn_transition(vers=None, force=False):
     async with _DN_LOCK:
         if not dn_state:
             return False, "aucun run"
+        if run_id is not None and dn_state.get("run_id") != run_id:
+            return False, "autre run"
         depuis = dn_state.get("phase")
         if depuis in DN_TERMINAUX:
             return False, f"run déjà {depuis}"
-        if not force and dn_stoppe():
-            return False, "event stoppé"
-        if not force and dn_fiche() is None:
-            return False, "fiche Events absente"
 
-        cible = vers or DN_SUITE.get(depuis)
-        if cible is None:
-            return False, f"pas de suite pour {depuis}"
-        if not force and vers is not None and vers != DN_SUITE.get(depuis) \
-                and vers not in DN_TERMINAUX:
-            return False, f"transition {depuis} → {vers} non autorisée"
+        if terminal is not None:
+            # Seul ABORTED passe par ce raccourci : c'est une interruption
+            # d'urgence, possible depuis n'importe quelle phase. FINISHED
+            # n'est JAMAIS un raccourci — il ne s'atteint que par la
+            # chaîne normale CLEANUP → FINISHED, avec tous ses contrôles.
+            if terminal != "ABORTED":
+                return False, f"{terminal} ne s'atteint pas par raccourci"
+            cible = terminal
+        else:
+            if dn_stoppe():
+                return False, "event stoppé"
+            if dn_fiche() is None:
+                return False, "fiche Events absente"
+            cible = vers or DN_SUITE.get(depuis)
+            if cible is None:
+                return False, f"pas de suite pour {depuis}"
+            if vers is not None and vers != DN_SUITE.get(depuis):
+                return False, f"transition {depuis} → {vers} non autorisée"
 
+        # Seuls des champs de premier niveau sont modifiés ci-dessous.
+        # Le snapshot permet d'annuler TOUTE la transition si le commit
+        # échoue, y compris la fermeture des inscriptions en COZY.
+        avant = dn_state.copy()
         # ── mutations métier ──
         if depuis == "COZY":
-            # La photo ferme les inscriptions. Les présences sont figées
-            # ici ; l'appartenance absente ne dépend d'aucun calcul.
+            # La photo ferme les inscriptions. On le committe ICI, avant
+            # tout appel réseau : si Discord tombe pendant l'envoi de la
+            # photo, les inscriptions restent fermées malgré tout.
+            dn_state["inscriptions_fermees"] = True
             dn_state["presences"] = len(dn_state["participants"])
             dn_state["appartenances_absentes"] = 1
 
@@ -9741,8 +9781,49 @@ async def dn_transition(vers=None, force=False):
         dn_state["phase_deadline"] = (
             0.0 if cible in DN_TERMINAUX
             else _dn_time.time() + dn_duree(cible))
-        dn_sauver()                       # ← COMMIT avant tout Discord
+        if not dn_sauver():               # ← COMMIT avant tout Discord
+            dn_state.clear()
+            dn_state.update(avant)
+            return False, "persistance échouée"
         return True, cible
+
+
+async def dn_photo_ancre():
+    """Matérialise la photo-ancre : la liste immuable des participants.
+
+    Idempotente par l'état : si photo_message_id existe déjà, on ne
+    renvoie rien. Le cas impossible à rendre parfaitement exactly-once
+    est documenté § du rapport : si Discord accepte l'envoi et que le
+    process meurt avant le persist, un doublon apparaîtra au restart.
+    Le marqueur en pied de page permet de le reconnaître — et une photo
+    en double vaut mieux que pas de photo du tout."""
+    if dn_state.get("photo_message_id") is not None:
+        return None
+    gid = dn_state.get("guild_id")
+    g = bot.get_guild(gid) if gid else None
+    ch = g.get_channel(dn_state.get("salon_principal_id")) if g else None
+    if ch is None:
+        return None
+    noms = []
+    for u in dn_state.get("participants", []):
+        m = g.get_member(int(u)) if str(u).isdigit() else None
+        noms.append(m.display_name if m else f"<@{u}>")
+    e = discord.Embed(
+        title="📸  CEUX QUI SONT LÀ",
+        description=("\n".join(f"· {n}" for n in noms[:60])
+                     + (f"\n*… et {len(noms)-60} autres*" if len(noms) > 60 else "")
+                     ) if noms else "*Personne.*",
+        color=season_color("neutre"))
+    e.set_footer(text=f"{len(noms)} · {dn_state.get('run_id','')}")
+    try:
+        msg = await ch.send(embed=e)
+    except Exception as ex:
+        print(f"[DN] photo-ancre non envoyée : {type(ex).__name__} — "
+              f"les inscriptions restent fermées, on réessaiera.")
+        return None
+    dn_state["photo_message_id"] = getattr(msg, "id", None) or -1
+    dn_sauver()
+    return msg
 
 
 async def dn_effet_phase(phase):
@@ -9780,10 +9861,17 @@ async def dn_superviseur():
             if dn_stoppe() or dn_fiche() is None:
                 return
             dl = dn_state.get("phase_deadline") or 0
+            # Rattrapage : la photo peut manquer si Discord était tombé
+            # ou si le process est mort entre le commit et l'envoi.
+            if dn_state.get("inscriptions_fermees") \
+                    and dn_state.get("photo_message_id") is None:
+                await dn_photo_ancre()
             if dl and _dn_time.time() >= dl:
                 avant = dn_state.get("phase")
                 ok, res = await dn_transition()
                 if ok:
+                    if res == "MIDNIGHT":
+                        await dn_photo_ancre()
                     await dn_effet_phase(res)
                 elif res in ("event stoppé", "fiche Events absente"):
                     return
@@ -9828,7 +9916,9 @@ def dn_inscrire(uid):
         return "deja"
     if uid in dn_state.get("spectateurs", []):
         return "deja_spectateur"
-    if dn_state.get("photo_message_id") is not None:
+    # On lit l'état métier, jamais « est-ce que Discord a réussi ? ».
+    # Si l'envoi de la photo échoue, les inscriptions restent fermées.
+    if dn_state.get("inscriptions_fermees"):
         dn_state["spectateurs"].append(uid)
         dn_sauver()
         return "spectateur"
@@ -9865,6 +9955,265 @@ class DNRejoindreView(ui.View):
 
 
 # ── Reprise au démarrage ──
+#
+# Une fiche appartient à UN lancement ou run. Seul le lancement qui l'a
+# inscrite, ou son run, écrit son dn_run_id ; la protection (étape A) et la
+# reprise (étape B) ne l'écrivent que sur une fiche qu'elles viennent de
+# créer, ou sur une fiche qui porte déjà ce même identifiant. L'égalité des
+# identifiants dit donc à qui appartient une fiche : une fiche sans
+# dn_run_id n'est à personne d'autre qu'à son lancement, qui attend
+# peut-être encore son annonce.
+
+def dn_proprietaire_vivant():
+    """Un propriétaire de La Dernière Nuit vit-il dans ce processus ? (une
+    fiche DN dont la task n'est pas terminée, sur n'importe quel serveur :
+    dn_state est unique)."""
+    for registre in events_actifs.values():
+        t = (registre.get(DN_CLE) or {}).get("task")
+        if t is not None and not t.done():
+            return True
+    return False
+
+
+def dn_place(gid, run_id):
+    """À qui appartient la place de La Dernière Nuit sur ce serveur, vue
+    depuis le run sauvegardé `run_id` ?
+
+    « libre »        aucune fiche ;
+    « tenue »        la fiche de CE run, avec un propriétaire vivant ;
+    « a_reprendre »  la fiche de CE run sans propriétaire vivant : fiche de
+                     protection posée par l'étape A, ou fiche laissée par ce
+                     run en suspension ;
+    « autre »        toute autre fiche : un lancement en cours — même sans
+                     task ni dn_run_id —, ou un autre run.
+    En cas de conflit, la fiche inscrite garde la place : la protection et
+    la reprise ne l'adoptent pas et n'y écrivent rien. dn_state étant
+    unique, une fiche DN sur un AUTRE serveur tient elle aussi la place."""
+    cle = int(gid) if gid is not None else None
+    for autre_gid, registre in events_actifs.items():
+        if autre_gid != cle and registre.get(DN_CLE) is not None:
+            return "autre", registre[DN_CLE]
+    f = event_actifs_guild(gid).get(DN_CLE) if gid is not None else None
+    if f is None:
+        return "libre", None
+    if not run_id or f.get("dn_run_id") != run_id:
+        return "autre", f
+    t = f.get("task")
+    if t is not None and not t.done():
+        return "tenue", f
+    return "a_reprendre", f
+
+
+def dn_proteger_avant_nettoyage():
+    """ÉTAPE A — à appeler AVANT event_nettoyer_orphelins().
+
+    Le nettoyeur ne considère actif qu'un salon référencé dans
+    events_actifs. Après un vrai redémarrage, le finale n'y est pas
+    encore : son salon serait reconnu comme orphelin et supprimé,
+    et dn_reprendre() ne trouverait plus rien à reprendre.
+
+    Cette fonction ne fait QUE réenregistrer la fiche. Aucun
+    superviseur, aucune View, aucune transition, aucun message,
+    aucun salon créé. Elle ne crée une fiche que si la place est libre
+    et ne modifie jamais une fiche existante (voir dn_place)."""
+    # Un propriétaire vit déjà dans ce processus (reconnexion, ou lancement
+    # traité avant on_ready) : sa mémoire fait foi. Le disque n'est pas relu
+    # — il peut être en retard sur elle, ou illisible, et dn_charger() la
+    # remplacerait — et aucune fiche n'est touchée : la sienne protège déjà
+    # son salon.
+    if dn_proprietaire_vivant():
+        print("[DN] Un propriétaire est actif : mémoire conservée, disque non relu.")
+        return None
+    d = dn_charger()
+    # Un état sans identifiant de run (fichier altéré) ne peut appartenir à
+    # aucune fiche : rien à protéger.
+    if not d or d.get("phase") in DN_TERMINAUX or not d.get("run_id"):
+        return None
+    # Un run arrêté par un admin dans ce processus n'est ni protégé ni repris
+    # (dn_reprendre applique la même règle) — même si ABORTED n'a pas pu être
+    # écrit. Un on_ready rejoué pendant son `.stopevent` ne doit pas lui
+    # recréer une fiche que plus personne ne possède. Même règle pour un run
+    # terminé d'une autre façon dans ce processus (dn_runs_clos) : sa fin est
+    # déjà engagée — s'il avait un wrapper, celui-ci a programmé la
+    # fermeture de son salon.
+    if d.get("run_id") in dn_arrets_admin or d.get("run_id") in dn_runs_clos:
+        return None
+    gid = d.get("guild_id")
+    g = bot.get_guild(gid) if gid else None
+    if g is None:
+        return None
+    ch = g.get_channel(d.get("salon_principal_id") or 0)
+    if ch is None:
+        return None
+    place, fiche = dn_place(gid, d.get("run_id"))
+    if place == "autre":
+        # Un autre lancement tient la place : on n'adopte pas sa fiche, on
+        # n'y écrit rien, et ce run n'est pas protégé. L'état sauvegardé
+        # n'est pas réécrit non plus.
+        print(f"[DN] Protection de {d.get('run_id')} refusée : "
+              f"la place est tenue par un autre lancement.")
+        return None
+    if fiche is None:
+        fiche = event_enregistrer(gid, DN_CLE, "🕯️ La Dernière Nuit",
+                                  salon=ch, fam="event")
+        fiche["dn_run_id"] = d.get("run_id")
+    print(f"[DN] Salon du finale protégé avant nettoyage ({d['phase']}).")
+    return d
+
+
+# ── Fin d'un propriétaire : abandon définitif ou suspension reprenable ──
+#
+# Trois sorties bien distinctes (arbitrage 3.2.1.4) :
+#   · stop     — `.stopevent` : ABORTED persisté, nettoyage, jamais repris.
+#   · abandon  — exception métier, annulation sans cause connue, sortie
+#                prématurée non terminale : ABORTED. Jamais FINISHED.
+#   · suspension — le PROCESSUS s'arrête : on n'écrit rien, on ne
+#                nettoie rien. Le dernier état persisté est le point de
+#                reprise ; salon, fiche et suivi restent en place.
+# Un état déjà terminal reste terminal dans tous les cas.
+#
+# Une CancelledError seule ne dit pas que le processus s'arrête. D'où un
+# témoin : une task que PERSONNE n'annule. asyncio.run() — donc
+# bot.run() — annule toutes les tasks restantes d'un seul geste
+# (task.cancel() sur chacune) AVANT de laisser tourner le moindre
+# finalizer. Si le témoin est en cours d'annulation quand un finalizer
+# DN s'exécute, la boucle se ferme : l'information est disponible avant
+# tout finalizer, quel que soit leur ordre.
+
+async def _dn_temoin_vit():
+    await asyncio.Event().wait()        # ne se termine que par annulation
+
+
+def dn_armer_temoin():
+    """Un témoin par boucle, créé par chaque propriétaire au démarrage."""
+    global _dn_temoin
+    boucle = asyncio.get_running_loop()
+    t = _dn_temoin
+    if t is None or t.done() or t.get_loop() is not boucle:
+        _dn_temoin = boucle.create_task(_dn_temoin_vit(), name="dn:temoin-arret")
+    return _dn_temoin
+
+
+def dn_arret_processus():
+    """La boucle d'événements est-elle en train de fermer ?"""
+    t = _dn_temoin
+    if t is None:
+        return False
+    try:
+        if t.get_loop() is not asyncio.get_running_loop():
+            return False
+    except RuntimeError:
+        return False
+    return t.done() or t.cancelling() > 0
+
+
+def dn_hors_de_portee(run_id=None):
+    """Plus rien à abandonner pour ce run : aucun état, un terminal, ou
+    l'état d'un AUTRE run — auquel on ne touche jamais."""
+    return (not dn_state or dn_state.get("phase") in DN_TERMINAUX
+            or (run_id is not None and dn_state.get("run_id") != run_id))
+
+
+def dn_qualifier_sortie(fiche, sortie, run_id=None):
+    """Qualifie la sortie d'un propriétaire du lifecycle.
+
+    `sortie` : "fin" (boucle terminée), "annulation" (CancelledError),
+    "exception" (Exception), "arret" (KeyboardInterrupt/SystemExit),
+    "fermeture" (GeneratorExit : coroutine détruite, aucun await possible).
+    `fiche` est l'objet fiche DE CE RUN, gardé en main : son drapeau
+    `stopping` reste lisible même si une autre task l'a retiré du registre.
+    """
+    if sortie == "fermeture":
+        # Coroutine détruite : plus aucun await possible, rien ne peut être
+        # écrit — quel que soit l'état, on ne fait que s'arrêter.
+        return "suspension"
+    if dn_hors_de_portee(run_id):
+        return "terminal"
+    if (fiche is not None and fiche.get("stopping")) \
+            or dn_state.get("run_id") in dn_arrets_admin:
+        return "stop"
+    if sortie == "arret":
+        return "suspension"
+    if sortie in ("annulation", "fin") and dn_arret_processus():
+        return "suspension"
+    return "abandon"
+
+
+def dn_suspendre(fiche, run_id=None, sortie=""):
+    """Arrêt du processus. Synchrone : aucun await, donc sûr même pendant
+    la destruction d'une coroutine. Les tasks locales s'arrêtent ; l'état,
+    la fiche, le suivi du salon et le salon ne sont PAS touchés."""
+    if fiche is not None:
+        fiche["suspendu"] = True
+    try:
+        dn_arreter_superviseur()
+    except Exception:
+        pass                            # boucle déjà fermée : rien ne tourne plus
+    if dn_state and dn_state.get("phase") not in DN_TERMINAUX:
+        try:
+            print(f"[DN] Arrêt du processus ({sortie}) : {run_id or dn_state.get('run_id')} "
+                  f"suspendu en {dn_state.get('phase')} — reprise au prochain démarrage.")
+        except Exception:
+            pass
+
+
+async def dn_terminer_run(run_id=None):
+    """Arrête l'enfant et persiste l'abandon d'un run non terminé.
+
+    Un incident disque transitoire bénéficie de trois essais bornés.
+    Un disque durablement indisponible reste une erreur explicite :
+    on ne prétend jamais avoir enregistré ABORTED dans ce cas.
+
+    Si l'état est devenu terminal (ou celui d'un autre run) pendant
+    l'attente du lock, ce n'est pas un échec : on le reconnaît, on n'y
+    touche pas, et aucune alerte n'est émise.
+    """
+    if run_id:
+        dn_runs_clos.add(run_id)        # plus jamais protégé ni repris dans ce processus
+    dn_arreter_superviseur()
+    raison = "état inconnu"
+    for essai in range(3):
+        if dn_hors_de_portee(run_id):
+            return
+        ok, raison = await dn_transition(terminal="ABORTED", run_id=run_id)
+        if ok:
+            return
+        if raison != "persistance échouée":
+            break
+        if essai < 2:
+            await asyncio.sleep(0.05 * (essai + 1))
+    if dn_hors_de_portee(run_id):
+        return                          # terminal atteint pendant l'attente du lock
+    message = f"[DN] ABANDON NON PERSISTÉ : {raison} — état précédent conservé."
+    print(message)
+    raise RuntimeError(message)
+
+
+async def dn_arret_administratif(fiche):
+    """`.stopevent` sur le finale, appelé par event_stopper APRÈS l'arrêt
+    du propriétaire et AVANT la suppression du salon.
+
+    La cause est notée par run_id, puis ABORTED est persisté s'il ne l'est
+    pas déjà — y compris quand aucun propriétaire n'existait encore pour
+    l'écrire (stop pendant le démarrage d'une reprise). Disque refusé :
+    erreur explicite, jamais un faux succès ; le run ne sera pas repris
+    dans ce processus, dn_reprendre() lisant dn_arrets_admin.
+
+    Seul le run inscrit SUR la fiche est visé : une fiche qui n'a encore
+    porté aucun run (lancement pas démarré) ne touche à rien d'autre.
+    Renvoie True (abandon enregistré ou déjà terminal), False (disque
+    refusé) ou None (aucun run rattaché à cette fiche)."""
+    run_id = (fiche or {}).get("dn_run_id")
+    if not run_id:
+        return None
+    dn_arrets_admin.add(run_id)
+    try:
+        await dn_terminer_run(run_id)
+    except RuntimeError as ex:
+        print(f"[DN] .stopevent : {ex}")
+        return False
+    return True
+
 
 async def dn_reprendre():
     """Rétablit un finale interrompu.
@@ -9874,41 +10223,175 @@ async def dn_reprendre():
     le superviseur, et s'il manque des transitions il les appliquera
     une par une, au rythme du tick. Un arrêt long ne doit pas faire
     défiler cinq phases narratives en une seconde."""
-    d = dn_charger()
+    # L'étape A a peut-être déjà chargé l'état : on ne relit le disque
+    # que si la mémoire est vide, pour ne pas écraser une protection
+    # déjà en place.
+    d = dn_state if dn_state.get("run_id") else dn_charger()
     if not d:
         return None
     if d.get("phase") in DN_TERMINAUX:
         print(f"[DN] Dernier run {d.get('run_id')} : {d.get('phase')}. "
               f"Rien à reprendre.")
         return None
-
+    run_id = d.get("run_id")
+    if not run_id:
+        # Un état sans identifiant de run (fichier altéré) ne peut appartenir
+        # à aucune fiche : il n'est ni repris ni abandonné.
+        print("[DN] État sauvegardé sans identifiant de run — ignoré.")
+        return None
     gid = d.get("guild_id")
+    # La place d'abord (voir dn_place). Un propriétaire vivant de CE run :
+    # rien à faire — et surtout aucun des chemins d'abandon ci-dessous.
+    place, tenante = dn_place(gid, run_id)
+
+    def liberer_sa_fiche():
+        # Un run qui n'est pas repris ne garde pas la place : sa fiche sans
+        # propriétaire (protection de l'étape A, ou fiche laissée en
+        # suspension) quitte le registre. Seule celle de CE run est visée.
+        f = event_actifs_guild(gid).get(DN_CLE) if gid is not None else None
+        t = (f or {}).get("task")
+        if f is not None and f.get("dn_run_id") == run_id and (t is None or t.done()):
+            event_arreter_vues(f)
+            event_desenregistrer(gid, DN_CLE)
+
+    if place == "tenue":
+        # on_ready peut être rappelé après une reconnexion : ni second
+        # propriétaire du lifecycle, ni second superviseur, ni autre View.
+        if tenante.get("stopping"):
+            return None
+        if tenante.get("task_prete") is not None:
+            await tenante["task_prete"].wait()
+        return d
+    # Une fiche d'un autre lancement ou run : elle garde la place, ce run
+    # n'est pas repris, et rien n'est écrit — ni sur sa fiche, ni dans
+    # l'état sauvegardé. Si ce run-là démarre, son premier enregistrement
+    # remplace l'état ; sinon, le prochain passage, place libre, reprend ou
+    # abandonne ce run selon les règles habituelles.
+    if place == "autre":
+        print(f"[DN] {run_id} non repris : la place est tenue par un autre lancement.")
+        liberer_sa_fiche()
+        return None
+    # Un `.stopevent` a pu viser ce run pendant le démarrage, entre la
+    # protection et ici : sa fiche a alors quitté le registre. La cause
+    # est gardée par run_id — un run arrêté par un admin ne revit jamais,
+    # pas plus qu'un run terminé d'une autre façon dans ce processus.
+    if run_id in dn_arrets_admin or run_id in dn_runs_clos:
+        cause = ".stopevent" if run_id in dn_arrets_admin else "abandon ou fin"
+        print(f"[DN] {run_id} non repris : terminé dans ce processus ({cause}).")
+        try:
+            await dn_terminer_run(run_id)
+        except RuntimeError as ex:
+            print(f"[DN] reprise refusée après {cause} : {ex}")
+        liberer_sa_fiche()
+        return None
+
     g = bot.get_guild(gid) if gid else None
     if g is None:
-        print(f"[DN] ⚠️ Guild {gid} introuvable — run abandonné.")
-        dn_state["phase"] = "ABORTED"
-        dn_sauver()
+        print(f"[DN] ⚠️ Guild {gid} introuvable — abandon du run.")
+        try:
+            await dn_terminer_run(run_id)     # ABORTED, ou erreur explicite
+        except RuntimeError as ex:
+            print(f"[DN] reprise impossible : {ex}")
+        liberer_sa_fiche()
         return None
 
     sid = d.get("salon_principal_id")
     ch = g.get_channel(sid) if sid else None
     if ch is None:
-        print(f"[DN] ⚠️ Salon principal {sid} disparu — run abandonné.")
-        dn_state["phase"] = "ABORTED"
-        dn_sauver()
+        print(f"[DN] ⚠️ Salon principal {sid} disparu — abandon du run.")
+        try:
+            await dn_terminer_run(run_id)     # ABORTED, ou erreur explicite
+        except RuntimeError as ex:
+            print(f"[DN] reprise impossible : {ex}")
+        liberer_sa_fiche()
         return None
+    # Même règle qu'au lancement (lancer_event_standard) : le salon repris
+    # n'est pas soumis au nettoyeur d'inactivité. salons_temporaires n'est
+    # pas persisté, donc normalement vide ici ; le retrait garantit
+    # l'invariant même si une inscription avait survécu au redémarrage.
+    salons_temporaires.pop(ch.id, None)
 
-    # Réintégration au registre Events 2.0 si la fiche a disparu.
-    if event_actifs_guild(gid).get(DN_CLE) is None:
-        event_enregistrer(gid, DN_CLE, "🕯️ La Dernière Nuit",
-                          salon=ch, fam="event")
+    # Réintégration au registre Events 2.0 si la fiche a disparu. Aucun
+    # await depuis dn_place : c'est la fiche classée plus haut (place libre,
+    # ou fiche de CE run sans propriétaire). Les deux contrôles suivants
+    # sont défensifs.
+    fiche = event_actifs_guild(gid).get(DN_CLE)
+    if fiche is None:
+        fiche = event_enregistrer(gid, DN_CLE, "🕯️ La Dernière Nuit",
+                                 salon=ch, fam="event")
+    if fiche.get("stopping"):
+        return None
+    tache = fiche.get("task")
+    if tache is not None and not tache.done():
+        # on_ready peut être rappelé après une reconnexion : ni second
+        # propriétaire du lifecycle, ni second superviseur, ni autre View.
+        if fiche.get("task_prete") is not None:
+            await fiche["task_prete"].wait()
+        return d
+    fiche["dn_run_id"] = run_id
+    fiche.pop("suspendu", None)
 
     try:
-        bot.add_view(DNRejoindreView(d["run_id"]))
+        vue = DNRejoindreView(d["run_id"])
+        bot.add_view(vue)
+        event_attacher_vue(gid, DN_CLE, vue)
     except Exception as e:
         print(f"[DN] vue d'inscription non restaurée : {type(e).__name__}")
 
-    dn_lancer_superviseur(g)
+    pret = asyncio.Event()
+    fiche["task_prete"] = pret
+
+    async def suivre_reprise():
+        # Aucun schéma neuf, aucun salon neuf, aucun nouveau run_id.
+        # Cette task possède le lifecycle que le wrapper possédait avant
+        # le redémarrage ; le superviseur reste seul maître du temps.
+        sortie = "fin"
+        try:
+            dn_armer_temoin()
+            dn_lancer_superviseur(g)
+            pret.set()
+            while dn_actif() and not dn_stoppe():
+                await asyncio.sleep(DN_TICK)
+        except asyncio.CancelledError:
+            sortie = "annulation"
+            raise
+        except GeneratorExit:
+            sortie = "fermeture"
+            raise
+        except (KeyboardInterrupt, SystemExit):
+            sortie = "arret"
+            raise
+        except Exception as ex:
+            sortie = "exception"
+            print(f"[DN] reprise interrompue : {type(ex).__name__}: {ex}")
+        finally:
+            pret.set()
+            if dn_qualifier_sortie(fiche, sortie, run_id) == "suspension":
+                # Arrêt du processus : rien n'est écrit, rien n'est nettoyé.
+                # Fiche, suivi et salon restent en place pour la reprise.
+                dn_suspendre(fiche, run_id, sortie)
+            else:
+                try:
+                    await dn_terminer_run(run_id)
+                except Exception as ex:
+                    # dn_terminer_run a déjà signalé l'échec durable.
+                    print(f"[DN] terminaison de reprise : {type(ex).__name__}: {ex}")
+                finally:
+                    # Ne jamais retirer la fiche d'un éventuel autre run.
+                    if event_actifs_guild(gid).get(DN_CLE) is fiche:
+                        event_arreter_vues(fiche)
+                        event_desenregistrer(gid, DN_CLE)
+                        if not fiche.get("stopping"):
+                            asyncio.create_task(close_event_channel(ch, EVENT_FERMETURE_DELAI))
+                        # Lors d'un stop, event_stopper attend cette task puis
+                        # supprime lui-même le salon : aucune double suppression.
+
+    fiche["task"] = asyncio.create_task(
+        suivre_reprise(), name=f"event:{gid}:{DN_CLE}:reprise")
+    fiche["task"].add_done_callback(lambda _t: pret.set())
+    # À notre retour, le try/finally du propriétaire est effectivement
+    # entré : un stop immédiat ne peut plus annuler une task non démarrée.
+    await pret.wait()
     retard = _dn_time.time() - (d.get("phase_deadline") or 0)
     print(f"[DN] Reprise de {d['run_id']} en phase {d['phase']} "
           f"({'échéance dépassée' if retard > 0 else 'en cours'}).")
@@ -9922,13 +10405,26 @@ async def run_derniere_nuit(channel, guild):
 
     Ce run_* ne joue rien lui-même : il installe l'état et laisse le
     superviseur conduire. C'est ce qui rend le finale reprenable."""
+    # La fiche de CE run, gardée en main : son drapeau `stopping` reste
+    # lisible même si une autre task la retire du registre.
+    fiche = event_actifs_guild(guild.id).get(DN_CLE)
+    run_id = None
+    sortie = "fin"
     try:
+        dn_armer_temoin()
         dn_state.clear()
         dn_state.update(dn_schema(f"dn2026-{int(_dn_time.time())}", guild.id))
+        run_id = dn_state["run_id"]
+        # Le run_id est à la seconde : un run relancé dans la même seconde
+        # qu'un run stoppé ne doit pas hériter de son arrêt.
+        dn_arrets_admin.discard(run_id)
+        if fiche is not None:
+            fiche["dn_run_id"] = run_id
         dn_state["salon_principal_id"] = channel.id
         dn_state["phase_started_at"] = _dn_time.time()
         dn_state["phase_deadline"] = _dn_time.time() + dn_duree("LOBBY")
-        dn_sauver()
+        if not dn_sauver():
+            raise RuntimeError("[DN] État initial non persisté — lancement interrompu.")
 
         vue = DNRejoindreView(dn_state["run_id"])
         event_attacher_vue(guild.id, DN_CLE, vue)
@@ -9945,13 +10441,27 @@ async def run_derniere_nuit(channel, guild):
         # porter nous-mêmes la progression.
         while dn_actif() and not dn_stoppe():
             await asyncio.sleep(DN_TICK)
+    except asyncio.CancelledError:
+        sortie = "annulation"
+        raise
+    except GeneratorExit:
+        sortie = "fermeture"
+        raise
+    except (KeyboardInterrupt, SystemExit):
+        sortie = "arret"
+        raise
+    except Exception:
+        sortie = "exception"
+        raise
     finally:
-        # Une task enfant ne meurt pas avec son parent : on l'annule
-        # même si le run sort par exception.
-        dn_arreter_superviseur()
-        if dn_state and dn_state.get("phase") not in DN_TERMINAUX:
-            dn_state["phase"] = "ABORTED" if dn_stoppe() else "FINISHED"
-            dn_sauver()
+        # Une task enfant ne meurt pas avec son parent : le superviseur
+        # est arrêté dans les deux branches.
+        if dn_qualifier_sortie(fiche, sortie, run_id) == "suspension":
+            # Arrêt du processus : le wrapper lira fiche["suspendu"] et ne
+            # fermera pas le salon. Rien n'est écrit.
+            dn_suspendre(fiche, run_id, sortie)
+        else:
+            await dn_terminer_run(run_id)
 
 def possessions_lire(uid):
     """Toutes les possessions d'un membre, lues dans les systèmes d'origine.
@@ -15228,6 +15738,18 @@ async def lancer_event_standard(guild, salon_annonce, cle, fn=None):
         return False, f"La fonction `{ev['fn']}` est introuvable."
     gid = guild.id
     fam = ev.get("fam", "event")
+    # Qui est annulé ? `.stopevent` annule la task ENFANT (fiche["task"]).
+    # L'arrêt du processus, ou l'annulation du scheduler, annule la task
+    # qui EXÉCUTE ce wrapper. Pendant qu'elle attend l'enfant, seule une
+    # demande d'annulation NOUVELLE la vise : le compteur est relevé juste
+    # avant cette attente, jamais plus tôt — un compteur laissé haut par
+    # du code antérieur (annonce, appelant) ne peut pas tromper le test.
+    executante = asyncio.current_task()
+    annulations_avant = None
+
+    def executante_annulee():
+        return (executante is not None and annulations_avant is not None
+                and executante.cancelling() > annulations_avant)
 
     # ── Saison : un event de saison ne se lance que pendant la sienne ──
     _sai = ev.get("saison")
@@ -15237,13 +15759,24 @@ async def lancer_event_standard(guild, salon_annonce, cle, fn=None):
                        f"Il n'est pas de saison.")
 
     # ── Garde-fou : un seul event bloquant à la fois ──
-    if cle in event_actifs_guild(gid):
-        return False, f"**{ev['nom']}** est déjà en cours."
-    if fam in EVENT_FAMILLES_EXCLUSIVES:
-        occupe = event_exclusif_en_cours(gid)
-        if occupe:
-            autre = EVENTS_CATALOGUE.get(occupe, {}).get("nom", occupe)
-            return False, f"**{autre}** occupe déjà le serveur. Attends la fin."
+    # Vérifié avant la création du salon, puis REVÉRIFIÉ juste après : cette
+    # création est un await, pendant lequel un autre lancement a pu
+    # s'inscrire. Entre la seconde vérification et l'inscription, aucun
+    # await : une clé n'a jamais deux fiches, un serveur jamais deux events
+    # bloquants.
+    def occupation():
+        if cle in event_actifs_guild(gid):
+            return f"**{ev['nom']}** est déjà en cours."
+        if fam in EVENT_FAMILLES_EXCLUSIVES:
+            occupe = event_exclusif_en_cours(gid)
+            if occupe:
+                autre = EVENTS_CATALOGUE.get(occupe, {}).get("nom", occupe)
+                return f"**{autre}** occupe déjà le serveur. Attends la fin."
+        return None
+
+    refus = occupation()
+    if refus:
+        return False, refus
 
     # ── Salon dédié, ou rien ──
     salon = None
@@ -15255,37 +15788,93 @@ async def lancer_event_standard(guild, salon_annonce, cle, fn=None):
         if salon is None:
             # Pas de repli : jouer dans le salon Event est exclu.
             return False, "Event annulé — le helper n'a retourné aucun salon temporaire."
+        if cle == DN_CLE:
+            # Le salon de La Dernière Nuit n'appartient pas au nettoyeur
+            # d'inactivité : une phase longue sans message humain n'est pas
+            # un abandon. create_event_channel vient de l'inscrire dans
+            # salons_temporaires ; on l'en retire aussitôt, sans le moindre
+            # await entre les deux — l'annonce, qui peut traîner, vient
+            # après. Rien ne l'y réinscrit ensuite (on_message ne fait que
+            # rafraîchir une entrée présente). Fiche Events et
+            # event_salons_suivis restent : reprise et nettoyage normal
+            # (FINISHED, `.stopevent`) en dépendent.
+            salons_temporaires.pop(salon.id, None)
+        refus = occupation()
+        if refus:
+            # Un autre lancement s'est inscrit pendant la création : ce
+            # salon neuf n'appartient à personne, il repart aussitôt.
+            await _event_supprimer_salon(salon)
+            return False, refus
 
-    event_enregistrer(gid, cle, ev["nom"], salon=salon, fam=fam)
+    # La fiche de CE lancement, gardée en main jusqu'au bout : c'est la seule
+    # que ce wrapper démarre, nettoie ou désinscrit. Pendant l'annonce,
+    # `.stopevent` peut la retirer du registre et un nouveau lancement y
+    # inscrire la sienne sous la même clé : le registre ne désigne alors
+    # plus ce lancement-ci.
+    fiche = event_enregistrer(gid, cle, ev["nom"], salon=salon, fam=fam)
     try:
         if salon is not None and salon_annonce is not None:
             await annoncer_event(guild, salon_annonce, ev.get("ping", "everyone"),
                                  discord.Embed(title=ev["nom"],
                                                description=ev.get("desc", ""),
                                                color=0x9b59b6), salon)
+        # Arrêté pendant l'annonce (fiche marquée ou retirée), ou remplacé
+        # par un autre lancement : ce lancement se termine ici, sans run.
+        # Rien ne peut s'intercaler entre ce contrôle et la création de la
+        # task ci-dessous (aucun await).
+        if fiche.get("stopping") or event_actifs_guild(gid).get(cle) is not fiche:
+            print(f"[Event] {cle} arrêté pendant son annonce — run non démarré")
+            return False, f"Lancement de **{ev['nom']}** arrêté pendant son annonce."
         cible = salon if salon is not None else salon_annonce
         # La coroutine tourne dans une task nommée : `.stopevent` a besoin
         # d'un objet à annuler, pas seulement d'un drapeau à lever.
         tache = asyncio.create_task(fn(cible, guild), name=f"event:{gid}:{cle}")
-        fiche = event_actifs_guild(gid).get(cle)
-        if fiche is not None:
-            fiche["task"] = tache
+        fiche["task"] = tache
+        annulations_avant = executante.cancelling() if executante is not None else 0
         await tache
+        if executante_annulee():
+            # Annulé pendant l'attente, mais l'enfant a absorbé l'annulation
+            # qui lui a été transmise : celle du wrapper reste due.
+            raise asyncio.CancelledError
         return True, None
     except asyncio.CancelledError:
-        # Arrêt d'urgence : le finally nettoie, on ne remonte pas l'erreur.
+        # La task qui exécute le wrapper est annulée — pendant l'annonce,
+        # avant toute attente de l'enfant, ou pendant cette attente (arrêt
+        # du processus, scheduler annulé) : l'annulation remonte, APRÈS le
+        # nettoyage du finally. L'avaler rendrait la main au parent — le
+        # scheduler est un tasks.loop qui repartirait pour un tour — et
+        # asyncio.run() attendrait indéfiniment sa fin. La Dernière Nuit
+        # suspendue remonte de même ; la qualification de sa sortie (arrêt
+        # prouvé, stop, abandon) reste faite par son run_*, pas ici.
+        if annulations_avant is None or executante_annulee() or fiche.get("suspendu"):
+            raise
+        # `.stopevent` n'a annulé que l'enfant : le finally nettoie, on rend
+        # la main sans remonter l'erreur — le scheduler reste utilisable.
         print(f"[Event] {cle} annulé par un arrêt d'urgence")
         return False, None
     except Exception as e:
         print(f"[Event] {cle} interrompu : {type(e).__name__}: {e}")
+        if executante_annulee():
+            # L'enfant a transformé l'annulation transmise en exception :
+            # le wrapper, lui, a bien été annulé — ça remonte.
+            raise asyncio.CancelledError from e
         return False, f"**{ev['nom']}** s'est interrompu."
     finally:
-        fiche = event_actifs_guild(gid).get(cle)
-        event_arreter_vues(fiche)
-        event_desenregistrer(gid, cle)
-        if salon is not None:
+        # Seule la fiche de CE lancement est nettoyée, jamais celle d'un
+        # successeur enregistré entre-temps sous la même clé : ni ses vues,
+        # ni son inscription, ni son salon (`salon` est celui de ce
+        # lancement). Suspension reprenable (arrêt du processus) : le run_*
+        # a laissé fiche, suivi et salon en place pour la reprise — on n'y
+        # touche pas. Seule La Dernière Nuit pose ce drapeau : les autres
+        # events gardent exactement leur chemin.
+        suspendu = bool(fiche.get("suspendu"))
+        if not suspendu:
+            event_arreter_vues(fiche)
+            if event_actifs_guild(gid).get(cle) is fiche:
+                event_desenregistrer(gid, cle)
+        if salon is not None and not suspendu:
             # Un arrêt admin ne fait pas patienter : le salon part tout de suite.
-            urgence = bool((fiche or {}).get("stopping"))
+            urgence = bool(fiche.get("stopping"))
             try:
                 if urgence:
                     asyncio.create_task(_event_supprimer_salon(salon))
@@ -15325,7 +15914,18 @@ async def event_stopper(guild, cle):
     if f.get("stopping"):
         return False, None          # un autre .stopevent s'en occupe déjà
     f["stopping"] = True            # ① plus aucune attribution légitime
+    if cle == DN_CLE and f.get("dn_run_id"):
+        # Le run est marqué au même instant que sa fiche : un on_ready rejoué
+        # pendant ce stop (reconnexion) ne le protège ni ne le reprend, même
+        # après que son wrapper a désinscrit la fiche. ③bis le marque à
+        # nouveau (sans effet) avant d'écrire ABORTED.
+        dn_arrets_admin.add(f["dn_run_id"])
     nom = f.get("nom", cle)
+    # Une reprise peut tout juste avoir créé sa task. La laisser entrer
+    # dans son try/finally avant de l'annuler garantit sa terminaison.
+    # Les autres events n'ont pas cette barrière et gardent leur chemin.
+    if f.get("task_prete") is not None:
+        await f["task_prete"].wait()
     event_arreter_vues(f)           # ② les boutons deviennent inertes
     t = f.get("task")               # ③ on coupe la coroutine
     if t is not None and not t.done():
@@ -15336,9 +15936,19 @@ async def event_stopper(guild, cle):
             await asyncio.wait_for(asyncio.shield(t), timeout=3)
         except BaseException:
             pass                    # annulée, ou déjà finie : les deux conviennent
+    if cle == DN_CLE:
+        # ③bis La Dernière Nuit persiste son abandon AVANT que le salon ne
+        # parte, même sans propriétaire vivant pour l'écrire. No-op si le
+        # propriétaire l'a déjà fait. Disque refusé : l'admin le voit.
+        if await dn_arret_administratif(f) is False:
+            nom = f"{nom} — ⚠️ abandon NON enregistré (disque indisponible)"
     salon = guild.get_channel(f.get("salon_id")) if f.get("salon_id") else None
     await _event_supprimer_salon(salon)          # ④ immédiat
-    event_desenregistrer(gid, cle)               # ⑤ relançable
+    # ⑤ relançable — seulement si le registre désigne toujours CETTE fiche :
+    # pendant la suppression du salon, le wrapper de l'event a pu la retirer
+    # et un nouveau lancement s'enregistrer sous la même clé.
+    if event_actifs_guild(gid).get(cle) is f:
+        event_desenregistrer(gid, cle)
     return True, nom
 
 async def event_stopper_secretstory(guild):
@@ -15449,6 +16059,11 @@ async def event_nettoyer_orphelins(guild):
             event_salons_suivis.pop(cid, None)
     encore_actifs = {f.get("salon_id") for f in event_actifs_guild(guild.id).values()}
     for ch in candidats:
+        # Complété à CHAQUE salon : chaque suppression est un await, pendant
+        # lequel une fiche a pu s'inscrire (protection d'un on_ready
+        # concurrent, lancement). Un salon inscrit au début OU pendant ce
+        # passage n'est jamais supprimé par lui.
+        encore_actifs |= {f.get("salon_id") for f in event_actifs_guild(guild.id).values()}
         if ch.id in encore_actifs:
             ignores.append(ch.name)                 # un event tourne dedans
             continue
@@ -48327,6 +48942,15 @@ async def on_ready():
     # réenregistrée avant, donc son salon est reconnu et épargné.
     # Ne supprime que des salons prouvés : suivis en persistance, ou portant
     # le topic posé par create_event_channel.
+    # ── 🕯️ ÉTAPE A — protéger le finale AVANT le nettoyage ──
+    # Sans cela, le salon d'une Dernière Nuit interrompue serait vu
+    # comme un orphelin et supprimé avant que dn_reprendre() puisse
+    # le récupérer. On réenregistre sa fiche, rien de plus.
+    try:
+        dn_proteger_avant_nettoyage()
+    except Exception as e:
+        print(f"[DN] protection pré-nettoyage : {type(e).__name__}: {e}")
+
     for g in bot.guilds:
         try:
             sup, ign = await event_nettoyer_orphelins(g)
@@ -48335,9 +48959,9 @@ async def on_ready():
                       f"{', '.join(sup)}")
         except Exception as e:
             print(f"[Event] nettoyage des orphelins ignoré : {type(e).__name__}: {e}")
-    # ── 🕯️ Un finale interrompu reprend où il s'était arrêté ──
-    # Après le nettoyage des orphelins : le salon du finale est alors
-    # connu et protégé, il ne sera pas supprimé comme un résidu.
+    # ── 🕯️ ÉTAPE B — reprise complète du finale ──
+    # L'étape A (dn_proteger_avant_nettoyage) a déjà mis son salon à
+    # l'abri du nettoyeur ; ici on restaure la View et le superviseur.
     try:
         await dn_reprendre()
     except Exception as e:
