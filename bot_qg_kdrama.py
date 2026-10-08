@@ -91,7 +91,7 @@ class PageView(ui.View):
         return True
 
     def update_footer(self, embed):
-        embed.set_footer(text=f"Page {self.index+1}/{len(self.pages)}")
+        embed.set_footer(text=season_pied(f"Page {self.index+1}/{len(self.pages)}"))
         return embed
 
     @ui.button(emoji="◀️", style=discord.ButtonStyle.secondary)
@@ -1006,6 +1006,8 @@ ROASTS_QG = [
 async def on_message(message):
     if message.author.bot:
         return
+    if not donnees_charger():
+        return await bot.process_commands(message)      # la commande reçoit une réponse claire
     gazette_note(str(message.author.id), "messages")
 
     # Activité dans les salons temporaires
@@ -1060,10 +1062,10 @@ async def on_message(message):
                 f"*(PV • ATK • DEF • Endurance)*\n"
                 f"━━━━━━━━━━━━━━━━━━━━"
             ),
-            color=0xf1c40f
+            color=season_tint(0xf1c40f)
         )
         embed.set_thumbnail(url=message.author.display_avatar.url)
-        embed.set_footer(text=f"⚔️ Points dispo : {points_amelio[uid]}  •  .ameliorer pour les dépenser !")
+        embed.set_footer(text=season_pied(f"⚔️ Points dispo : {points_amelio[uid]}  •  .ameliorer pour les dépenser !"))
         # Envoyer dans le salon level up configuré ou dans le salon actuel
         levelup_channel = None
         if SALON_LEVELUP_ID:
@@ -1074,9 +1076,9 @@ async def on_message(message):
     if megaphone_actif.pop(uid, None) and not message.content.startswith(PREFIX):
         try:
             await message.channel.send(embed=discord.Embed(
-                title=f"📣  {message.author.display_name} prend la parole",
+                title=season_titre(f"📣  {season_brut(message.author.display_name)} prend la parole"),
                 description=f"# {message.content[:200]}",
-                color=0xf1c40f))
+                color=season_tint(0xf1c40f)))
         except Exception:
             pass
 
@@ -1097,6 +1099,8 @@ async def on_message(message):
 @bot.event
 async def on_voice_state_update(member, before, after):
     """Track le temps en vocal"""
+    if not donnees_charger():
+        return
     import time
     uid = str(member.id)
     if before.channel is None and after.channel is not None:
@@ -1115,9 +1119,20 @@ async def on_voice_state_update(member, before, after):
 #  HELP — 6 pages membres + 4 pages admin (masquées aux membres)
 #  Navigation : menu déroulant + boutons
 # ============================================================
+# Le nom de l'aide, par saison. Hors de cette table : présentation habituelle.
+HELP_NOM_SAISON = {"blackwood": "Le Grimoire d’Akari"}
+
 def _help_footer(embed, i, total):
     dots = "".join("●" if k == i else "○" for k in range(total))
-    embed.set_footer(text=f"Page {i+1}/{total}  •  {dots}  •  QG Kdrama 🌸")
+    nom = HELP_NOM_SAISON.get(saison_mode())
+    if nom:
+        # Le nom de l'aide en tête, le titre court de la page habillé, la
+        # pagination intacte. Les commandes des rubriques restent normales.
+        embed.set_author(name=f"📖 {deco_gothique(nom)}")
+        embed.title = season_titre(embed.title)
+        embed.set_footer(text=f"Page {i+1}/{total}  •  {dots}  •  {saison_valeur('footer')}")
+    else:
+        embed.set_footer(text=f"Page {i+1}/{total}  •  {dots}  •  QG Kdrama 🌸")
     return embed
 
 def build_help_pages(guild, is_admin=False):
@@ -1488,7 +1503,7 @@ def build_help_pages(guild, is_admin=False):
     e.add_field(name="📖 La Chronique", value=(
         "*Une histoire interactive où les choix du serveur changent réellement la suite.*\n"
         "`.chronique` — Où en est la série, et voter quand un choix s'ouvre\n"
-        "`.saison` — La saison en cours"
+        "`.chapitre` — Le chapitre en cours de la Chronique"
     ), inline=False)
     e.add_field(name="🌙 Ambiances & rendez-vous", value=(
         "`.nuit` — État du **Mode Nuit** 🌙 *(minuit → 6 h)*\n"
@@ -1548,10 +1563,10 @@ def build_help_pages(guild, is_admin=False):
         "`.drama-start` · `.drama-next` · `.drama-cast` · `.drama-tropes`\n"
         "`.drama-stop` · `.drama-reset`"
     ), inline=False)
-    e.add_field(name="🍂 Ambiance du serveur", value=(
-        "`.ambiance` — Mode saisonnier en cours\n"
-        "`.ambiance auto` — Suivre le calendrier\n"
-        "`.ambiance normal|blackwood|wintervale` — Forcer un mode"
+    e.add_field(name="🎃 Saison du serveur", value=(
+        "`.saison` — Mode effectif et état du skin des salons\n"
+        "`.saison auto` — Suivre le calendrier *(octobre : Blackwood)*\n"
+        "`.saison normal|blackwood|wintervale` — Forcer un mode"
     ), inline=False)
     pages.append(("🛡️", "Admin — Modération", e))
 
@@ -1841,7 +1856,7 @@ async def guide_cmd(ctx):
         e.add_field(name="📚 Explorer",
                     value="Choisis une rubrique ci-dessous.\n"
                           "*Besoin d'une commande précise ? → `.help`*", inline=False)
-        e.set_footer(text="`.help <commande>` pour le détail d'une commande")
+        e.set_footer(text=season_pied("`.help <commande>` pour le détail d'une commande"))
         if ctx.guild and ctx.guild.icon:
             e.set_thumbnail(url=ctx.guild.icon.url)
         return e
@@ -1851,9 +1866,9 @@ async def guide_cmd(ctx):
         if not p:
             return accueil()
         _c, _emo, _lab, titre, texte, cmds = p
-        e = discord.Embed(title=titre, description=texte, color=hab["couleur"])
+        e = discord.Embed(title=season_titre(titre), description=texte, color=hab["couleur"])
         e.add_field(name="⌨️ Pour commencer", value="\n".join(cmds), inline=False)
-        e.set_footer(text="Toutes les commandes → `.help`")
+        e.set_footer(text=season_pied("Toutes les commandes → `.help`"))
         return e
 
     class GuideView(ui.View):
@@ -1894,17 +1909,17 @@ async def help_cmd(ctx, recherche: str = None):
                              + (f"\n\nTu cherchais peut-être : "
                                 + " · ".join(f"`.{p}`" for p in proches) if proches else "")
                              + "\n\n*`.help` pour la liste complète.*"),
-                color=0xe74c3c))
+                color=season_tint(0xe74c3c)))
         # Une commande d'admin ne se documente pas pour tout le monde.
         est_admin = any("has_permissions" in getattr(x, "__qualname__", "")
                         or "is_owner" in getattr(x, "__qualname__", "")
                         for x in cmd.checks)
         if est_admin and not (ctx.guild and ctx.author.guild_permissions.administrator):
             return await ctx.send(embed=discord.Embed(
-                description=f"🔒 `.{cmd.name}` est réservée au staff.", color=0x95a5a6))
+                description=f"🔒 `.{cmd.name}` est réservée au staff.", color=season_tint(0x95a5a6)))
         e = discord.Embed(title=f"`.{cmd.name}`",
                           description=(cmd.help or "*Pas de description.*").strip(),
-                          color=0x5865F2)
+                          color=season_tint(0x5865F2))
         sig = cmd.signature.strip()
         e.add_field(name="📝 Usage", value=f"`.{cmd.name}{' ' + sig if sig else ''}`", inline=False)
         if cmd.aliases:
@@ -1912,7 +1927,7 @@ async def help_cmd(ctx, recherche: str = None):
                         value=" · ".join(f"`.{a}`" for a in cmd.aliases), inline=False)
         if est_admin:
             e.add_field(name="🛡️ Accès", value="Staff uniquement", inline=False)
-        e.set_footer(text="`.help` pour toutes les commandes  ·  `.guide` pour découvrir le QG")
+        e.set_footer(text=season_pied("`.help` pour toutes les commandes  ·  `.guide` pour découvrir le QG"))
         return await ctx.send(embed=e)
     pages = build_help_pages(ctx.guild, is_admin=False)
     view = HelpView(pages, ctx.author, timeout=180)
@@ -1920,7 +1935,7 @@ async def help_cmd(ctx, recherche: str = None):
     if ctx.guild and ctx.author.guild_permissions.administrator:
         await ctx.send(embed=discord.Embed(
             description="🛡️ *Tu es admin — tape `.helpadmin` pour les commandes de modération et de configuration.*",
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
 
 @bot.command(name="helpadmin", aliases=["adminhelp", "aideadmin"])
 @commands.has_permissions(administrator=True)
@@ -2181,11 +2196,11 @@ async def quiz(ctx, theme: str = "mix"):
     theme = QUIZ_ALIAS_THEMES.get(theme.lower(), theme.lower())
     if theme not in QUIZ_THEMES:
         return await salon.send(embed=discord.Embed(
-            title="🎯 Thèmes de quiz disponibles",
+            title=season_titre("🎯 Thèmes de quiz disponibles"),
             description=("\n".join(f"`{k}` — {v} *({len(QUIZ_THEMES[k])} questions)*"
                                    for k, v in THEME_LABELS.items())
                          + "\n\n*Ex : `.quiz kdrama` · `.quiz harrypotter` · `.quiz mix`*"),
-            color=0xf1c40f))
+            color=season_tint(0xf1c40f)))
     if ctx.channel.id in active_quiz or ctx.channel.id in quiz_duels:
         return await ctx.send("❓ Un quiz est déjà en cours ici ! Tape `.quizstop` pour l'arrêter.")
 
@@ -2197,12 +2212,12 @@ async def quiz(ctx, theme: str = "mix"):
     questions_posees = []
 
     await salon.send(embed=discord.Embed(
-        title=f"🎯 Quiz {THEME_LABELS[theme]}",
+        title=season_titre(f"🎯 Quiz {season_brut(THEME_LABELS[theme])}"),
         description=(f"**{len(QUIZ_THEMES[theme])} questions** dans ce thème.\n"
                      f"⏳ 30 secondes par question — elles s'enchaînent automatiquement.\n"
                      f"💰 **30 à 80 pièces** + 30 XP par bonne réponse.\n\n"
                      f"Tape **`.quizstop`** pour arrêter."),
-        color=0xf1c40f))
+        color=season_tint(0xf1c40f)))
 
     def check(m):
         return m.channel == salon and not m.author.bot
@@ -2219,11 +2234,11 @@ async def quiz(ctx, theme: str = "mix"):
         active_quiz[salon.id]["answer"] = q["a"]
 
         embed = discord.Embed(
-            title=f"🎯 Quiz {THEME_LABELS[theme]}",
+            title=season_titre(f"🎯 Quiz {season_brut(THEME_LABELS[theme])}"),
             description=f"**{q['q']}**",
-            color=0xf1c40f
+            color=season_tint(0xf1c40f)
         )
-        embed.set_footer(text="⏳ 30 secondes • Tape `.quizstop` pour arrêter")
+        embed.set_footer(text=season_pied("⏳ 30 secondes • Tape `.quizstop` pour arrêter"))
         await salon.send(embed=embed)
 
         try:
@@ -2246,7 +2261,7 @@ async def quiz(ctx, theme: str = "mix"):
                     except: pass
                     await salon.send(embed=discord.Embed(
                         description=f"✅ **{msg.author.display_name}** a trouvé ! **+{prize} pièces & +30 XP** 🎉\n*Prochaine question dans 3 secondes...*",
-                        color=0x2ecc71
+                        color=season_tint(0x2ecc71)
                     ))
                     break
                 else:
@@ -2254,7 +2269,7 @@ async def quiz(ctx, theme: str = "mix"):
                     await msg.add_reaction("❌")
                     await salon.send(embed=discord.Embed(
                         description=f"❌ Mauvaise réponse ! La bonne réponse était : **{correct}**\n*Prochaine question dans 3 secondes...*",
-                        color=0xe74c3c
+                        color=season_tint(0xe74c3c)
                     ))
                     break
 
@@ -2264,7 +2279,7 @@ async def quiz(ctx, theme: str = "mix"):
             correct = active_quiz[salon.id].get("answer", "")
             await salon.send(embed=discord.Embed(
                 description=f"⏰ Temps écoulé ! La réponse était : **{correct}**\n*Prochaine question dans 3 secondes...*",
-                color=0xe74c3c
+                color=season_tint(0xe74c3c)
             ))
 
         await asyncio.sleep(3)
@@ -2334,12 +2349,12 @@ async def emoji_cmd(ctx, theme: str = "mix"):
         na = sum(1 for x in EMOJI_QUIZ if x[2].startswith("📺"))
         nk = sum(1 for x in EMOJI_QUIZ if x[2].startswith("🎭"))
         return await ctx.send(embed=discord.Embed(
-            title="🎬 Emoji Quiz — choisis ton thème",
+            title=season_titre("🎬 Emoji Quiz — choisis ton thème"),
             description=(f"`.emoji anime` — 📺 **Animés uniquement** *({na} énigmes)*\n"
                          f"`.emoji kdrama` — 🎭 **K-Dramas uniquement** *({nk} énigmes)*\n"
                          f"`.emoji mix` — 🎲 **Les deux mélangés** *({len(EMOJI_QUIZ)} énigmes)*\n\n"
                          f"*Devine le titre à partir de 3 emojis.*"),
-            color=0xe67e22))
+            color=season_tint(0xe67e22)))
 
     if theme == "anime":
         pool = [x for x in EMOJI_QUIZ if x[2].startswith("📺")]
@@ -2357,13 +2372,13 @@ async def emoji_cmd(ctx, theme: str = "mix"):
 
     active_emoji[salon.id] = {"running": True, "manche": 0, "scores": {}, "vus": [], "pool": pool}
     await salon.send(embed=discord.Embed(
-        title=f"🎬 Emoji Quiz — {LABELS[theme]}",
+        title=season_titre(f"🎬 Emoji Quiz — {season_brut(LABELS[theme])}"),
         description=(f"Je te donne **3 emojis**, tu devines le titre !\n\n"
                      f"📂 **{len(pool)} énigmes** dans ce thème\n"
                      f"🏆 **80 à 140 pièces** + 25 XP par bonne réponse\n"
                      f"⏱️ 45 secondes par manche · un **indice** apparaît après 20 s\n\n"
                      f"`skip` pour passer · `.emojistop` pour arrêter"),
-        color=0xe67e22))
+        color=season_tint(0xe67e22)))
     await asyncio.sleep(2)
 
     def check(m):
@@ -2380,10 +2395,10 @@ async def emoji_cmd(ctx, theme: str = "mix"):
         etat["vus"].append(reponse)
 
         await salon.send(embed=discord.Embed(
-            title=f"🎬 Manche {etat['manche']}  —  {theme}",
+            title=season_titre(f"🎬 Manche {season_brut(etat['manche'])}  —  {season_brut(theme)}"),
             description=f"# {emojis}\n\n*Quel titre se cache derrière ces emojis ?*",
-            color=0xe67e22
-        ).set_footer(text="⏱️ 45 s · indice après 20 s · `skip` · `.emojistop`"))
+            color=season_tint(0xe67e22)
+        ).set_footer(text=season_pied("⏱️ 45 s · indice après 20 s · `skip` · `.emojistop`")))
 
         trouve, passe, indice_donne = False, False, False
         fin = asyncio.get_event_loop().time() + 45
@@ -2395,7 +2410,7 @@ async def emoji_cmd(ctx, theme: str = "mix"):
                 masque = " ".join(m[0] + "•" * (len(m) - 1) for m in mots)
                 await salon.send(embed=discord.Embed(
                     description=f"💡 **Indice :** `{masque}`  ·  *{len(reponse.replace(' ',''))} lettres*",
-                    color=0xf39c12))
+                    color=season_tint(0xf39c12)))
             try:
                 msg = await bot.wait_for("message", check=check, timeout=reste)
             except asyncio.TimeoutError:
@@ -2406,7 +2421,7 @@ async def emoji_cmd(ctx, theme: str = "mix"):
             if contenu in ("skip", "passer", ".emojiskip"):
                 passe = True
                 await salon.send(embed=discord.Embed(
-                    description=f"⏭️ Passé — c'était **{reponse}**", color=0x95a5a6))
+                    description=f"⏭️ Passé — c'était **{reponse}**", color=season_tint(0x95a5a6)))
                 break
             if contenu.startswith("."):
                 continue
@@ -2421,12 +2436,12 @@ async def emoji_cmd(ctx, theme: str = "mix"):
                 etat["scores"][msg.author.display_name] = etat["scores"].get(msg.author.display_name, 0) + 1
                 await salon.send(embed=discord.Embed(
                     description=f"🎉 **{msg.author.display_name}** trouve — **{reponse}** !\n💰 +{gain} pièces · ⭐ +25 XP",
-                    color=0x2ecc71))
+                    color=season_tint(0x2ecc71)))
                 trouve = True
                 break
         if not trouve and not passe and salon.id in active_emoji:
             await salon.send(embed=discord.Embed(
-                description=f"⏰ Temps écoulé — c'était **{reponse}**", color=0xe74c3c))
+                description=f"⏰ Temps écoulé — c'était **{reponse}**", color=season_tint(0xe74c3c)))
         if salon.id not in active_emoji:
             break
         await asyncio.sleep(3)
@@ -2436,8 +2451,8 @@ async def emoji_cmd(ctx, theme: str = "mix"):
         cl = sorted(etat["scores"].items(), key=lambda x: -x[1])
         detail = "\n".join(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{n}** — {s}" for i, (n, s) in enumerate(cl[:5]))
         await salon.send(embed=discord.Embed(
-            title="🎬 Emoji Quiz terminé",
-            description=f"**{etat['manche']} manche(s)**\n\n{detail}", color=0xe67e22))
+            title=season_titre("🎬 Emoji Quiz terminé"),
+            description=f"**{etat['manche']} manche(s)**\n\n{detail}", color=season_tint(0xe67e22)))
     if temporaire:
         await close_event_channel(salon, 60)
 
@@ -2446,7 +2461,7 @@ async def emojistop_cmd(ctx):
     """Arrête l'Emoji Quiz — .emojistop"""
     if ctx.channel.id in active_emoji:
         active_emoji[ctx.channel.id]["running"] = False
-        return await ctx.send(embed=discord.Embed(description="🛑 Emoji Quiz arrêté.", color=0xe74c3c))
+        return await ctx.send(embed=discord.Embed(description="🛑 Emoji Quiz arrêté.", color=season_tint(0xe74c3c)))
     await ctx.send("❌ Aucun Emoji Quiz en cours ici !")
 
 
@@ -2502,10 +2517,10 @@ class MemoryView(ui.View):
                     + (f"\n🔥 Série en cours : **{serie}**" if serie else ""))
             col = 0x9b59b6
         titre = f"🃏 Memory — Manche {self.etat.get('manche', 1)} · {NIV[self.niveau]}"
-        e = discord.Embed(title=titre, description=desc, color=col)
+        e = discord.Embed(title=season_titre(titre), description=desc, color=season_tint(col))
         e.set_author(name=self.joueur.display_name, icon_url=self.joueur.display_avatar.url)
         if not fin:
-            e.set_footer(text="Clique sur deux cartes pour les retourner")
+            e.set_footer(text=season_pied("Clique sur deux cartes pour les retourner"))
         return e
 
     async def retourner(self, interaction, idx):
@@ -2595,7 +2610,7 @@ async def memory_cmd(ctx, niveau: str = "facile"):
     active_memory[salon.id] = {"running": True, "manche": 0, "total": 0,
                                "serie": 0, "niveau": niveau, "vue": None}
     await salon.send(embed=discord.Embed(
-        title="🃏 Memory — Marathon",
+        title=season_titre("🃏 Memory — Marathon"),
         description=("Retrouve toutes les paires. À chaque réussite, **le niveau monte** :\n"
                      "🟢 Facile → 🟡 Normal → 🔴 Difficile → 🟢 Facile → …\n\n"
                      "**Les manches s'enchaînent sans fin.**\n"
@@ -2603,7 +2618,7 @@ async def memory_cmd(ctx, niveau: str = "facile"):
                      "🟢 12 cartes · **250 p**   🟡 16 cartes · **450 p**   🔴 20 cartes · **800 p**\n"
                      "*+40 p par coup économisé · +10 % par manche de série*\n\n"
                      "Tape **`.memorystop`** quand tu veux arrêter."),
-        color=0x9b59b6))
+        color=season_tint(0x9b59b6)))
     await asyncio.sleep(2)
 
     ORDRE = ["facile", "normal", "difficile"]
@@ -2635,11 +2650,11 @@ async def memory_cmd(ctx, niveau: str = "facile"):
     etat = active_memory.pop(salon.id, None)
     if etat and etat["manche"] > 0:
         await salon.send(embed=discord.Embed(
-            title="🃏 Marathon terminé",
+            title=season_titre("🃏 Marathon terminé"),
             description=(f"**{etat['manche']} manche(s)** jouée(s)\n"
                          f"🔥 Meilleure série : **{etat.get('record', etat['serie'])}**\n"
                          f"💰 Total gagné : **{etat['total']:,} pièces**"),
-            color=0x9b59b6))
+            color=season_tint(0x9b59b6)))
     if temporaire:
         await close_event_channel(salon, 60)
 
@@ -2655,7 +2670,7 @@ async def memorystop_cmd(ctx):
     vue.fini = True
     vue.stop()
     active_memory.pop(ctx.channel.id, None)
-    await ctx.send(embed=discord.Embed(description="🛑 Partie de Memory abandonnée.", color=0xe74c3c))
+    await ctx.send(embed=discord.Embed(description="🛑 Partie de Memory abandonnée.", color=season_tint(0xe74c3c)))
 
 # ============================================================
 #  🔴 PUISSANCE 4 — duel à boutons
@@ -2710,8 +2725,8 @@ class Puissance4View(ui.View):
             j = self.joueurs[self.tour]
             desc = f"{plateau}\n\n{'🔴' if self.tour == 1 else '🟡'} Au tour de **{j.display_name}**"
             col = 0xe74c3c if self.tour == 1 else 0xf1c40f
-        e = discord.Embed(title="🔴 Puissance 4", description=desc, color=col)
-        e.set_footer(text=f"🔴 {self.joueurs[1].display_name}   vs   🟡 {self.joueurs[2].display_name}")
+        e = discord.Embed(title=season_titre("🔴 Puissance 4"), description=desc, color=season_tint(col))
+        e.set_footer(text=season_pied(f"🔴 {self.joueurs[1].display_name}   vs   🟡 {self.joueurs[2].display_name}"))
         return e
 
     async def jouer(self, interaction, col):
@@ -2775,15 +2790,15 @@ async def puissance4_cmd(ctx, adversaire: discord.Member = None):
     msg = await ctx.send(
         f"{adversaire.mention}",
         embed=discord.Embed(
-            title="🔴 Défi Puissance 4",
+            title=season_titre("🔴 Défi Puissance 4"),
             description=(f"**{ctx.author.display_name}** défie **{adversaire.display_name}** !\n\n"
                          f"🏆 **250 à 450 pièces** + 40 XP au vainqueur\n"
                          f"*60 secondes pour accepter.*"),
-            color=0xe74c3c), view=view)
+            color=season_tint(0xe74c3c)), view=view)
     await view.wait()
     if not view.value:
         return await msg.edit(embed=discord.Embed(
-            description=f"❌ **{adversaire.display_name}** n'a pas relevé le défi.", color=0x95a5a6), view=None)
+            description=f"❌ **{adversaire.display_name}** n'a pas relevé le défi.", color=season_tint(0x95a5a6)), view=None)
 
     ajouter_lien(str(ctx.author.id), str(adversaire.id), "duel")
     jeu = Puissance4View(ctx.author, adversaire, ctx.channel)
@@ -2801,7 +2816,7 @@ async def p4stop_cmd(ctx):
     jeu.fini = True
     jeu.stop()
     active_p4.pop(ctx.channel.id, None)
-    await ctx.send(embed=discord.Embed(description="🛑 Partie de Puissance 4 annulée.", color=0xe74c3c))
+    await ctx.send(embed=discord.Embed(description="🛑 Partie de Puissance 4 annulée.", color=season_tint(0xe74c3c)))
 
 
 # ============================================================
@@ -2894,7 +2909,7 @@ class DrapeauView(ui.View):
                         await self.salon.send(embed=discord.Embed(
                             description=f"✅ **{interaction.user.display_name}** trouve — c'était **{self.bonne}** !\n"
                                         f"💰 +{gain} pièces · ⭐ +25 XP",
-                            color=0x2ecc71))
+                            color=season_tint(0x2ecc71)))
                         self.stop()
                     else:
                         await interaction.response.send_message("✅ Bonne réponse, mais trop tard !", ephemeral=True)
@@ -2915,12 +2930,12 @@ async def drapeaux_cmd(ctx):
 
     active_drapeaux[salon.id] = {"running": True, "manche": 0, "scores": {}, "vus": []}
     await salon.send(embed=discord.Embed(
-        title="🌍 Quiz Drapeaux",
+        title=season_titre("🌍 Quiz Drapeaux"),
         description=(f"Je te montre un drapeau, tu cliques sur le bon pays parmi **4 propositions**.\n\n"
                      f"🏆 **40 à 90 pièces** + 25 XP par bonne réponse\n"
                      f"⏱️ 25 secondes par drapeau · une seule réponse chacun\n\n"
                      f"`.drapeauxskip` pour passer · `.drapeauxstop` pour arrêter"),
-        color=0x3498db))
+        color=season_tint(0x3498db)))
     await asyncio.sleep(2)
 
     while salon.id in active_drapeaux and active_drapeaux[salon.id].get("running"):
@@ -2939,10 +2954,10 @@ async def drapeaux_cmd(ctx):
         view = DrapeauView(pays, options, salon, timeout=25)
         etat["view"] = view
         embed = discord.Embed(
-            title=f"🌍 Manche {etat['manche']} — Quel est ce drapeau ?",
+            title=season_titre(f"🌍 Manche {season_brut(etat['manche'])} — Quel est ce drapeau ?"),
             description=f"# {emoji}\n\n*Clique sur la bonne réponse.*",
-            color=0x3498db)
-        embed.set_footer(text="⏱️ 25 secondes · une seule réponse par personne")
+            color=season_tint(0x3498db))
+        embed.set_footer(text=season_pied("⏱️ 25 secondes · une seule réponse par personne"))
         await salon.send(embed=embed, view=view)
         await view.wait()
 
@@ -2953,7 +2968,7 @@ async def drapeaux_cmd(ctx):
             etat["scores"][n] = etat["scores"].get(n, 0) + 1
         elif not etat.get("skip"):
             await salon.send(embed=discord.Embed(
-                description=f"⏰ Personne n'a trouvé — c'était **{emoji} {pays}** !", color=0xe74c3c))
+                description=f"⏰ Personne n'a trouvé — c'était **{emoji} {pays}** !", color=season_tint(0xe74c3c)))
         etat["skip"] = False
         await asyncio.sleep(3)
 
@@ -2963,8 +2978,8 @@ async def drapeaux_cmd(ctx):
         detail = "\n".join(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{n}** — {s}"
                             for i, (n, s) in enumerate(classement[:5]))
         await salon.send(embed=discord.Embed(
-            title="🌍 Quiz terminé",
-            description=f"**{etat['manche']} drapeau(x)**\n\n{detail}", color=0x3498db))
+            title=season_titre("🌍 Quiz terminé"),
+            description=f"**{etat['manche']} drapeau(x)**\n\n{detail}", color=season_tint(0x3498db)))
     if temporaire:
         await close_event_channel(salon, 60)
 
@@ -2977,7 +2992,7 @@ async def drapeauxstop_cmd(ctx):
     etat["running"] = False
     if etat.get("view"):
         etat["view"].stop()
-    await ctx.send(embed=discord.Embed(description="🛑 Quiz drapeaux arrêté.", color=0xe74c3c))
+    await ctx.send(embed=discord.Embed(description="🛑 Quiz drapeaux arrêté.", color=season_tint(0xe74c3c)))
 
 @bot.command(name="drapeauxskip", aliases=["skipdrapeau"])
 async def drapeauxskip_cmd(ctx):
@@ -2988,7 +3003,7 @@ async def drapeauxskip_cmd(ctx):
     etat["skip"] = True
     if etat.get("view"):
         etat["view"].stop()
-    await ctx.send(embed=discord.Embed(description="⏭️ Drapeau passé !", color=0x95a5a6))
+    await ctx.send(embed=discord.Embed(description="⏭️ Drapeau passé !", color=season_tint(0x95a5a6)))
 
 @bot.command(name="quizstop")
 async def quiz_stop(ctx):
@@ -2997,13 +3012,13 @@ async def quiz_stop(ctx):
         active_quiz[ctx.channel.id]["running"] = False
         await ctx.send(embed=discord.Embed(
             description="🛑 Quiz arrêté !",
-            color=0xe74c3c
+            color=season_tint(0xe74c3c)
         ))
     elif ctx.channel.id in quiz_duels:
         quiz_duels.pop(ctx.channel.id, None)
         await ctx.send(embed=discord.Embed(
             description="🛑 Quiz duel arrêté !",
-            color=0xe74c3c
+            color=season_tint(0xe74c3c)
         ))
     else:
         await ctx.send("❌ Aucun quiz en cours ici !")
@@ -3016,12 +3031,12 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
     theme = QUIZ_ALIAS_THEMES.get(theme.lower(), theme.lower())
     if theme not in QUIZ_THEMES:
         return await salon.send(embed=discord.Embed(
-            title="⚔️ Quiz Duel — choisis un thème",
+            title=season_titre("⚔️ Quiz Duel — choisis un thème"),
             description=("**Usage :** `.quizduel <thème> @joueur1 [@joueur2 …]`\n\n"
                          + "\n".join(f"`{k}` — {v} *({len(QUIZ_THEMES[k])} questions)*"
                                      for k, v in THEME_LABELS.items())
                          + "\n\n*Ex : `.quizduel anime @ami`*"),
-            color=0xff6b9d))
+            color=season_tint(0xff6b9d)))
     if not opponents:
         return await ctx.send("❌ Mentionne au moins un adversaire !\nEx: `.quizduel anime @ami`")
     if ctx.channel.id in active_quiz or ctx.channel.id in quiz_duels:
@@ -3047,13 +3062,13 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
 
     players_str = " vs ".join([f"**{p.display_name}**" for p in all_players])
     embed = discord.Embed(
-        title=f"⚔️ Quiz Duel — {THEME_LABELS[theme]}",
+        title=season_titre(f"⚔️ Quiz Duel — {season_brut(THEME_LABELS[theme])}"),
         description=(
             f"{players_str}\n\n"
             f"**{TOTAL_ROUNDS} questions • Premier à répondre marque un point !**\n\n"
             "La partie commence dans 3 secondes... 🎯"
         ),
-        color=0xff6b9d
+        color=season_tint(0xff6b9d)
     )
     await salon.send(embed=embed)
     await asyncio.sleep(3)
@@ -3073,14 +3088,14 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
         quiz_duels[salon.id]["questions_used"].append(q["a"])
 
         embed = discord.Embed(
-            title=f"🎯 Round {round_num}/{TOTAL_ROUNDS} — {THEME_LABELS[theme]}",
+            title=season_titre(f"🎯 Round {season_brut(round_num)}/{season_brut(TOTAL_ROUNDS)} — {season_brut(THEME_LABELS[theme])}"),
             description=f"**{q['q']}**",
-            color=0xf1c40f
+            color=season_tint(0xf1c40f)
         )
         # Afficher le score actuel
         scores = quiz_duels[salon.id]["players"]
         score_str = " | ".join([f"{data['name']}: {data['score']}" for data in scores.values()])
-        embed.set_footer(text=f"⏳ 20 secondes • Scores: {score_str}")
+        embed.set_footer(text=season_pied(f"⏳ 20 secondes • Scores: {score_str}"))
         await salon.send(embed=embed)
 
         def check_duel(m):
@@ -3093,7 +3108,7 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
             if remaining <= 0:
                 await salon.send(embed=discord.Embed(
                     description=f"⏰ Temps écoulé ! La réponse était : **{q['a']}**",
-                    color=0x95a5a6
+                    color=season_tint(0x95a5a6)
                 ))
                 break
             try:
@@ -3105,14 +3120,14 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
                     score = quiz_duels[salon.id]["players"][msg.author.id]["score"]
                     await salon.send(embed=discord.Embed(
                         description=f"✅ **{msg.author.display_name}** a trouvé ! ({score} pt{'s' if score > 1 else ''})",
-                        color=0x2ecc71
+                        color=season_tint(0x2ecc71)
                     ))
                     answered = True
                 # Mauvaise réponse → on continue à écouter les autres
             except asyncio.TimeoutError:
                 await salon.send(embed=discord.Embed(
                     description=f"⏰ Temps écoulé ! La réponse était : **{q['a']}**",
-                    color=0x95a5a6
+                    color=season_tint(0x95a5a6)
                 ))
                 break
 
@@ -3154,9 +3169,9 @@ async def quiz_duel(ctx, theme: str = "mix", *opponents: discord.Member):
         result += f"\n💰 +{prize} pièces & +50 XP !"
 
     embed = discord.Embed(
-        title="🏆 Résultats du Quiz Duel !",
+        title=season_titre("🏆 Résultats du Quiz Duel !"),
         description=result,
-        color=0xf1c40f
+        color=season_tint(0xf1c40f)
     )
     scores_final = "\n".join([f"{'🥇' if i==0 else '🥈' if i==1 else '🥉' if i==2 else '▪️'} **{p['name']}** — {p['score']} pt{'s' if p['score'] > 1 else ''}" for i, p in enumerate(sorted_scores)])
     embed.add_field(name="📊 Classement final", value=scores_final, inline=False)
@@ -3238,7 +3253,7 @@ async def rank(ctx, member: discord.Member = None):
     s = arena_stats[uid]
     pts = points_amelio[uid]
     hp_total, end_total, _atk, _def = arene_totaux(uid)
-    embed = discord.Embed(title=f"📊 Fiche de {member.display_name}", color=0xff6b9d)
+    embed = discord.Embed(title=season_titre(f"📊 Fiche de {season_brut(member.display_name)}"), color=season_tint(0xff6b9d))
     embed.add_field(name="Titre", value=tier, inline=False)
     embed.add_field(name="Niveau", value=str(lvl))
     embed.add_field(name="XP", value=f"{xp}/{needed}")
@@ -3259,7 +3274,7 @@ async def rank(ctx, member: discord.Member = None):
         f"🆙 **{pts}** point(s) libre(s)\n"
         f"🏆 **{victoires}** victoire(s)"
     ), inline=True)
-    embed.set_footer(text="Utilise .ameliorer pour dépenser tes points !" if pts > 0 else "Gagne de l'XP pour obtenir des points d'amélioration !")
+    embed.set_footer(text=season_pied("Utilise .ameliorer pour dépenser tes points !" if pts > 0 else "Gagne de l'XP pour obtenir des points d'amélioration !"))
     embed.set_thumbnail(url=member.display_avatar.url)
     await ctx.send(embed=embed)
 
@@ -3285,7 +3300,7 @@ async def ameliorer(ctx, stat: str = None):
             title=f"🆙 {ctx.author.display_name}",
             description=(f"**{pts} point(s)** à dépenser\n"
                          f"{emo} **{nom}** — *{desc}*"),
-            color=0x3498db if pts else 0x95a5a6)
+            color=season_tint(0x3498db if pts else 0x95a5a6))
         e.add_field(name="❤️ PV",
                     value=f"**{p['hp_max']}**\n*+{ARENE_PV_PAS} au prochain*", inline=True)
         e.add_field(name="🗡️ ATK",
@@ -3302,7 +3317,7 @@ async def ameliorer(ctx, stat: str = None):
         e.add_field(name="📊 Répartition",
                     value=f"❤️{s['pv_bonus']} · 🗡️{s['atk_bonus']} · "
                           f"🛡️{s['def_bonus']} · ⚡{s['end_bonus']}", inline=True)
-        e.set_footer(text="Le style suit ta répartition — aucune classe à choisir")
+        e.set_footer(text=season_pied("Le style suit ta répartition — aucune classe à choisir"))
         return e
 
     def depenser(cle):
@@ -3334,7 +3349,7 @@ async def ameliorer(ctx, stat: str = None):
             txt += f"\n\n🎯 Ton style devient **{e2} {n2}** — *{d2}*"
         return await ctx.send(embed=discord.Embed(
             description=txt + f"\n\n*Points restants : {points_amelio[uid]}*",
-            color=0x2ecc71))
+            color=season_tint(0x2ecc71)))
 
     # ── Interface boutons ──
     class UpView(ui.View):
@@ -3382,9 +3397,9 @@ async def leaderboard(ctx):
         tier = get_tier(data["level"])
         desc += f"{medal} **{name}** — Niv.{data['level']} {tier}\n"
     await ctx.send(embed=discord.Embed(
-        title="🏆 Classement QG Kdrama",
+        title=season_titre("🏆 Classement QG Kdrama"),
         description=desc or "Aucune donnée",
-        color=0xf1c40f
+        color=season_tint(0xf1c40f)
     ))
 
 # ============================================================
@@ -3578,7 +3593,7 @@ async def daily(ctx):
     except: pass
     await ctx.send(embed=discord.Embed(
         description=f"💰 {ctx.author.mention} reçoit **{gain} pièces** ! Total : {economy_data[uid]['coins']}{roll_msg}",
-        color=0x2ecc71
+        color=season_tint(0x2ecc71)
     ))
 
 @bot.command(name="balance", aliases=["solde","pieces","coins"])
@@ -3587,7 +3602,7 @@ async def balance(ctx, member: discord.Member = None):
     coins = economy_data[str(member.id)]["coins"]
     await ctx.send(embed=discord.Embed(
         description=f"💳 **{member.display_name}** possède **{coins} pièces**.",
-        color=0xf39c12
+        color=season_tint(0xf39c12)
     ))
 
 @bot.command(name="pay", aliases=["donner","transfer"])
@@ -3609,7 +3624,7 @@ async def pay(ctx, member: discord.Member, amount: int):
     save_all_data()
     await ctx.send(embed=discord.Embed(
         description=f"💸 **{ctx.author.display_name}** a envoyé **{amount} pièces** à **{member.display_name}**.",
-        color=0x27ae60
+        color=season_tint(0x27ae60)
     ))
 
 # ============================================================
@@ -3700,12 +3715,12 @@ async def ticket(ctx):
     )
     tickets[channel.id] = ctx.author.id
     embed = discord.Embed(
-        title="🎫 Ticket ouvert — QG Kdrama",
+        title=season_titre("🎫 Ticket ouvert — QG Kdrama"),
         description=f"Bonjour {ctx.author.mention} ! 👋\nDécris ta demande et un staff te répondra bientôt.\nTape `.close` pour fermer ce ticket.",
-        color=0xff6b9d
+        color=season_tint(0xff6b9d)
     )
     await channel.send(embed=embed)
-    await ctx.send(embed=discord.Embed(description=f"✅ Ticket créé : {channel.mention}", color=0x2ecc71))
+    await ctx.send(embed=discord.Embed(description=f"✅ Ticket créé : {channel.mention}", color=season_tint(0x2ecc71)))
 
 @bot.command()
 async def close(ctx):
@@ -3841,7 +3856,7 @@ async def roast(ctx, member: discord.Member = None):
     target = member or ctx.author
     await ctx.send(embed=discord.Embed(
         description=f"🔥 {target.mention} : {random.choice(ROASTS_QG)}",
-        color=0xe74c3c
+        color=season_tint(0xe74c3c)
     ))
 
 @bot.command(name="cadeau", aliases=["offrir", "gift"])
@@ -3849,7 +3864,7 @@ async def cadeau_cmd(ctx, destinataire: discord.Member = None, contenu: str = No
     """Offrir un cadeau emballé — .cadeau @membre <montant|carte> [petit mot]"""
     if not destinataire or not contenu:
         return await ctx.send(embed=discord.Embed(
-            title="🎁 Offrir un cadeau",
+            title=season_titre("🎁 Offrir un cadeau"),
             description=("`.cadeau @membre 2500` — des pièces\n"
                          "`.cadeau @membre <carte>` — une carte de ta collection\n\n"
                          "Tu peux ajouter un petit mot après.\n"
@@ -3887,12 +3902,12 @@ async def cadeau_cmd(ctx, destinataire: discord.Member = None, contenu: str = No
                   contexte=f"un cadeau de {ctx.author.display_name}")
 
     e = discord.Embed(
-        title=f"🎁 Un cadeau pour {destinataire.display_name}",
+        title=season_titre(f"🎁 Un cadeau pour {season_brut(destinataire.display_name)}"),
         description=f"**{ctx.author.display_name}** t'a laissé quelque chose.",
         color=season_color("principal"))
     if g["msg"]:
         e.add_field(name="💌", value=f"*« {g['msg']} »*", inline=False)
-    e.set_footer(text="Seul le destinataire peut l'ouvrir  ·  7 jours pour le faire")
+    e.set_footer(text=season_pied("Seul le destinataire peut l'ouvrir  ·  7 jours pour le faire"))
     await ctx.send(destinataire.mention, embed=e, view=CadeauView(cid))
 
 @bot.command(name="compliment")
@@ -3907,7 +3922,7 @@ async def compliment(ctx, member: discord.Member = None):
     target = member or ctx.author
     await ctx.send(embed=discord.Embed(
         description=f"💖 {target.mention} : {random.choice(compliments)}",
-        color=0xff6b9d
+        color=season_tint(0xff6b9d)
     ))
 
 @bot.command(name="8ball")
@@ -3918,9 +3933,9 @@ async def eight_ball(ctx, *, question):
         "Non, le second lead dirait non aussi 😭", "Clairement non, comme une fin de drama triste 💔"
     ]
     await ctx.send(embed=discord.Embed(
-        title="🎱 La boule magique du QG",
+        title=season_titre("🎱 La boule magique du QG"),
         description=f"**Question :** {question}\n**Réponse :** {random.choice(responses)}",
-        color=0x8e44ad
+        color=season_tint(0x8e44ad)
     ))
 
 @bot.command(name="rps", aliases=["chifoumi"])
@@ -3941,16 +3956,16 @@ async def rps(ctx, choix: str):
     else:
         result, color = "💀 Tu perds !", 0xe74c3c
     await ctx.send(embed=discord.Embed(
-        title="🎮 Pierre Feuille Ciseaux",
+        title=season_titre("🎮 Pierre Feuille Ciseaux"),
         description=f"Toi : {emojis[choix]}  |  Bot : {emojis[bot_choix]}\n\n**{result}**",
-        color=color
+        color=season_tint(color)
     ))
 
 @bot.command(name="dice", aliases=["de","d6"])
 async def dice(ctx, faces: int = 6):
     await ctx.send(embed=discord.Embed(
         description=f"🎲 Tu lances un dé à {faces} faces... **{random.randint(1, faces)}** !",
-        color=0xe67e22
+        color=season_tint(0xe67e22)
     ))
 
 @bot.command(name="meme")
@@ -3961,7 +3976,7 @@ async def meme(ctx):
         "https://i.imgflip.com/2fm6x.jpg",
         "https://i.imgflip.com/1bij.jpg",
     ]
-    embed = discord.Embed(title="😂 Meme du QG !", color=0xf1c40f)
+    embed = discord.Embed(title=season_titre("😂 Meme du QG !"), color=season_tint(0xf1c40f))
     embed.set_image(url=random.choice(memes))
     await ctx.send(embed=embed)
 
@@ -4336,7 +4351,7 @@ def build_card_embed(key, uid_claimer=None, claimed=False, guild=None):
 
     if owner_uid and uid_claimer and owner_uid == uid_claimer:
         nb = doublons[owner_uid].get(key, 0)
-        embed.set_footer(text=f"⚡ Elle est à toi — doublons accumulés : {nb}")
+        embed.set_footer(text=season_pied(f"⚡ Elle est à toi — doublons accumulés : {nb}"))
     elif owner_uid:
         nom_proprio = None
         if guild:
@@ -4352,15 +4367,15 @@ def build_card_embed(key, uid_claimer=None, claimed=False, guild=None):
                             value=f"Cette carte appartient à **{nom_proprio}**{depuis}\n"
                                   f"*`.wish {ANIME_CARDS_DB[key]['nom']}` pour être prévenu si elle se libère.*",
                             inline=False)
-            embed.set_footer(text=f"🔒 Propriétaire : {nom_proprio}")
+            embed.set_footer(text=season_pied(f"🔒 Propriétaire : {nom_proprio}"))
         else:
             embed.add_field(name="🔒 Déjà possédée",
                             value=f"Elle appartient à <@{owner_uid}>{depuis}", inline=False)
-            embed.set_footer(text="🔒 Carte déjà réclamée")
+            embed.set_footer(text=season_pied("🔒 Carte déjà réclamée"))
     elif claimed:
-        embed.set_footer(text="✅ Claimée !")
+        embed.set_footer(text=season_pied("✅ Claimée !"))
     else:
-        embed.set_footer(text="❤️ Clique sur le cœur pour la réclamer — 30 secondes")
+        embed.set_footer(text=season_pied("❤️ Clique sur le cœur pour la réclamer — 30 secondes"))
     if est_legacy(key):
         _cible = RETIRED_CARD_MAP[key]
         if _cible == key:
@@ -4434,7 +4449,7 @@ class ClaimView(ui.View):
         if self.message and self.key not in claimed_cards:
             try:
                 embed = build_card_embed(self.key, guild=getattr(self.message, "guild", None) if self.message else None)
-                embed.set_footer(text="⏰ Claim expiré — personne n'a réclamé cette carte")
+                embed.set_footer(text=season_pied("⏰ Claim expiré — personne n'a réclamé cette carte"))
                 await self.message.edit(embed=embed, view=self)
             except Exception:
                 pass
@@ -4465,10 +4480,10 @@ class DoublonView(ui.View):
         embed.set_author(name=f"⚡  {interaction.user.display_name} récupère un doublon !")
         reste = max(0, 2 - nb)
         embed.set_footer(
-            text=(f"⚡ Doublons de cette carte : {nb}  •  "
+            text=(season_pied(f"⚡ Doublons de cette carte : {nb}  •  "
                   + (f"Encore {reste} pour fusionner (.fusionner {cc['nom']})" if etoiles < 3 and reste
                      else (f"Tu peux fusionner ! → .fusionner {cc['nom']}" if etoiles < 3
-                           else "Fusion maximale atteinte ⭐⭐⭐"))))
+                           else "Fusion maximale atteinte ⭐⭐⭐")))))
         await interaction.response.edit_message(embed=embed, view=self)
         self.stop()
 
@@ -4795,8 +4810,8 @@ async def ga_cmd(ctx):
     proprio = claimed_cards.get(key)
     if proprio == uid:
         # Ta propre carte revient → doublon gratuit, sans toucher au claim
-        embed.set_footer(text="⚡ Clique sur l'éclair pour récupérer un DOUBLON — "
-                              "gratuit, ça n'utilise pas ton claim ! (2 doublons = fusion)")
+        embed.set_footer(text=season_pied("⚡ Clique sur l'éclair pour récupérer un DOUBLON — "
+                              "gratuit, ça n'utilise pas ton claim ! (2 doublons = fusion)"))
         view = DoublonView(key, uid, timeout=30)
         view.message = await ctx.send(embed=embed, view=view)
     elif proprio:
@@ -4828,7 +4843,7 @@ async def rolls_cmd(ctx):
     reset_in = max(0, int((ROLLS_RESET_MINUTES * 60 - (now - data["last_reset"])) / 60))
     await ctx.send(embed=discord.Embed(
         description=f"🎰 **{ctx.author.display_name}** — **{data['rolls']}/{ROLLS_MAX} rolls** disponibles\n⏳ Recharge dans **{reset_in} min**",
-        color=0x9b59b6
+        color=season_tint(0x9b59b6)
     ))
 
 class CollectionView(ui.View):
@@ -4909,7 +4924,7 @@ class CollectionView(ui.View):
         embed.add_field(name="🔧 Progression", value=infos, inline=True)
         embed.set_author(name=f"Collection de {self.cible.display_name}  ·  {len(self.cles)} cartes",
                          icon_url=self.cible.display_avatar.url)
-        embed.set_footer(text=f"Carte {self.index+1}/{len(self.cles)}  ·  Tri : {self.ORDRES[self.ordre]}")
+        embed.set_footer(text=season_pied(f"Carte {self.index+1}/{len(self.cles)}  ·  Tri : {self.ORDRES[self.ordre]}"))
         return embed
 
     async def _go(self, interaction, delta):
@@ -4943,10 +4958,10 @@ class CollectionView(ui.View):
             lignes.append(f"{RARETE_EMOJI.get(cc['rarete'],'')} **{cc['nom']}**"
                           + ("⭐"*fus if fus else "") + f" — *{cc['serie']}*")
         e = discord.Embed(
-            title=f"📋 Collection de {self.cible.display_name}  ({len(self.cles)} cartes)",
+            title=season_titre(f"📋 Collection de {season_brut(self.cible.display_name)}  ({season_brut(len(self.cles))} cartes)"),
             description="\n".join(lignes) + (f"\n\n*…et {len(self.cles)-40} autres*" if len(self.cles) > 40 else ""),
-            color=0x9b59b6)
-        e.set_footer(text=f"Tri : {self.ORDRES[self.ordre]}")
+            color=season_tint(0x9b59b6))
+        e.set_footer(text=season_pied(f"Tri : {self.ORDRES[self.ordre]}"))
         await interaction.response.send_message(embed=e, ephemeral=True)
 
 class CartesListeView(ui.View):
@@ -5049,12 +5064,12 @@ class CartesListeView(ui.View):
         if self.serie: filtres.append(f"série « {self.serie} »")
 
         embed = discord.Embed(
-            title="🎴 Catalogue des cartes",
+            title=season_titre("🎴 Catalogue des cartes"),
             description=("\n".join(lignes) if lignes else "*Aucune carte ne correspond à ces filtres.*"),
-            color=0x9b59b6)
+            color=season_tint(0x9b59b6))
         embed.set_author(name=f"{prises}/{total} cartes déjà prises sur le serveur")
-        embed.set_footer(text=(f"Page {self.page+1}/{pages}  ·  {len(self.cles)} carte(s)"
-                               + (f"  ·  Filtres : {', '.join(filtres)}" if filtres else "")))
+        embed.set_footer(text=(season_pied(f"Page {self.page+1}/{pages}  ·  {len(self.cles)} carte(s)"
+                               + (f"  ·  Filtres : {', '.join(filtres)}" if filtres else ""))))
         return embed
 
     @ui.button(emoji="⏮️", style=discord.ButtonStyle.secondary, row=2)
@@ -5107,10 +5122,10 @@ async def series_cmd(ctx):
     pages = []
     for i in range(0, len(lignes), 15):
         pages.append(discord.Embed(
-            title="📚 Séries du gacha",
+            title=season_titre("📚 Séries du gacha"),
             description="\n".join(lignes[i:i+15]),
-            color=0x9b59b6).set_footer(
-                text=f"{len(cnt)} séries · {len(ANIME_CARDS_DB)} cartes · `.cartes <série>` pour le détail"))
+            color=season_tint(0x9b59b6)).set_footer(
+                text=season_pied(f"{len(cnt)} séries · {len(ANIME_CARDS_DB)} cartes · `.cartes <série>` pour le détail")))
     view = PageView(pages, ctx.author, timeout=180) if len(pages) > 1 else None
     await ctx.send(embed=pages[0], view=view)
 
@@ -5135,7 +5150,7 @@ async def fusionner_cmd(ctx, *, perso: str = None):
         pretes = [(k, doublons[uid][k]) for k in gacha_collections[uid]
                   if doublons[uid].get(k, 0) >= 2 and fusion_levels[uid].get(k, 0) < 3]
         embed = discord.Embed(
-            title="✨ Fusion de cartes",
+            title=season_titre("✨ Fusion de cartes"),
             description=(
                 "**À quoi ça sert ?**\n"
                 "Fusionner ajoute une **⭐ étoile** à ta carte, et chaque étoile lui donne :\n"
@@ -5146,7 +5161,7 @@ async def fusionner_cmd(ctx, *, perso: str = None):
                 "pour récupérer un **doublon** *(gratuit, ça n'utilise pas ton claim)*.\n"
                 "Avec **2 doublons** de la même carte → `.fusionner <nom>`\n\n"
                 "*Maximum : ⭐⭐⭐ par carte.*"),
-            color=0xf1c40f)
+            color=season_tint(0xf1c40f))
         if pretes:
             embed.add_field(
                 name="✅ Prêtes à fusionner",
@@ -5178,7 +5193,7 @@ async def fusionner_cmd(ctx, *, perso: str = None):
             description=(f"❌ Il te faut **2 doublons** de **{cc['nom']}** — tu en as **{dispo}**.\n\n"
                          f"*Quand cette carte retombe dans un tirage, clique sur le **⚡** "
                          f"pour récupérer un doublon (c'est gratuit).*"),
-            color=0xe74c3c))
+            color=season_tint(0xe74c3c)))
 
     doublons[uid][key] -= 2
     fusion_levels[uid][key] = lv + 1
@@ -5188,7 +5203,7 @@ async def fusionner_cmd(ctx, *, perso: str = None):
 
     b_pv, b_atk, b_def = card_total_bonus(uid, key)
     embed = discord.Embed(
-        title=f"✨ FUSION RÉUSSIE — {'⭐' * new_lv}",
+        title=season_titre(f"✨ FUSION RÉUSSIE — {season_brut('⭐' * new_lv)}"),
         description=(f"{RARETE_EMOJI.get(cc['rarete'],'')} **{cc['nom']}** passe à **{new_lv} étoile(s)** !\n"
                      f"*2 doublons consommés — il t'en reste {doublons[uid][key]}.*"),
         color=RARETE_COULEURS.get(cc["rarete"], 0xf1c40f))
@@ -5200,9 +5215,9 @@ async def fusionner_cmd(ctx, *, perso: str = None):
     embed.add_field(name="💰 Valeur au recyclage",
                     value=f"**{burn + new_lv*200:,} pièces**\n*(+{new_lv*200} grâce aux étoiles)*", inline=True)
     if new_lv < 3:
-        embed.set_footer(text=f"Encore 2 doublons pour atteindre {'⭐'*(new_lv+1)}")
+        embed.set_footer(text=season_pied(f"Encore 2 doublons pour atteindre {'⭐'*(new_lv+1)}"))
     else:
-        embed.set_footer(text="⭐⭐⭐ Fusion maximale atteinte !")
+        embed.set_footer(text=season_pied("⭐⭐⭐ Fusion maximale atteinte !"))
     if cc.get("image"):
         embed.set_thumbnail(url=cc["image"])
     await ctx.send(embed=embed)
@@ -5219,13 +5234,13 @@ async def wish_cmd(ctx, action: str = None, *, perso: str = None):
         wl = list(gacha_wishlist[uid])
         if not wl:
             return await ctx.send(embed=discord.Embed(
-                title="🌟 Ta wishlist est vide",
+                title=season_titre("🌟 Ta wishlist est vide"),
                 description=(f"`.wish <nom de carte>` — ajoute une carte à ta wishlist.\n\n"
                              f"**À quoi ça sert ?** Dès que cette carte apparaît dans le tirage "
                              f"de **n'importe qui**, tu es **mentionné automatiquement** pour "
                              f"pouvoir la réclamer avant les autres.\n\n"
                              f"*Tu peux en suivre **{limite}** — augmente la limite dans `.shop`.*"),
-                color=0xf1c40f))
+                color=season_tint(0xf1c40f)))
         lignes = []
         for k in wl:
             if k not in ANIME_CARDS_DB:
@@ -5241,9 +5256,9 @@ async def wish_cmd(ctx, action: str = None, *, perso: str = None):
                 etat = "🟢 **disponible !**"
             lignes.append(f"{RARETE_EMOJI.get(cc['rarete'],'')} **{cc['nom']}** — *{cc['serie']}*\n└ {etat}")
         return await ctx.send(embed=discord.Embed(
-            title=f"🌟 Wishlist de {ctx.author.display_name}  ({len(wl)}/{limite})",
+            title=season_titre(f"🌟 Wishlist de {season_brut(ctx.author.display_name)}  ({season_brut(len(wl))}/{season_brut(limite)})"),
             description="\n".join(lignes) + "\n\n*Tu es mentionné dès qu'une de ces cartes tombe.*",
-            color=0xf1c40f))
+            color=season_tint(0xf1c40f)))
 
     # .wish remove <carte>
     if action.lower() in ("remove", "retirer", "supprimer", "-"):
@@ -5265,7 +5280,7 @@ async def wish_cmd(ctx, action: str = None, *, perso: str = None):
             return await ctx.send(f"❌ **{cc['nom']}** n'est pas dans ta wishlist.")
         gacha_wishlist[uid].discard(key)
         return await ctx.send(embed=discord.Embed(
-            description=f"🗑️ **{cc['nom']}** retirée de ta wishlist.", color=0x95a5a6))
+            description=f"🗑️ **{cc['nom']}** retirée de ta wishlist.", color=season_tint(0x95a5a6)))
 
     if key in gacha_wishlist[uid]:
         return await ctx.send(f"❌ **{cc['nom']}** est déjà dans ta wishlist !")
@@ -5274,20 +5289,20 @@ async def wish_cmd(ctx, action: str = None, *, perso: str = None):
             description=(f"❌ Ta wishlist est pleine (**{limite}** cartes).\n"
                          f"Retire-en une avec `.wish remove <carte>`, ou achète des "
                          f"**Slots Favoris** dans `.shop`."),
-            color=0xe74c3c))
+            color=season_tint(0xe74c3c)))
     gacha_wishlist[uid].add(key)
     proprio = claimed_cards.get(key)
     etat = ("🟢 Elle est **libre** — tu seras prévenu dès qu'elle tombe !" if not proprio
             else ("✅ Tu la possèdes déjà." if proprio == uid
                   else "🔒 Elle appartient à un membre — tu seras prévenu si elle se libère."))
     embed = discord.Embed(
-        title="🌟 Ajoutée à ta wishlist",
+        title=season_titre("🌟 Ajoutée à ta wishlist"),
         description=(f"{RARETE_EMOJI.get(cc['rarete'],'')} **{cc['nom']}** — *{cc['serie']}*\n\n{etat}\n\n"
                      f"*Tu seras **mentionné automatiquement** dès qu'elle apparaît dans un tirage.*"),
         color=RARETE_COULEURS.get(cc["rarete"], 0xf1c40f))
     if cc.get("image"):
         embed.set_thumbnail(url=cc["image"])
-    embed.set_footer(text=f"Wishlist : {len(gacha_wishlist[uid])}/{limite}")
+    embed.set_footer(text=season_pied(f"Wishlist : {len(gacha_wishlist[uid])}/{limite}"))
     await ctx.send(embed=embed)
 
 @bot.command(name="gachagive")
@@ -5306,7 +5321,7 @@ async def gachagive_cmd(ctx, target: discord.Member = None, *, perso: str = None
     gazette_note(str(target.id), "cartes")
     await ctx.send(embed=discord.Embed(
         description=f"🎁 **{c['nom']}** donnée à {target.mention} !",
-        color=0x2ecc71
+        color=season_tint(0x2ecc71)
     ))
 
 
@@ -5347,7 +5362,7 @@ async def travailler_cmd(ctx):
     travailler_cooldowns[uid] = now
     await ctx.send(embed=discord.Embed(
         description=f"{job}\n💰 **{ctx.author.display_name}** a gagné **{gain} pièces** ! Total : {economy_data[uid]['coins']}",
-        color=0x2ecc71
+        color=season_tint(0x2ecc71)
     ))
 
 @bot.command(name="braquage", aliases=["voler", "steal", "steal_bank"])
@@ -5379,17 +5394,17 @@ async def braquage_cmd(ctx, target: discord.Member = None):
     _bloque, _sauve, _txt = await tenter_protection(str(target.id), ctx.channel)
     if _txt and _bloque:
         return await ctx.send(embed=discord.Embed(
-            title="🛡️ Braquage déjoué !",
+            title=season_titre("🛡️ Braquage déjoué !"),
             description=f"{_txt}\n\n*Le compagnon de **{target.display_name}** veille.*",
-            color=0x3498db))
+            color=season_tint(0x3498db)))
 
     # Le compagnon de la cible peut s'interposer
     _bloque, _sauve, _txt = await tenter_protection(str(target.id), ctx.channel)
     if _txt and _bloque:
         return await ctx.send(embed=discord.Embed(
-            title="🛡️ Braquage déjoué !",
+            title=season_titre("🛡️ Braquage déjoué !"),
             description=f"{_txt}\n\n*Le compagnon de **{target.display_name}** veille.*",
-            color=0x3498db))
+            color=season_tint(0x3498db)))
 
     # 12 % de réussite — le braquage doit rester un événement rare
     if random.random() < 0.12:
@@ -5398,18 +5413,18 @@ async def braquage_cmd(ctx, target: discord.Member = None):
         track_stat(uid, "braquages", channel=ctx.channel)
         economy_data[tid]["coins"] -= montant
         await ctx.send(embed=discord.Embed(
-            title="🦹 BRAQUAGE RÉUSSI !",
+            title=season_titre("🦹 BRAQUAGE RÉUSSI !"),
             description=f"Contre toute attente, **{ctx.author.mention}** repart avec **{montant:,} pièces** volées à {target.mention} !\n*Une chance sur huit… il l'a saisie.*",
-            color=0x2ecc71
+            color=season_tint(0x2ecc71)
         ))
     else:
         amende = min(random.randint(200, 500), economy_data[uid]["coins"])
         economy_data[uid]["coins"] -= amende
         economy_data[tid]["coins"] += amende
         await ctx.send(embed=discord.Embed(
-            title="🚨 Braquage raté",
+            title=season_titre("🚨 Braquage raté"),
             description=f"**{ctx.author.mention}** s'est fait attraper !\n💸 Amende de **{amende:,} pièces** versée à {target.mention}. 😂",
-            color=0xe74c3c
+            color=season_tint(0xe74c3c)
         ))
 
 # ============================================================
@@ -5575,7 +5590,7 @@ class BlackjackView(ui.View):
 
     def embed(self, reveler=False, verdict=None, coul=0x2c3e50):
         jv = bj_valeur(self.joueur)
-        e = discord.Embed(title="🃏  BLACKJACK", color=coul)
+        e = discord.Embed(title=season_titre("🃏  BLACKJACK"), color=season_tint(coul))
         if reveler:
             cv = bj_valeur(self.croupier)
             e.add_field(name=f"🎩 Croupier — **{cv}**",
@@ -5587,7 +5602,7 @@ class BlackjackView(ui.View):
                     value=" ".join(carte_txt(c) for c in self.joueur), inline=False)
         if verdict:
             e.description = verdict
-        e.set_footer(text=f"Mise : {self.mise:,} pièces")
+        e.set_footer(text=season_pied(f"Mise : {self.mise:,} pièces"))
         return e
 
     async def terminer(self, itx, verdict, multiplicateur, coul):
@@ -5716,12 +5731,12 @@ async def roulette_cmd(ctx, pari: str = None, mise: str = "50"):
     """Roulette européenne — .roulette <rouge|noir|pair|impair|manque|passe|0-36> <mise>"""
     if not pari:
         return await ctx.send(embed=discord.Embed(
-            title="🎡  ROULETTE",
+            title=season_titre("🎡  ROULETTE"),
             description=("Roulette européenne — **un seul zéro**.\n\n"
                          + "\n".join(f"`.roulette {k} <mise>` — {lib} · paie **×{mult:g}**"
                                      for k, (lib, mult, _f) in ROULETTE_MISES.items())
                          + "\n`.roulette 17 <mise>` — numéro plein · paie **×36**"),
-            color=0xc0392b))
+            color=season_tint(0xc0392b)))
     p = pari.lower().strip()
     plein = None
     if p.isdigit():
@@ -5739,7 +5754,7 @@ async def roulette_cmd(ctx, pari: str = None, mise: str = "50"):
         await ctx.send(f"ℹ️ Mise plafonnée à **{CASINO_MISE_MAX:,}**.", delete_after=6)
 
     msg = await ctx.send(embed=discord.Embed(
-        title="🎡  ROULETTE", description="*La bille tourne…*", color=0xc0392b))
+        title=season_titre("🎡  ROULETTE"), description="*La bille tourne…*", color=season_tint(0xc0392b)))
     await asyncio.sleep(1.6)
     n = random.randint(0, 36)
     coul = ("🟢 Vert" if n == 0 else
@@ -5755,8 +5770,8 @@ async def roulette_cmd(ctx, pari: str = None, mise: str = "50"):
         description=(f"Tu misais sur {lib if plein is not None else lib}.\n\n"
                      + (f"✅ **+{net:,} pièces**" if net > 0
                         else f"❌ **{net:,} pièces**")),
-        color=0x2ecc71 if gagne else 0xe74c3c)
-    e.set_footer(text=f"Mise : {m:,} pièces")
+        color=season_tint(0x2ecc71 if gagne else 0xe74c3c))
+    e.set_footer(text=season_pied(f"Mise : {m:,} pièces"))
     try:
         await msg.edit(embed=e)
     except Exception:
@@ -5811,25 +5826,25 @@ class CrashView(ui.View):
         gain = int(self.mise * self.encaisse)
         net = casino_payer(self.uid, gain, self.mise)
         await itx.response.edit_message(embed=discord.Embed(
-            title=f"💰  ENCAISSÉ À ×{self.encaisse:g}",
+            title=season_titre(f"💰  ENCAISSÉ À ×{season_brut(self.encaisse):g}"),
             description=(f"Tu sors avec **{gain:,} pièces**.\n"
                          f"{'💰 **+' + format(net, ',') + '**' if net > 0 else '💸 **' + format(net, ',') + '**'}"),
-            color=0x2ecc71), view=self)
+            color=season_tint(0x2ecc71)), view=self)
 
     def embed(self, etat="monte"):
         if etat == "crash":
             return discord.Embed(
-                title=f"💥  CRASH À ×{self.point:.2f}",
+                title=season_titre(f"💥  CRASH À ×{season_brut(self.point):.2f}"),
                 description=(f"Tu es resté trop longtemps.\n\n💸 **−{self.mise:,} pièces**"
                              if self.encaisse is None else "Tu étais déjà sorti."),
-                color=0xe74c3c)
+                color=season_tint(0xe74c3c))
         barre = "▰" * self.palier + "▱" * (len(CRASH_PALIERS) - self.palier)
         return discord.Embed(
             title=f"📈  ×{self.mult:g}",
             description=(f"`{barre}`\n\n"
                          f"Gain actuel : **{int(self.mise * self.mult):,} pièces**\n"
                          f"*Encaisse… ou attends le palier suivant.*"),
-            color=0xf39c12 if self.mult < 3 else 0xe67e22)
+            color=season_tint(0xf39c12 if self.mult < 3 else 0xe67e22))
 
     async def on_timeout(self):
         """Sans décision, la partie est perdue — la règle est annoncée."""
@@ -5849,11 +5864,11 @@ async def crash_cmd(ctx, mise: str = "50"):
     point = crash_tirer_point()
     vue = CrashView(uid, m, point)
     vue.message = await ctx.send(embed=discord.Embed(
-        title="📈  CRASH",
+        title=season_titre("📈  CRASH"),
         description=(f"Mise : **{m:,} pièces**\n\n"
                      f"Le multiplicateur va monter. Encaisse avant qu'il ne casse.\n"
                      f"*Si tu ne fais rien, tu perds ta mise.*"),
-        color=0xf39c12), view=vue)
+        color=season_tint(0xf39c12)), view=vue)
     await asyncio.sleep(2)
     # Un palier toutes les 2,2 s : lisible, et sans marteler l'API Discord.
     for i, mult in enumerate(CRASH_PALIERS, 1):
@@ -5880,9 +5895,9 @@ async def crash_cmd(ctx, mise: str = "50"):
         net = casino_payer(uid, gain, m)
         try:
             await vue.message.edit(embed=discord.Embed(
-                title=f"🚀  PLAFOND ×{CRASH_PALIERS[-1]:g}",
+                title=season_titre(f"🚀  PLAFOND ×{season_brut(CRASH_PALIERS[-1]):g}"),
                 description=f"La fusée est sortie de l'écran.\n\n💰 **+{net:,} pièces**",
-                color=0xf1c40f), view=vue)
+                color=season_tint(0xf1c40f)), view=vue)
         except Exception:
             pass
 
@@ -5919,7 +5934,7 @@ class HLView(ui.View):
         return True
 
     def embed(self, texte=None, coul=0x9b59b6):
-        e = discord.Embed(title="🃏  HIGHER / LOWER", color=coul)
+        e = discord.Embed(title=season_titre("🃏  HIGHER / LOWER"), color=season_tint(coul))
         e.add_field(name="Carte visible", value=f"# {carte_txt(self.carte)}", inline=False)
         if self.serie:
             e.add_field(name="🔥 Série",
@@ -5927,7 +5942,7 @@ class HLView(ui.View):
                               f"→ **{int(self.mise * self.mult):,} pièces**", inline=False)
         if texte:
             e.description = texte
-        e.set_footer(text=f"Mise : {self.mise:,} pièces  ·  As bas, Roi haut")
+        e.set_footer(text=season_pied(f"Mise : {self.mise:,} pièces  ·  As bas, Roi haut"))
         return e
 
     async def deviner(self, itx, plus_haut):
@@ -6028,14 +6043,14 @@ async def hl_cmd(ctx, mise: str = "50"):
 async def casino_cmd(ctx):
     """Le Casino du QG — .casino"""
     uid = str(ctx.author.id)
+    _bw = saison_mode() == "blackwood"
     e = discord.Embed(
-        title=("🃏  L'ARRIÈRE-SALLE" if saison_mode() == "blackwood"
-               else "🎰  CASINO DU QG"),
+        title=season_titre("🎰  CASINO DU QG", "🌙  Moon Casino"),
         description=(f"💰 Ton solde : **{economy_data[uid]['coins']:,} pièces**\n"
                      f"🎁 Cagnotte jackpot : **{jackpot_cagnotte:,} pièces**\n\n"
                      f"*Mise entre **{CASINO_MISE_MIN}** et "
                      f"**{CASINO_MISE_MAX:,}** pièces. `all` pour tout miser.*"),
-        color=season_color("alerte"))
+        color=season_color("accent" if _bw else "alerte"))
     e.add_field(name="🎰 `.slot <mise>`",
                 value="Trois symboles. Une paire paie, un triplé rapporte gros.", inline=False)
     e.add_field(name="🃏 `.blackjack <mise>`",
@@ -6048,7 +6063,7 @@ async def casino_cmd(ctx):
                 value="Plus haute ou plus basse ? Huit bonnes réponses, ×14.", inline=False)
     e.add_field(name="🏦 `.banque`",
                 value="Mettre de côté ce que tu ne veux pas risquer.", inline=False)
-    e.set_footer(text="La maison garde un léger avantage. Joue ce que tu peux perdre.")
+    e.set_footer(text=season_pied("La maison garde un léger avantage. Joue ce que tu peux perdre."))
     await ctx.send(embed=e)
 
 @bot.command(name="slot")
@@ -6094,26 +6109,26 @@ async def slot_cmd(ctx, mise: str = "50"):
         titre = "🎰 TRIPLE 💎 !!!" if r1 == "💎" else (
                 "🎰 TRIPLE 👑 !" if r1 == "👑" else "🎰 TRIPLE !")
         embed = discord.Embed(
-            title=titre,
+            title=season_titre(titre),
             description=(f"**{r1} {r2} {r3}**\n\n"
                          f"×{mult} — 🎉 **+{gain:,} pièces !**"),
-            color=0xf1c40f)
+            color=season_tint(0xf1c40f))
     elif r1 == r2 or r2 == r3 or r1 == r3:
         gain = mise * SLOT_PAIRE
         economy_data[uid]["coins"] += gain
         gazette_gain(uid, gain)
         embed = discord.Embed(
-            title="🎰 Paire !",
+            title=season_titre("🎰 Paire !"),
             description=f"**{r1} {r2} {r3}**\n\n✅ **+{gain:,} pièces !**",
-            color=0x2ecc71)
+            color=season_tint(0x2ecc71))
     else:
         embed = discord.Embed(
-            title="🎰 Raté...",
+            title=season_titre("🎰 Raté..."),
             description=f"**{r1} {r2} {r3}**\n\n💸 Perdu **{mise:,} pièces**",
-            color=0xe74c3c)
+            color=season_tint(0xe74c3c))
     if casino_boost_actif:
         embed.set_author(name="🌙 Nuit Casino — les triples paient davantage")
-    embed.set_footer(text=f"💰 Solde : {economy_data[uid]['coins']:,} pièces  •  Mise : {mise:,}")
+    embed.set_footer(text=season_pied(f"💰 Solde : {economy_data[uid]['coins']:,} pièces  •  Mise : {mise:,}"))
     await ctx.send(embed=embed)
 
 # ── Banque : source de vérité des intérêts ──
@@ -6138,14 +6153,14 @@ async def banque_cmd(ctx, action: str = None, montant: int = None):
     now = _time_module.time()
     if not action:
         return await ctx.send(embed=discord.Embed(
-            title="🏦 Banque du QG",
+            title=season_titre("🏦 Banque du QG"),
             description=("`.banque depot <montant>` — placer des pièces\n"
                          "`.banque retrait <montant>` — retirer une somme précise\n"
                          "`.banque retrait` — tout récupérer\n"
                          "`.banque solde` — voir ton compte\n\n"
                          f"📈 **+{int(BANQUE_TAUX_JOUR*100)} % d'intérêts par jour**, "
                          f"plafonnés à **{BANQUE_JOURS_MAX} jours**."),
-            color=0xf1c40f))
+            color=season_tint(0xf1c40f)))
     action = action.lower()
     if action == "depot":
         if not montant or montant <= 0: return await ctx.send("❌ Précise un montant !")
@@ -6153,7 +6168,7 @@ async def banque_cmd(ctx, action: str = None, montant: int = None):
         economy_data[uid]["coins"] -= montant
         bank_data[uid]["depot"] += montant
         bank_data[uid]["depot_time"] = now
-        await ctx.send(embed=discord.Embed(description=f"🏦 **{montant:,} pièces** déposées ! Intérêts +{int(BANQUE_TAUX_JOUR*100)} %/24h (max {BANQUE_JOURS_MAX} j) 📈", color=0x2ecc71))
+        await ctx.send(embed=discord.Embed(description=f"🏦 **{montant:,} pièces** déposées ! Intérêts +{int(BANQUE_TAUX_JOUR*100)} %/24h (max {BANQUE_JOURS_MAX} j) 📈", color=season_tint(0x2ecc71)))
     elif action in ("retrait", "retirer"):
         depot = bank_data[uid]["depot"]
         if depot == 0:
@@ -6166,11 +6181,11 @@ async def banque_cmd(ctx, action: str = None, montant: int = None):
             economy_data[uid]["coins"] += total_dispo
             bank_data[uid] = {"depot": 0, "depot_time": 0}
             return await ctx.send(embed=discord.Embed(
-                title="🏦 Retrait total",
+                title=season_titre("🏦 Retrait total"),
                 description=(f"Tu récupères **{total_dispo:,} pièces**\n"
                              f"*(dépôt {depot:,} + intérêts {interets:,})*\n\n"
                              f"💰 Nouveau solde : **{economy_data[uid]['coins']:,} pièces**"),
-                color=0x2ecc71))
+                color=season_tint(0x2ecc71)))
         if montant <= 0:
             return await ctx.send("❌ Précise un montant positif.")
 
@@ -6179,23 +6194,23 @@ async def banque_cmd(ctx, action: str = None, montant: int = None):
         reste = total_dispo - montant
         bank_data[uid] = {"depot": reste, "depot_time": now}
         await ctx.send(embed=discord.Embed(
-            title="🏦 Retrait partiel",
+            title=season_titre("🏦 Retrait partiel"),
             description=(f"Tu retires **{montant:,} pièces**.\n"
                          f"🏦 Il reste **{reste:,} pièces** en banque *(les intérêts repartent de zéro)*\n\n"
                          f"💰 Nouveau solde : **{economy_data[uid]['coins']:,} pièces**"),
-            color=0x2ecc71))
+            color=season_tint(0x2ecc71)))
     elif action == "solde":
         depot = bank_data[uid]["depot"]
         if depot == 0: return await ctx.send("🏦 Rien en banque !")
         interets = banque_interets(uid, now)
-        await ctx.send(embed=discord.Embed(title="🏦 Compte bancaire", description=f"💰 Dépôt : **{depot}**\n📈 Intérêts : **+{interets}**\n💎 Total : **{depot+interets}**", color=0xf1c40f))
+        await ctx.send(embed=discord.Embed(title=season_titre("🏦 Compte bancaire"), description=f"💰 Dépôt : **{depot}**\n📈 Intérêts : **+{interets}**\n💎 Total : **{depot+interets}**", color=season_tint(0xf1c40f)))
 
 @bot.command(name="jackpot")
 async def jackpot_cmd(ctx):
     """Voir la cagnotte jackpot — .jackpot"""
     await ctx.send(embed=discord.Embed(
         description=f"🎰 **Cagnotte Jackpot** : **{jackpot_cagnotte} pièces** accumulées !\n*Gagnez-la en étant le premier à poster exactement `!jackpot` dans le bon event !*",
-        color=0xf1c40f
+        color=season_tint(0xf1c40f)
     ))
 
 def build_shop_pages():
@@ -6295,10 +6310,10 @@ class RetireRoleView(ui.View):
         for it in self.children:
             it.disabled = True
         await interaction.response.edit_message(embed=discord.Embed(
-            title="🗑️ Rôle retiré",
+            title=season_titre("🗑️ Rôle retiré"),
             description=(f"**{role.name}** n'apparaît plus sur ton profil.\n\n"
                          f"⚠️ *Aucun remboursement — il faudra le racheter en boutique si tu le regrettes.*"),
-            color=0x95a5a6), view=self)
+            color=season_tint(0x95a5a6)), view=self)
         self.stop()
 
 @bot.command(name="retirerole", aliases=["enleverrole", "removerole", "roleoff"])
@@ -6309,14 +6324,14 @@ async def retirerole_cmd(ctx):
     if not possedes:
         return await ctx.send(embed=discord.Embed(
             description="🎭 Tu ne possèdes aucun rôle acheté en boutique.",
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
     liste = "\n".join(f"• **{r.name}**" for r in possedes)
     embed = discord.Embed(
-        title="🎭 Faire le tri dans tes rôles",
+        title=season_titre("🎭 Faire le tri dans tes rôles"),
         description=(f"Tu possèdes **{len(possedes)} rôle(s)** de la boutique :\n{liste}\n\n"
                      f"Choisis celui à retirer dans le menu.\n"
                      f"⚠️ **Aucun remboursement** — pour le récupérer, il faudra le racheter."),
-        color=0xff6b9d)
+        color=season_tint(0xff6b9d))
     await ctx.send(embed=embed, view=RetireRoleView(ctx.author, possedes))
 
 # ── 🏪 HABILLAGE — un pack saisonnier peut tout remplacer ici ──
@@ -6355,7 +6370,7 @@ async def shop_cmd(ctx, recherche: str = None):
     def fiche(iid):
         it = boutique_item(iid)
         if not it:
-            return discord.Embed(description="❌ Cet article n'existe plus.", color=0xe74c3c)
+            return discord.Embed(description="❌ Cet article n'existe plus.", color=season_tint(0xe74c3c))
         typ = boutique_type(iid)
         emo, ray, _c, _d = BOUTIQUE_RAYONS[boutique_rayon_de(it.get("cat"))]
         e = discord.Embed(title=it["nom"],
@@ -6383,7 +6398,7 @@ async def shop_cmd(ctx, recherche: str = None):
             e.add_field(name="📈 Progression",
                         value="**+1 %** par niveau — il monte quand tu discutes",
                         inline=False)
-            e.set_footer(text="`.pet` pour t'en occuper une fois adopté")
+            e.set_footer(text=season_pied("`.pet` pour t'en occuper une fois adopté"))
         for ccle, (cemo, cnom, ids, _cd) in BOUTIQUE_COLLECTIONS.items():
             if iid in ids:
                 ok = sum(1 for x in ids if boutique_possede(uid, x))
@@ -6393,10 +6408,10 @@ async def shop_cmd(ctx, recherche: str = None):
             e.add_field(name="🔒 Indisponible",
                         value=boutique_raison_indispo(iid)
                               + "\n*Si tu le possèdes déjà, tu le gardes.*", inline=False)
-            e.color = 0x7f8c8d
+            e.color = season_tint(0x7f8c8d)
         if boutique_est_nouveau(iid):
             e.set_author(name="🆕 NOUVEAU")
-        e.set_footer(text=f"`.acheter {iid}` pour l'acheter directement")
+        e.set_footer(text=season_pied(f"`.acheter {iid}` pour l'acheter directement"))
         return e
 
     def emb_accueil():
@@ -6432,8 +6447,8 @@ async def shop_cmd(ctx, recherche: str = None):
         e.add_field(name="🛒 Panier",
                     value=(f"**{nb}** article(s) · **{tot:,}** pièces" if nb
                            else "*vide*"), inline=False)
-        e.set_footer(text=f"{len(boutique_catalogue_complet())} articles au catalogue — "
-                          f"tout reste disponible dans les rayons")
+        e.set_footer(text=season_pied(f"{len(boutique_catalogue_complet())} articles au catalogue — "
+                          f"tout reste disponible dans les rayons"))
         return e
 
     PAR_PAGE = 9
@@ -6449,7 +6464,7 @@ async def shop_cmd(ctx, recherche: str = None):
                 titre += f"  ·  {s[1]} {s[2]}"
         pages = max(1, (len(arts) + PAR_PAGE - 1) // PAR_PAGE)
         page = max(0, min(page, pages - 1))
-        e = discord.Embed(title=titre, description=f"*{desc}*", color=H["couleur"])
+        e = discord.Embed(title=season_titre(titre), description=f"*{desc}*", color=H["couleur"])
         if not arts:
             e.description += "\n\n*Ce rayon est vide pour le moment.*"
             return e, pages, page
@@ -6467,13 +6482,13 @@ async def shop_cmd(ctx, recherche: str = None):
         pied = f"{len(arts)} article(s)"
         if pages > 1:
             pied += f"  ·  page {page + 1}/{pages}"
-        e.set_footer(text=pied + "  ·  `.shop <id>` pour une fiche")
+        e.set_footer(text=season_pied(pied + "  ·  `.shop <id>` pour une fiche"))
         return e, pages, page
 
     def emb_panier():
         lignes = panier_lignes(uid)
         nb, tot = panier_total(uid)
-        e = discord.Embed(title="🛒  TON PANIER", color=H["couleur"])
+        e = discord.Embed(title=season_titre("🛒  TON PANIER"), color=H["couleur"])
         if not lignes:
             e.description = "*Ton panier est vide.*\n\nParcours les rayons pour le remplir."
             return e
@@ -6486,14 +6501,14 @@ async def shop_cmd(ctx, recherche: str = None):
                          f"**TOTAL : {tot:,} pièces**\n"
                          f"💰 Ton solde : {economy_data[uid]['coins']:,}")
         if tot > economy_data[uid]["coins"]:
-            e.set_footer(text=f"Il te manque {tot - economy_data[uid]['coins']:,} pièces")
+            e.set_footer(text=season_pied(f"Il te manque {tot - economy_data[uid]['coins']:,} pièces"))
         else:
-            e.set_footer(text=f"{nb} article(s) — aucune pièce n'est réservée avant l'achat")
+            e.set_footer(text=season_pied(f"{nb} article(s) — aucune pièce n'est réservée avant l'achat"))
         return e
 
     def emb_favoris():
         f = favoris_get(uid)
-        e = discord.Embed(title="❤️  MES FAVORIS", color=H["couleur"])
+        e = discord.Embed(title=season_titre("❤️  MES FAVORIS"), color=H["couleur"])
         if not f:
             e.description = ("*Aucun favori.*\n\nOuvre la fiche d'un article "
                              "et mets-le de côté pour plus tard.")
@@ -6506,11 +6521,11 @@ async def shop_cmd(ctx, recherche: str = None):
             else:
                 corps.append(f"`{iid}` — *n'est plus disponible*")
         e.description = "\n".join(corps)
-        e.set_footer(text="Un favori ne réserve rien — c'est juste une envie")
+        e.set_footer(text=season_pied("Un favori ne réserve rien — c'est juste une envie"))
         return e
 
     def emb_collections():
-        e = discord.Embed(title="📦  COLLECTIONS",
+        e = discord.Embed(title=season_titre("📦  COLLECTIONS"),
                           description="*Des ensembles à réunir. Aucun bonus — "
                                       "juste le plaisir de compléter.*",
                           color=H["couleur"])
@@ -6530,7 +6545,7 @@ async def shop_cmd(ctx, recherche: str = None):
 
     def emb_possessions():
         p = possessions_lire(uid)
-        e = discord.Embed(title="🎒  MES POSSESSIONS", color=H["couleur"])
+        e = discord.Embed(title=season_titre("🎒  MES POSSESSIONS"), color=H["couleur"])
         vide = True
         if p["cosmetiques"]:
             vide = False
@@ -6578,7 +6593,7 @@ async def shop_cmd(ctx, recherche: str = None):
         if vide and not p["equipe"]:
             e.description = ("*Tu ne possèdes rien pour l'instant.*\n\n"
                              "Les achats apparaîtront ici, rangés selon ce qu'ils font.")
-        e.set_footer(text="`.macustom` pour équiper  ·  `.inventaire` pour utiliser un objet")
+        e.set_footer(text=season_pied("`.macustom` pour équiper  ·  `.inventaire` pour utiliser un objet"))
         return e
 
     # ── Vue ──
@@ -6825,7 +6840,7 @@ async def shop_cmd(ctx, recherche: str = None):
         if not it:
             return await ctx.send(embed=discord.Embed(
                 description=f"❌ Aucun article ne correspond à `{recherche}`.\n"
-                            f"*`.shop` pour parcourir les rayons.*", color=0xe74c3c))
+                            f"*`.shop` pour parcourir les rayons.*", color=season_tint(0xe74c3c)))
         v = ShopView("fiche", it["id"])
         return await ctx.send(embed=v.embed(), view=v)
     v = ShopView()
@@ -7363,7 +7378,7 @@ async def boutique_effet(ctx, uid, item):
         else:
             _lieu = "ton profil"
         return await ctx.send(embed=discord.Embed(
-            title="🍂 Acquis",
+            title=season_titre("🍂 Acquis"),
             description=f"**{item['nom']}** est à toi.\n"
                         f"*Tu le retrouveras sur {_lieu}.*",
             color=season_color()))
@@ -7392,7 +7407,7 @@ async def boutique_effet(ctx, uid, item):
         # ajout au panier au lieu de le découvrir après le débit.
         inventaire[uid][iid] = 1
         return await ctx.send(embed=discord.Embed(
-            title="🎉 Nouveau rôle !",
+            title=season_titre("🎉 Nouveau rôle !"),
             description=f"**{nom_role}** est à toi — regarde ta couleur dans la liste des membres.",
             color=couleur_role))
 
@@ -7415,7 +7430,7 @@ async def boutique_effet(ctx, uid, item):
         couleurs = {"Commun": 0x95a5a6, "Rare": 0x3498db, "Épique": 0x9b59b6,
                     "Légendaire": 0xf1c40f, "Mythique": 0xe74c3c}
         return await ctx.send(embed=discord.Embed(
-            title=f"🐾 {p['emoji']} {p['nom']} rejoint ton équipe !",
+            title=season_titre(f"🐾 {season_brut(p['emoji'])} {season_brut(p['nom'])} rejoint ton équipe !"),
             description=(f"**{p['rarete']}**\n\n{pet_bonus_texte(p, 1)}\n"
                          f"*+1 % par niveau — **sans plafond** grâce aux évolutions.*\n\n"
                          + ("🌟 Équipé automatiquement !" if pets_data[uid]["active"] == iid
@@ -7423,25 +7438,25 @@ async def boutique_effet(ctx, uid, item):
             color=couleurs.get(p["rarete"], 0x95a5a6)))
     if iid == "rolls_5":
         roll_data[uid]["rolls"] = min(roll_data[uid]["rolls"]+5, ROLLS_MAX+5)
-        return await ctx.send(embed=discord.Embed(description=f"🎰 **+5 rolls** ! ({roll_data[uid]['rolls']} restants)", color=0x2ecc71))
+        return await ctx.send(embed=discord.Embed(description=f"🎰 **+5 rolls** ! ({roll_data[uid]['rolls']} restants)", color=season_tint(0x2ecc71)))
     if iid == "boost_rarete":
         rarity_boost[uid] = 5
-        return await ctx.send(embed=discord.Embed(description=f"🎯 **Boost Rareté** actif pour 5 rolls !", color=0x9b59b6))
+        return await ctx.send(embed=discord.Embed(description=f"🎯 **Boost Rareté** actif pour 5 rolls !", color=season_tint(0x9b59b6)))
     if iid == "double_xp":
         double_xp_users[str(ctx.author.id)] = now + 3600
-        return await ctx.send(embed=discord.Embed(description=f"⚡ **Double XP** actif pendant 1h !", color=0x2ecc71))
+        return await ctx.send(embed=discord.Embed(description=f"⚡ **Double XP** actif pendant 1h !", color=season_tint(0x2ecc71)))
     if iid == "protection":
         shield_active[uid] = now + 7200
-        return await ctx.send(embed=discord.Embed(description=f"🌟 **Protection Divine** active 2h !", color=0xf1c40f))
+        return await ctx.send(embed=discord.Embed(description=f"🌟 **Protection Divine** active 2h !", color=season_tint(0xf1c40f)))
     if iid == "shield":
         shield_active[uid] = now + 1800
-        return await ctx.send(embed=discord.Embed(description=f"🛡️ **Bouclier** actif 30min !", color=0x3498db))
+        return await ctx.send(embed=discord.Embed(description=f"🛡️ **Bouclier** actif 30min !", color=season_tint(0x3498db)))
     if iid == "fav_slot_5":
         if fav_slots[uid] >= 5:
             economy_data[uid]["coins"] += item["prix"]
             return await ctx.send("❌ Tu as déjà 5 slots favoris ou plus !")
         fav_slots[uid] = 5
-        return await ctx.send(embed=discord.Embed(description="🔓 **Slots favoris augmentés à 5 !** Utilise `.cartefav add` 🌟", color=0x2ecc71))
+        return await ctx.send(embed=discord.Embed(description="🔓 **Slots favoris augmentés à 5 !** Utilise `.cartefav add` 🌟", color=season_tint(0x2ecc71)))
     if iid == "fav_slot_10":
         if fav_slots[uid] < 5:
             economy_data[uid]["coins"] += item["prix"]
@@ -7450,7 +7465,7 @@ async def boutique_effet(ctx, uid, item):
             economy_data[uid]["coins"] += item["prix"]
             return await ctx.send("❌ Tu as déjà 10 slots favoris !")
         fav_slots[uid] = 10
-        return await ctx.send(embed=discord.Embed(description="🔓 **Slots favoris augmentés à 10 !** 🌟🌟", color=0x2ecc71))
+        return await ctx.send(embed=discord.Embed(description="🔓 **Slots favoris augmentés à 10 !** 🌟🌟", color=season_tint(0x2ecc71)))
     # ── Réductions de claim permanentes ──
     if iid in ("claim_10", "claim_15", "claim_20"):
         cible = {"claim_10": 20, "claim_15": 15, "claim_20": 10}[iid]
@@ -7461,7 +7476,7 @@ async def boutique_effet(ctx, uid, item):
         restant = CLAIM_COOLDOWN_MINUTES - cible
         return await ctx.send(embed=discord.Embed(
             description=f"⚡ Ton cooldown de claim passe à **{restant} minutes** ! *(permanent)*",
-            color=0x2ecc71))
+            color=season_tint(0x2ecc71)))
 
     # ── Cadeau Mystère : une carte Rare ou mieux ──
     if iid == "cadeau":
@@ -7497,31 +7512,31 @@ async def boutique_effet(ctx, uid, item):
             roll_data[uid]["rolls"] = min(r * 2, ROLLS_MAX + 5)
             return await ctx.send(embed=discord.Embed(
                 description=f"🎰 **DOUBLÉ !** Tu passes de {r} à **{roll_data[uid]['rolls']} rolls** ! 🎉",
-                color=0x2ecc71))
+                color=season_tint(0x2ecc71)))
         roll_data[uid]["rolls"] = 0
         return await ctx.send(embed=discord.Embed(
-            description=f"💀 **Perdu !** Tes {r} rolls sont partis en fumée...", color=0xe74c3c))
+            description=f"💀 **Perdu !** Tes {r} rolls sont partis en fumée...", color=season_tint(0xe74c3c)))
 
     # ── Oracle : chance de carte mystère sur les 3 prochains rolls ──
     if iid == "oracle":
         oracle_actif[uid] = 3
         return await ctx.send(embed=discord.Embed(
             description="🔮 **Oracle activé !** Tes **3 prochains rolls** ont 1 chance sur 5 de faire tomber une carte rare bonus.",
-            color=0x9b59b6))
+            color=season_tint(0x9b59b6)))
 
     # ── Amulette : renvoie les sabotages ──
     if iid == "amulette":
         amulette_active[uid] = now + 1200
         return await ctx.send(embed=discord.Embed(
             description="🪬 **Amulette active 20 min** — tout sabotage se retournera contre son auteur.",
-            color=0x9b59b6))
+            color=season_tint(0x9b59b6)))
 
     # ── ☕ Café : recharge 3 rolls ──
     if iid == "cafe":
         roll_data[uid]["rolls"] = min(roll_data[uid]["rolls"] + 3, ROLLS_MAX + 5)
         return await ctx.send(embed=discord.Embed(
             description=f"☕ Un café bien serré — **+3 rolls** ! *({roll_data[uid]['rolls']} disponibles)*",
-            color=0x2ecc71))
+            color=season_tint(0x2ecc71)))
 
     # ── 🐷 Tirelire : pari sur soi-même ──
     if iid == "tirelire":
@@ -7542,9 +7557,9 @@ async def boutique_effet(ctx, uid, item):
         else:
             txt = f"Elle contenait **{gain:,} pièces**.\n💸 Tu perds **{abs(net):,} pièces**… ça arrive."
         return await ctx.send(embed=discord.Embed(
-            title="🐷 Tu casses la tirelire…",
+            title=season_titre("🐷 Tu casses la tirelire…"),
             description=txt + "\n\n*Espérance de gain : environ 4 550 p pour 5 000 misés — la maison gagne.*",
-            color=0x2ecc71 if net > 0 else 0xe74c3c))
+            color=season_tint(0x2ecc71 if net > 0 else 0xe74c3c)))
 
     # ── 🔄 Friandise : 300 XP au compagnon ──
     if iid == "reroll_pet":
@@ -7556,13 +7571,13 @@ async def boutique_effet(ctx, uid, item):
         return await ctx.send(embed=discord.Embed(
             description=(f"🍬 **{pdb['emoji']} {pdb['nom']}** dévore la friandise — **+300 XP** !"
                          + (f"\n🆙 Il passe **niveau {lvl}** ! {pet_bonus_texte(pdb, lvl)}" if leveled else "")),
-            color=0x2ecc71))
+            color=season_tint(0x2ecc71)))
 
     # ── 📅 Double Daily ──
     if iid == "boost_daily":
         double_daily[uid] = True
         return await ctx.send(embed=discord.Embed(
-            description="📅 Ton **prochain `.daily`** rapportera le **double** !", color=0x2ecc71))
+            description="📅 Ton **prochain `.daily`** rapportera le **double** !", color=season_tint(0x2ecc71)))
 
     # ── 🔍 Loupe : révèle 3 cartes disponibles ──
     if iid == "loupe":
@@ -7577,33 +7592,33 @@ async def boutique_effet(ctx, uid, item):
             f"{RARETE_EMOJI.get(ANIME_CARDS_DB[k]['rarete'],'')} **{ANIME_CARDS_DB[k]['nom']}** — *{ANIME_CARDS_DB[k]['serie']}*"
             for k in tirage)
         return await ctx.send(embed=discord.Embed(
-            title="🔍 La loupe révèle…",
+            title=season_titre("🔍 La loupe révèle…"),
             description=f"Ces cartes rares n'appartiennent **à personne** :\n\n{lignes}\n\n*À toi de les faire tomber !*",
-            color=0x9b59b6))
+            color=season_tint(0x9b59b6)))
 
     # ── 📣 Mégaphone ──
     if iid == "megaphone":
         megaphone_actif[uid] = True
         return await ctx.send(embed=discord.Embed(
-            description="📣 Ton **prochain message** sera annoncé en grand dans ce salon !", color=0x2ecc71))
+            description="📣 Ton **prochain message** sera annoncé en grand dans ce salon !", color=season_tint(0x2ecc71)))
 
     # ── 🧲 Aimant : prochain roll garanti Rare+ ──
     if iid == "aimant":
         aimant_actif[uid] = True
         return await ctx.send(embed=discord.Embed(
-            description="🧲 Ton **prochain roll** est garanti **Rare ou mieux** !", color=0x2ecc71))
+            description="🧲 Ton **prochain roll** est garanti **Rare ou mieux** !", color=season_tint(0x2ecc71)))
 
     # ── 🕰️ Sablier : claim rechargé ──
     if iid == "sablier":
         claim_cooldown.pop(uid, None)
         return await ctx.send(embed=discord.Embed(
-            description="🕰️ Le sable s'inverse — ton **claim est de nouveau disponible** !", color=0x2ecc71))
+            description="🕰️ Le sable s'inverse — ton **claim est de nouveau disponible** !", color=season_tint(0x2ecc71)))
 
     # ── 🧿 Œil du Destin ──
     if iid == "oeil":
         oeil_destin[uid] = 3
         return await ctx.send(embed=discord.Embed(
-            description="🧿 Tes **3 prochains rolls** te seront révélés à l'avance.", color=0x2ecc71))
+            description="🧿 Tes **3 prochains rolls** te seront révélés à l'avance.", color=season_tint(0x2ecc71)))
 
     # ── 🔮 Boule de Cristal : qui a wishé mes cartes ──
     if iid == "cristal":
@@ -7616,10 +7631,10 @@ async def boutique_effet(ctx, uid, item):
                 m = ctx.guild.get_member(int(autre))
                 convoitees.append(f"**{ANIME_CARDS_DB[k]['nom']}** — convoitée par *{m.display_name if m else 'un membre'}*")
         return await ctx.send(embed=discord.Embed(
-            title="🔮 La boule s'éclaircit…",
+            title=season_titre("🔮 La boule s'éclaircit…"),
             description=("\n".join(convoitees[:15]) if convoitees
                          else "*Personne ne convoite tes cartes… pour l'instant.*"),
-            color=0x9b59b6))
+            color=season_tint(0x9b59b6)))
 
     # ── 🧪 Potion d'XP ──
     if iid == "potionxp":
@@ -7635,7 +7650,7 @@ async def boutique_effet(ctx, uid, item):
             description=("🧪 Tu bois la potion — **+500 XP** !"
                          + (f"\n🆙 **Niveau {xp_data[uid]['level']}** atteint "
                             f"(+{monte} point{'s' if monte > 1 else ''} d'amélioration) !" if monte else "")),
-            color=0x2ecc71))
+            color=season_tint(0x2ecc71)))
 
     # ── 💊 Antidote ──
     if iid == "antidote":
@@ -7647,34 +7662,34 @@ async def boutique_effet(ctx, uid, item):
         return await ctx.send(embed=discord.Embed(
             description=(f"💊 Antidote bu — **{n} malédiction(s)** annulée(s)." if n
                          else "💊 Tu n'étais sous aucune malédiction… mais ça fait du bien."),
-            color=0x2ecc71))
+            color=season_tint(0x2ecc71)))
 
     # ── 🍀 Trèfle : gains d'events doublés 1 h ──
     if iid == "trefle":
         import time as _t
         trefle_actif[uid] = _t.time() + 3600
         return await ctx.send(embed=discord.Embed(
-            description="🍀 Tes gains d'**events sont doublés** pendant **1 heure** !", color=0x2ecc71))
+            description="🍀 Tes gains d'**events sont doublés** pendant **1 heure** !", color=season_tint(0x2ecc71)))
 
     # ── 🎺 Fanfare ──
     if iid == "fanfare":
         fanfare_actif[uid] = True
         return await ctx.send(embed=discord.Embed(
-            description="🎺 Ton **prochain passage de niveau** sera annoncé en grand !", color=0x2ecc71))
+            description="🎺 Ton **prochain passage de niveau** sera annoncé en grand !", color=season_tint(0x2ecc71)))
 
     # ── 🔗 Cadenas Personnel ──
     if iid == "cadenasp":
         import time as _t
         cadenas_perso[uid] = _t.time() + 86400
         return await ctx.send(embed=discord.Embed(
-            description="🔗 Tu es **immunisé contre le braquage** pendant **24 heures**.", color=0x2ecc71))
+            description="🔗 Tu es **immunisé contre le braquage** pendant **24 heures**.", color=season_tint(0x2ecc71)))
 
     # ── 💌 Lettre Anonyme ──
     if iid == "lettre":
         inventaire[uid]["lettre"] += 1
         return await ctx.send(embed=discord.Embed(
             description="💌 Lettre achetée ! Utilise `.lettre #salon <ton message>` pour l'envoyer anonymement.",
-            color=0x2ecc71))
+            color=season_tint(0x2ecc71)))
 
     # ── 🎨 Cosmétiques ──
     if iid in ("badge", "couleur", "citation", "banniere", "cadre", "titre", "emojiperso", "theme"):
@@ -7686,22 +7701,22 @@ async def boutique_effet(ctx, uid, item):
         if iid == "theme":
             profil_custom[uid]["cadre_debloque"] = True   # les deux clés se valent
         return await ctx.send(embed=discord.Embed(
-            title="🎨 Personnalisation débloquée !",
+            title=season_titre("🎨 Personnalisation débloquée !"),
             description=(f"Configure-la avec `{commandes[iid]}`\n"
                          f"Elle apparaîtra sur ton `.profil`.\n\n"
                          f"*`.macustom` regroupe tout au même endroit.*"),
-            color=0xff6fd8))
+            color=season_tint(0xff6fd8)))
 
     # ── Items offensifs : rangés dans l'inventaire ──
     if iid in ("freeze", "curse", "cadenas", "bombe_gacha", "fantome", "malediction", "vol_roll"):
         inventaire[uid][iid] += 1
         return await ctx.send(embed=discord.Embed(
-            title="🛒 Achat réussi !",
+            title=season_titre("🛒 Achat réussi !"),
             description=(f"✅ **{item['nom']}** ajouté à ton inventaire *(x{inventaire[uid][iid]})*\n"
                          f"Utilise-le avec `.utiliser {iid} @joueur`"),
-            color=0x2ecc71))
+            color=season_tint(0x2ecc71)))
 
-    await ctx.send(embed=discord.Embed(title="🛒 Achat réussi !", description=f"✅ **{item['nom']}** acheté !", color=0x2ecc71))
+    await ctx.send(embed=discord.Embed(title=season_titre("🛒 Achat réussi !"), description=f"✅ **{item['nom']}** acheté !", color=season_tint(0x2ecc71)))
 
 # ── 💳 CHECKOUT ATOMIQUE ──
 # ============================================================
@@ -8331,7 +8346,7 @@ class TrickOrTreatView(ui.View):
             color=season_color("alerte" if p.get("etrange") else "principal"))
         if lignes:
             e.add_field(name="\u200b", value="\n".join(lignes), inline=False)
-        e.set_footer(text=f"{len(faites)}/{TOT_VISITES_MAX} maisons visitées")
+        e.set_footer(text=season_pied(f"{len(faites)}/{TOT_VISITES_MAX} maisons visitées"))
         await itx.response.send_message(embed=e, ephemeral=True)
 
     def bilan(self):
@@ -8343,7 +8358,7 @@ async def run_trick_or_treat(channel, guild):
     """🍬 Trick or Treat — la rue de Blackwood."""
     portes = tot_portes_du_soir()
     e = discord.Embed(
-        title="🍬  TRICK OR TREAT",
+        title=season_titre("🍬  TRICK OR TREAT"),
         description=(f"*{tot_ambiance()}*\n\n"
                      f"**{len(portes)} maisons** ce soir. Tu peux en faire "
                      f"**{TOT_VISITES_MAX}**.\n"
@@ -8366,7 +8381,7 @@ async def run_trick_or_treat(channel, guild):
             blackwood_progress(_u, "tot_porte", n=len(_p),
                                guild_id=guild.id, event="trickortreat")
     fin = discord.Embed(
-        title="🍬  LA RUE SE VIDE",
+        title=season_titre("🍬  LA RUE SE VIDE"),
         description=(f"**{n_j}** habitant(s) sont sortis ce soir, "
                      f"**{n_p}** portes ont été frappées.\n\n"
                      f"*Comparez vos sacs.*" if n_j else
@@ -8528,7 +8543,7 @@ class DossierView(ui.View):
         e.add_field(name="Déclaration",
                     value=self.aff["def"]["temoignages"].get(k, "*Silence.*"),
                     inline=False)
-        e.set_footer(text="Personne d'autre ne voit ce que tu consultes.")
+        e.set_footer(text=season_pied("Personne d'autre ne voit ce que tu consultes."))
         await itx.response.send_message(embed=e, ephemeral=True)
 
     async def _lieu(self, itx):
@@ -8592,7 +8607,7 @@ async def run_dossier(channel, guild, cle=None):
     vue = DossierView(aff, DOS_PHASE_ENQUETE + DOS_PHASE_DEBAT + DOS_PHASE_VOTE)
     event_attacher_vue(guild.id, "dossier", vue)
     await channel.send(embed=discord.Embed(
-        title="🔍  L'ENQUÊTE EST OUVERTE",
+        title=season_titre("🔍  L'ENQUÊTE EST OUVERTE"),
         description=("Interrogez, fouillez. **Ce que vous consultez reste "
                      "privé.**\n\nVous aurez ensuite quelques minutes pour "
                      "confronter vos trouvailles."),
@@ -8600,7 +8615,7 @@ async def run_dossier(channel, guild, cle=None):
     await asyncio.sleep(DOS_PHASE_ENQUETE)
 
     await channel.send(embed=discord.Embed(
-        title="💬  MISE EN COMMUN",
+        title=season_titre("💬  MISE EN COMMUN"),
         description=("L'enquête reste ouverte, mais il est temps de parler.\n"
                      "*Qu'avez-vous trouvé que les autres n'ont pas vu ?*"),
         color=season_color("or")))
@@ -8608,7 +8623,7 @@ async def run_dossier(channel, guild, cle=None):
 
     vue.passer_au_vote()
     await channel.send(embed=discord.Embed(
-        title="⚖️  L'ACCUSATION",
+        title=season_titre("⚖️  L'ACCUSATION"),
         description=("Chacun accuse **pour soi**. Il n'y a pas de vote "
                      "collectif : avoir raison seul vaut mieux que suivre "
                      "les autres.\n\n*Une seule réponse, définitive.*"),
@@ -8902,7 +8917,7 @@ async def run_ne_quitte_pas_ta_chambre(channel, guild, difficulte=None):
     stimuli = nq_stimuli_nuit(NQ_TOURS, difficulte)
 
     intro = discord.Embed(
-        title="🚪  NE QUITTE PAS TA CHAMBRE",
+        title=season_titre("🚪  NE QUITTE PAS TA CHAMBRE"),
         description=(
             "*Tu es rentré. Tu as fermé à clé. Tu as allumé une bougie.*\n\n"
             "Cette nuit a des règles. **Personne ne te les dira.**\n"
@@ -8926,13 +8941,13 @@ async def run_ne_quitte_pas_ta_chambre(channel, guild, difficulte=None):
         vue = NQView(partie, st, NQ_TEMPS_TOUR)
         event_attacher_vue(guild.id, "nequittepas", vue)
         e = discord.Embed(
-            title=f"🕯️  TOUR {tour} / {len(stimuli)}",
+            title=season_titre(f"🕯️  TOUR {season_brut(tour)} / {season_brut(len(stimuli))}"),
             description=f"**{st['texte']}**",
             color=season_color("alerte" if st["intensite"] >= 3 else "neutre"))
         if tour == 1:
-            e.set_footer(text="Choisis. Tu as un peu plus d'une minute.")
+            e.set_footer(text=season_pied("Choisis. Tu as un peu plus d'une minute."))
         elif vivants:
-            e.set_footer(text=f"🕯️ {len(vivants)} encore éveillé(s)")
+            e.set_footer(text=season_pied(f"🕯️ {len(vivants)} encore éveillé(s)"))
         await channel.send(embed=e, view=vue)
         await asyncio.sleep(NQ_TEMPS_TOUR)
         vue.stop()
@@ -8954,7 +8969,7 @@ async def run_ne_quitte_pas_ta_chambre(channel, guild, difficulte=None):
                          f"🌑 **{len(morts)}** n'ont pas passé ce tour."),
             color=season_color("neutre"))
         if partie["joueurs"]:
-            syn.set_footer(text=f"🕯️ {len(survivants)} encore là")
+            syn.set_footer(text=season_pied(f"🕯️ {len(survivants)} encore là"))
         await channel.send(embed=syn)
         await asyncio.sleep(4)
 
@@ -8964,7 +8979,7 @@ async def run_ne_quitte_pas_ta_chambre(channel, guild, difficulte=None):
     survivants = [e for e in partie["joueurs"].values() if e.vivant]
     parfaits = [e for e in survivants if e.erreurs == 0]
     fin = discord.Embed(
-        title="🌅  LE JOUR SE LÈVE",
+        title=season_titre("🌅  LE JOUR SE LÈVE"),
         description=(f"*{rs['murmure']}*\n\n"
                      + (f"**{len(survivants)}** ont tenu jusqu'au matin."
                         if survivants else
@@ -9174,7 +9189,7 @@ async def run_une_nuit_une_vie(channel, guild):
     insc = UNInscription(partie, UN_INSCRIPTION)
     event_attacher_vue(guild.id, "unenuit", insc)
     await channel.send(embed=discord.Embed(
-        title="🕯️  UNE NUIT, UNE SEULE VIE",
+        title=season_titre("🕯️  UNE NUIT, UNE SEULE VIE"),
         description=("*Sept épreuves. Une erreur suffit.*\n\n"
                      "Tu n'entres qu'une fois. Si tu tombes, tu restes — "
                      "et tu regardes les autres continuer.\n\n"
@@ -9208,10 +9223,10 @@ async def run_une_nuit_une_vie(channel, guild):
         vue = UNView(partie, options, str(bonne), UN_TEMPS_EPREUVE)
         event_attacher_vue(guild.id, "unenuit", vue)
         await channel.send(embed=discord.Embed(
-            title=f"🕯️  ÉPREUVE {i}",
+            title=season_titre(f"🕯️  ÉPREUVE {season_brut(i)}"),
             description=question,
             color=season_color("neutre")).set_footer(
-                text=f"🕯️ {len(partie['vivants'])} survivant(s)"), view=vue)
+                text=season_pied(f"🕯️ {len(partie['vivants'])} survivant(s)")), view=vue)
         await asyncio.sleep(UN_TEMPS_EPREUVE)
         vue.stop()
         if event_est_stoppe(guild.id, "unenuit"):
@@ -9226,7 +9241,7 @@ async def run_une_nuit_une_vie(channel, guild):
                          + (f"🌑 **{len(tombes)}** éliminé(s)."
                             if tombes else "*Tout le monde a tenu.*")),
             color=season_color("neutre"))
-        e.set_footer(text=f"🕯️ {len(partie['vivants'])} survivant(s)")
+        e.set_footer(text=season_pied(f"🕯️ {len(partie['vivants'])} survivant(s)"))
         await channel.send(embed=e)
         await asyncio.sleep(5)
 
@@ -9243,10 +9258,10 @@ async def run_une_nuit_une_vie(channel, guild):
         titre, desc = ("🌑  PERSONNE",
                        "*La nuit n'a laissé personne. Ce sont des choses "
                        "qui arrivent à Blackwood.*")
-    fin = discord.Embed(title=titre, description=desc,
+    fin = discord.Embed(title=season_titre(titre), description=desc,
                         color=season_color("or" if v else "neutre"))
     if partie["elimines"]:
-        fin.set_footer(text=f"🌑 {len(partie['elimines'])} tombé(s) cette nuit")
+        fin.set_footer(text=season_pied(f"🌑 {len(partie['elimines'])} tombé(s) cette nuit"))
     if not event_est_stoppe(guild.id, "unenuit"):
         for _u in v:
             blackwood_progress(_u, "flamme_survie", guild_id=guild.id, event="unenuit")
@@ -10674,14 +10689,14 @@ def ticket_embed(source, achetes, total):
         _e, _l, exp = boutique_nature(it["id"])
         lignes.append(f"{it['nom']}{q_txt} — **{st:,}**\n　*{exp}*")
     e = discord.Embed(
-        title="🧾  BOUTIQUE AKARI",
+        title=season_titre("🧾  BOUTIQUE AKARI"),
         description=("\n".join(lignes)
                      + "\n" + "─" * 18
                      + f"\n**TOTAL : {total:,} pièces**"),
-        color=0x2ecc71)
+        color=season_tint(0x2ecc71))
     m = source_membre(source)
-    e.set_footer(text=f"💰 Solde restant : "
-                      f"{economy_data[str(m.id)]['coins']:,} pièces")
+    e.set_footer(text=season_pied(f"💰 Solde restant : "
+                      f"{economy_data[str(m.id)]['coins']:,} pièces"))
     return e
 
 @bot.command(name="acheter")
@@ -10730,9 +10745,9 @@ async def marier_cmd(ctx, cible: discord.Member = None):
         return await ctx.send("❌ Tu es déjà marié(e) ! `.divorcer` d'abord.")
     demandes_mariage[ctx.author.id] = cible.id
     await ctx.send(embed=discord.Embed(
-        title="💍 Demande en Mariage !",
+        title=season_titre("💍 Demande en Mariage !"),
         description=f"💜 **{ctx.author.mention}** demande en mariage **{cible.mention}** !\n\n{cible.mention}, tape `.accepter` pour dire **Oui** 💍 ou `.refuser` pour Non 💔",
-        color=0xff6b9d
+        color=season_tint(0xff6b9d)
     ))
 
 @bot.command(name="accepter")
@@ -10745,7 +10760,7 @@ async def accepter_mariage(ctx):
     mariages[str(ctx.author.id)] = demandeur_id
     unlock_achievement(str(ctx.author.id), "mariage", ctx.channel)
     unlock_achievement(str(demandeur_id), "mariage", ctx.channel)
-    await ctx.send(embed=discord.Embed(title="💍 Mariage du QG Kdrama ! 🎊", description=f"🎉 **{demandeur.mention}** et **{ctx.author.mention}** sont maintenant mariés ! 💜", color=0xff6b9d))
+    await ctx.send(embed=discord.Embed(title=season_titre("💍 Mariage du QG Kdrama ! 🎊"), description=f"🎉 **{demandeur.mention}** et **{ctx.author.mention}** sont maintenant mariés ! 💜", color=season_tint(0xff6b9d)))
 
 @bot.command(name="refuser")
 async def refuser_mariage(ctx):
@@ -10753,7 +10768,7 @@ async def refuser_mariage(ctx):
     if not demandeur_id: return await ctx.send("❌ Aucune demande en attente !")
     demandeur = ctx.guild.get_member(demandeur_id)
     demandes_mariage.pop(demandeur_id, None)
-    await ctx.send(embed=discord.Embed(description=f"💔 **{ctx.author.mention}** a refusé la demande de **{demandeur.mention}**...", color=0xe74c3c))
+    await ctx.send(embed=discord.Embed(description=f"💔 **{ctx.author.mention}** a refusé la demande de **{demandeur.mention}**...", color=season_tint(0xe74c3c)))
 
 @bot.command(name="divorcer")
 async def divorcer_cmd(ctx):
@@ -10761,7 +10776,7 @@ async def divorcer_cmd(ctx):
     if uid not in mariages: return await ctx.send("❌ Tu n'es pas marié(e) !")
     partner_id = str(mariages[uid])
     mariages.pop(uid, None); mariages.pop(partner_id, None)
-    await ctx.send(embed=discord.Embed(description=f"💔 **{ctx.author.mention}** a divorcé... 😢", color=0xe74c3c))
+    await ctx.send(embed=discord.Embed(description=f"💔 **{ctx.author.mention}** a divorcé... 😢", color=season_tint(0xe74c3c)))
 
 @bot.command(name="anniversaire")
 async def anniversaire_cmd(ctx, date: str = None):
@@ -10773,9 +10788,9 @@ async def anniversaire_cmd(ctx, date: str = None):
         if not lignes:
             return await ctx.send("🎂 Aucun anniversaire d'un membre présent.")
         embed = discord.Embed(
-            title="🎂 Anniversaires du QG",
+            title=season_titre("🎂 Anniversaires du QG"),
             description="*Classés par prochaine occurrence.*",
-            color=0xff6b9d)
+            color=season_tint(0xff6b9d))
         auj = [x for x in lignes if x[2] == 0]
         suite = [x for x in lignes if x[2] > 0]
         if auj:
@@ -10786,7 +10801,7 @@ async def anniversaire_cmd(ctx, date: str = None):
             bloc = "\n".join(f"`{lib}` — {nom}" for nom, _d, _j, lib in suite[:15])
             embed.add_field(name="📅 À venir", value=bloc, inline=False)
             if len(suite) > 15:
-                embed.set_footer(text=f"{len(suite) - 15} autre(s) plus tard dans l'année")
+                embed.set_footer(text=season_pied(f"{len(suite) - 15} autre(s) plus tard dans l'année"))
         return await ctx.send(embed=embed)
     try:
         j, mo = date.split("/")
@@ -10806,18 +10821,20 @@ async def anniversaire_cmd(ctx, date: str = None):
             description=(f"🔒 Ta date est enregistrée au **{ancienne}**.\n"
                          f"Elle pourra être modifiée dans **{jours} jour(s)**.\n\n"
                          f"*Akari préfère éviter les anniversaires à répétition.*"),
-            color=0xe67e22))
+            color=season_tint(0xe67e22)))
     anniv_enregistrer(uid, date)
     save_all_data()
     txt = f"🎂 Anniversaire enregistré le **{date}** ! 🎉"
     if ancienne:
         txt = f"🎂 Date changée : {ancienne} → **{date}**."
-    await ctx.send(embed=discord.Embed(description=txt, color=0xff6b9d))
+    await ctx.send(embed=discord.Embed(description=txt, color=season_tint(0xff6b9d)))
 
 snipe_data = {}
 
 @bot.event
 async def on_message_delete(message):
+    if not donnees_charger():
+        return
     if not message.author.bot:
         snipe_data[message.channel.id] = {"content": message.content, "author": message.author}
 
@@ -10827,13 +10844,13 @@ async def snipe_cmd(ctx):
     if not data: return await ctx.send("❌ Rien à snipe !")
     await ctx.send(embed=discord.Embed(
         description=f"👻 **{data['author'].display_name}** avait écrit :\n> {data['content']}",
-        color=0x95a5a6
+        color=season_tint(0x95a5a6)
     ))
 
 @bot.command(name="avatar")
 async def avatar_cmd(ctx, member: discord.Member = None):
     m = member or ctx.author
-    embed = discord.Embed(title=f"🖼️ Avatar de {m.display_name}", color=0x3498db)
+    embed = discord.Embed(title=season_titre(f"🖼️ Avatar de {season_brut(m.display_name)}"), color=season_tint(0x3498db))
     embed.set_image(url=m.display_avatar.url)
     await ctx.send(embed=embed)
 
@@ -10845,7 +10862,7 @@ async def activite_cmd(ctx, membre: discord.Member = None):
 
     def fiche():
         mj, ms, mt, vj, vs, vt = act_lire(uid)
-        e = discord.Embed(title=f"📊 Activité de {cible.display_name}", color=0x5865F2)
+        e = discord.Embed(title=season_titre(f"📊 Activité de {season_brut(cible.display_name)}"), color=season_tint(0x5865F2))
         e.set_thumbnail(url=cible.display_avatar.url)
         e.add_field(name="💬 Messages",
                     value=(f"Aujourd'hui : **{mj:,}**\n"
@@ -10855,7 +10872,7 @@ async def activite_cmd(ctx, membre: discord.Member = None):
                     value=(f"Aujourd'hui : **{act_duree(vj)}**\n"
                            f"Cette semaine : **{act_duree(vs)}**\n"
                            f"Total : **{act_duree(vt)}**"), inline=True)
-        e.set_footer(text="Jour et semaine comptent depuis la mise en place du suivi")
+        e.set_footer(text=season_pied("Jour et semaine comptent depuis la mise en place du suivi"))
         return e
 
     PER = {"jour": ("Aujourd'hui", 0, 3), "semaine": ("Cette semaine", 1, 4),
@@ -10872,7 +10889,7 @@ async def activite_cmd(ctx, membre: discord.Member = None):
                 lignes.append((u, val))
         lignes.sort(key=lambda x: (-x[1], x[0]))
         titre = "💬 TOP MESSAGES" if kind == "msg" else "🎙️ TOP VOCAL"
-        e = discord.Embed(title=f"{titre} — {lib}", color=0x5865F2)
+        e = discord.Embed(title=season_titre(f"{titre} — {lib}"), color=season_tint(0x5865F2))
         if not lignes:
             e.description = "*Aucune activité enregistrée sur cette période.*"
             return e
@@ -10885,8 +10902,8 @@ async def activite_cmd(ctx, membre: discord.Member = None):
                          else f"{med} **{nom}** — {act_duree(val)}")
         e.description = "\n".join(corps)
         moi = next((i for i, (u, _) in enumerate(lignes, 1) if u == str(ctx.author.id)), None)
-        e.set_footer(text=(f"Tu es {moi}e sur {len(lignes)}" if moi
-                           else f"Tu n'apparais pas encore — {len(lignes)} classé(s)"))
+        e.set_footer(text=(season_pied(f"Tu es {moi}e sur {len(lignes)}" if moi
+                           else f"Tu n'apparais pas encore — {len(lignes)} classé(s)")))
         return e
 
     class ActView(ui.View):
@@ -10942,9 +10959,9 @@ async def stats_cmd(ctx, membre: discord.Member = None):
     depot = bank_data[uid].get("depot", 0)
 
     embed = discord.Embed(
-        title=f"📊  Statistiques de {cible.display_name}",
+        title=season_titre(f"📊  Statistiques de {season_brut(cible.display_name)}"),
         description=f"**{get_tier(lvl)}**",
-        color=0x5865F2)
+        color=season_tint(0x5865F2))
     embed.set_thumbnail(url=cible.display_avatar.url)
 
     embed.add_field(name="⭐ Progression", value=(
@@ -10990,7 +11007,7 @@ async def stats_cmd(ctx, membre: discord.Member = None):
         if conjoint:
             embed.add_field(name="💍 Marié(e) à", value=conjoint.display_name, inline=False)
 
-    embed.set_footer(text="`.profil` pour ta carte visuelle  •  `.succes` pour le détail des trophées")
+    embed.set_footer(text=season_pied("`.profil` pour ta carte visuelle  •  `.succes` pour le détail des trophées"))
     await ctx.send(embed=embed)
 
 @bot.command(name="serverstats", aliases=["serveur", "infoserveur"])
@@ -10998,7 +11015,7 @@ async def serverstats_cmd(ctx):
     """Statistiques du serveur — .serverstats"""
     g = ctx.guild
     total_coins = sum(v["coins"] for v in economy_data.values())
-    embed = discord.Embed(title=f"🏯 {g.name}", color=0x5865F2)
+    embed = discord.Embed(title=f"🏯 {g.name}", color=season_tint(0x5865F2))
     if g.icon:
         embed.set_thumbnail(url=g.icon.url)
     embed.add_field(name="👥 Membres", value=f"{g.member_count}", inline=True)
@@ -11016,8 +11033,8 @@ async def serverstats_cmd(ctx):
 @bot.command(name="sondage")
 async def sondage_cmd(ctx, *, question: str = None):
     if not question: return await ctx.send("❌ `.sondage <question>`")
-    embed = discord.Embed(title="📊 Sondage", description=question, color=0x3498db)
-    embed.set_footer(text=f"Par {ctx.author.display_name}")
+    embed = discord.Embed(title=season_titre("📊 Sondage"), description=question, color=season_tint(0x3498db))
+    embed.set_footer(text=season_pied(f"Par {ctx.author.display_name}"))
     msg = await ctx.send(embed=embed)
     await msg.add_reaction("✅"); await msg.add_reaction("❌")
 
@@ -11032,8 +11049,8 @@ async def giveaway_cmd(ctx, duree: str = None, *, prix: str = None):
         try: seconds = int(duree.replace("m","")) * 60
         except: pass
     if seconds == 0: return await ctx.send("❌ Durée invalide ! Ex: `1h` `30m`")
-    embed = discord.Embed(title="🎉 GIVEAWAY !", description=f"**Prix : {prix}**\n\nRéagis avec 🎉 !\n⏳ Fin dans : **{duree}**", color=0xf1c40f)
-    embed.set_footer(text=f"Par {ctx.author.display_name}")
+    embed = discord.Embed(title=season_titre("🎉 GIVEAWAY !"), description=f"**Prix : {prix}**\n\nRéagis avec 🎉 !\n⏳ Fin dans : **{duree}**", color=season_tint(0xf1c40f))
+    embed.set_footer(text=season_pied(f"Par {ctx.author.display_name}"))
     msg = await ctx.send(embed=embed)
     await msg.add_reaction("🎉")
     await asyncio.sleep(seconds)
@@ -11043,7 +11060,7 @@ async def giveaway_cmd(ctx, duree: str = None, *, prix: str = None):
         users = [u async for u in r.users() if not u.bot] if r else []
         if users:
             gagnant = random.choice(users)
-            await ctx.send(embed=discord.Embed(title="🎉 Fin du Giveaway !", description=f"🏆 **{gagnant.mention}** remporte **{prix}** ! 🎊", color=0x2ecc71))
+            await ctx.send(embed=discord.Embed(title=season_titre("🎉 Fin du Giveaway !"), description=f"🏆 **{gagnant.mention}** remporte **{prix}** ! 🎊", color=season_tint(0x2ecc71)))
         else:
             await ctx.send("😔 Personne n'a participé...")
     except: pass
@@ -11053,7 +11070,7 @@ async def choisir_cmd(ctx, *, args: str = None):
     if not args or " ou " not in args: return await ctx.send("❌ `.choisir <option1> ou <option2>`")
     options = [o.strip() for o in args.split(" ou ")]
     choix = random.choice(options)
-    await ctx.send(embed=discord.Embed(description=f"🎲 Je choisis : **{choix}** !", color=0xf1c40f))
+    await ctx.send(embed=discord.Embed(description=f"🎲 Je choisis : **{choix}** !", color=season_tint(0xf1c40f)))
 
 # ============================================================
 #  DRAMA & ANIMÉ INFO
@@ -11105,7 +11122,7 @@ def build_oeuvre_embed(o, kind):
     embed = discord.Embed(
         title=f"{o.get('emoji','🎬')}  {o['title']}",
         description=f"*{o.get('synopsis','Pas de synopsis disponible.')}*",
-        color=couleur)
+        color=season_tint(couleur))
     embed.add_field(name="🎭 Genre", value=o.get("genre", "—"), inline=True)
     embed.add_field(name="⭐ Note", value=f"**{note}/10**\n{etoiles}", inline=True)
     embed.add_field(name="📅 Sortie", value=str(o.get("annee", "—")), inline=True)
@@ -11127,8 +11144,8 @@ def build_oeuvre_embed(o, kind):
 
     if o.get("image"):
         embed.set_thumbnail(url=o["image"])
-    embed.set_footer(text=f"`.noter <1-10> {o['title']}` pour donner ton avis  •  "
-                          f"`.watch ajouter {o['title']}` pour l'ajouter à ta liste")
+    embed.set_footer(text=season_pied(f"`.noter <1-10> {o['title']}` pour donner ton avis  •  "
+                          f"`.watch ajouter {o['title']}` pour l'ajouter à ta liste"))
     return embed
 
 
@@ -11140,14 +11157,14 @@ async def drama_cmd(ctx, *, titre: str = None):
         return await ctx.send(embed=discord.Embed(
             description=("❌ Précise un titre : `.drama Goblin`\n"
                          f"*{len(KDRAMAS)} dramas référencés — `.dramarec` pour une suggestion au hasard.*"),
-            color=0xe74c3c))
+            color=season_tint(0xe74c3c)))
     match, suggestions = chercher_oeuvre(titre, KDRAMAS)
     if not match:
         txt = f"❌ Aucun drama trouvé pour **{titre}**."
         if suggestions:
             txt += "\n\n**Tu cherchais peut-être :**\n" + "\n".join(
                 f"{s.get('emoji','🎬')} {s['title']}" for s in suggestions)
-        return await ctx.send(embed=discord.Embed(description=txt, color=0xe74c3c))
+        return await ctx.send(embed=discord.Embed(description=txt, color=season_tint(0xe74c3c)))
     embed = build_oeuvre_embed(match, "drama")
     if suggestions:
         embed.add_field(name="🔎 Aussi disponibles",
@@ -11171,14 +11188,14 @@ async def anime_cmd(ctx, *, titre: str = None):
         return await ctx.send(embed=discord.Embed(
             description=("❌ Précise un titre : `.anime Dragon Ball Z`\n"
                          f"*{len(ANIMES)} animés référencés — `.animerec` pour une suggestion au hasard.*"),
-            color=0xe74c3c))
+            color=season_tint(0xe74c3c)))
     match, suggestions = chercher_oeuvre(titre, ANIMES)
     if not match:
         txt = f"❌ Aucun animé trouvé pour **{titre}**."
         if suggestions:
             txt += "\n\n**Tu cherchais peut-être :**\n" + "\n".join(
                 f"{s.get('emoji','✨')} {s['title']}" for s in suggestions)
-        return await ctx.send(embed=discord.Embed(description=txt, color=0xe74c3c))
+        return await ctx.send(embed=discord.Embed(description=txt, color=season_tint(0xe74c3c)))
     embed = build_oeuvre_embed(match, "anime")
     if suggestions:
         embed.add_field(name="🔎 Aussi disponibles",
@@ -11197,11 +11214,11 @@ async def animerec_cmd(ctx):
 
 @bot.command(name="quote")
 async def quote_cmd(ctx):
-    await ctx.send(embed=discord.Embed(description=random.choice(KDRAMA_QUOTES), color=0xff6b9d))
+    await ctx.send(embed=discord.Embed(description=random.choice(KDRAMA_QUOTES), color=season_tint(0xff6b9d)))
 
 @bot.command(name="animequote")
 async def animequote_cmd(ctx):
-    await ctx.send(embed=discord.Embed(description=random.choice(ANIME_QUOTES), color=0x9b59b6))
+    await ctx.send(embed=discord.Embed(description=random.choice(ANIME_QUOTES), color=season_tint(0x9b59b6)))
 
 # ============================================================
 #  ADMIN ÉCONOMIE
@@ -11311,15 +11328,15 @@ async def eventoff_cmd(ctx):
 @bot.command(name="eventstatus")
 async def eventstatus_cmd(ctx):
     status = "✅ Activé" if planning_actif else "🛑 Désactivé"
-    await ctx.send(embed=discord.Embed(description=f"📊 Planning automatique : **{status}**", color=0x3498db))
+    await ctx.send(embed=discord.Embed(description=f"📊 Planning automatique : **{status}**", color=season_tint(0x3498db)))
 
 @bot.command(name="planning")
 async def planning_cmd(ctx):
     """Affiche le planning des events — .planning"""
     embed = discord.Embed(
-        title="📅 Planning des Events — QG Kdrama",
+        title=season_titre("📅 Planning des Events — QG Kdrama"),
         description="Voici comment fonctionnent les events du serveur :",
-        color=0x3498db
+        color=season_tint(0x3498db)
     )
     embed.add_field(
         name="🎲 Events aléatoires (automatiques)",
@@ -11345,7 +11362,7 @@ async def planning_cmd(ctx):
         inline=False
     )
     statut = "✅ Actifs" if planning_actif else "🛑 En pause"
-    embed.set_footer(text=f"Events automatiques : {statut}")
+    embed.set_footer(text=season_pied(f"Events automatiques : {statut}"))
     await ctx.send(embed=embed)
 
 # ============================================================
@@ -11367,10 +11384,10 @@ async def run_invasion(channel, guild):
         active_boss[guild.id]["salon_temp"] = salon.id
         b = active_boss[guild.id]["boss"]
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title=f"⚠️ INVASION ! {b['emoji']} {b['nom']} attaque le QG !",
+            title=season_titre(f"⚠️ INVASION ! {season_brut(b['emoji'])} {season_brut(b['nom'])} attaque le QG !"),
             description=(f"**{b['hp_max']:,} PV** — tout le monde peut frapper avec `.attaque` !\n"
                          f"*Celui qui porte le coup fatal reçoit un bonus.*"),
-            color=0xe74c3c), salon)
+            color=season_tint(0xe74c3c)), salon)
 
 COFFRE_PALIERS = [
     ("simple",   "Coffre",          "📦",  300, 1200, 0xf1c40f, "gacha",    55),
@@ -11485,7 +11502,7 @@ async def modif_watchdog():
                     try:
                         await sal.send(embed=discord.Embed(
                             description=f"⏰ **{M['nom']}** est terminé — {M['fin']}",
-                            color=0x95a5a6))
+                            color=season_tint(0x95a5a6)))
                     except Exception: pass
             print(f"[Modificateur] {cle} éteint par le chien de garde")
 
@@ -11494,27 +11511,27 @@ async def run_nuit_chasse(channel, guild, duree=7200):
     if not modif_allumer("nuitchasse", duree, channel.id):
         return await channel.send(f"🌙 Déjà en cours — encore {modif_restants('nuitchasse')//60} min.")
     await channel.send(get_event_ping(guild, "gacha") if guild else "", embed=discord.Embed(
-        title="🌙 NUIT DE CHASSE !",
+        title=season_titre("🌙 NUIT DE CHASSE !"),
         description=f"🔴 **Mythique ×3** et **Légendaire ×2** pendant **{duree//3600} h** !",
-        color=0x9b59b6))
+        color=season_tint(0x9b59b6)))
 
 async def run_double_xp(channel, guild, duree=3600):
     """⚡ Double XP — XP des messages doublée."""
     if not modif_allumer("doublexp", duree, channel.id):
         return await channel.send(f"⚡ Déjà actif — encore {modif_restants('doublexp')//60} min.")
     await channel.send(get_event_ping(guild, "everyone") if guild else "", embed=discord.Embed(
-        title="⚡ DOUBLE XP !",
+        title=season_titre("⚡ DOUBLE XP !"),
         description=f"Chaque message rapporte **deux fois plus d'XP** pendant **{duree//60} min** !",
-        color=0x3498db))
+        color=season_tint(0x3498db)))
 
 async def run_nuit_casino(channel, guild, duree=3600):
     """🎰 Nuit Casino — jackpot du .slot ×20."""
     if not modif_allumer("nuitcasino", duree, channel.id):
         return await channel.send(f"🎰 Déjà en cours — encore {modif_restants('nuitcasino')//60} min.")
     await channel.send(get_event_ping(guild, "everyone") if guild else "", embed=discord.Embed(
-        title="🎰 NUIT CASINO !",
+        title=season_titre("🎰 NUIT CASINO !"),
         description=f"Le **jackpot** de `.slot` passe à **×20** pendant **{duree//60} min** ! 🍀",
-        color=0xf1c40f))
+        color=season_tint(0xf1c40f)))
 
 async def run_marche_noir(channel, guild):
     """🕶️ Marché Noir — 3 cartes rares à acheter pendant 24h"""
@@ -11535,7 +11552,7 @@ async def run_marche_noir(channel, guild):
         desc += f"{RARETE_EMOJI.get(cc['rarete'],'▫️')} **{cc['nom']}** — **{prix:,} pièces** → `.marcheacheter {k}`\n"
     modif_allumer("marchenoir", 86400, channel.id)
     ping = get_event_ping(guild, "gacha")
-    await channel.send(ping, embed=discord.Embed(title="🕶️ MARCHÉ NOIR", description=desc, color=0x2c3e50))
+    await channel.send(ping, embed=discord.Embed(title=season_titre("🕶️ MARCHÉ NOIR"), description=desc, color=season_tint(0x2c3e50)))
 
 async def run_carte_mystere(channel, guild):
     """🎴 Carte Mystère — une carte rare tombe, premier au cœur la garde"""
@@ -11558,10 +11575,10 @@ async def run_jackpot(channel, guild, montant=None):
     jackpot_cagnotte = montant or random.randint(1500, 5000)
     ping = get_event_ping(guild, "everyone")
     await channel.send(ping, embed=discord.Embed(
-        title="💰 EVENT JACKPOT !",
+        title=season_titre("💰 EVENT JACKPOT !"),
         description=(f"Une cagnotte de **{jackpot_cagnotte:,} pièces** est en jeu !\n\n"
                      f"Le **premier** à écrire exactement `!jackpot` remporte tout. 🏃"),
-        color=0xf1c40f))
+        color=season_tint(0xf1c40f)))
 
 async def run_classement(channel, guild):
     """🏆 Classement — le top 5 du serveur, affiché directement"""
@@ -11574,17 +11591,17 @@ async def run_classement(channel, guild):
             lignes.append(f"{medals[i]} **{m.display_name}** — niveau {d.get('level',1)}")
     ping = get_event_ping(guild, "everyone")
     await channel.send(ping, embed=discord.Embed(
-        title="🏆 CLASSEMENT DU MOMENT",
+        title=season_titre("🏆 CLASSEMENT DU MOMENT"),
         description="\n".join(lignes) if lignes else "Personne au classement pour l'instant !",
-        color=0xf1c40f))
+        color=season_tint(0xf1c40f)))
 
 async def run_heure_maudite(channel, guild):
     """😈 Heure Maudite — déclenche un event surprise au hasard"""
     ping = get_event_ping(guild, "everyone")
     await channel.send(ping, embed=discord.Embed(
-        title="😈 HEURE MAUDITE",
+        title=season_titre("😈 HEURE MAUDITE"),
         description="Quelque chose se prépare au QG... personne ne sait quoi. 🌑",
-        color=0xe74c3c))
+        color=season_tint(0xe74c3c)))
     await asyncio.sleep(5)
     await random.choice([run_defi_eclair, run_reflexe, run_debat])(channel, guild)
 
@@ -11785,9 +11802,9 @@ async def demander_salon_prive(ctx, nom_jeu, emoji="🎮", invites=None):
                   "personne ne vient spammer les réponses.\n"
                   "👥 **Ici** — tout le monde peut participer et tenter de trouver.")
     msg = await ctx.send(embed=discord.Embed(
-        title=f"{emoji} {nom_jeu}",
+        title=season_titre(f"{emoji} {nom_jeu}"),
         description=f"**Où veux-tu jouer ?**\n\n{detail}",
-        color=0x9b59b6), view=view)
+        color=season_tint(0x9b59b6)), view=view)
     await view.wait()
     try: await msg.delete()
     except Exception: pass
@@ -11820,7 +11837,7 @@ async def demander_salon_prive(ctx, nom_jeu, emoji="🎮", invites=None):
     await ctx.send(f"{mentions}" if mentions else "", embed=discord.Embed(
         description=f"🔒 La partie vous attend dans {salon.mention} !" if invites
                     else f"🔒 Ta partie t'attend dans {salon.mention} !",
-        color=0x2ecc71), delete_after=20)
+        color=season_tint(0x2ecc71)), delete_after=20)
     return salon, True
 
 # ============================================================
@@ -11907,30 +11924,30 @@ async def run_banquier(channel, guild):
     salon = channel  # Salon unique créé par lancer_event_standard().
 
     annonce = discord.Embed(
-        title="🎩 LE BANQUIER OUVRE SON BUREAU",
+        title=season_titre("🎩 LE BANQUIER OUVRE SON BUREAU"),
         description=(
             "**12 valises. Une seule sera la vôtre.**\n\n"
             "Un candidat affronte le banquier. Il peut repartir avec "
             "**9 000 pièces**… ou avec **1**.\n\n"
             "*Premier à cliquer sur le bouton entre en jeu.*"),
-        color=0x1abc9c)
+        color=season_tint(0x1abc9c))
     if salon is not channel:
         await annoncer_event(guild, channel, "everyone", annonce, salon)
 
     # ── Recrutement du candidat ──
     view = BanquierCandidatView(timeout=60)
     embed_inscr = discord.Embed(
-        title="🎩 LE BANQUIER",
+        title=season_titre("🎩 LE BANQUIER"),
         description="**12 valises. Une seule sera la vôtre.**\n\nQui ose affronter le banquier ?",
-        color=0x1abc9c)
-    embed_inscr.set_footer(text="⏰ 60 secondes — premier arrivé")
+        color=season_tint(0x1abc9c))
+    embed_inscr.set_footer(text=season_pied("⏰ 60 secondes — premier arrivé"))
     await salon.send(get_event_ping(guild, "everyone") if salon is channel else "", embed=embed_inscr, view=view)
     await view.wait()
 
     if not view.candidat:
         await salon.send(embed=discord.Embed(
             description="😴 Personne ne s'est présenté — le banquier referme son bureau.",
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
         if salon is not channel:
             pass  # fermeture assurée par lancer_event_standard()
         return
@@ -11949,9 +11966,9 @@ async def run_banquier(channel, guild):
     await salon.send(
         f"{joueur.mention}",
         embed=discord.Embed(
-            title=f"🎩 {joueur.display_name} entre en jeu !",
+            title=season_titre(f"🎩 {season_brut(joueur.display_name)} entre en jeu !"),
             description="**Choisis TA valise.**\nElle restera fermée jusqu'à la toute fin.",
-            color=0x1abc9c),
+            color=season_tint(0x1abc9c)),
         view=v)
     await v.wait()
     ma_valise = v.choix or random.choice(list(fermees))
@@ -11959,7 +11976,7 @@ async def run_banquier(channel, guild):
 
     await salon.send(embed=discord.Embed(
         description=f"🧳 **{joueur.display_name}** garde la valise **n°{ma_valise}**.\n\nQue le jeu commence…",
-        color=0x1abc9c))
+        color=season_tint(0x1abc9c)))
     await asyncio.sleep(2)
 
     # ── Les manches ──
@@ -11971,9 +11988,9 @@ async def run_banquier(channel, guild):
                 break
             vw = ValisesView(joueur, fermees, timeout=90)
             e = discord.Embed(
-                title=f"🎩 MANCHE {idx_manche + 1} — ouvre une valise",
+                title=season_titre(f"🎩 MANCHE {season_brut(idx_manche + 1)} — ouvre une valise"),
                 description=f"💰 **Montants encore en jeu**\n{_banquier_tableau(restants)}\n\n🧳 Ta valise : **n°{ma_valise}**",
-                color=0x3498db)
+                color=season_tint(0x3498db))
             msg = await salon.send(f"{joueur.mention} à toi !", embed=e, view=vw)
             await vw.wait()
             num = vw.choix or random.choice(list(fermees))
@@ -11986,7 +12003,7 @@ async def run_banquier(channel, guild):
                              f"# {'💀' if gros else '😌'}  {montant:,} pièces\n\n"
                              + ("*Aïe. Un gros montant part en fumée.*" if gros
                                 else "*Ouf — un petit montant éliminé.*")),
-                color=0xe74c3c if gros else 0x2ecc71))
+                color=season_tint(0xe74c3c if gros else 0x2ecc71)))
             await asyncio.sleep(1.5)
 
         if not fermees:
@@ -11998,12 +12015,12 @@ async def run_banquier(channel, guild):
         offre_finale = offre
         dv = DealView(joueur, timeout=60)
         e = discord.Embed(
-            title="☎️ LE BANQUIER APPELLE",
+            title=season_titre("☎️ LE BANQUIER APPELLE"),
             description=(f"Il propose à **{joueur.display_name}** :\n\n"
                          f"# 💰 {offre:,} pièces\n\n"
                          f"**Montants restants**\n{_banquier_tableau(restants)}"),
-            color=0xf1c40f)
-        e.set_footer(text="⏰ 60 secondes pour décider")
+            color=season_tint(0xf1c40f))
+        e.set_footer(text=season_pied("⏰ 60 secondes pour décider"))
         await salon.send(f"{joueur.mention}", embed=e, view=dv)
         await dv.wait()
 
@@ -12013,19 +12030,19 @@ async def run_banquier(channel, guild):
             check_coins_achievements(uid, salon)
             ecart = contenu - offre
             await salon.send(embed=discord.Embed(
-                title="💰 DEAL !",
+                title=season_titre("💰 DEAL !"),
                 description=(
                     f"**{joueur.display_name}** accepte les **{offre:,} pièces**.\n\n"
                     f"… mais ouvrons sa valise **n°{ma_valise}** :\n\n"
                     f"# {contenu:,} pièces\n\n"
                     + (f"😱 Il laisse **{ecart:,} pièces** sur la table." if ecart > 0
                        else f"😎 Bien joué — il gagne **{abs(ecart):,} pièces** de plus que sa valise !")),
-                color=0xf1c40f))
+                color=season_tint(0xf1c40f)))
             if salon is not channel:
                 pass  # fermeture assurée par lancer_event_standard()
             return
         await salon.send(embed=discord.Embed(
-            description=f"🚫 **NO DEAL !** {joueur.display_name} continue… 😤", color=0xe74c3c))
+            description=f"🚫 **NO DEAL !** {joueur.display_name} continue… 😤", color=season_tint(0xe74c3c)))
         await asyncio.sleep(1.5)
 
     # ── Il est allé au bout ──
@@ -12033,7 +12050,7 @@ async def run_banquier(channel, guild):
     economy_data[uid]["coins"] += contenu
     check_coins_achievements(uid, salon)
     await salon.send(embed=discord.Embed(
-        title="🧳 LA VALISE FINALE",
+        title=season_titre("🧳 LA VALISE FINALE"),
         description=(
             f"**{joueur.display_name}** a refusé toutes les offres.\n"
             f"*(la dernière était de {offre_finale:,} pièces)*\n\n"
@@ -12041,7 +12058,7 @@ async def run_banquier(channel, guild):
             f"# 💰 {contenu:,} pièces\n\n"
             + ("🏆 **Quel sang-froid !**" if offre_finale and contenu >= offre_finale
                else "💔 **Il aurait mieux fait d'accepter…**")),
-        color=0xf1c40f if (offre_finale and contenu >= offre_finale) else 0xe74c3c))
+        color=season_tint(0xf1c40f if (offre_finale and contenu >= offre_finale) else 0xe74c3c)))
     if salon is not channel:
         pass  # fermeture assurée par lancer_event_standard()
 
@@ -12157,7 +12174,7 @@ async def run_encheres(channel, guild):
     salon = channel  # Salon unique créé par lancer_event_standard().
 
     annonce = discord.Embed(
-        title="🏛️ VENTE AUX ENCHÈRES",
+        title=season_titre("🏛️ VENTE AUX ENCHÈRES"),
         description=f"**Lot du jour :** {lot_nom}\n\nMise de départ : **{depart:,} pièces**",
         color=couleur)
     if salon is not channel:
@@ -12168,7 +12185,7 @@ async def run_encheres(channel, guild):
     view = EnchereView(etat)
 
     def build():
-        e = discord.Embed(title="🏛️ ENCHÈRE EN COURS", color=couleur)
+        e = discord.Embed(title=season_titre("🏛️ ENCHÈRE EN COURS"), color=couleur)
         e.add_field(name=f"📦 {lot_nom}", value=lot_desc or "\u200b", inline=False)
         if etat["gagnant"]:
             e.add_field(name="💰 Meilleure offre",
@@ -12181,7 +12198,7 @@ async def run_encheres(channel, guild):
         e.add_field(name="⏰ Temps restant", value=f"**{reste}s**\n*(relancé à chaque offre)*", inline=False)
         if lot_image:
             e.set_image(url=lot_image)
-        e.set_footer(text=f"Enchère minimum : +{increment:,} pièces • QG Kdrama")
+        e.set_footer(text=season_pied(f"Enchère minimum : +{increment:,} pièces • QG Kdrama"))
         return e
 
     msg = await salon.send(get_event_ping(guild, ping_type) if salon is channel else "",
@@ -12204,7 +12221,7 @@ async def run_encheres(channel, guild):
     # ── Adjugé ──
     if not etat["gagnant"]:
         await salon.send(embed=discord.Embed(
-            description="🔨 **Aucune offre** — le lot retourne dans les réserves.", color=0x95a5a6))
+            description="🔨 **Aucune offre** — le lot retourne dans les réserves.", color=season_tint(0x95a5a6)))
         if salon is not channel:
             pass  # fermeture assurée par lancer_event_standard()
         return
@@ -12214,7 +12231,7 @@ async def run_encheres(channel, guild):
     prix = etat["offre"]
     if economy_data[uid]["coins"] < prix:
         await salon.send(embed=discord.Embed(
-            description=f"❌ {gagnant.mention} n'a plus les fonds — la vente est annulée.", color=0xe74c3c))
+            description=f"❌ {gagnant.mention} n'a plus les fonds — la vente est annulée.", color=season_tint(0xe74c3c)))
         if salon is not channel:
             pass  # fermeture assurée par lancer_event_standard()
         return
@@ -12257,7 +12274,7 @@ async def run_encheres(channel, guild):
             detail = "L'objet est dans son inventaire."
 
     await salon.send(embed=discord.Embed(
-        title="🔨 ADJUGÉ !",
+        title=season_titre("🔨 ADJUGÉ !"),
         description=(f"**{lot_nom}** revient à {gagnant.mention}\n"
                      f"pour **{prix:,} pièces** !\n\n{detail}\n\n"
                      f"*{etat['nb']} enchères · {len(etat['participants'])} participants*"),
@@ -12310,9 +12327,9 @@ class DebatView(ui.View):
         nb = sum(1 for v in self.camps.values() if v == "b")
         total = na + nb
         e = discord.Embed(
-            title="🎤 DÉBAT DU JOUR",
+            title=season_titre("🎤 DÉBAT DU JOUR"),
             description=f"## {self.d['sujet']}\n\n🅰️ **{self.d['a']}**\n🆚\n🅱️ **{self.d['b']}**",
-            color=0x9b59b6)
+            color=season_tint(0x9b59b6))
         # Le décompte exact n'apparaît qu'à la fin : sinon effet boule de neige.
         if reveler:
             pa = int(na / total * 100) if total else 0
@@ -12344,9 +12361,9 @@ async def run_debat(channel, guild, duree=3600):
     cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, d["theme"], discord.Embed(
-            title="🎤 DÉBAT DU JOUR",
+            title=season_titre("🎤 DÉBAT DU JOUR"),
             description=f"## {d['sujet']}\n🅰️ {d['a']}  🆚  🅱️ {d['b']}",
-            color=0x9b59b6), salon)
+            color=season_tint(0x9b59b6)), salon)
 
     vue = DebatView(d, timeout=duree + 120)
     vue.message = await cible.send(
@@ -12365,7 +12382,7 @@ async def run_debat(channel, guild, duree=3600):
         description=(f"🗣️ **Les camps sont formés — à vous.**\n\n"
                      f"**{na + nb}** personnes ont pris parti. Défendez votre côté ici même.\n"
                      f"*Vous pouvez encore changer d'avis : le bouton reste ouvert.*"),
-        color=0x9b59b6))
+        color=season_tint(0x9b59b6)))
 
     # ── Phase 2 : discussion, avec relances d'Akari ──
     reste = duree - p1
@@ -12397,17 +12414,17 @@ async def run_debat(channel, guild, duree=3600):
     total = na + nb
     if total == 0:
         concl = discord.Embed(
-            title="🎤 Débat clos",
+            title=season_titre("🎤 Débat clos"),
             description=("Personne n'a pris parti.\n\n"
                          "*Akari trouve ça très révélateur, et refuse d'en dire plus.*"),
-            color=0x95a5a6)
+            color=season_tint(0x95a5a6))
     elif na == nb:
         concl = discord.Embed(
-            title="🎤 ÉGALITÉ PARFAITE",
+            title=season_titre("🎤 ÉGALITÉ PARFAITE"),
             description=(f"**{na}** contre **{nb}**.\n\n"
                          f"🅰️ {d['a']}\n🅱️ {d['b']}\n\n"
                          f"*Le QG est coupé en deux. On remet ça un autre jour.*"),
-            color=0xf1c40f)
+            color=season_tint(0xf1c40f))
     else:
         gagnant = d["a"] if na > nb else d["b"]
         emo = "🅰️" if na > nb else "🅱️"
@@ -12419,8 +12436,8 @@ async def run_debat(channel, guild, duree=3600):
             description=(f"**{max(na, nb)}** voix contre **{min(na, nb)}** — {pct} %.\n"
                          f"*Verdict {commentaire}.*\n\n"
                          f"Sujet : *{d['sujet']}*"),
-            color=0x2ecc71)
-    concl.set_footer(text=f"{total} participant(s) · aucune pièce en jeu, juste la fierté")
+            color=season_tint(0x2ecc71))
+    concl.set_footer(text=season_pied(f"{total} participant(s) · aucune pièce en jeu, juste la fierté"))
     await cible.send(embed=concl)
     # Fermeture confiée au wrapper : lancer_event_standard() supprime
     # le salon une seule fois, dans son finally.
@@ -12434,7 +12451,7 @@ async def run_loterie(channel, guild):
     gid = guild.id
     loterie_data[gid] = {"participants": {}, "cagnotte": 0, "active": True}
     embed = discord.Embed(
-        title="🍀 LOTERIE DU QG !",
+        title=season_titre("🍀 LOTERIE DU QG !"),
         description=(
             "La loterie est ouverte ! 🎰\n\n"
             "Tape `.loto` pour acheter un ticket (**100 pièces**)\n"
@@ -12442,7 +12459,7 @@ async def run_loterie(channel, guild):
             "💰 **Un seul gagnant rafle TOUTE la cagnotte !**\n"
             "⏰ Tirage dans **5 minutes** !"
         ),
-        color=0xf1c40f
+        color=season_tint(0xf1c40f)
     )
     await channel.send(ping, embed=embed)
     await asyncio.sleep(300)  # 5 min
@@ -12450,7 +12467,7 @@ async def run_loterie(channel, guild):
     if not data or not data["participants"]:
         loterie_data.pop(gid, None)
         await channel.send(embed=discord.Embed(
-            description="🍀 Loterie annulée — aucun participant !", color=0x95a5a6))
+            description="🍀 Loterie annulée — aucun participant !", color=season_tint(0x95a5a6)))
         if channel is not salon_principal:
             pass  # fermeture assurée par lancer_event_standard()
         return
@@ -12466,9 +12483,9 @@ async def run_loterie(channel, guild):
     member = guild.get_member(int(gagnant_uid))
     nom = member.mention if member else "quelqu'un"
     await channel.send(embed=discord.Embed(
-        title="🍀 TIRAGE DE LA LOTERIE !",
+        title=season_titre("🍀 TIRAGE DE LA LOTERIE !"),
         description=f"🎉 Félicitations {nom} !\n💰 Tu remportes la cagnotte de **{cagnotte:,} pièces** !\n\n*{len(tickets_pool)} tickets vendus à {len(data['participants'])} joueurs*",
-        color=0xf1c40f))
+        color=season_tint(0xf1c40f)))
     if channel is not salon_principal:
         pass  # fermeture assurée par lancer_event_standard()
 
@@ -12489,7 +12506,7 @@ async def loto_cmd(ctx):
     cagnotte = loterie_data[gid]["cagnotte"]
     await ctx.send(embed=discord.Embed(
         description=f"🎟️ **{ctx.author.display_name}** achète un ticket ! *(tu en as {nb})*\n💰 Cagnotte actuelle : **{cagnotte:,} pièces**",
-        color=0x2ecc71))
+        color=season_tint(0x2ecc71)))
 
 
 # ============================================================
@@ -12520,16 +12537,16 @@ async def run_chiffre_mystere(channel, guild):
     cible = channel
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🔢 CHIFFRE MYSTÈRE",
+            title=season_titre("🔢 CHIFFRE MYSTÈRE"),
             description=f"Un nombre entre **1 et 100** est caché. **{gain:,} pièces** à qui le trouve.",
-            color=0x3498db), salon)
+            color=season_tint(0x3498db)), salon)
     await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
                      embed=discord.Embed(
-                         title="🔢 CHIFFRE MYSTÈRE",
+                         title=season_titre("🔢 CHIFFRE MYSTÈRE"),
                          description=("J'ai choisi un nombre entre **1 et 100**.\n"
                                       "Proposez vos nombres — je vous dis si c'est plus haut ou plus bas.\n"
                                       f"🏆 **{gain:,} pièces** au gagnant  •  ⏰ 3 minutes"),
-                         color=0x3498db))
+                         color=season_tint(0x3498db)))
     def check(m):
         return m.channel == cible and not m.author.bot and m.content.strip().isdigit()
     fin = asyncio.get_event_loop().time() + 180
@@ -12547,10 +12564,10 @@ async def run_chiffre_mystere(channel, guild):
             gazette_gain(str(msg.author.id), gain)
             check_coins_achievements(str(msg.author.id), cible)
             await cible.send(embed=discord.Embed(
-                title="🎯 TROUVÉ !",
+                title=season_titre("🎯 TROUVÉ !"),
                 description=f"C'était bien **{secret}** !\n**{msg.author.display_name}** empoche **{gain:,} pièces** "
                             f"en {essais} essai(s).",
-                color=0x2ecc71))
+                color=season_tint(0x2ecc71)))
             if salon:
                 pass  # fermeture assurée par lancer_event_standard()
             return
@@ -12558,7 +12575,7 @@ async def run_chiffre_mystere(channel, guild):
         chaud = "🔥 très chaud" if ecart <= 3 else ("🌡️ chaud" if ecart <= 10 else ("❄️ froid" if ecart <= 25 else "🧊 glacial"))
         await cible.send(f"{'⬆️ Plus haut' if n < secret else '⬇️ Plus bas'} que **{n}** — {chaud}", delete_after=20)
     await cible.send(embed=discord.Embed(
-        description=f"⏰ Temps écoulé ! Le nombre était **{secret}**.", color=0xe74c3c))
+        description=f"⏰ Temps écoulé ! Le nombre était **{secret}**.", color=season_tint(0xe74c3c)))
     if salon:
         pass  # fermeture assurée par lancer_event_standard()
 
@@ -12590,25 +12607,25 @@ async def run_pluie_pieces(channel, guild):
 
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="💸 PLUIE DE PIÈCES !",
+            title=season_titre("💸 PLUIE DE PIÈCES !"),
             description="Des pièces tombent du ciel — **tout le monde peut en attraper** !",
-            color=0xf1c40f), salon)
+            color=season_tint(0xf1c40f)), salon)
     view = PluieView()
     await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
                      embed=discord.Embed(
-                         title="💸 PLUIE DE PIÈCES !",
+                         title=season_titre("💸 PLUIE DE PIÈCES !"),
                          description=(f"Clique sur le bouton pour attraper ta part !\n"
                                       f"**150 à 600 pièces** par personne  •  ⏰ {duree} secondes\n"
                                       f"*Une seule fois chacun.*"),
-                         color=0xf1c40f), view=view)
+                         color=season_tint(0xf1c40f)), view=view)
     await asyncio.sleep(duree + 2)
     view.stop()
     total = sum(gagnants.values())
     await cible.send(embed=discord.Embed(
-        title="🌤️ La pluie s'arrête",
+        title=season_titre("🌤️ La pluie s'arrête"),
         description=(f"**{len(gagnants)} personne(s)** ont attrapé **{total:,} pièces** au total !"
                      if gagnants else "Personne n'a rien attrapé… dommage !"),
-        color=0x95a5a6))
+        color=season_tint(0x95a5a6)))
     if salon:
         pass  # fermeture assurée par lancer_event_standard()
 
@@ -12623,16 +12640,16 @@ async def run_morpion_geant(channel, guild):
     cible = channel
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🎲 LE CHIFFRE DU JOUR",
+            title=season_titre("🎲 LE CHIFFRE DU JOUR"),
             description=f"Un seul essai chacun — le plus proche remporte **{gain:,} pièces**.",
-            color=0x9b59b6), salon)
+            color=season_tint(0x9b59b6)), salon)
     await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
                      embed=discord.Embed(
-                         title="🎲 LE CHIFFRE DU JOUR",
+                         title=season_titre("🎲 LE CHIFFRE DU JOUR"),
                          description=(f"J'ai choisi un nombre entre **1 et 50**.\n"
                                       f"**Un seul essai chacun** — écris ton nombre.\n"
                                       f"Le plus proche gagne **{gain:,} pièces**  •  ⏰ 90 secondes"),
-                         color=0x9b59b6))
+                         color=season_tint(0x9b59b6)))
     paris = {}
     def check(m):
         return (m.channel == cible and not m.author.bot and m.content.strip().isdigit()
@@ -12648,7 +12665,7 @@ async def run_morpion_geant(channel, guild):
         try: await msg.add_reaction("✅")
         except Exception: pass
     if not paris:
-        await cible.send(embed=discord.Embed(description="😴 Aucun pari — event annulé.", color=0x95a5a6))
+        await cible.send(embed=discord.Embed(description="😴 Aucun pari — event annulé.", color=season_tint(0x95a5a6)))
     else:
         classement = sorted(paris.items(), key=lambda x: abs(x[1][0] - secret))
         uid_g, (n_g, nom_g) = classement[0]
@@ -12659,9 +12676,9 @@ async def run_morpion_geant(channel, guild):
                             f"*(écart {abs(v[0]-secret)})*"
                             for i, (k, v) in enumerate(classement[:5]))
         await cible.send(embed=discord.Embed(
-            title=f"🎲 Le nombre était **{secret}** !",
+            title=season_titre(f"🎲 Le nombre était **{season_brut(secret)}** !"),
             description=f"{détail}\n\n🏆 **{nom_g}** remporte **{gain:,} pièces** !",
-            color=0xf1c40f))
+            color=season_tint(0xf1c40f)))
     if salon:
         pass  # fermeture assurée par lancer_event_standard()
 
@@ -12789,10 +12806,10 @@ class TapRaceInscription(ui.View):
                           for i, j in enumerate(self.joueurs))
         try:
                 await interaction.response.edit_message(embed=discord.Embed(
-                title="🏁 TAP RACE — Inscriptions",
+                title=season_titre("🏁 TAP RACE — Inscriptions"),
                 description=(f"**{len(self.joueurs)}/{self.places} places prises**\n\n{noms}\n\n"
                              f"*Départ dès que la course est complète.*"),
-                color=0xe67e22))
+                color=season_tint(0xe67e22)))
         except (discord.NotFound, discord.HTTPException, discord.InteractionResponded):
             pass
         if len(self.joueurs) >= self.places:
@@ -12852,9 +12869,9 @@ class TapRaceView(ui.View):
             medaille = "🥇🥈🥉🏅"[rang] if rang < 4 else "▪️"
             lignes.append(f"{medaille} **{self.joueurs[jid].display_name}**\n`{barre}` {n}/{self.LIGNE} 👆")
         return discord.Embed(
-            title="🏁 TAP RACE — EN COURSE !",
+            title=season_titre("🏁 TAP RACE — EN COURSE !"),
             description=(fin or "**Clique ton bouton le plus vite possible !**\n*Le classement se met à jour toutes les 1,5 s — continue de tapoter sans t'arrêter.*") + "\n\n" + "\n".join(lignes),
-            color=0x2ecc71 if fin else 0xe67e22)
+            color=season_tint(0x2ecc71 if fin else 0xe67e22))
 
 # ============================================================
 #  🏁 TAP RACE 2.0 — quatre segments, une décision par segment
@@ -12932,12 +12949,12 @@ def _tap_piste(etat):
             f"{medaille} **{etat['noms'][uid]}** {allure}\n"
             f"`{'━'*n}{'🏃' if pct < 1 else '🏁'}{'┄'*(14-n)}`  {jauge} {endur}%")
     e = discord.Embed(
-        title=f"🏁 TAP RACE — {etat['seg_emo']} {etat['seg_nom']} ({etat['seg']}/4)",
+        title=season_titre(f"🏁 TAP RACE — {season_brut(etat['seg_emo'])} {season_brut(etat['seg_nom'])} ({season_brut(etat['seg'])}/4)"),
         description=etat["seg_desc"] + "\n\n" + "\n".join(lignes),
-        color=0xe67e22)
+        color=season_tint(0xe67e22))
     if etat.get("dernier"):
         e.add_field(name="📣 Sur la piste", value=etat["dernier"], inline=False)
-    e.set_footer(text=f"💰 {etat['gain']:,} pièces au vainqueur")
+    e.set_footer(text=season_pied(f"💰 {etat['gain']:,} pièces au vainqueur"))
     return e
 
 async def run_tap_race(channel, guild):
@@ -12951,15 +12968,15 @@ async def run_tap_race(channel, guild):
     cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🏁 TAP RACE !",
+            title=season_titre("🏁 TAP RACE !"),
             description=f"Quatre segments, quatre décisions — **{gain:,} pièces** au vainqueur.",
-            color=0xe67e22), salon)
+            color=season_tint(0xe67e22)), salon)
 
     insc = TapRaceInscription(places, timeout=45)
     insc.message = await cible.send(
         get_event_ping(guild, "everyone") if (cible is channel and guild) else "",
         embed=discord.Embed(
-            title="🏁 TAP RACE — Inscriptions",
+            title=season_titre("🏁 TAP RACE — Inscriptions"),
             description=(
                 f"**{places} places.** La course se joue en **4 segments**.\n\n"
                 f"Avant chaque segment tu choisis une allure :\n"
@@ -12968,7 +12985,7 @@ async def run_tap_race(channel, guild):
                 f"💧 **Souffler** — tu récupères, tu perds du terrain\n\n"
                 f"*Sans endurance, tes clics ne comptent presque plus.*\n"
                 f"🏆 **{gain:,} pièces** au vainqueur · ⏰ 45 s pour s'inscrire"),
-            color=0xe67e22), view=insc)
+            color=season_tint(0xe67e22)), view=insc)
     await insc.wait()
     for it in insc.children: it.disabled = True
     try: await insc.message.edit(view=insc)
@@ -12977,11 +12994,11 @@ async def run_tap_race(channel, guild):
     coureurs = insc.joueurs
     if len(coureurs) < 2:
         await cible.send(embed=discord.Embed(
-            title="🏁 Course annulée",
+            title=season_titre("🏁 Course annulée"),
             description=("Personne au départ." if not coureurs
                          else f"Seul **{coureurs[0].display_name}** s'est présenté. "
                               f"Une course à un, ça s'appelle un footing."),
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
         # Fermeture confiée au wrapper : lancer_event_standard() supprime
         # le salon une seule fois, dans son finally.
         return
@@ -12998,8 +13015,8 @@ async def run_tap_race(channel, guild):
         # ── Choix d'allure ──
         av = TapAllureView(coureurs, timeout=15)
         m_av = await cible.send(embed=discord.Embed(
-            title=f"{emo_seg} {nom_seg.upper()} — choisis ton allure",
-            description=f"{desc}\n\n⏰ **15 secondes**", color=0xe67e22), view=av)
+            title=season_titre(f"{season_brut(emo_seg)} {season_brut(nom_seg.upper())} — choisis ton allure"),
+            description=f"{desc}\n\n⏰ **15 secondes**", color=season_tint(0xe67e22)), view=av)
         await av.wait()
         for it in av.children: it.disabled = True
         try: await m_av.edit(view=av)
@@ -13069,9 +13086,9 @@ async def run_tap_race(channel, guild):
     for uid, _d in classement[2:]:
         lignes.append(f"▪️ {etat['noms'][uid]}")
     await cible.send(embed=discord.Embed(
-        title="🏁 ARRIVÉE",
+        title=season_titre("🏁 ARRIVÉE"),
         description="\n".join(lignes),
-        color=0x2ecc71).set_footer(text="4 segments · l'endurance décide autant que les clics"))
+        color=season_tint(0x2ecc71)).set_footer(text=season_pied("4 segments · l'endurance décide autant que les clics")))
     # Fermeture confiée au wrapper : lancer_event_standard() supprime
     # le salon une seule fois, dans son finally.
 
@@ -13137,15 +13154,15 @@ async def run_ascenseur(channel, guild):
     cible = channel
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🎢 L'ASCENSEUR",
+            title=season_titre("🎢 L'ASCENSEUR"),
             description="Un candidat, dix étages. Chaque étage double la cagnotte — mais un étage est piégé.",
-            color=0x8e44ad), salon)
+            color=season_tint(0x8e44ad)), salon)
 
     vue_c = AscenseurCandidatView(timeout=60)
     msg = await cible.send(
         get_event_ping(guild, "everyone") if cible is channel else "",
         embed=discord.Embed(
-            title="🎢 L'ASCENSEUR",
+            title=season_titre("🎢 L'ASCENSEUR"),
             description=("**Règle du jeu :**\n"
                          "Tu entres dans l'ascenseur avec **500 pièces**.\n"
                          "Chaque étage monté **double** ta cagnotte.\n"
@@ -13154,11 +13171,11 @@ async def run_ascenseur(channel, guild):
                          "Si tu tombes, **tu perds tout**.\n\n"
                          "🎯 **10 étages maximum — jusqu'à 512 000 pièces**\n\n"
                          "*Qui ose entrer ?*"),
-            color=0x8e44ad), view=vue_c)
+            color=season_tint(0x8e44ad)), view=vue_c)
     await vue_c.wait()
     if not vue_c.candidat:
         await cible.send(embed=discord.Embed(
-            description="😴 Personne n'a osé entrer dans l'ascenseur.", color=0x95a5a6))
+            description="😴 Personne n'a osé entrer dans l'ascenseur.", color=season_tint(0x95a5a6)))
         if salon:
             pass  # fermeture assurée par lancer_event_standard()
         return
@@ -13166,9 +13183,9 @@ async def run_ascenseur(channel, guild):
     candidat = vue_c.candidat
     cagnotte, etage = ASC_POT_DEPART, 0
     await cible.send(embed=discord.Embed(
-        title=f"🎢 {candidat.display_name} entre dans l'ascenseur",
+        title=season_titre(f"🎢 {season_brut(candidat.display_name)} entre dans l'ascenseur"),
         description=f"Les portes se referment… **{cagnotte:,} pièces** en poche.\n\n*Le serveur retient son souffle.*",
-        color=0x8e44ad))
+        color=season_tint(0x8e44ad)))
     await asyncio.sleep(2)
 
     AMBIANCE = [
@@ -13182,41 +13199,41 @@ async def run_ascenseur(channel, guild):
         risque = min(ASC_RISQUE_MAX, ASC_RISQUE_BASE + etage * ASC_RISQUE_PAS)
         vue = AscenseurView(candidat, etage, cagnotte, timeout=40)
         await cible.send(f"{candidat.mention}", embed=discord.Embed(
-            title=f"🎢 Étage {etage}  —  {cagnotte:,} pièces",
+            title=season_titre(f"🎢 Étage {season_brut(etage)}  —  {season_brut(cagnotte):,} pièces"),
             description=(f"*{random.choice(AMBIANCE)}*\n\n"
                          f"⬆️ **Monter** — la cagnotte passerait à **{int(cagnotte*ASC_MULT):,} pièces**\n"
                          f"   *…mais {int(risque*100)} % de chance de tout perdre*\n\n"
                          f"🚪 **Sortir** — tu repars avec **{cagnotte:,} pièces**\n\n"
                          f"⏰ 40 secondes pour décider"),
-            color=0x8e44ad), view=vue)
+            color=season_tint(0x8e44ad)), view=vue)
         await vue.wait()
 
         if vue.choix != "monter":
             economy_data[str(candidat.id)]["coins"] += cagnotte
             check_coins_achievements(str(candidat.id), cible)
             return await _fin_ascenseur(cible, salon, discord.Embed(
-                title="🚪 Les portes s'ouvrent",
+                title=season_titre("🚪 Les portes s'ouvrent"),
                 description=(f"**{candidat.display_name}** sort à l'étage **{etage}** avec "
                              f"**{cagnotte:,} pièces** !\n\n"
                              f"*{'Sagesse ou lâcheté ? Le serveur jugera.' if etage < 5 else 'Une belle montée, et il a su s’arrêter.'}*"),
-                color=0x2ecc71))
+                color=season_tint(0x2ecc71)))
 
-        msg2 = await cible.send(embed=discord.Embed(description="⏳ **L'ascenseur monte…**", color=0xf1c40f))
+        msg2 = await cible.send(embed=discord.Embed(description="⏳ **L'ascenseur monte…**", color=season_tint(0xf1c40f)))
         await asyncio.sleep(2.2)
         # Une seule application du multiplicateur, après le tirage :
         # sinon la cagnotte affichée dans le message d'échec serait fausse.
         if random.random() < risque:
             return await _fin_ascenseur(cible, salon, discord.Embed(
-                title="💥 LE CÂBLE LÂCHE !",
+                title=season_titre("💥 LE CÂBLE LÂCHE !"),
                 description=(f"L'ascenseur s'effondre à l'étage **{etage}**.\n\n"
                              f"**{candidat.display_name}** perd tout — les "
                              f"**{int(cagnotte * ASC_MULT):,} pièces** partent en fumée. 💸"
                              f"\n\n*Il aurait pu sortir avec {cagnotte:,}…*"),
-                color=0xe74c3c))
+                color=season_tint(0xe74c3c)))
         cagnotte = int(cagnotte * ASC_MULT)
         try:
             await msg2.edit(embed=discord.Embed(
-                description=f"✅ **Étage {etage} atteint !** Cagnotte : **{cagnotte:,} pièces**", color=0x2ecc71))
+                description=f"✅ **Étage {etage} atteint !** Cagnotte : **{cagnotte:,} pièces**", color=season_tint(0x2ecc71)))
         except Exception:
             pass
         await asyncio.sleep(1.5)
@@ -13224,10 +13241,10 @@ async def run_ascenseur(channel, guild):
     economy_data[str(candidat.id)]["coins"] += cagnotte
     check_coins_achievements(str(candidat.id), cible)
     await _fin_ascenseur(cible, salon, discord.Embed(
-        title="👑 LE SOMMET !",
+        title=season_titre("👑 LE SOMMET !"),
         description=(f"**{candidat.display_name}** atteint le **10ème étage** et repart avec "
                      f"**{cagnotte:,} pièces** !\n\n*Personne n'ira plus haut. Légende du QG.*"),
-        color=0xf1c40f))
+        color=season_tint(0xf1c40f)))
 
 async def _fin_ascenseur(cible, salon, embed):
     await cible.send(embed=embed)
@@ -13275,9 +13292,9 @@ class PremierClicView(ui.View):
         self.bouton.style = discord.ButtonStyle.success
         if self.message:
             await self.message.edit(embed=discord.Embed(
-                title="🟢  GO !!!",
+                title=season_titre("🟢  GO !!!"),
                 description=f"**CLIQUE MAINTENANT !**\n🏆 {self.gain:,} pièces au premier",
-                color=0x2ecc71), view=self)
+                color=season_tint(0x2ecc71)), view=self)
 
 REFLEXE_VARIANTES = ("go", "emoji", "fauxdepart")
 
@@ -13292,23 +13309,23 @@ async def run_reflexe(channel, guild, variante=None):
     cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="⚡ RÉFLEXE", description=f"Test de réflexe — **{gain:,} pièces** au plus rapide.",
-            color=0xf39c12), salon)
+            title=season_titre("⚡ RÉFLEXE"), description=f"Test de réflexe — **{gain:,} pièces** au plus rapide.",
+            color=season_tint(0xf39c12)), salon)
     elimines = set()
     if v == "emoji":
         POOL = ["🍓","🐉","🌙","⚡","🎴","🔥","💎","🎯","🦊","👑"]
         bon = random.choice(POOL)
         leurres = random.sample([x for x in POOL if x != bon], 4)
-        await cible.send(embed=discord.Embed(title="⚡ RÉFLEXE — Emoji Cible",
+        await cible.send(embed=discord.Embed(title=season_titre("⚡ RÉFLEXE — Emoji Cible"),
             description=f"Quand le signal tombe, écris l'emoji cible.\n\n# {bon}\n\n*Prépare-toi…*",
-            color=0xf39c12))
+            color=season_tint(0xf39c12)))
         await asyncio.sleep(random.uniform(3, 7))
         await cible.send(f"🚦 **MAINTENANT !**  ({' '.join(random.sample(leurres+[bon], 5))})")
         attendu = [bon]
     elif v == "fauxdepart":
-        await cible.send(embed=discord.Embed(title="⚡ RÉFLEXE — Faux Départ",
+        await cible.send(embed=discord.Embed(title=season_titre("⚡ RÉFLEXE — Faux Départ"),
             description="Écris `go` **uniquement** quand je dis **PARTEZ**.\nAvant = éliminé.",
-            color=0xe74c3c))
+            color=season_tint(0xe74c3c)))
         async def _sentinelle():
             def ck(m): return m.channel == cible and not m.author.bot
             while True:
@@ -13335,8 +13352,8 @@ async def run_reflexe(channel, guild, variante=None):
         await cible.send("🚦 **PARTEZ !**")
         attendu = ["go"]
     else:
-        await cible.send(embed=discord.Embed(title="⚡ RÉFLEXE — Signal GO",
-            description="Écris `go` dès que le signal apparaît.", color=0xf39c12))
+        await cible.send(embed=discord.Embed(title=season_titre("⚡ RÉFLEXE — Signal GO"),
+            description="Écris `go` dès que le signal apparaît.", color=season_tint(0xf39c12)))
         await asyncio.sleep(random.uniform(4, 9))
         await cible.send("🟢 **GO !**")
         attendu = ["go"]
@@ -13347,7 +13364,7 @@ async def run_reflexe(channel, guild, variante=None):
     try:
         msg = await bot.wait_for("message", check=check, timeout=20)
     except asyncio.TimeoutError:
-        await cible.send(embed=discord.Embed(description="⏰ Personne n'a réagi.", color=0xe74c3c))
+        await cible.send(embed=discord.Embed(description="⏰ Personne n'a réagi.", color=season_tint(0xe74c3c)))
         # Fermeture confiée au wrapper : lancer_event_standard() supprime
         # le salon une seule fois, dans son finally.
         return None
@@ -13359,7 +13376,7 @@ async def run_reflexe(channel, guild, variante=None):
     except Exception: pass
     await cible.send(embed=discord.Embed(
         description=f"⚡ **{msg.author.display_name}** — **{ms} ms**\n💰 +{gain:,} pièces",
-        color=0x2ecc71))
+        color=season_tint(0x2ecc71)))
     # Fermeture confiée au wrapper : lancer_event_standard() supprime
     # le salon une seule fois, dans son finally.
     return msg.author
@@ -13395,17 +13412,17 @@ async def run_qui_suis_je(channel, guild):
     cible = channel
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🎭 QUI SUIS-JE ?",
+            title=season_titre("🎭 QUI SUIS-JE ?"),
             description=f"Un personnage {perso['univers']} se cache — jusqu'à **{gain_max:,} pièces** !",
-            color=0x9b59b6), salon)
+            color=season_tint(0x9b59b6)), salon)
     await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
                      embed=discord.Embed(
-                         title="🎭 QUI SUIS-JE ?",
+                         title=season_titre("🎭 QUI SUIS-JE ?"),
                          description=(f"📂 **Thème : {perso['univers']}**\n\n"
                                       f"**Indice 1 :** {perso['indices'][0]}\n\n"
                                       f"🏆 **{gain_max:,} pièces** — *le gain baisse à chaque nouvel indice*\n"
                                       f"⏰ Un indice de plus toutes les 25 secondes"),
-                         color=0x9b59b6))
+                         color=season_tint(0x9b59b6)))
     def check(m):
         return m.channel == cible and not m.author.bot and not m.content.startswith(".")
     idx = 0
@@ -13419,7 +13436,7 @@ async def run_qui_suis_je(channel, guild):
             await cible.send(embed=discord.Embed(
                 description=(f"💡 **Indice {idx+1} :** {perso['indices'][idx]}\n"
                              f"*Gain actuel : {max(300, gain_max - idx*300):,} pièces*"),
-                color=0xf39c12))
+                color=season_tint(0xf39c12)))
         try:
             msg = await bot.wait_for("message", check=check, timeout=min(5, fin - now))
         except asyncio.TimeoutError:
@@ -13430,16 +13447,16 @@ async def run_qui_suis_je(channel, guild):
             gazette_gain(str(msg.author.id), gain)
             check_coins_achievements(str(msg.author.id), cible)
             await cible.send(embed=discord.Embed(
-                title="🎭 Trouvé !",
+                title=season_titre("🎭 Trouvé !"),
                 description=(f"**{msg.author.display_name}** reconnaît **{perso['nom']}** "
                              f"*({perso['univers']})* en {idx+1} indice(s) !\n💰 +{gain:,} pièces"),
-                color=0x2ecc71))
+                color=season_tint(0x2ecc71)))
             if salon:
                 pass  # fermeture assurée par lancer_event_standard()
             return
     await cible.send(embed=discord.Embed(
         description=f"⏰ Personne n'a trouvé — c'était **{perso['nom']}** *({perso['univers']})*",
-        color=0xe74c3c))
+        color=season_tint(0xe74c3c)))
     if salon:
         pass  # fermeture assurée par lancer_event_standard()
 
@@ -13469,26 +13486,26 @@ async def run_braquage_coffre(channel, guild):
     cible = channel
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🔐 BRAQUAGE DU COFFRE",
+            title=season_titre("🔐 BRAQUAGE DU COFFRE"),
             description=f"Un coffre de **{total:,} pièces** — 3 codes à trouver, chacun rapporte une part.",
-            color=0xf1c40f), salon)
+            color=season_tint(0xf1c40f)), salon)
     part = total // 3
     await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
                      embed=discord.Embed(
-                         title="🔐 BRAQUAGE DU COFFRE",
+                         title=season_titre("🔐 BRAQUAGE DU COFFRE"),
                          description=(f"Le coffre contient **{total:,} pièces**, protégé par **3 codes**.\n"
                                       f"Chaque code trouvé rapporte **{part:,} pièces** à celui qui le craque.\n\n"
                                       f"⏰ **2 minutes par code** — que le meilleur gagne !"),
-                         color=0xf1c40f))
+                         color=season_tint(0xf1c40f)))
     await asyncio.sleep(3)
     butins = {}
     def check(m):
         return m.channel == cible and not m.author.bot and not m.content.startswith(".")
     for i, (q, rep) in enumerate(enigmes, 1):
         await cible.send(embed=discord.Embed(
-            title=f"🔢 Code {i}/3",
+            title=season_titre(f"🔢 Code {season_brut(i)}/3"),
             description=f"## {q}\n\n💰 **{part:,} pièces** au premier · ⏰ 2 minutes",
-            color=0xf1c40f))
+            color=season_tint(0xf1c40f)))
         fin = asyncio.get_event_loop().time() + 120
         trouve = False
         while asyncio.get_event_loop().time() < fin:
@@ -13504,24 +13521,24 @@ async def run_braquage_coffre(channel, guild):
                 butins[msg.author.display_name] = butins.get(msg.author.display_name, 0) + part
                 await cible.send(embed=discord.Embed(
                     description=f"🔓 **{msg.author.display_name}** craque le code {i} — **{rep}** !\n💰 +{part:,} pièces",
-                    color=0x2ecc71))
+                    color=season_tint(0x2ecc71)))
                 trouve = True
                 break
         if not trouve:
             await cible.send(embed=discord.Embed(
                 description=f"⏰ Code {i} non trouvé — c'était **{rep}**. Cette part reste dans le coffre.",
-                color=0xe74c3c))
+                color=season_tint(0xe74c3c)))
         await asyncio.sleep(2)
     if butins:
         cl = sorted(butins.items(), key=lambda x: -x[1])
         await cible.send(embed=discord.Embed(
-            title="🏦 Butin du braquage",
+            title=season_titre("🏦 Butin du braquage"),
             description="\n".join(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{n}** — {v:,} pièces"
                                   for i, (n, v) in enumerate(cl)),
-            color=0xf1c40f))
+            color=season_tint(0xf1c40f)))
     else:
         await cible.send(embed=discord.Embed(
-            description="🔒 Le coffre est resté fermé… personne n'a craqué un seul code.", color=0x95a5a6))
+            description="🔒 Le coffre est resté fermé… personne n'a craqué un seul code.", color=season_tint(0x95a5a6)))
     if salon:
         pass  # fermeture assurée par lancer_event_standard()
 
@@ -13549,25 +13566,25 @@ class RisqueView(ui.View):
                 check_coins_achievements(str(self.joueur.id), interaction.channel)
                 for it in self.children: it.disabled = True
                 return await interaction.response.edit_message(embed=discord.Embed(
-                    title="👑 PALIER MAXIMUM !",
+                    title=season_titre("👑 PALIER MAXIMUM !"),
                     description=(f"**{self.joueur.display_name}** est allé au bout — "
                                  f"**{nouveau:,} pièces** encaissées !\n*Personne n'ira plus loin.*"),
-                    color=0xf1c40f), view=None)
+                    color=season_tint(0xf1c40f)), view=None)
             vue = RisqueView(self.joueur, nouveau, self.palier + 1)
             await interaction.response.edit_message(embed=discord.Embed(
-                title=f"🎲 Palier {self.palier + 1}",
+                title=season_titre(f"🎲 Palier {season_brut(self.palier + 1)}"),
                 description=(f"Ça passe ! Tu as maintenant **{nouveau:,} pièces**.\n\n"
                              f"🎲 **Continuer** — ×2 mais {int((1-max(0.35, 0.70-(self.palier+1)*0.07))*100)} % de tout perdre\n"
                              f"💰 **Encaisser** — tu repars avec {nouveau:,} pièces"),
-                color=0xe67e22), view=vue)
+                color=season_tint(0xe67e22)), view=vue)
             vue.message = interaction.message
         else:
             for it in self.children: it.disabled = True
             await interaction.response.edit_message(embed=discord.Embed(
-                title="💥 Perdu !",
+                title=season_titre("💥 Perdu !"),
                 description=(f"**{self.joueur.display_name}** a tout perdu au palier {self.palier}…\n"
                              f"*Il repart avec **0 pièce**. Il aurait pu encaisser {self.montant:,}.*"),
-                color=0xe74c3c), view=None)
+                color=season_tint(0xe74c3c)), view=None)
             self.stop()
 
     @ui.button(label="Encaisser", emoji="💰", style=discord.ButtonStyle.success)
@@ -13576,10 +13593,10 @@ class RisqueView(ui.View):
         check_coins_achievements(str(self.joueur.id), interaction.channel)
         for it in self.children: it.disabled = True
         await interaction.response.edit_message(embed=discord.Embed(
-            title="💰 Encaissé !",
+            title=season_titre("💰 Encaissé !"),
             description=(f"**{self.joueur.display_name}** repart avec **{self.montant:,} pièces** "
                          f"après {self.palier} palier(s).\n*Sage décision… ou pas ?*"),
-            color=0x2ecc71), view=None)
+            color=season_tint(0x2ecc71)), view=None)
         self.stop()
 
 @bot.command(name="risque", aliases=["risqueousecurite", "doubleounrien"])
@@ -13595,12 +13612,12 @@ async def risque_cmd(ctx):
     depart = random.randint(300, 800)
     vue = RisqueView(ctx.author, depart)
     vue.message = await ctx.send(embed=discord.Embed(
-        title="🎲 Risque ou Sécurité",
+        title=season_titre("🎲 Risque ou Sécurité"),
         description=(f"Tu as gagné **{depart:,} pièces** !\n\n"
                      f"🎲 **Continuer** — ×2 mais 30 % de tout perdre\n"
                      f"💰 **Encaisser** — tu repars avec {depart:,} pièces\n\n"
                      f"*Jusqu'à 6 paliers. Plus tu montes, plus c'est risqué.*"),
-        color=0xe67e22), view=vue)
+        color=season_tint(0xe67e22)), view=vue)
 
 # ============================================================
 #  ⚡ EVENTS RAPIDES — série 2
@@ -13841,7 +13858,7 @@ class VraiFauxView(ui.View):
                 await interaction.response.edit_message(view=self)
                 await self.salon.send(embed=discord.Embed(
                     description=f"✅ **{interaction.user.display_name}** a raison — c'était **{'VRAI' if self.bonne else 'FAUX'}** !\n💰 +{gain:,} pièces",
-                    color=0x2ecc71))
+                    color=season_tint(0x2ecc71)))
                 self.stop()
             else:
                 await interaction.response.send_message("✅ Bonne réponse, mais trop tard !", ephemeral=True)
@@ -13865,14 +13882,14 @@ async def run_vraifaux(channel, guild):
     cible = channel
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🧠 VRAI OU FAUX !",
+            title=season_titre("🧠 VRAI OU FAUX !"),
             description="5 affirmations, 15 secondes chacune — le premier bon bouton empoche les pièces.",
-            color=0x9b59b6), salon)
+            color=season_tint(0x9b59b6)), salon)
     await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
                      embed=discord.Embed(
-                         title="🧠 VRAI OU FAUX",
+                         title=season_titre("🧠 VRAI OU FAUX"),
                          description="**5 affirmations** · 15 s chacune\n🏆 **300 à 600 pièces** au premier qui répond juste",
-                         color=0x9b59b6))
+                         color=season_tint(0x9b59b6)))
     await asyncio.sleep(2)
     scores = {}
     dispo_vf = [x for x in VRAIFAUX if x[0] not in vf_vues]
@@ -13884,22 +13901,22 @@ async def run_vraifaux(channel, guild):
     for i, (texte, rep) in enumerate(tirage, 1):
         view = VraiFauxView(rep, cible, timeout=15)
         await cible.send(embed=discord.Embed(
-            title=f"🧠 Affirmation {i}/5",
+            title=season_titre(f"🧠 Affirmation {season_brut(i)}/5"),
             description=f"## {texte}",
-            color=0x9b59b6), view=view)
+            color=season_tint(0x9b59b6)), view=view)
         await view.wait()
         if view.gagnant:
             scores[view.gagnant.display_name] = scores.get(view.gagnant.display_name, 0) + 1
         else:
             await cible.send(embed=discord.Embed(
-                description=f"⏰ Personne — c'était **{'VRAI' if rep else 'FAUX'}**", color=0xe74c3c))
+                description=f"⏰ Personne — c'était **{'VRAI' if rep else 'FAUX'}**", color=season_tint(0xe74c3c)))
         await asyncio.sleep(2)
     if scores:
         cl = sorted(scores.items(), key=lambda x: -x[1])
         await cible.send(embed=discord.Embed(
-            title="🧠 Résultats",
+            title=season_titre("🧠 Résultats"),
             description="\n".join(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{n}** — {s}/5"
-                                  for i, (n, s) in enumerate(cl[:5])), color=0x9b59b6))
+                                  for i, (n, s) in enumerate(cl[:5])), color=season_tint(0x9b59b6)))
     if salon:
         pass  # fermeture assurée par lancer_event_standard()
 
@@ -13971,35 +13988,35 @@ async def run_sapin_noel(channel, guild):
     cible = channel
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🎄 LE SAPIN DU QG",
+            title=season_titre("🎄 LE SAPIN DU QG"),
             description="Des cadeaux sont apparus sous le sapin — **un par personne** !",
-            color=0xc0392b), salon)
+            color=season_tint(0xc0392b)), salon)
     vue = SapinView()
     await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
                      embed=discord.Embed(
-                         title="🎄  LE SAPIN DU QG",
+                         title=season_titre("🎄  LE SAPIN DU QG"),
                          description=("*Il est tard. Les guirlandes clignotent doucement.*\n"
                                       "*Cinq paquets attendent sous le sapin — personne ne sait ce qu'il y a dedans.*\n\n"
                                       "**Choisis ton cadeau. Un seul par personne.**\n\n"
                                       "🧦 500 p · 🍬 900 p · 🧣 1 400 p · 📦 2 000 p\n"
                                       "🎁 3 200 p · 🎀 5 000 p · 💎 9 000 p · 🌟 **18 000 p**\n\n"
                                       "⏰ 3 minutes"),
-                         color=0xc0392b), view=vue)
+                         color=season_tint(0xc0392b)), view=vue)
     await asyncio.sleep(185)
     vue.stop()
     if vue.pris:
         cl = sorted(vue.pris.items(), key=lambda x: -x[1])
         await cible.send(embed=discord.Embed(
-            title="🎄 Le sapin est vide",
+            title=season_titre("🎄 Le sapin est vide"),
             description=(f"**{len(vue.pris)} personne(s)** ont déballé leur cadeau.\n\n"
                          + "\n".join(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} <@{u}> — **{v:,} p**"
                                      for i, (u, v) in enumerate(cl[:5]))
                          + "\n\n*Joyeuses fêtes au QG.* ❄️"),
-            color=0xc0392b))
+            color=season_tint(0xc0392b)))
     else:
         await cible.send(embed=discord.Embed(
             description="🎄 Personne n'est venu chercher son cadeau… le Père Noël est déçu.",
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
     if salon:
         pass  # fermeture assurée par lancer_event_standard()
 
@@ -14058,20 +14075,20 @@ async def run_halloween(channel, guild):
     cible = channel
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🎃 DES BONBONS OU UN SORT !",
+            title=season_titre("🎃 DES BONBONS OU UN SORT !"),
             description="Frappe à **3 portes** — des bonbons, ou une très mauvaise surprise.",
-            color=0xff7518), salon)
+            color=season_tint(0xff7518)), salon)
     vue = PorteHalloweenView()
     await cible.send(get_event_ping(guild, "everyone") if cible is channel else "",
                      embed=discord.Embed(
-                         title="🎃  DES BONBONS OU UN SORT",
+                         title=season_titre("🎃  DES BONBONS OU UN SORT"),
                          description=("*La nuit est tombée sur le QG. Les lampadaires grésillent.*\n"
                                       "*Cinq portes. Tu peux en frapper **trois**.*\n\n"
                                       "🍬 Derrière certaines, des bonbons.\n"
                                       "👻 Derrière d'autres… autre chose.\n\n"
                                       "**1 chance sur 4 de tomber sur un piège.**\n"
                                       "⏰ 3 minutes"),
-                         color=0xff7518), view=vue)
+                         color=season_tint(0xff7518)), view=vue)
     await asyncio.sleep(185)
     vue.stop()
     if vue.recoltes:
@@ -14081,14 +14098,14 @@ async def run_halloween(channel, guild):
                 gazette_gain(uid, d["total"])
         cl = sorted(vue.recoltes.items(), key=lambda x: -x[1]["total"])
         await cible.send(embed=discord.Embed(
-            title="🎃 Fin de la tournée",
+            title=season_titre("🎃 Fin de la tournée"),
             description=("\n".join(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} <@{u}> — **{d['total']:,} p**"
                                    for i, (u, d) in enumerate(cl[:8]))
                          + "\n\n*Bonne nuit… si tu y arrives.* 👻"),
-            color=0xff7518))
+            color=season_tint(0xff7518)))
     else:
         await cible.send(embed=discord.Embed(
-            description="🎃 Personne n'a osé frapper aux portes. Sage décision.", color=0x95a5a6))
+            description="🎃 Personne n'a osé frapper aux portes. Sage décision.", color=season_tint(0x95a5a6)))
     if salon:
         pass  # fermeture assurée par lancer_event_standard()
 
@@ -14167,13 +14184,13 @@ class BombeView(ui.View):
             f"{emo} **{nom}** — {sum(1 for v in self.choix.values() if v == i)} personne(s)"
             for i, (nom, emo, _) in enumerate(BOMBE_FILS))
         return discord.Embed(
-            title="🚨 Une bombe a été découverte dans le QG !",
+            title=season_titre("🚨 Une bombe a été découverte dans le QG !"),
             description=(f"*Le démineur n'arrivera jamais à temps…*\n"
                          f"**Coupez le bon fil avant l'explosion !**\n\n"
                          f"🎁 Récompense : **{gain:,} pièces** pour chaque personne qui trouve\n\n"
                          f"{repartition}\n\n"
                          f"⚠️ *Un seul fil par personne — le choix est définitif.*"),
-            color=0xe74c3c)
+            color=season_tint(0xe74c3c))
 
 # ============================================================
 #  💣 BOMBE 2.0 — la bombe circule, chacun décide
@@ -14206,14 +14223,14 @@ class BombeInscription(ui.View):
         n = len(self.joueurs)
         cag = min(BOMBE_CAG_MAX, BOMBE_CAG_BASE + n * BOMBE_CAG_PAR_JOUEUR)
         return discord.Embed(
-            title="💣 BOMBE — inscriptions",
+            title=season_titre("💣 BOMBE — inscriptions"),
             description=(
                 "La bombe va circuler. Quand tu l'as, tu **décides**.\n\n"
                 "🔧 **Désamorcer** — coupe un fil. Réussi, tu la passes. Raté, tu sors.\n"
                 "🤝 **Passer** — sans risque, mais le minuteur descend **pour tout le monde**.\n"
                 "🔍 **Sonder** — un fil sûr révélé rien qu'à toi. Une seule fois.\n\n"
                 f"👥 **{n}** inscrit(s)\n💰 Cagnotte : **{cag:,} pièces**"),
-            color=0xe74c3c).set_footer(text="40 secondes pour rejoindre")
+            color=season_tint(0xe74c3c)).set_footer(text=season_pied("40 secondes pour rejoindre"))
 
 class BombeTour(ui.View):
     """Tour d'un porteur — seul lui peut agir."""
@@ -14265,15 +14282,15 @@ def _bombe_embed(etat):
             lignes.append(f"🙂 {etat['noms'][uid]}")
     coupes = " ".join(BOMBE_FILS2[i][1] for i in etat["coupes"]) or "aucun"
     e = discord.Embed(
-        title=f"💣 BOMBE — tour {etat['tour']}",
+        title=season_titre(f"💣 BOMBE — tour {season_brut(etat['tour'])}"),
         description=f"{barre}\n\n" + "\n".join(lignes),
-        color=0xe74c3c if etat["minuteur"] <= 2 else 0xf39c12)
+        color=season_tint(0xe74c3c if etat["minuteur"] <= 2 else 0xf39c12))
     e.add_field(name="⚠️ Risque si tu coupes", value=f"**{int(etat['risque']*100)} %**", inline=True)
     e.add_field(name="✂️ Fils coupés", value=coupes, inline=True)
     e.add_field(name="👥 En vie", value=f"{len(vivants)}", inline=True)
     if etat.get("dernier"):
         e.add_field(name="📣 Ce qui vient de se passer", value=etat["dernier"], inline=False)
-    e.set_footer(text=f"💰 Cagnotte {etat['cagnotte']:,} pièces")
+    e.set_footer(text=season_pied(f"💰 Cagnotte {etat['cagnotte']:,} pièces"))
     return e
 
 async def run_bombe(channel, guild):
@@ -14285,9 +14302,9 @@ async def run_bombe(channel, guild):
     cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🚨 UNE BOMBE DANS LE QG !",
+            title=season_titre("🚨 UNE BOMBE DANS LE QG !"),
             description="Elle va passer de main en main. Le dernier debout rafle la cagnotte.",
-            color=0xe74c3c), salon)
+            color=season_tint(0xe74c3c)), salon)
 
     insc = BombeInscription(timeout=40)
     insc.message = await cible.send(
@@ -14300,10 +14317,10 @@ async def run_bombe(channel, guild):
 
     if len(insc.joueurs) < 2:
         await cible.send(embed=discord.Embed(
-            title="💨 Désamorçage annulé",
+            title=season_titre("💨 Désamorçage annulé"),
             description=("Personne n'a osé." if not insc.joueurs
                          else "Il faut être au moins **deux** — une bombe ne se passe pas tout seul."),
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
         # Fermeture confiée au wrapper : lancer_event_standard() supprime
         # le salon une seule fois, dans son finally.
         return
@@ -14387,17 +14404,17 @@ async def run_bombe(channel, guild):
         perdant = etat["porteur"]
         etat["vivants"] = [u for u in etat["vivants"] if u != perdant]
         await cible.send(embed=discord.Embed(
-            title="💥 BOOM",
+            title=season_titre("💥 BOOM"),
             description=(f"Le minuteur tombe à zéro. **{etat['noms'][perdant]}** avait la bombe.\n\n"
                          f"*À force de se la refiler, quelqu'un devait la tenir à la fin.*"),
-            color=0xe74c3c))
+            color=season_tint(0xe74c3c)))
 
     cagnotte = etat["cagnotte"]
     survivants = etat["vivants"]
     if not survivants:
         await cible.send(embed=discord.Embed(
-            title="💀 Personne",
-            description="Tout le monde a sauté. Akari note ça quelque part.", color=0x95a5a6))
+            title=season_titre("💀 Personne"),
+            description="Tout le monde a sauté. Akari note ça quelque part.", color=season_tint(0x95a5a6)))
         # Fermeture confiée au wrapper : lancer_event_standard() supprime
         # le salon une seule fois, dans son finally.
         return
@@ -14418,10 +14435,10 @@ async def run_bombe(channel, guild):
             gazette_gain(u, part_a)
             lignes.append(f"🎖️ {etat['noms'][u]} — +{part_a:,} pièces")
     await cible.send(embed=discord.Embed(
-        title="💣 Désamorcée",
+        title=season_titre("💣 Désamorcée"),
         description=("\n".join(lignes) +
                      f"\n\n*{etat['tour']} tours · {len(ordre)} démineurs au départ.*"),
-        color=0x2ecc71).set_footer(text=f"Cagnotte totale : {cagnotte:,} pièces"))
+        color=season_tint(0x2ecc71)).set_footer(text=season_pied(f"Cagnotte totale : {cagnotte:,} pièces")))
     pass  # fermeture assurée par lancer_event_standard()
 
 
@@ -14467,11 +14484,11 @@ async def run_defi_eclair(channel, guild, mode=None):
     if salon and guild:
         await annoncer_event(guild, channel, M["ping"], discord.Embed(
             title=f"{M['emoji']} {M['nom'].upper()}",
-            description=f"{titre}\n🏆 **{gain:,} pièces** au premier.", color=M["couleur"]), salon)
+            description=f"{titre}\n🏆 **{gain:,} pièces** au premier.", color=season_tint(M["couleur"])), salon)
     await cible.send(get_event_ping(guild, M["ping"]) if (cible is channel and guild) else "",
         embed=discord.Embed(title=f"{M['emoji']} {M['nom'].upper()}",
             description=f"{corps}\n\n🏆 **{gain:,} pièces** au premier · ⏰ {M['duree']} s",
-            color=M["couleur"]))
+            color=season_tint(M["couleur"])))
     def check(m):
         return m.channel == cible and not m.author.bot and not m.content.startswith(".")
     fin = asyncio.get_event_loop().time() + M["duree"]
@@ -14494,11 +14511,11 @@ async def run_defi_eclair(channel, guild, mode=None):
             except Exception: pass
             await cible.send(embed=discord.Embed(
                 description=f"🎉 **{gagnant.display_name}** trouve — {revelation}\n💰 +{gain:,} pièces",
-                color=0x2ecc71))
+                color=season_tint(0x2ecc71)))
             break
     if not gagnant:
         await cible.send(embed=discord.Embed(
-            description=f"⏰ Temps écoulé — {revelation}", color=0xe74c3c))
+            description=f"⏰ Temps écoulé — {revelation}", color=season_tint(0xe74c3c)))
     pass  # fermeture assurée par lancer_event_standard()
     return gagnant
 
@@ -14610,7 +14627,7 @@ class TrainInscription(ui.View):
 
     def build(self):
         return discord.Embed(
-            title="🚂 TRAIN FOU — embarquement",
+            title=season_titre("🚂 TRAIN FOU — embarquement"),
             description=(
                 "Huit stations. À chacune, **vous votez** : on continue ou on s'arrête.\n\n"
                 "🚂 **Continuer** — la cagnotte monte, le risque aussi\n"
@@ -14618,7 +14635,7 @@ class TrainInscription(ui.View):
                 "*Si le train déraille, ceux qui sont encore dedans perdent tout.*\n"
                 "*Ceux qui sont descendus regardent.*\n\n"
                 f"👥 **{len(self.joueurs)}** passager(s)"),
-            color=0x2c3e50).set_footer(text="45 secondes pour monter")
+            color=season_tint(0x2c3e50)).set_footer(text=season_pied("45 secondes pour monter"))
 
 class TrainStationView(ui.View):
     """Chaque passager encore à bord vote."""
@@ -14660,9 +14677,9 @@ def _train_embed(etat):
         else:
             lignes.append(f"💥 ~~{etat['noms'][uid]}~~")
     e = discord.Embed(
-        title=f"🚂 {emo} {nom.upper()}  —  station {etat['station']+1}/8",
+        title=season_titre(f"🚂 {season_brut(emo)} {season_brut(nom.upper())}  —  station {season_brut(etat['station']+1)}/8"),
         description=f"`{voie}`\n\n*{texte}*\n\n" + "\n".join(lignes),
-        color=0xe74c3c if risque >= 0.30 else 0xe67e22 if risque >= 0.18 else 0x2c3e50)
+        color=season_tint(0xe74c3c if risque >= 0.30 else 0xe67e22 if risque >= 0.18 else 0x2c3e50))
     e.add_field(name="💰 Part par passager",
                 value=f"**{etat['part']:,} pièces**", inline=True)
     e.add_field(name="⚠️ Risque de déraillement",
@@ -14670,7 +14687,7 @@ def _train_embed(etat):
     e.add_field(name="👥 À bord", value=f"{len(etat['a_bord'])}", inline=True)
     if etat.get("incident"):
         e.add_field(name="📣 Sur la voie", value=etat["incident"], inline=False)
-    e.set_footer(text="Continuer = plus de pièces · Descendre = tu gardes ta part")
+    e.set_footer(text=season_pied("Continuer = plus de pièces · Descendre = tu gardes ta part"))
     return e
 
 async def run_train_fou(channel, guild):
@@ -14682,9 +14699,9 @@ async def run_train_fou(channel, guild):
     cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🚂 LE TRAIN FOU ENTRE EN GARE",
+            title=season_titre("🚂 LE TRAIN FOU ENTRE EN GARE"),
             description="Huit stations. À chacune, on vote : continuer ou descendre.",
-            color=0x2c3e50), salon)
+            color=season_tint(0x2c3e50)), salon)
 
     insc = TrainInscription(timeout=45)
     insc.message = await cible.send(
@@ -14697,10 +14714,10 @@ async def run_train_fou(channel, guild):
 
     if len(insc.joueurs) < 2:
         await cible.send(embed=discord.Embed(
-            title="🚂 Le train repart à vide",
+            title=season_titre("🚂 Le train repart à vide"),
             description=("Personne n'est monté." if not insc.joueurs
                          else "Un seul passager. Le chef de gare a annulé le départ."),
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
         # Fermeture confiée au wrapper : lancer_event_standard() supprime
         # le salon une seule fois, dans son finally.
         return
@@ -14733,13 +14750,13 @@ async def run_train_fou(channel, guild):
             await cible.send(embed=discord.Embed(
                 description=("🚪 " + ", ".join(f"**{etat['noms'][u]}**" for u in descendent) +
                              f" descend(ent) avec **{etat['part']:,} pièces** chacun."),
-                color=0x95a5a6))
+                color=season_tint(0x95a5a6)))
 
         if not etat["a_bord"]:
             await cible.send(embed=discord.Embed(
-                title="🚂 Le train continue sans personne",
+                title=season_titre("🚂 Le train continue sans personne"),
                 description="Tout le monde est descendu. Sage. Ennuyeux, mais sage.",
-                color=0x95a5a6))
+                color=season_tint(0x95a5a6)))
             break
 
         if idx == len(TRAIN_STATIONS) - 1:
@@ -14751,13 +14768,13 @@ async def run_train_fou(channel, guild):
             etat["morts"] |= etat["a_bord"]
             etat["a_bord"] = set()
             await cible.send(embed=discord.Embed(
-                title="💥 DÉRAILLEMENT",
+                title=season_titre("💥 DÉRAILLEMENT"),
                 description=(f"**{TRAIN_STATIONS[idx][0]}.** Le train sort de la voie.\n\n"
                              + ", ".join(f"**{etat['noms'][u]}**" for u in perdus) +
                              f" perd(ent) **{etat['part']:,} pièces** qu'ils avaient à portée.\n\n"
                              + ("*Ceux qui étaient descendus n'ont rien dit. C'était plus poli.*"
                                 if etat["descendus"] else "*Personne n'était descendu.*")),
-                color=0xe74c3c))
+                color=season_tint(0xe74c3c)))
             break
 
         # ── Incident de voie ──
@@ -14787,12 +14804,12 @@ async def run_train_fou(channel, guild):
             memoriser("event.train_terminus", uid=_u, valeur=int(prime), unique=False,
                       tag=f"train:{int(prime)}")
         await cible.send(embed=discord.Embed(
-            title="🏁 TERMINUS",
+            title=season_titre("🏁 TERMINUS"),
             description=("Le train s'arrête. Les portes s'ouvrent.\n\n"
                          + "\n".join(f"🏆 **{etat['noms'][u]}** — +{prime:,} pièces" for u in survivants)
                          + f"\n\n*{len(etat['descendus'])} descendu(s) en route · "
                            f"{len(etat['morts'])} resté(s) dedans.*"),
-            color=0x2ecc71))
+            color=season_tint(0x2ecc71)))
     recap = []
     if etat["descendus"]:
         recap.append("🚪 " + " · ".join(f"{etat['noms'][u]} ({g:,})"
@@ -14801,7 +14818,7 @@ async def run_train_fou(channel, guild):
         recap.append("💥 " + " · ".join(etat["noms"][u] for u in etat["morts"]))
     if recap:
         await cible.send(embed=discord.Embed(
-            title="🚂 Le voyage", description="\n".join(recap), color=0x2c3e50))
+            title=season_titre("🚂 Le voyage"), description="\n".join(recap), color=season_tint(0x2c3e50)))
     pass  # fermeture assurée par lancer_event_standard()
 
 # ============================================================
@@ -14840,7 +14857,7 @@ class DealInscription(ui.View):
 
     def build(self):
         return discord.Embed(
-            title="💼 LE DEAL — à la table",
+            title=season_titre("💼 LE DEAL — à la table"),
             description=(
                 "Un lot. **Deux acheteurs.** Chacun reçoit en privé :\n"
                 "un **rôle**, et **ce que le lot vaut pour lui**.\n\n"
@@ -14850,7 +14867,7 @@ class DealInscription(ui.View):
                 "**Le plus offrant emporte le lot** — et paie ce qu'il a proposé.\n"
                 "*Payer plus que ça ne vaut, c'est perdre.*\n\n"
                 f"👥 **{len(self.joueurs)}** à la table"),
-            color=0x34495e).set_footer(text="40 secondes pour entrer")
+            color=season_tint(0x34495e)).set_footer(text=season_pied("40 secondes pour entrer"))
 
 class DealOffreModal(ui.Modal, title="💼 Ton offre finale"):
     montant = ui.TextInput(label="Combien tu proposes ?", placeholder="ex : 1200",
@@ -14895,9 +14912,9 @@ async def run_le_deal(channel, guild):
     cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="💼 LE DEAL",
+            title=season_titre("💼 LE DEAL"),
             description="Un lot, deux acheteurs, deux valeurs secrètes. Négociez.",
-            color=0x34495e), salon)
+            color=season_tint(0x34495e)), salon)
 
     insc = DealInscription(timeout=40)
     insc.message = await cible.send(
@@ -14910,10 +14927,10 @@ async def run_le_deal(channel, guild):
 
     if len(insc.joueurs) < 2:
         await cible.send(embed=discord.Embed(
-            title="💼 Négociation annulée",
+            title=season_titre("💼 Négociation annulée"),
             description=("Personne à la table." if not insc.joueurs
                          else "On ne négocie pas tout seul."),
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
         # Fermeture confiée au wrapper : lancer_event_standard() supprime
         # le salon une seule fois, dans son finally.
         return
@@ -14937,7 +14954,7 @@ async def run_le_deal(channel, guild):
                                  f"L'autre ignore ce chiffre. Tu ignores le sien.\n"
                                  f"Si tu remportes le lot, tu gagnes **sa valeur moins ton offre**.\n"
                                  f"Offrir plus que {valeurs[uid]:,} te fait **perdre** des pièces."),
-                    color=0x34495e))
+                    color=season_tint(0x34495e)))
         except Exception:
             pass
 
@@ -14949,7 +14966,7 @@ async def run_le_deal(channel, guild):
                      f"Chacun a reçu son rôle et sa valeur en message privé.\n"
                      f"**Vous avez 2 minutes pour discuter ici.**\n\n"
                      f"*Vous pouvez mentir. C'est même prévu.*"),
-        color=0x34495e).set_footer(text="Le salon est à vous — négociez à voix haute"))
+        color=season_tint(0x34495e)).set_footer(text=season_pied("Le salon est à vous — négociez à voix haute")))
 
     for restant in (90, 45, 15):
         await asyncio.sleep(120 - restant if restant == 90 else (90 - 45 if restant == 45 else 30))
@@ -14959,11 +14976,11 @@ async def run_le_deal(channel, guild):
 
     ov = DealOffreView(duo, timeout=45)
     m_off = await cible.send(embed=discord.Embed(
-        title="💼 OFFRES FINALES",
+        title=season_titre("💼 OFFRES FINALES"),
         description=("Chacun pose son offre **en secret**.\n"
                      "Le plus offrant emporte le lot et paie ce qu'il a proposé.\n\n"
                      "⏰ 45 secondes."),
-        color=0xf39c12), view=ov)
+        color=season_tint(0xf39c12)), view=ov)
     await ov.wait()
     for it in ov.children: it.disabled = True
     try: await m_off.edit(view=ov)
@@ -14974,11 +14991,11 @@ async def run_le_deal(channel, guild):
               for u in duo]
     if o[duo[0]] == o[duo[1]]:
         concl = discord.Embed(
-            title="🤝 ÉGALITÉ",
+            title=season_titre("🤝 ÉGALITÉ"),
             description=("\n".join(lignes) +
                          "\n\nMême offre à la pièce près. **Le lot reste invendu.**\n"
                          "*Akari range le carton. Personne ne gagne, personne ne perd.*"),
-            color=0xf1c40f)
+            color=season_tint(0xf1c40f))
     else:
         gagnant = max(duo, key=lambda u: o[u])
         perdant = duo[0] if gagnant == duo[1] else duo[1]
@@ -15012,12 +15029,12 @@ async def run_le_deal(channel, guild):
             economy_data[perdant]["coins"] += bonus
             gazette_gain(perdant, bonus)
         concl = discord.Embed(
-            title="💼 DEAL CONCLU",
+            title=season_titre("💼 DEAL CONCLU"),
             description=("\n".join(lignes) + "\n\n" + verdict +
                          (f"\n\n🎖️ **{insc.noms[perdant]}** n'a pas surpayé — "
                           f"+{bonus:,} pièces de sang-froid." if bonus else "")),
-            color=coul)
-    concl.set_footer(text=f"{emo} {lot}")
+            color=season_tint(coul))
+    concl.set_footer(text=season_pied(f"{emo} {lot}"))
     await cible.send(embed=concl)
     pass  # fermeture assurée par lancer_event_standard()
 
@@ -15044,7 +15061,7 @@ class RougeInscription(ui.View):
 
     def build(self):
         return discord.Embed(
-            title="🃏 CARTE ROUGE — distribution",
+            title=season_titre("🃏 CARTE ROUGE — distribution"),
             description=(
                 "Chacun reçoit **3 cartes en secret** : des noires, et parfois **une rouge**.\n\n"
                 "À ton tour, tu **annonces** combien de rouges tu as.\n"
@@ -15054,7 +15071,7 @@ class RougeInscription(ui.View):
                 "*Annoncer haut rapporte — et attire les soupçons.*\n"
                 "*Accuser juste rapporte. Accuser à tort coûte.*\n\n"
                 f"👥 **{len(self.joueurs)}** joueur(s)"),
-            color=0xc0392b).set_footer(text="40 secondes · 3 joueurs minimum")
+            color=season_tint(0xc0392b)).set_footer(text=season_pied("40 secondes · 3 joueurs minimum"))
 
 class RougeAnnonceView(ui.View):
     """Le joueur au tour annonce un nombre de rouges — vrai ou faux."""
@@ -15124,13 +15141,13 @@ def _rouge_embed(etat):
                       + (f"  *(a annoncé {etat['annonces'][uid]})*"
                          if uid in etat["annonces"] else ""))
     e = discord.Embed(
-        title=f"🃏 CARTE ROUGE — manche {etat['manche']}/{etat['manches']}",
+        title=season_titre(f"🃏 CARTE ROUGE — manche {season_brut(etat['manche'])}/{season_brut(etat['manches'])}"),
         description="\n".join(lignes),
-        color=0xc0392b)
+        color=season_tint(0xc0392b))
     if etat.get("dernier"):
         e.add_field(name="📣 Ce qui vient de se passer", value=etat["dernier"], inline=False)
-    e.set_footer(text=f"🔴 {etat['rouges_totales']} rouge(s) en jeu ce tour · "
-                      f"mise {etat['mise']:,} p")
+    e.set_footer(text=season_pied(f"🔴 {etat['rouges_totales']} rouge(s) en jeu ce tour · "
+                      f"mise {etat['mise']:,} p"))
     return e
 
 async def run_carte_rouge(channel, guild):
@@ -15142,9 +15159,9 @@ async def run_carte_rouge(channel, guild):
     cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🃏 CARTE ROUGE",
+            title=season_titre("🃏 CARTE ROUGE"),
             description="Trois cartes en secret. Annoncez. Mentez. Accusez.",
-            color=0xc0392b), salon)
+            color=season_tint(0xc0392b)), salon)
 
     insc = RougeInscription(timeout=40)
     insc.message = await cible.send(
@@ -15157,11 +15174,11 @@ async def run_carte_rouge(channel, guild):
 
     if len(insc.joueurs) < 3:
         await cible.send(embed=discord.Embed(
-            title="🃏 Partie annulée",
+            title=season_titre("🃏 Partie annulée"),
             description=("Personne n'a pris de main." if not insc.joueurs
                          else f"**{len(insc.joueurs)}** joueur(s) — il en faut **trois**. "
                               f"On ne bluffe pas à deux, on se regarde."),
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
         # Fermeture confiée au wrapper : lancer_event_standard() supprime
         # le salon une seule fois, dans son finally.
         return
@@ -15201,7 +15218,7 @@ async def run_carte_rouge(channel, guild):
             m_an = await cible.send(embed=discord.Embed(
                 description=f"🎯 **{insc.noms[u]}**, combien de rouges as-tu ?\n"
                             f"*Tu as 25 secondes. Tu peux mentir.*",
-                color=0xc0392b), view=av)
+                color=season_tint(0xc0392b)), view=av)
             await av.wait()
             for it in av.children: it.disabled = True
             try: await m_an.edit(view=av)
@@ -15211,9 +15228,9 @@ async def run_carte_rouge(channel, guild):
 
             rv = RougeReactionView(autres, timeout=20)
             m_re = await cible.send(embed=discord.Embed(
-                title=f"🃏 {insc.noms[u]} annonce **{annonce} rouge(s)**",
+                title=season_titre(f"🃏 {season_brut(insc.noms[u])} annonce **{season_brut(annonce)} rouge(s)**"),
                 description="Vous le croyez, ou quelqu'un le traite de menteur ?\n⏰ 20 secondes.",
-                color=0xf39c12), view=rv)
+                color=season_tint(0xf39c12)), view=rv)
             await rv.wait()
             for it in rv.children: it.disabled = True
             try: await m_re.edit(view=rv)
@@ -15276,10 +15293,10 @@ async def run_carte_rouge(channel, guild):
         prime = f" — +{gain_u:,} p" if u in vainqueurs and gain_u else ""
         lignes.append(f"{med} **{etat['noms'][u]}** — {etat['points'][u]:+d} pts{prime}")
     await cible.send(embed=discord.Embed(
-        title="🃏 FIN DE PARTIE",
+        title=season_titre("🃏 FIN DE PARTIE"),
         description="\n".join(lignes),
-        color=0x2ecc71 if meilleur > 0 else 0x95a5a6
-    ).set_footer(text=f"{manches} manches · {len(ordre)} joueurs"))
+        color=season_tint(0x2ecc71 if meilleur > 0 else 0x95a5a6)
+    ).set_footer(text=season_pied(f"{manches} manches · {len(ordre)} joueurs")))
     pass  # fermeture assurée par lancer_event_standard()
 
 # ============================================================
@@ -15329,14 +15346,14 @@ async def run_memoire_inversee(channel, guild):
     cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🧠 MÉMOIRE INVERSÉE",
+            title=season_titre("🧠 MÉMOIRE INVERSÉE"),
             description="Une séquence apparaît, disparaît — puis la question tombe.",
-            color=0x8e44ad), salon)
+            color=season_tint(0x8e44ad)), salon)
 
     await cible.send(
         get_event_ping(guild, "everyone") if (cible is channel and guild) else "",
         embed=discord.Embed(
-            title="🧠 MÉMOIRE INVERSÉE",
+            title=season_titre("🧠 MÉMOIRE INVERSÉE"),
             description=(
                 "Une suite d'emojis s'affiche quelques secondes, puis **disparaît**.\n"
                 "Ensuite seulement, la question arrive — et ce n'est jamais "
@@ -15344,7 +15361,7 @@ async def run_memoire_inversee(channel, guild):
                 "*Position, voisin, intrus, ordre inversé… on ne sait pas à l'avance.*\n\n"
                 "**4 manches**, de plus en plus longues. Répondez dans le salon.\n"
                 "⏰ La première manche démarre dans 12 secondes."),
-            color=0x8e44ad))
+            color=season_tint(0x8e44ad)))
     await asyncio.sleep(12)
 
     scores, noms = {}, {}
@@ -15352,24 +15369,24 @@ async def run_memoire_inversee(channel, guild):
         seq = random.sample(MEM_POOL, taille)
         pts = 100 + num * 60
         m = await cible.send(embed=discord.Embed(
-            title=f"🧠 Manche {num}/4 — {diff}",
+            title=season_titre(f"🧠 Manche {season_brut(num)}/4 — {season_brut(diff)}"),
             description=f"# {'  '.join(seq)}\n\n*Mémorise. {expo} secondes.*",
-            color=0x8e44ad))
+            color=season_tint(0x8e44ad)))
         await asyncio.sleep(expo)
         try:
             await m.edit(embed=discord.Embed(
-                title=f"🧠 Manche {num}/4 — {diff}",
+                title=season_titre(f"🧠 Manche {season_brut(num)}/4 — {season_brut(diff)}"),
                 description="# " + "  ".join("⬛" for _ in seq) + "\n\n*Trop tard.*",
-                color=0x8e44ad))
+                color=season_tint(0x8e44ad)))
         except Exception:
             pass
         await asyncio.sleep(0.8)
 
         question, bonnes, revelation = _mem_question(seq)
         await cible.send(embed=discord.Embed(
-            title=f"❓ Manche {num}",
+            title=season_titre(f"❓ Manche {season_brut(num)}"),
             description=f"{question}\n\n🏆 **{pts} points** au premier · ⏰ 20 secondes",
-            color=0x9b59b6))
+            color=season_tint(0x9b59b6)))
 
         def check(msg):
             return msg.channel == cible and not msg.author.bot and not msg.content.startswith(".")
@@ -15394,26 +15411,26 @@ async def run_memoire_inversee(channel, guild):
             await cible.send(embed=discord.Embed(
                 description=f"✅ **{gagnant.display_name}** — c'était bien {revelation}. "
                             f"*+{pts} points*",
-                color=0x2ecc71))
+                color=season_tint(0x2ecc71)))
         else:
             await cible.send(embed=discord.Embed(
                 description=f"⏰ Personne. La réponse était {revelation}.\n"
                             f"*Séquence : {'  '.join(seq)}*",
-                color=0xe74c3c))
+                color=season_tint(0xe74c3c)))
         if scores:
             cl = sorted(scores.items(), key=lambda x: -x[1])[:5]
             await cible.send(embed=discord.Embed(
-                title="📊 Scores",
+                title=season_titre("📊 Scores"),
                 description="\n".join(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{noms[u]}** — {s}"
                                       for i, (u, s) in enumerate(cl)),
-                color=0x8e44ad))
+                color=season_tint(0x8e44ad)))
         await asyncio.sleep(2)
 
     if not scores:
         await cible.send(embed=discord.Embed(
-            title="🧠 Personne n'a trouvé",
+            title=season_titre("🧠 Personne n'a trouvé"),
             description="Quatre manches, zéro bonne réponse. Akari est perplexe.",
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
         # Fermeture confiée au wrapper : lancer_event_standard() supprime
         # le salon une seule fois, dans son finally.
         return
@@ -15427,7 +15444,7 @@ async def run_memoire_inversee(channel, guild):
         med = ["🥇", "🥈", "🥉"][i] if i < 3 else "▪️"
         lignes.append(f"{med} **{noms[u]}** — {s} pts" + (f" · +{gain:,} pièces" if gain else ""))
     await cible.send(embed=discord.Embed(
-        title="🧠 CLASSEMENT FINAL", description="\n".join(lignes), color=0x2ecc71))
+        title=season_titre("🧠 CLASSEMENT FINAL"), description="\n".join(lignes), color=season_tint(0x2ecc71)))
     pass  # fermeture assurée par lancer_event_standard()
 
 # ============================================================
@@ -15450,9 +15467,9 @@ async def run_petit_bac(channel, guild):
     cible = channel
     if salon and guild:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🧠 PETIT BAC",
+            title=season_titre("🧠 PETIT BAC"),
             description="Une lettre, quatre catégories. Être original rapporte plus qu'être rapide.",
-            color=0x16a085), salon)
+            color=season_tint(0x16a085)), salon)
 
     total = {}
     noms = {}
@@ -15463,13 +15480,13 @@ async def run_petit_bac(channel, guild):
         await cible.send(
             get_event_ping(guild, "everyone") if (cible is channel and guild and manche == 1) else "",
             embed=discord.Embed(
-                title=f"🧠 PETIT BAC — manche {manche}/2",
+                title=season_titre(f"🧠 PETIT BAC — manche {season_brut(manche)}/2"),
                 description=(f"# Lettre : {lettre}\n\n{liste}\n\n"
                              "**Un seul message**, une réponse par ligne, dans l'ordre.\n"
                              "```\nMadagascar\nMob Psycho\nMangue\nMarmotte\n```\n"
                              "🏅 **2 points** si tu es le seul à l'avoir · **1 point** sinon\n"
                              "⏰ **60 secondes**"),
-                color=0x16a085))
+                color=season_tint(0x16a085)))
 
         reponses = {}   # {uid: [4 réponses normalisées]}
         brutes = {}
@@ -15498,7 +15515,7 @@ async def run_petit_bac(channel, guild):
 
         if not reponses:
             await cible.send(embed=discord.Embed(
-                description=f"⏰ Personne n'a joué la manche {manche}.", color=0xe74c3c))
+                description=f"⏰ Personne n'a joué la manche {manche}.", color=season_tint(0xe74c3c)))
             continue
 
         # ── Dépouillement : valide si ça commence par la lettre ──
@@ -15523,18 +15540,18 @@ async def run_petit_bac(channel, guild):
             total[u] = total.get(u, 0) + p
         cl = sorted(pts_manche.items(), key=lambda x: -x[1])
         await cible.send(embed=discord.Embed(
-            title=f"📊 Manche {manche} — lettre {lettre}",
+            title=season_titre(f"📊 Manche {season_brut(manche)} — lettre {season_brut(lettre)}"),
             description="\n".join(detail) + "\n\n" + "\n".join(
                 f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{noms[u]}** — {p} pts "
                 f"*({' · '.join(x or '—' for x in brutes[u])})*"
                 for i, (u, p) in enumerate(cl[:6])),
-            color=0x16a085))
+            color=season_tint(0x16a085)))
         await asyncio.sleep(3)
 
     if not total:
         await cible.send(embed=discord.Embed(
-            title="🧠 Petit Bac annulé",
-            description="Personne n'a rendu de copie.", color=0x95a5a6))
+            title=season_titre("🧠 Petit Bac annulé"),
+            description="Personne n'a rendu de copie.", color=season_tint(0x95a5a6)))
         # Fermeture confiée au wrapper : lancer_event_standard() supprime
         # le salon une seule fois, dans son finally.
         return
@@ -15555,9 +15572,9 @@ async def run_petit_bac(channel, guild):
         med = ["🥇", "🥈", "🥉"][i] if i < 3 else "▪️"
         lignes.append(f"{med} **{noms[u]}** — {p} pts" + (f" · +{gain:,} pièces" if gain else ""))
     await cible.send(embed=discord.Embed(
-        title="🧠 PETIT BAC — classement final",
+        title=season_titre("🧠 PETIT BAC — classement final"),
         description="\n".join(lignes),
-        color=0x2ecc71).set_footer(text="2 points par réponse unique · 1 si partagée"))
+        color=season_tint(0x2ecc71)).set_footer(text=season_pied("2 points par réponse unique · 1 si partagée")))
     pass  # fermeture assurée par lancer_event_standard()
 
 EVENTS_CATALOGUE = {
@@ -16109,7 +16126,7 @@ async def event_cmd(ctx, nom: str = None):
             return await ctx.send(f"❌ `{nom}` inconnu — tape `.event` pour la liste.")
         fam = e.get("fam", "event")
         lib = FAMILLES_EVENT.get(fam, ("🎯 Mode", 0x95a5a6))
-        emb = (discord.Embed(title=e["nom"], description=e["desc"], color=lib[1])
+        emb = (discord.Embed(title=e["nom"], description=e["desc"], color=season_tint(lib[1]))
                .add_field(name="⏱️ Durée", value=e["duree"], inline=True)
                .add_field(name="🏆 Récompense", value=e["gain"], inline=True)
                .add_field(name="📂 Famille", value=lib[0], inline=True))
@@ -16123,235 +16140,1670 @@ async def event_cmd(ctx, nom: str = None):
             emb.add_field(name="🔵 État", value=f"Actif — encore {r//60} min" if r else "Inactif", inline=False)
         return await ctx.send(embed=emb)
     pages = []
+    # Un embed n'accepte que 25 champs : au-delà Discord refuse le message.
+    # Une famille nombreuse est donc répartie sur plusieurs pages.
+    PAR_PAGE = 12
     for fam, (titre, couleur) in FAMILLES_EVENT.items():
         items = events_de(fam)
         if not items: continue
-        e = discord.Embed(title=f"{titre} — {len(items)}", color=couleur, description={
-            "event":"*Des activités auxquelles on participe.*",
-            "casino":"*Mises, tirages et cagnottes.*",
-            "combat":"*Boss et raids — voir aussi `.boss`.*",
-            "saisonnier":"*Ne tournent qu'à leur période.*",
-            "modificateur":"*Pas des events : des états temporaires du serveur.*",
-            "legacy":"*Conservés, mais plus mis en avant.*"}.get(fam, ""))
-        for k, ev in items.items():
-            val = f"{ev['desc']}\n🏆 **{ev['gain']}**"
-            if fam == "modificateur" and modif_restants(k):
-                val += f"\n🔵 **ACTIF** — encore {modif_restants(k)//60} min"
-            modes = [v["nom"] for v in EVENTS_CATALOGUE.values() if v.get("parent") == k]
-            if modes: val += f"\n*Modes : {' · '.join(modes)}*"
-            e.add_field(name=f"{ev['nom']}  ·  {ev['duree']}", value=val, inline=False)
-        e.set_footer(text=f"{len(events_de('event'))} events  •  `.event <nom>` pour le détail")
-        pages.append(e)
+        cles = list(items.items())
+        lots = [cles[i:i + PAR_PAGE] for i in range(0, len(cles), PAR_PAGE)]
+        for n_lot, lot in enumerate(lots):
+            suite = f"  ·  {n_lot + 1}/{len(lots)}" if len(lots) > 1 else ""
+            e = discord.Embed(title=season_titre(f"{titre} — {len(items)}{suite}"), color=season_tint(couleur), description={
+                "event":"*Des activités auxquelles on participe.*",
+                "casino":"*Mises, tirages et cagnottes.*",
+                "combat":"*Boss et raids — voir aussi `.boss`.*",
+                "saisonnier":"*Ne tournent qu'à leur période.*",
+                "modificateur":"*Pas des events : des états temporaires du serveur.*",
+                "legacy":"*Conservés, mais plus mis en avant.*"}.get(fam, ""))
+            for k, ev in lot:
+                val = f"{ev['desc']}\n🏆 **{ev['gain']}**"
+                if fam == "modificateur" and modif_restants(k):
+                    val += f"\n🔵 **ACTIF** — encore {modif_restants(k)//60} min"
+                modes = [v["nom"] for v in EVENTS_CATALOGUE.values() if v.get("parent") == k]
+                if modes: val += f"\n*Modes : {' · '.join(modes)}*"
+                e.add_field(name=f"{ev['nom']}  ·  {ev['duree']}", value=val, inline=False)
+            e.set_footer(text=season_pied(f"{len(events_de('event'))} events  •  `.event <nom>` pour le détail"))
+            pages.append(e)
     await ctx.send(embed=pages[0], view=PageView(pages, ctx.author, timeout=180))
 
 
 # ============================================================
-#  🏚️ SKIN SERVEUR — renommage saisonnier des salons
-#  Ne touche QUE les noms et les topics. Jamais les permissions,
-#  jamais les overwrites, jamais un ID, jamais l'ordre des rôles.
+#  🏚️ SKIN SERVEUR — habillage saisonnier des NOMS (lot DA-1)
+#
+#  Une liste FERMÉE de 34 objets désignés par leur ID : 5 catégories,
+#  26 salons textuels, 3 salons vocaux. Aucun autre objet n'est jamais
+#  renommé, même s'il porte un nom ressemblant.
+#
+#  Le seul appel Discord du moteur est `objet.edit(name=…, reason=…)`.
+#  Jamais une permission, un overwrite, une synchronisation, un parent,
+#  une position, un topic, un type ou un réglage vocal ; aucun salon ni
+#  rôle créé, supprimé ou déplacé.
+#
+#  · Le vrai nom normal (emoji et séparateur compris) est mémorisé ET
+#    écrit sur disque AVANT le premier renommage ; un nom décoré n'est
+#    jamais pris pour un nom normal, même après un redémarrage.
+#  · Idempotent : aucun appel réseau quand le nom est déjà le bon. Le
+#    cache est suivi par l'événement gateway : ni appel de trop juste
+#    après un renommage, ni renommage humain masqué.
+#  · Un renommage manuel n'est jamais écrasé : il est signalé. Dès que le
+#    moteur a entrepris d'habiller un objet, tout nom qu'il ne reconnaît
+#    pas est tenu pour un choix du staff, jusqu'à la fin de la saison.
+#  · Un refus de Discord garde tout ce qu'il faut pour réessayer.
+#  · Une seule synchronisation à la fois ; le mode est relu sous verrou.
+#  · L'état relu du disque est assaini : un fichier abîmé ne fait jamais
+#    planter une passe.
 # ============================================================
-SKIN_SCHEMA = 1
+import unicodedata as _skin_ud
 
-# Snapshot des valeurs NORMALES, par identifiant. Écrit une seule fois,
-# avant la toute première transformation. Jamais réécrit avec des
-# valeurs saisonnières : c'est ce qui garantit un retour exact.
-skin_snapshot = {}        # {str(channel_id): {"nom": ..., "topic": ...}}
-# Ce que le bot a lui-même appliqué en dernier, pour détecter les
-# renommages manuels d'un admin pendant la saison.
-skin_applique = {}        # {str(channel_id): {"nom": ..., "topic": ...}}
+SKIN_SCHEMA = 2                   # data_skin.json (moteur par identifiants)
+SKIN_SCHEMA_ANCIEN = 1            # clés skin_* de data_social.json (moteur précédent)
+SKIN_FICHIER = data_path("data_skin.json")
+SKIN_DELAI_EDIT = 20              # s par renommage ; au-delà, Discord nous fait attendre
+SKIN_ECHECS_MAX = 3               # refus d'affilée avant d'interrompre une passe
+SKIN_ESSAIS_AUTO = 3              # nouveaux essais automatiques par mode, ensuite le staff décide
+SKIN_RENOMMAGES_MAX = 2           # Discord : 2 changements de nom par salon…
+SKIN_RENOMMAGES_FENETRE = 615     # … par fenêtre de 10 minutes (plus une marge)
 
-# ⚠️ La catégorie d'events est résolue PAR NOM dans create_event_channel().
-# La renommer ferait échouer la recherche, provoquerait la création d'une
-# catégorie doublon et casserait les salons temporaires. Events 2.0 est
-# gelé : on ne la touche pas tant que la résolution n'est pas par ID.
-SKIN_INTOUCHABLES = {"EVENT_CATEGORY_NAME"}
+# (ID, type, intitulé Blackwood en écriture normale, emoji, nom actuel de référence)
+# La dernière colonne ne sert qu'aux messages : le VRAI nom normal est
+# relevé sur Discord, tel quel, au moment du premier renommage.
+SKIN_BLACKWOOD = (
+    # ── 5 catégories · « Cassette VHS » ──
+    (1533215188868923554, "categorie", "ACCUEIL",            "🎃", "ACCUEIL"),
+    (1533215189384695811, "categorie", "INFORMATIONS",       "📼", "INFORMATIONS"),
+    (1533215189728624772, "categorie", "DISCUSSIONS",        "🕯️", "DISCUSSIONS"),
+    (1533215190072426697, "categorie", "DIVERTISSEMENT",     "🦇", "DIVERTISSEMENT"),
+    (1533215190072426703, "categorie", "VOCAUX",             "🌙", "VOCAUX"),
+    # ── 26 salons textuels · « Grimoire rétro » ──
+    (1533215188868923555, "texte",     "âmes-nouvelles",     "👻", "arrivé"),
+    (1533215188868923556, "texte",     "règlement",          "🕯️", "règlement"),
+    (1533215188868923557, "texte",     "guide-de-minuit",    "🔮", "guide"),
+    (1533215188868923558, "texte",     "rôles",              "🧙", "rôles"),
+    (1533215189384695810, "texte",     "départs",            "🦇", "départ"),
+    (1533215189384695812, "texte",     "gazette",            "🦉", "annonces"),
+    (1541033593973899324, "texte",     "chronique",          "🍂", "chronique"),
+    (1533215189384695813, "texte",     "veillées",           "🎃", "event"),
+    (1533215189384695814, "texte",     "cadeaux-hantés",     "🍬", "giveaways"),
+    (1533215189384695815, "texte",     "hall-des-légendes",  "🌒", "hall-of-fame"),
+    (1533215189384695816, "texte",     "tickets",            "🕷️", "ticket"),
+    (1533215189384695817, "texte",     "la-toile",           "🕸️", "réseaux"),
+    (1533215189728624770, "texte",     "boosts-magiques",    "🧪", "boosts"),
+    (1533215189728624771, "texte",     "level-up",           "🌕", "level"),
+    (1533215189728624773, "texte",     "salon-hanté",        "🎃", "général"),
+    (1533215189728624774, "texte",     "dramas-de-minuit",   "🌙", "kdramas"),
+    (1533215189728624775, "texte",     "anime-night",        "👹", "animes"),
+    (1533215189728624776, "texte",     "gaming-afterdark",   "🧟", "gaming"),
+    (1533215189728624777, "texte",     "witch-club",         "🧙‍♀️", "girlsonly"),
+    (1533215189728624778, "texte",     "archives-hantées",   "📼", "médias"),
+    (1535753884189073550, "texte",     "witch-pets",         "🐈‍⬛", "pet-paradise"),
+    (1533215189728624779, "texte",     "idées-magiques",     "🍁", "suggestions"),
+    (1533215190072426696, "texte",     "grimoire-bot",       "🪄", "commandes"),
+    (1533215190072426699, "texte",     "dark-shop",          "🕯️", "boutique"),
+    (1533215190072426700, "texte",     "moon-casino",        "🌙", "casino"),
+    (1533215190072426702, "texte",     "duels-maudits",      "💀", "duel"),
+    # ── 3 salons vocaux · « Grimoire rétro », espaces conservés ──
+    (1533215190072426704, "vocal",     "Chill des fantômes", "👻", "Vocal Chill"),
+    (1533215190072426705, "vocal",     "Arcade de minuit",   "🧛", "L’arcade"),
+    (1533215190311768246, "vocal",     "Cinéma de minuit",   "🎃", "Salle de projection"),
+)
+SKIN_IDS = frozenset(str(o[0]) for o in SKIN_BLACKWOOD)
+_SKIN_TYPES = {"categorie": ("category",), "texte": ("text", "news"),
+               "vocal": ("voice", "stage_voice")}
 
-def skin_protege(objet):
-    """Ce salon ou cette catégorie doit-il rester tel quel ?"""
-    nom = getattr(objet, "name", "") or ""
-    if nom == EVENT_CATEGORY_NAME:
-        return True
-    # Un salon temporaire d'event, ou le salon d'une émission en cours.
-    if getattr(objet, "id", None) in event_salons_suivis:
-        return True
-    for gid in events_actifs:
-        for f in events_actifs[gid].values():
-            if f.get("salon_id") == getattr(objet, "id", None):
-                return True
-    return False
+# Noms posés par le moteur précédent (SKIN_SAISONS, schéma 1). Ce sont des
+# noms SAISONNIERS : jamais mémorisés comme noms normaux, et rendus à leur
+# nom d'origine quand celui-ci est connu.
+SKIN_ANCIENS_NOMS = frozenset({
+    "🍂 Le Salon", "🍂・le-salon", "🕯️ Le Boudoir", "🃏 L'Arrière-Salle",
+    "🔮 Le Cabinet", "📜 La Gazette de Blackwood", "🦇 La Ménagerie",
+    "🕯️ Le Comptoir", "🍂 Le Panneau", "❄️ La Grande Salle",
+    "❄️ Le Comptoir d'Hiver", "❄️ Le Panneau"})
 
-# Renommages proposés par saison. Clé = nom NORMAL exact.
-# On ne renomme que ce qui est explicitement listé : rien d'automatique.
-SKIN_SAISONS = {
-    "blackwood": {
-        "💬 Général":        "🍂 Le Salon",
-        "💬・général":       "🍂・le-salon",
-        "🎀 Girls Only":     "🕯️ Le Boudoir",
-        "🎰 Casino":         "🃏 L'Arrière-Salle",
-        "🎴 Gacha":          "🔮 Le Cabinet",
-        "📰 Gazette":        "📜 La Gazette de Blackwood",
-        "🐾 Compagnons":     "🦇 La Ménagerie",
-        "🛍️ Boutique":       "🕯️ Le Comptoir",
-        "📢 Annonces":       "🍂 Le Panneau",
-    },
-    "wintervale": {
-        "💬 Général":        "❄️ La Grande Salle",
-        "🛍️ Boutique":       "❄️ Le Comptoir d'Hiver",
-        "📢 Annonces":       "❄️ Le Panneau",
-    },
-}
+# ── État (seuls les 34 IDs y figurent) ──
+skin_snapshot = {}      # {id: {"nom": nom normal, "source": capture|adopte|ancien, "t": ts}}
+skin_suivi = {}         # {id: {"etat": repos|applique|conflit|erreur, "pose", "cible",
+                        #       "encours", "echec", "detail", "avant", "apres", "ok_t", "t"}}
+                        #   repos    : nom normal en place, saison non engagée ;
+                        #   applique : habillé par le bot ("pose" = nom confirmé par Discord) ;
+                        #   conflit  : renommé à la main PENDANT la saison (jamais écrasé) ;
+                        #   erreur   : dernier renommage refusé ("echec" = opération à refaire) ;
+                        #   "encours": opération écrite sur disque juste AVANT l'appel Discord.
+skin_bilans = {}        # {guild_id: bilan de la dernière synchronisation}
+skin_veille_etat = {}   # {guild_id: {"essais": n, "mode": m}} — nouveaux essais automatiques
+# Relu depuis data_social.json et réécrit à chaque sauvegarde :
+#  · "snapshot" / "applique" : données du moteur précédent, telles quelles
+#    (rien n'est perdu ; avant de revenir à la version précédente, remettre
+#    les noms normaux par `.saison normal`) ;
+#  · "normaux" / "conflits" : copie de secours du moteur DA-1 — noms normaux
+#    et objets en conflit manuel —, utilisée seulement si data_skin.json est
+#    perdu ou illisible.
+skin_ancien = {"snapshot": {}, "applique": {}, "normaux": {}, "conflits": []}
+#  "fait"       : data_skin.json a été relu (une fois par processus) ;
+#  "social_lu"  : le mode forcé a pu être relu de data_social.json ;
+#  "mode_connu" : le mode forcé en mémoire est celui du staff (données
+#                 chargées, ou `.saison` tapée) — sinon une sauvegarde le
+#                 marque « non fiable » et il n'est pas relu ;
+#  "social_vu"  : la relecture de ce que le skin garde dans
+#                 data_social.json a eu lieu ou a été tentée (au chargement,
+#                 ou juste avant une sauvegarde précoce) ;
+#  "demarre"    : la passe de démarrage a déjà été lancée dans ce processus.
+_skin_charge = {"fait": False, "social_lu": False, "mode_connu": False,
+                "social_vu": False, "demarre": False}
+_SKIN_LOCK = asyncio.Lock()
+_skin_taches = set()
 
-SKIN_TOPICS = {
-    "blackwood": "🍂 Blackwood — l'automne s'est installé au QG.",
-    "wintervale": "❄️ Wintervale — la neige tient enfin.",
-}
 
-def _skin_cibles(guild):
-    """Salons et catégories concernés, hors intouchables."""
+# ── Lettres décoratives ──
+_SKIN_FRAKTUR_MAJ = {"C": "ℭ", "H": "ℌ", "I": "ℑ", "R": "ℜ", "Z": "ℨ"}
+_SKIN_MARQUES = frozenset(_SKIN_FRAKTUR_MAJ.values()) | {"⌜", "⌟"}
+
+
+def _skin_deco(texte, maj0, min0, exceptions=None):
+    """Remplace les lettres latines de base par leur variante décorative.
+    Un accent reste sur sa lettre (lettre de base + diacritique combinant) ;
+    chiffres, espaces, tirets, ponctuation et emojis ne changent pas."""
     out = []
-    for c in list(guild.categories) + list(guild.text_channels):
-        if not skin_protege(c):
+    for c in _skin_ud.normalize("NFD", texte or ""):
+        if "A" <= c <= "Z":
+            out.append((exceptions or {}).get(c) or chr(maj0 + ord(c) - 65))
+        elif "a" <= c <= "z":
+            out.append(chr(min0 + ord(c) - 97))
+        else:
             out.append(c)
-    return out
+    return _skin_ud.normalize("NFC", "".join(out))
 
-def skin_capturer(guild):
-    """Mémorise les valeurs NORMALES manquantes. N'écrase jamais.
-    Appelé avant toute transformation, et à chaque démarrage pour
-    prendre en compte les salons créés depuis."""
+
+def deco_gothique(texte):
+    """« Grimoire rétro » : lettres gothiques (Fraktur)."""
+    return _skin_deco(texte, 0x1D504, 0x1D51E, _SKIN_FRAKTUR_MAJ)
+
+
+def deco_mono(texte):
+    """Lettres à chasse fixe (monospace), casse conservée."""
+    return _skin_deco(texte, 0x1D670, 0x1D68A)
+
+
+def deco_vhs(texte):
+    """« Cassette VHS » : CAPITALES à chasse fixe."""
+    return deco_mono((texte or "").upper())
+
+
+def skin_nom_cible(objet):
+    """Le nom Blackwood d'une entrée de SKIN_BLACKWOOD.
+    Catégorie : `emoji ⌜ INTITULÉ ⌟` · texte : `emoji┊nom` · vocal : `emoji┃Nom`."""
+    _id, typ, nom, emoji = objet[:4]
+    if typ == "categorie":
+        return f"{emoji} ⌜ {deco_vhs(nom)} ⌟"
+    return f"{emoji}{chr(0x2503) if typ == 'vocal' else chr(0x250A)}{deco_gothique(nom)}"
+
+
+def skin_norm(nom):
+    """Forme de comparaison : sans sélecteur de variante (Discord peut le
+    retirer d'un emoji), NFC, sans casse (salons textuels en minuscules)."""
+    s = (nom or "").replace("️", "").replace("︎", "")
+    return _skin_ud.normalize("NFC", s).casefold().strip()
+
+
+def _skin_eq(a, b):
+    return a is not None and b is not None and skin_norm(a) == skin_norm(b)
+
+
+def skin_est_decore(nom):
+    """Porte les lettres ou le cadre du skin : gothiques (Fraktur, ℭ ℌ ℑ ℜ ℨ
+    compris), à chasse fixe (monospace) ou ⌜ ⌟. Un tel nom n'est JAMAIS un
+    nom normal. Les autres polices fantaisie (script, gras…) qu'un staff
+    peut avoir choisies sont des noms ordinaires."""
+    return any(0x1D504 <= ord(c) <= 0x1D537 or 0x1D670 <= ord(c) <= 0x1D6A3 or c in _SKIN_MARQUES
+               for c in (nom or ""))
+
+
+def _skin_nom_ancien_moteur(nom):
+    return any(_skin_eq(nom, x) for x in SKIN_ANCIENS_NOMS)
+
+
+def _skin_texte_sur(x):
+    """Chaîne non vide et inscriptible en UTF-8 (un caractère isolé d'une
+    paire, venu d'un fichier abîmé, ferait échouer toute sauvegarde)."""
+    if not isinstance(x, str) or not x:
+        return False
+    try:
+        x.encode("utf-8")
+    except UnicodeError:
+        return False
+    return True
+
+
+def _skin_nom_normal_valide(nom):
+    return (_skin_texte_sur(nom) and 0 < len(nom.strip()) <= 100
+            and not skin_est_decore(nom) and not _skin_nom_ancien_moteur(nom))
+
+
+def _skin_pose_ancienne(k, nom):
+    """Nom posé sur CET objet par le moteur précédent ? Prouvé par son
+    archive ; sans cette preuve, présumé tant que le moteur DA-1 n'a jamais
+    relevé lui-même le nom normal de l'objet. Dès que le moteur DA-1 a
+    renommé l'objet avec succès, le moteur précédent n'y est plus pour rien :
+    un de ses noms, s'il réapparaît, est un choix du staff (signalé, laissé).
+    (Conséquence assumée : après un retour à la version précédente puis un
+    redéploiement, un nom que l'ancien moteur aurait reposé entre-temps se
+    corrige à la main.)"""
+    if (skin_suivi.get(k) or {}).get("ok_t") is not None:
+        return False
+    a = (skin_ancien.get("applique") or {}).get(k)
+    if isinstance(a, dict) and isinstance(a.get("nom"), str) and _skin_eq(nom, a["nom"]):
+        return True
+    releve = (skin_snapshot.get(k) or {}).get("source") in ("capture", "adopte", "copie")
+    return (not releve) and _skin_nom_ancien_moteur(nom)
+
+
+def _skin_tronquer(texte, limite):
+    """Coupe à `limite` unités UTF-16 — la mesure la plus stricte des limites
+    d'embed (une lettre gothique compte double)."""
+    texte = texte or ""
+    if len(texte.encode("utf-16-le")) // 2 <= limite:
+        return texte
+    out, n = [], 0
+    for c in texte:
+        w = 2 if ord(c) > 0xFFFF else 1
+        if n + w > limite - 1:
+            break
+        out.append(c)
+        n += w
+    return "".join(out) + "…"
+
+
+# ── Persistance dédiée, atomique ──
+
+def skin_persister():
+    """Écrit data_skin.json (.tmp + fsync + os.replace, comme la Dernière
+    Nuit). Retourne False si l'écriture échoue : l'appelant NE renomme PAS."""
+    import json as _j, os as _o
+    donnees = {"schema": SKIN_SCHEMA,
+               # Le mode forcé, aussi écrit ici (écriture atomique) : relu au
+               # démarrage si data_social.json n'a pas pu l'être.
+               "mode_force": saison_override.get("mode"),
+               "snapshot": {k: v for k, v in skin_snapshot.items() if k in SKIN_IDS},
+               "suivi": {k: v for k, v in skin_suivi.items() if k in SKIN_IDS},
+               "bilans": skin_bilans, "veille": skin_veille_etat}
+    tmp = SKIN_FICHIER + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            _j.dump(donnees, f, ensure_ascii=False, indent=1)
+            f.flush()
+            _o.fsync(f.fileno())
+        _o.replace(tmp, SKIN_FICHIER)
+        return True
+    except Exception as e:
+        print(f"[Skin] Sauvegarde impossible : {type(e).__name__}: {e}")
+        try:
+            _o.remove(tmp)
+        except Exception:
+            pass
+        return False
+
+
+def skin_ancien_charger(data):
+    """Relit les clés skin_* de data_social.json, sans les interpréter : elles
+    sont réécrites telles quelles à chaque sauvegarde."""
+    import json as _j
+
+    def inscriptible(v):                # une entrée qui ferait échouer la sauvegarde est écartée
+        try:
+            _j.dumps(v, ensure_ascii=False).encode("utf-8")
+            return True
+        except (UnicodeError, TypeError, ValueError):
+            return False
+    snap, app = data.get("skin_snapshot"), data.get("skin_applique")
+    norm = data.get("skin_normaux")
+    skin_ancien["snapshot"] = ({str(k): v for k, v in snap.items()
+                                if isinstance(v, dict) and inscriptible(v)}
+                               if isinstance(snap, dict) else {})
+    skin_ancien["applique"] = ({str(k): v for k, v in app.items()
+                                if isinstance(v, dict) and inscriptible(v)}
+                               if isinstance(app, dict) else {})
+    skin_ancien["normaux"] = ({str(k): v for k, v in norm.items() if _skin_texte_sur(v)}
+                              if isinstance(norm, dict) else {})
+    conf = data.get("skin_conflits")
+    skin_ancien["conflits"] = (sorted({str(k) for k in conf
+                                       if isinstance(k, (str, int)) and not isinstance(k, bool)
+                                       and str(k) in SKIN_IDS})
+                               if isinstance(conf, list) else [])
+
+
+def skin_lire_social():
+    """Appelée par save_all_data juste AVANT d'écrire data_social.json.
+    Une commande servie avant on_ready sauvegarde une mémoire qui n'a pas
+    encore été chargée : ce que le skin garde dans ce fichier — mode forcé,
+    archive du moteur précédent, copies de secours — y serait effacé. Tant
+    que les données ne sont pas chargées, ces clés sont donc relues du
+    fichier, pour que la sauvegarde les réécrive telles quelles (sauf un mode
+    forcé déjà marqué « non fiable » : il n'est pas relu). Une tentative de
+    lecture au plus par processus ; sans effet une fois les données chargées."""
+    if _skin_charge["social_vu"]:
+        return
+    _skin_charge["social_vu"] = True
+    import json as _j
+    try:
+        with open(DATA_FILES["social"], encoding="utf-8") as f:
+            data = _j.load(f)
+        if not isinstance(data, dict):
+            return
+        skin_ancien_charger(data)
+        # Le mode forcé déjà sur disque fait foi, sauf si le staff vient d'en
+        # choisir un autre (`.saison` tapée avant on_ready).
+        if not _skin_charge["mode_connu"] and data.get("saison_override_fiable", True) is not False:
+            ov = data.get("saison_override")
+            saison_override["mode"] = ov if isinstance(ov, str) and ov in SAISON_MODES else None
+            _skin_charge["social_lu"] = _skin_charge["mode_connu"] = True
+    except Exception:
+        pass                # fichier absent ou illisible : rien à préserver
+
+
+def skin_normaux_a_sauver():
+    """Copie de secours des noms normaux (data_social.json). Tant que l'état
+    du skin n'est pas chargé, la copie lue est réécrite telle quelle."""
+    d = dict(skin_ancien.get("normaux") or {})
+    if _skin_charge["fait"]:
+        d.update({k: v["nom"] for k, v in skin_snapshot.items()
+                  if k in SKIN_IDS and isinstance(v, dict) and v.get("nom")})
+    return d
+
+
+def skin_conflits_a_sauver():
+    """Copie de secours des objets en conflit manuel (data_social.json) :
+    ceux que le moteur suit, et ceux de la copie lue qu'il n'a pas encore
+    revus (aucune fiche)."""
+    lus = [k for k in (skin_ancien.get("conflits") or []) if k not in skin_suivi]
+    if not _skin_charge["fait"]:
+        return sorted(skin_ancien.get("conflits") or [])
+    return sorted(set(lus) | {k for k, v in skin_suivi.items()
+                              if k in SKIN_IDS and isinstance(v, dict) and v.get("etat") == "conflit"})
+
+
+def skin_reprendre_ancien():
+    """Pour les 34 objets seulement, quand aucun snapshot n'existe encore :
+    reprend la copie de secours (data_social.json), à défaut le nom normal
+    mémorisé par le moteur précédent. Un nom décoré ou saisonnier n'est
+    jamais repris ; un snapshot existant n'est jamais remplacé. Idempotent.
+    Retourne le nombre de noms repris."""
+    import time as _t
     n = 0
-    for c in _skin_cibles(guild):
-        k = str(c.id)
-        if k not in skin_snapshot:
-            skin_snapshot[k] = {"nom": c.name,
-                                "topic": getattr(c, "topic", None)}
-            n += 1
+    sources = [("copie", {k: {"nom": v} for k, v in (skin_ancien.get("normaux") or {}).items()}),
+               ("ancien", skin_ancien.get("snapshot") or {})]
+    for source, table in sources:
+        for k, v in table.items():
+            k = str(k)
+            if (k in SKIN_IDS and k not in skin_snapshot and isinstance(v, dict)
+                    and _skin_nom_normal_valide(v.get("nom"))):
+                skin_snapshot[k] = {"nom": v["nom"], "source": source, "t": _t.time()}
+                n += 1
     return n
 
-async def skin_appliquer(guild, mode):
-    """Applique le skin d'une saison. Retourne (renommés, ignorés).
 
-    Ne renomme que ce que SKIN_SAISONS prévoit explicitement, et
-    seulement si le nom actuel correspond encore à la valeur normale
-    ou à celle que le bot avait posée."""
-    table = SKIN_SAISONS.get(mode) or {}
-    topic = SKIN_TOPICS.get(mode)
-    faits, ignores = [], []
-    for c in _skin_cibles(guild):
-        k = str(c.id)
-        base = (skin_snapshot.get(k) or {}).get("nom")
-        if base is None:
+_SKIN_ETATS = ("repos", "applique", "conflit", "erreur")
+_SKIN_ACTIONS = ("appliquer", "restaurer")
+_SKIN_LISTES_BILAN = ("modifies", "conformes", "absents", "conflits", "erreurs",
+                      "avertissements", "non_traites")
+
+
+def _skin_instant(x):
+    """Un instant plausible (secondes Unix), ou None. NaN, infinis et entiers
+    démesurés sont écartés par la seule comparaison (aucune conversion)."""
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
+        return None
+    try:
+        return x if 0 <= x < 4e9 else None
+    except Exception:
+        return None
+
+
+def _skin_fiche_saine(v):
+    """Une fiche de suivi relue du disque, ramenée à des types sûrs : un
+    fichier abîmé ou retouché à la main ne fait jamais planter une passe."""
+    def texte(x):
+        return x if _skin_texte_sur(x) else None
+
+    def parmi(x, choix):
+        return x if isinstance(x, str) and x in choix else None
+    renoms = v.get("renoms") if isinstance(v.get("renoms"), list) else []
+    return {"etat": parmi(v.get("etat"), _SKIN_ETATS) or "repos",
+            "pose": texte(v.get("pose")), "cible": texte(v.get("cible")),
+            "encours": parmi(v.get("encours"), _SKIN_ACTIONS),
+            "echec": parmi(v.get("echec"), _SKIN_ACTIONS),
+            "detail": texte(v.get("detail")) or "",
+            "avant": texte(v.get("avant")), "apres": texte(v.get("apres")),
+            "ok_t": _skin_instant(v.get("ok_t")), "t": _skin_instant(v.get("t")),
+            "renoms": [t for t in renoms if _skin_instant(t) is not None][-SKIN_RENOMMAGES_MAX:]}
+
+
+def _skin_bilan_sain(b):
+    """Un bilan relu du disque, ou None s'il n'a pas la forme attendue (il
+    n'est qu'un compte rendu : le perdre ne change aucune décision)."""
+    if (not isinstance(b, dict) or not isinstance(b.get("mode"), str)
+            or b["mode"] not in SAISON_MODES or b.get("action") not in _SKIN_ACTIONS
+            or _skin_instant(b.get("t")) is None):
+        return None
+    out = {"t": b["t"], "mode": b["mode"], "action": b["action"],
+           "source": b["source"] if _skin_texte_sur(b.get("source")) else "?",
+           "guild": b["guild"] if isinstance(b.get("guild"), int) else None,
+           "trouves": b["trouves"] if isinstance(b.get("trouves"), int) else 0,
+           "interrompu": b["interrompu"] if _skin_texte_sur(b.get("interrompu")) else None}
+    for cle in _SKIN_LISTES_BILAN:
+        if not isinstance(b.get(cle), list):
+            return None
+        out[cle] = []
+        for x in b[cle]:
+            if isinstance(x, dict):
+                e = {str(a): ("" if c is None else str(c)) for a, c in x.items()}
+                if all(_skin_texte_sur(a) and (c == "" or _skin_texte_sur(c)) for a, c in e.items()):
+                    out[cle].append(e)
+    out["statut"] = _skin_statut(out)
+    return out
+
+
+def _skin_interpreter(d):
+    """L'état relu du disque, ramené à des types sûrs, sans rien modifier :
+    (snapshot, suivi, bilans, veille, nombre d'entrées écartées)."""
+    def section(cle):
+        v = d.get(cle)
+        return v if isinstance(v, dict) else {}
+    snapshot, suivi, bilans, veille = {}, {}, {}, {}
+    rejets = sum(1 for cle in ("suivi", "bilans", "veille")
+                 if d.get(cle) is not None and not isinstance(d.get(cle), dict))
+    for k, v in section("snapshot").items():
+        if str(k) not in SKIN_IDS:
             continue
-        cible = table.get(base)
-        if not cible or c.name == cible:
+        if isinstance(v, dict) and _skin_nom_normal_valide(v.get("nom")):
+            snapshot[str(k)] = {
+                "nom": v["nom"], "t": _skin_instant(v.get("t")),
+                "source": v["source"] if _skin_texte_sur(v.get("source")) else "?"}
+        else:
+            rejets += 1
+    for k, v in section("suivi").items():
+        if str(k) not in SKIN_IDS:
             continue
-        # Conflit : un admin a renommé pendant la saison précédente.
-        pose = (skin_applique.get(k) or {}).get("nom")
-        if c.name != base and pose is not None and c.name != pose:
-            ignores.append((c.name, "renommé à la main"))
-            continue
+        if isinstance(v, dict):
+            suivi[str(k)] = _skin_fiche_saine(v)
+        else:
+            rejets += 1
+    for g, b in section("bilans").items():
+        b = _skin_bilan_sain(b)
+        if b is not None and _skin_texte_sur(str(g)):
+            bilans[str(g)] = b
+        else:
+            rejets += 1
+    for g, v in section("veille").items():
+        if (isinstance(v, dict) and isinstance(v.get("essais"), int)
+                and not isinstance(v.get("essais"), bool) and _skin_texte_sur(str(g))):
+            veille[str(g)] = {
+                "essais": max(0, min(v["essais"], SKIN_ESSAIS_AUTO)),
+                "mode": v["mode"] if v.get("mode") in SAISON_MODES else None}
+    return snapshot, suivi, bilans, veille, rejets
+
+
+def _skin_mettre_de_cote(raison):
+    """Met data_skin.json de côté, sans jamais écraser un fichier déjà mis de
+    côté lors d'un incident précédent. Pendant le chargement des données, le
+    fichier n'est pas touché : il n'est déplacé qu'une fois le chargement
+    validé en entier (si le démarrage est refusé, il reste à sa place)."""
+    import os as _o, time as _t
+    if _donnees["etat"] == "en_cours":
+        _donnees_differer("skin", lambda: _skin_mettre_de_cote(raison))
+        print(f"[Skin] ⚠️ État illisible ({raison}) — il sera mis de côté une fois le chargement validé")
+        return
+    cible = SKIN_FICHIER + ".corrompu"
+    if _o.path.exists(cible):
+        cible += _t.strftime("-%Y%m%d-%H%M%S")
+    try:
+        _o.replace(SKIN_FICHIER, cible)
+    except Exception:
+        pass
+    print(f"[Skin] ⚠️ État illisible ({raison}) — mis de côté dans {cible}")
+
+
+def skin_charger():
+    """Relit data_skin.json UNE fois par processus : on_ready peut se répéter
+    (reconnexion) et la mémoire vivante reste alors la référence. Un fichier
+    illisible, écrit par une version plus récente ou dont l'interprétation
+    échoue est mis de côté (.corrompu) et signalé ; une entrée mal formée
+    est écartée, jamais interprétée. Les noms normaux de la copie de secours
+    ou du moteur précédent sont ensuite repris s'il en manque."""
+    if _skin_charge["fait"]:
+        return
+    _skin_charge["fait"] = True
+    import json as _j, os as _o
+    d, etat = {}, ({}, {}, {}, {}, 0)
+    if _o.path.exists(SKIN_FICHIER):
         try:
-            kw = {"name": cible, "reason": f"Ambiance {mode}"}
-            if topic is not None and hasattr(c, "topic"):
-                kw["topic"] = topic
-            await c.edit(**kw)
-            skin_applique[k] = {"nom": cible,
-                                "topic": topic if hasattr(c, "topic") else None}
-            faits.append(f"{base} → {cible}")
+            with open(SKIN_FICHIER, encoding="utf-8") as f:
+                d = _j.load(f)
+            if not isinstance(d, dict) or not isinstance(d.get("snapshot"), dict):
+                raise ValueError("schéma inattendu")
+            sch = d.get("schema")
+            if isinstance(sch, int) and not isinstance(sch, bool) and sch > SKIN_SCHEMA:
+                raise ValueError("schéma plus récent")
+            etat = _skin_interpreter(d)
         except Exception as e:
-            ignores.append((c.name, type(e).__name__))
-    return faits, ignores
+            _skin_mettre_de_cote(type(e).__name__)
+            d, etat = {}, ({}, {}, {}, {}, 0)
+    snapshot, suivi, bilans, veille, rejets = etat
+    skin_snapshot.update(snapshot)
+    skin_suivi.update(suivi)
+    skin_bilans.update(bilans)
+    skin_veille_etat.update(veille)
+    if rejets:
+        print(f"[Skin] ⚠️ {rejets} entrée(s) mal formée(s) ignorée(s) à la lecture de l'état")
+    # Mode forcé : celui de data_social.json fait foi. S'il n'a pas pu être
+    # relu (fichier absent ou illisible), celui que `.saison` a aussi écrit ici
+    # — sans quoi le calendrier renommerait le serveur contre le choix du staff.
+    if "mode_force" in d and not _skin_charge["social_lu"]:
+        mf = d.get("mode_force")
+        saison_override["mode"] = mf if isinstance(mf, str) and mf in SAISON_MODES else None
+        print(f"[Skin] mode forcé repris de {SKIN_FICHIER} : {saison_override['mode'] or 'aucun (calendrier)'}")
+    n = skin_reprendre_ancien()
+    if n:
+        print(f"[Skin] {n} nom(s) normal(aux) repris (copie de secours ou moteur précédent)")
 
-async def skin_restaurer(guild):
-    """Rend au serveur ses noms d'origine. Retourne (restaurés, conflits).
 
-    Un salon renommé à la main pendant la saison est laissé tel quel :
-    la valeur admin prime sur la restauration."""
-    faits, conflits = [], []
-    for c in _skin_cibles(guild):
-        k = str(c.id)
-        base = skin_snapshot.get(k)
-        if not base or c.name == base["nom"]:
-            skin_applique.pop(k, None)
-            continue
-        pose = (skin_applique.get(k) or {}).get("nom")
-        if pose is not None and c.name != pose:
-            conflits.append((c.name, pose))       # touché à la main : on garde
-            skin_applique.pop(k, None)
-            continue
-        if pose is None:
-            continue                              # le bot n'y est pour rien
+# ── Décision (pure : ne modifie rien) ──
+
+# Après un renommage, Discord a confirmé le nouveau nom mais le cache du bot
+# — mis à jour par l'événement gateway — peut montrer encore l'ancien, et
+# même avoir plusieurs événements de retard.
+# {id: {"ch": l'objet salon du cache,
+#       "base": le nom que montre le cache en retard,
+#       "attendus": [noms confirmés dont l'événement n'est pas encore arrivé]}}
+# Tant que le cache montre `base` ou l'un des noms attendus, le nom réel est
+# le DERNIER confirmé. Chaque événement de Discord retire de la file le nom
+# qu'il apporte (et ceux qui le précédaient) ; un nom que le moteur
+# n'attendait pas vide la file : quelqu'un d'autre a renommé, le cache fait
+# foi. Mémoire du PROCESSUS seulement (jamais sur disque), attachée à l'objet
+# salon : après un redémarrage ou une reconnexion complète, le cache est neuf.
+_skin_confirmes = {}
+
+
+def skin_cache_a_jour(channel_id, ch=None):
+    """Discord vient de mettre à jour ce salon dans le cache.
+    Si un renommage resté sans réponse l'attendait (fiche en erreur) et que
+    le nom attendu est maintenant en place, la fiche le dit — et l'écrit —
+    aussitôt : un retour manuel fait ensuite sera reconnu comme tel. Aucun
+    appel Discord."""
+    k = str(channel_id)
+    e = _skin_confirmes.get(k)
+    if e is not None:
+        nom, attendus = getattr(ch, "name", None), e["attendus"]
+        if ch is not None and e.get("ch") is ch and nom in attendus:
+            del attendus[:attendus.index(nom) + 1]      # notre écho, et ceux qui le précédaient
+            e["base"] = nom
+        else:
+            attendus.clear()                            # un autre nom : le cache fait foi
+        if not attendus:
+            _skin_confirmes.pop(k, None)
+    try:
+        s = skin_suivi.get(k)
+        if (ch is None or k not in SKIN_IDS or not isinstance(s, dict)
+                or s.get("etat") != "erreur" or s.get("encours")):
+            return
+        objet = next(o for o in SKIN_BLACKWOOD if str(o[0]) == k)
+        action = "appliquer" if saison_mode() == "blackwood" else "restaurer"
+        if s.get("echec") == action and _skin_decider(objet, ch, action)[0] == "conforme":
+            s.update(_skin_fiche_attendue("conforme", action, objet, _skin_lib(objet, ch)))
+            skin_persister()
+    except Exception as e:
+        print(f"[Skin] événement ignoré : {type(e).__name__}: {e}")
+
+
+@bot.listen("on_guild_channel_update")
+async def _skin_sur_maj_salon(before, after):
+    skin_cache_a_jour(getattr(after, "id", None), after)
+
+
+def _skin_nom_actuel(k, ch, now=None):
+    """Le nom réel de l'objet : celui du cache, sauf si Discord a confirmé
+    depuis un renommage dont le cache n'a pas encore reçu l'événement — ce
+    qui se reconnaît à ce que ce même objet du cache montre toujours le nom
+    d'avant, ou un nom dont l'événement était attendu (ni faux conflit, ni
+    renommage à refaire)."""
+    cur = getattr(ch, "name", "") or ""
+    e = _skin_confirmes.get(k)
+    if (e is not None and e.get("ch") is ch and e["attendus"]
+            and (cur == e["base"] or cur in e["attendus"])):
+        return e["attendus"][-1]
+    return cur
+
+
+def _skin_engage(k, s):
+    """La saison est-elle ENGAGÉE pour cet objet ? Vrai dès que le moteur a
+    entrepris de l'habiller — même si Discord n'a jamais confirmé — et
+    jusqu'à ce qu'une restauration le remette au repos. Tant qu'elle l'est,
+    un nom que le moteur ne reconnaît pas est un renommage manuel de saison.
+    Au tout premier contact (aucune fiche), la prudence l'emporte dans deux
+    cas : le moteur précédent avait habillé cet objet (son archive le dit),
+    ou l'état du skin a été perdu et le nom normal vient de la copie de
+    secours — impossible alors de savoir ce qui s'était passé."""
+    if (s.get("etat") in ("applique", "conflit") or s.get("pose") is not None
+            or "appliquer" in (s.get("encours"), s.get("echec"))):
+        return True
+    if k in skin_suivi:
+        return False
+    return (isinstance((skin_ancien.get("applique") or {}).get(k), dict)
+            or (skin_snapshot.get(k) or {}).get("source") == "copie")
+
+
+def _skin_motif_laisse(cur, action):
+    """Pourquoi un nom posé à la main est laissé tel quel sans être mémorisé."""
+    if _skin_nom_ancien_moteur(cur):
+        return "nom de saison de l'ancien moteur posé à la main : laissé tel quel"
+    if action == "appliquer":
+        return "nom déjà décoré : jamais mémorisé comme nom normal"
+    return "nom décoré posé à la main : laissé tel quel"
+
+
+def _skin_decider(objet, ch, action, now=None):
+    """Ce qu'il faut faire d'un objet, sans rien modifier.
+    Retourne (verdict, nom_a_poser, motif, nom_normal_a_memoriser) avec
+    verdict ∈ absent · type · conforme · renommer · conflit · laisse · inconnu.
+      conflit : renommé à la main PENDANT la saison — jamais écrasé ;
+      laisse  : nom aux lettres du skin posé à la main, hors habillage du
+                bot — jamais écrasé et jamais mémorisé comme nom normal."""
+    oid, typ = objet[0], objet[1]
+    if ch is None:
+        return "absent", None, "introuvable sur ce serveur", None
+    if str(getattr(ch, "type", "")) not in _SKIN_TYPES[typ]:
+        return "type", None, f"type inattendu ({getattr(ch, 'type', '?')})", None
+    k = str(oid)
+    cur = _skin_nom_actuel(k, ch, now)
+    cible = skin_nom_cible(objet)
+    snap = skin_snapshot.get(k) or {}
+    normal = snap.get("nom")
+    s = skin_suivi.get(k) or {}
+    etat = s.get("etat", "repos")
+    premier_contact = k not in skin_suivi
+    if premier_contact and k in (skin_ancien.get("conflits") or ()):
+        etat = "conflit"          # état perdu : la copie de secours le disait en conflit manuel
+    pose = s.get("pose")
+    deco_du_bot = ((pose is not None and _skin_eq(cur, pose)) or _skin_eq(cur, cible)
+                   or _skin_pose_ancienne(k, cur))
+    simple = _skin_nom_normal_valide(cur)
+    engage = _skin_engage(k, s)
+    # Le bot avait-il lui-même entrepris de rendre le nom normal ?
+    bot_restaurait = "restaurer" in (s.get("encours"), s.get("echec"))
+    # Même nom à la casse ou au sélecteur d'emoji près : la graphie exacte que
+    # montre Discord devient la référence (jamais une ancienne graphie rendue).
+    # Et un nom repris de l'archive du moteur précédent, que ce moteur voit en
+    # place pour la première fois : dès lors, il l'a relevé lui-même.
+    graphie = cur if (normal is not None and simple
+                      and (cur != normal or snap.get("source") == "ancien")) else None
+    if action == "appliquer":
+        if _skin_eq(cur, cible) or (pose is not None and _skin_eq(cur, pose)
+                                    and _skin_eq(s.get("cible"), cible)):
+            return "conforme", None, "", None
+        if deco_du_bot:
+            return "renommer", cible, "habillage précédent remplacé", None
+        if normal is not None and _skin_eq(cur, normal):
+            if etat == "conflit" or (etat == "applique" and not bot_restaurait):
+                return "conflit", None, "remis à son nom normal à la main pendant la saison", None
+            return "renommer", cible, "", graphie
+        if engage:
+            return "conflit", None, "renommé à la main pendant la saison", None
+        if not simple:
+            return "laisse", None, _skin_motif_laisse(cur, action), None
+        # Au repos, un nom simple EST le nom normal actuel.
+        return "renommer", cible, ("" if normal is None
+                                   else f"nom normal mis à jour (avant : {normal})"), cur
+    # ── restaurer ──
+    if normal is not None and _skin_eq(cur, normal):
+        return "conforme", None, "", graphie
+    if deco_du_bot:
+        if normal is None:
+            return "inconnu", None, "nom normal inconnu : à renommer à la main", None
+        return "renommer", normal, "", None
+    if not simple:
+        return "laisse", None, _skin_motif_laisse(cur, action), None
+    if engage:
+        # Fin de saison : le nom choisi à la main devient le nom normal.
+        return "conflit", None, ("nom changé depuis la dernière sauvegarde : conservé" if premier_contact
+                                 else "renommé à la main pendant la saison : nom conservé"), cur
+    return "conforme", None, ("" if normal is None
+                              else f"nom normal mis à jour (avant : {normal})"), cur
+
+
+def _skin_lib(objet, ch, now=None):
+    if ch is None:
+        return f"{objet[4]} (id {objet[0]})"
+    return _skin_nom_actuel(str(objet[0]), ch, now) or f"{objet[4]} (id {objet[0]})"
+
+
+_SKIN_REPOS = {"etat": "repos", "pose": None, "cible": None, "encours": None, "echec": None}
+_SKIN_SANS_APPEL = ("conforme", "conflit", "laisse", "inconnu")
+
+
+def _skin_fiche_attendue(verdict, action, objet, lib, motif=""):
+    """Ce que devient la fiche d'un objet quand AUCUN appel Discord n'est
+    nécessaire (conforme, conflit, laisse, inconnu) ; None sinon."""
+    if verdict == "conforme":
+        if action == "appliquer":
+            return {"etat": "applique", "pose": lib, "cible": skin_nom_cible(objet),
+                    "encours": None, "echec": None, "detail": ""}
+        return dict(_SKIN_REPOS, detail="")
+    if verdict == "laisse":
+        # Signalé à chaque passe, sans rien retenir : dès qu'il retrouve un nom
+        # simple, l'objet redevient un objet comme les autres.
+        return dict(_SKIN_REPOS, detail=motif)
+    if verdict == "conflit":
+        if action == "appliquer":
+            return {"etat": "conflit", "encours": None, "detail": motif}
+        return dict(_SKIN_REPOS, detail=motif)
+    if verdict == "inconnu":            # on ne sait pas vers quoi restaurer
+        return {"etat": "erreur", "echec": action, "encours": None, "detail": motif}
+    return None
+
+
+def _skin_prochain_renommage(s, now):
+    """Discord n'accepte que SKIN_RENOMMAGES_MAX changements de nom par salon
+    et par fenêtre de 10 minutes : au-delà, la bibliothèque attend la fin de
+    la fenêtre. Retourne l'instant à partir duquel un nouveau renommage est
+    possible, ou None s'il l'est déjà."""
+    recents = sorted(t for t in (s.get("renoms") or [])
+                     if isinstance(t, (int, float)) and abs(now - t) < SKIN_RENOMMAGES_FENETRE)
+    if len(recents) < SKIN_RENOMMAGES_MAX:
+        return None
+    return recents[-SKIN_RENOMMAGES_MAX] + SKIN_RENOMMAGES_FENETRE
+
+
+def _skin_heure(ts):
+    try:
+        return paris_maintenant(ts).strftime("%H:%M")
+    except Exception:
+        return "?"
+
+
+# ── Exécution ──
+
+def _skin_limite_globale_libre():
+    """Aucune limite globale n'est-elle en cours (aucune requête du bot
+    retenue par discord.py) ? LECTURE SEULE : pendant une limite globale,
+    discord.py retient toutes les requêtes du bot, et c'est la requête qui l'a
+    reçue qui lève l'attente à la fin du délai imposé par Discord. Le moteur
+    ne la lève jamais lui-même — il ne peut pas savoir à qui elle appartient."""
+    try:
+        attente = getattr(getattr(bot, "http", None), "_global_over", None)
+        return attente is None or not hasattr(attente, "is_set") or attente.is_set()
+    except Exception:
+        return True
+
+
+# Renommages ENVOYÉS dont la réponse de Discord n'est pas encore arrivée.
+# Une requête n'est jamais annulée : annulée pendant qu'elle attend la fin
+# d'une limite globale, elle laisserait toutes les requêtes du bot bloquées
+# jusqu'au redémarrage. Passé SKIN_DELAI_EDIT, la passe continue donc sans
+# elle ; la requête reste suivie ici, aucun autre renommage du même objet ne
+# part tant qu'elle n'a pas répondu, et sa réponse — même tardive — est
+# enregistrée par `_skin_reponse_tardive`. Mémoire du processus.
+# {id: {"tache", "action", "nom", "t", "ch", "attendu", …}}
+_skin_en_vol = {}
+_skin_rattrapage = {"tache": None}
+
+
+def _skin_classer_echec(exc):
+    """(texte, issue) pour une requête de renommage qui a échoué.
+    « refus » : propre à cet objet (permission, nom rejeté) ; « echec » :
+    Discord ou le réseau ne suit plus."""
+    if isinstance(exc, discord.Forbidden):
+        return "permission refusée par Discord", "refus"
+    if isinstance(exc, discord.HTTPException):
+        code = getattr(exc, "status", None)
+        texte = f"refus de Discord (HTTP {code if code is not None else '?'})"
+        return texte, ("refus" if isinstance(code, int) and 400 <= code < 500 and code != 429 else "echec")
+    return f"{type(exc).__name__}", "echec"
+
+
+def _skin_noter_confirmation(k, ch, vu, apres, cache_avant, echos_attendus):
+    """Discord a confirmé le nom `apres` ; le cache montre `vu`. Tient la file
+    des événements encore attendus (voir _skin_confirmes)."""
+    e = _skin_confirmes.get(k)
+    if e is not None and e.get("ch") is not ch:
+        e = None
+    if e is not None and (vu == e["base"] or vu in e["attendus"]):
+        # Le cache avait déjà au moins un événement de retard : celui de ce
+        # renommage s'ajoute à la file.
+        e["attendus"].append(apres)
+        del e["attendus"][:-8]
+    elif vu != apres and (vu == cache_avant or vu in echos_attendus):
+        # Le cache n'a pas encore reçu l'événement de ce renommage : il montre
+        # le nom d'avant, ou celui d'un renommage précédent du moteur dont
+        # l'écho vient seulement d'arriver.
+        _skin_confirmes[k] = {"ch": ch, "base": vu, "attendus": [apres]}
+    else:
+        # Le cache montre déjà le nouveau nom — ou un AUTRE, posé pendant
+        # l'appel : c'est lui qui fait foi.
+        _skin_confirmes.pop(k, None)
+
+
+def _skin_reponse_tardive(k, vol, tache):
+    """Fin d'une requête de renommage. Si la passe l'attend encore, c'est elle
+    qui traite la réponse. Sinon (délai dépassé, passe annulée), la réponse
+    est enregistrée ici : la fiche dit ce que Discord a réellement fait, puis
+    un tour de veille remet l'objet en accord avec le mode du MOMENT."""
+    if vol.get("attendu"):
+        return
+    if _skin_en_vol.get(k) is vol:
+        _skin_en_vol.pop(k, None)
+    if tache.cancelled():
+        return                              # arrêt du bot : rien à enregistrer
+    try:
+        exc = tache.exception()             # toujours relue : aucune erreur « jamais récupérée »
+        action, nom, ch = vol["action"], vol["nom"], vol["ch"]
+        s = skin_suivi.setdefault(k, {"etat": "repos"})
+        if exc is None:
+            apres = getattr(tache.result(), "name", None) or nom
+            vu = getattr(ch, "name", "") or ""
+            if bot.get_channel(int(k)) is ch:
+                _skin_noter_confirmation(k, ch, vu, apres, vol["cache_avant"], vol["echos"])
+            if action == "appliquer":
+                s.update({"etat": "applique", "pose": apres, "cible": nom})
+            else:
+                s.update({"etat": "repos", "pose": None, "cible": None})
+            s.update({"encours": None, "echec": None, "detail": "", "apres": apres, "ok_t": vol["t"]})
+            print(f"[Skin] réponse tardive de Discord : {apres} en place "
+                  f"(renommage envoyé à {_skin_heure(vol['t'])})")
+            skin_persister()
+            # Le nom est en place : si le mode a changé entre-temps, ou si la
+            # passe s'était arrêtée là, un tour de veille remet tout d'accord.
+            _skin_rattraper()
+            return
+        elif not isinstance(exc, Exception):
+            return                          # KeyboardInterrupt, SystemExit… : rien à enregistrer
+        else:
+            texte, issue = _skin_classer_echec(exc)
+            # La fiche n'est touchée que si elle parle encore de CET essai.
+            if s.get("etat") == "erreur" and s.get("echec") == action:
+                s["detail"] = texte
+                if issue == "refus":        # Discord a répondu non : ce renommage n'a pas eu lieu
+                    s["renoms"] = [t for t in (s.get("renoms") or []) if t != vol["t"]]
+            print(f"[Skin] réponse tardive de Discord : {texte} "
+                  f"(renommage envoyé à {_skin_heure(vol['t'])})")
+        skin_persister()                    # un échec tardif : la veille réessaiera à son tour normal
+    except Exception as e:
+        print(f"[Skin] réponse tardive ignorée : {type(e).__name__}: {e}")
+
+
+def _skin_rattraper():
+    """Après un renommage abouti en retard : un tour de veille sans attendre
+    le prochain (dix minutes). Un seul à la fois ; la veille ne fait rien si une
+    passe tourne déjà ou s'il n'y a rien à faire."""
+    t = _skin_rattrapage.get("tache")
+    if t is not None and not t.done():
+        return
+    try:
+        t = asyncio.get_running_loop().create_task(skin_veille.coro())
+    except RuntimeError:
+        return                              # plus de boucle : le bot s'arrête
+    _skin_rattrapage["tache"] = t
+    _skin_taches.add(t)
+    t.add_done_callback(_skin_taches.discard)
+
+
+async def _skin_renommer(ch, objet, action, nom, capture, motif, bilan, now):
+    """UN renommage. Le snapshot et l'intention sont écrits sur disque AVANT
+    l'appel ; l'appel ne transmet que `name` et `reason`."""
+    k = str(objet[0])
+    avant = _skin_nom_actuel(k, ch, now)
+    suivi_neuf = k not in skin_suivi
+    s = skin_suivi.setdefault(k, {"etat": "repos"})
+    snap_avant = dict(skin_snapshot[k]) if k in skin_snapshot else None
+    suivi_avant = dict(s)
+    if capture is not None:
+        skin_snapshot[k] = {"nom": capture, "t": now,
+                            "source": "capture" if snap_avant is None else "adopte"}
+    # L'essai est compté AVANT l'appel, pour la limite de Discord : si la réponse
+    # se perd ou si le processus meurt, le renommage a peut-être eu lieu.
+    s.update({"encours": action, "t": now,
+              "renoms": ([t for t in (s.get("renoms") or []) if isinstance(t, (int, float))]
+                         + [now])[-SKIN_RENOMMAGES_MAX:]})
+    if not skin_persister():
+        # Rien n'est renommé : la mémoire revient exactement à l'état d'avant.
+        if snap_avant is None:
+            skin_snapshot.pop(k, None)
+        else:
+            skin_snapshot[k] = snap_avant
+        if suivi_neuf:
+            skin_suivi.pop(k, None)
+        else:
+            s.clear()
+            s.update(suivi_avant)
+        bilan["erreurs"].append({"id": k, "nom": avant,
+                                 "detail": "sauvegarde impossible : renommage annulé"})
+        return "echec"
+    # (Une confirmation en attente pour cet objet reste valable pendant l'appel :
+    # seul un événement de Discord, ou un nouveau succès, la remplace.)
+    # Les noms déjà confirmés dont l'événement n'est pas encore arrivé : si l'un
+    # d'eux apparaît dans le cache PENDANT l'appel, c'est l'écho d'un renommage
+    # précédent du moteur, pas le geste de quelqu'un d'autre.
+    e0 = _skin_confirmes.get(k)
+    echos_attendus = list(e0["attendus"]) if e0 is not None and e0.get("ch") is ch else []
+    cache_avant = getattr(ch, "name", "") or ""
+    # « refus » : propre à cet objet (permission, nom rejeté) — la passe continue.
+    # « echec » : Discord ou le réseau ne suit plus — trois d'affilée l'interrompent.
+    issue, erreur, res = "echec", None, None
+    # La requête part dans sa propre tâche, suivie dès maintenant : la passe
+    # l'attend SKIN_DELAI_EDIT au plus, mais ne l'annule jamais.
+    tache = asyncio.ensure_future(ch.edit(name=nom, reason=f"Skin saisonnier : {bilan['mode']}"))
+    vol = _skin_en_vol[k] = {"tache": tache, "action": action, "nom": nom, "t": now, "ch": ch,
+                             "cache_avant": cache_avant, "echos": echos_attendus, "attendu": True}
+    tache.add_done_callback(lambda t, k=k, vol=vol: _skin_reponse_tardive(k, vol, t))
+    try:
+        await asyncio.wait({tache}, timeout=SKIN_DELAI_EDIT)
+    except BaseException:
+        vol["attendu"] = False              # passe annulée : la réponse sera enregistrée à son arrivée…
+        if tache.done():
+            _skin_reponse_tardive(k, vol, tache)        # … ou tout de suite, si elle est déjà là
+        raise
+    if tache.done():
+        _skin_en_vol.pop(k, None)           # la réponse est là : elle est traitée ici même
+        exc = None if tache.cancelled() else tache.exception()
+        if tache.cancelled():
+            erreur = "requête annulée"
+        elif exc is None:
+            res = tache.result()
+        elif isinstance(exc, Exception):
+            erreur, issue = _skin_classer_echec(exc)
+        else:
+            raise exc                       # KeyboardInterrupt, SystemExit… : rien n'est masqué
+    else:
+        # Pas de réponse dans le délai. La requête continue ; sa réponse sera
+        # enregistrée à son arrivée, et d'ici là aucun autre renommage de cet
+        # objet ne part.
+        vol["attendu"] = False
+        erreur = "Discord n'a pas répondu à temps (limite de renommage ou incident)"
+        if not _skin_limite_globale_libre():
+            # Limite GLOBALE de Discord en cours (reçue par ce renommage ou par
+            # une autre requête du bot) : inutile d'envoyer les renommages
+            # suivants maintenant, la passe s'arrête là. L'attente n'est PAS
+            # levée ici : discord.py la lève à la fin du délai imposé.
+            erreur, issue = "limite globale de Discord : nouvel essai plus tard", "global"
+            bilan["limite_globale"] = True
+    vu = getattr(ch, "name", "") or ""
+    if (erreur is not None and issue in ("echec", "global") and _skin_eq(vu, nom)
+            and not _skin_eq(cache_avant, nom) and vu not in echos_attendus):
+        # Pas de réponse exploitable, mais l'événement gateway montre le nom
+        # demandé — et ce n'est pas l'écho, encore attendu, d'un renommage
+        # précédent : Discord l'a bel et bien appliqué. (Un refus net, lui,
+        # reste un refus, même si quelqu'un pose ce nom au même instant.)
+        erreur = None
+    if erreur is None:
+        apres = getattr(res, "name", None) or (vu if _skin_eq(vu, nom) else nom)
+        _skin_noter_confirmation(k, ch, vu, apres, cache_avant, echos_attendus)
+        if action == "appliquer":
+            s.update({"etat": "applique", "pose": apres, "cible": nom})
+        else:
+            s.update({"etat": "repos", "pose": None, "cible": None})
+        s.update({"encours": None, "echec": None, "detail": motif or "",
+                  "avant": avant, "apres": apres, "ok_t": now})
+        bilan["modifies"].append({"id": k, "avant": avant, "apres": apres})
+        if capture is not None and motif:
+            bilan["avertissements"].append({"id": k, "nom": avant, "detail": motif})
+        if action == "appliquer" and k not in skin_snapshot:
+            bilan["avertissements"].append({
+                "id": k, "nom": apres,
+                "detail": "nom normal inconnu : il faudra le renommer à la main hors saison"})
+        skin_persister()
+        return "modifie"
+    # Échec : le snapshot, la pose éventuelle et l'opération ratée restent
+    # connus — de quoi réessayer. Rien n'est effacé.
+    s.update({"etat": "erreur", "echec": action, "encours": None, "detail": erreur})
+    if issue == "refus":                # Discord a répondu non : ce renommage n'a pas eu lieu
+        s["renoms"] = [t for t in s["renoms"] if t != now]
+    skin_persister()
+    bilan["erreurs"].append({"id": k, "nom": avant, "detail": erreur})
+    return issue
+
+
+async def _skin_traiter(guild, objet, action, bilan, now):
+    ch = guild.get_channel(objet[0]) if guild else None
+    verdict, nom, motif, capture = _skin_decider(objet, ch, action, now)
+    k = str(objet[0])
+    lib = _skin_lib(objet, ch, now)
+    if verdict == "absent":
+        bilan["absents"].append({"id": k, "nom": lib, "detail": motif})
+        return verdict
+    bilan["trouves"] += 1
+    if verdict == "type":
+        bilan["erreurs"].append({"id": k, "nom": lib, "detail": motif, "bloque": "oui"})
+        return verdict
+    if verdict == "renommer":
+        vol = _skin_en_vol.get(k)
+        if vol is not None:
+            # Un renommage de cet objet est déjà parti et Discord n'a pas encore
+            # répondu : on n'en empile pas un second. Sa réponse tranchera.
+            detail = (f"réponse de Discord encore attendue pour le renommage envoyé à "
+                      f"{_skin_heure(vol['t'])} : rien de nouveau n'est envoyé")
+            bilan["erreurs"].append({"id": k, "nom": lib, "detail": detail, "attente": True})
+            return "attente"
+        if not _skin_limite_globale_libre():
+            # Limite globale de Discord en cours : la requête resterait retenue
+            # par discord.py. Rien n'est envoyé ; l'opération reste à faire.
+            s = skin_suivi.setdefault(k, {"etat": "repos"})
+            if capture is not None:
+                skin_snapshot[k] = {"nom": capture, "t": now,
+                                    "source": "capture" if k not in skin_snapshot else "adopte"}
+            detail = "limite globale de Discord : nouvel essai plus tard"
+            s.update({"etat": "erreur", "echec": action, "encours": None, "detail": detail})
+            bilan["erreurs"].append({"id": k, "nom": lib, "detail": detail, "attente": True})
+            bilan["limite_globale"] = True
+            return "attente"
+        s = skin_suivi.get(k) or {}
+        quand = _skin_prochain_renommage(s, now)
+        if quand is None:
+            return await _skin_renommer(ch, objet, action, nom, capture, motif, bilan, now)
+        # Troisième renommage du salon en dix minutes : Discord le ferait
+        # attendre. Rien n'est envoyé ; l'opération reste à faire.
+        s = skin_suivi.setdefault(k, {"etat": "repos"})
+        if capture is not None:
+            skin_snapshot[k] = {"nom": capture, "t": now,
+                                "source": "capture" if k not in skin_snapshot else "adopte"}
+        detail = (f"limite Discord ({SKIN_RENOMMAGES_MAX} renommages par salon en 10 min) : "
+                  f"nouvel essai à partir de {_skin_heure(quand)}")
+        s.update({"etat": "erreur", "echec": action, "encours": None, "detail": detail})
+        bilan["erreurs"].append({"id": k, "nom": lib, "detail": detail, "differe": quand})
+        return "differe"
+    s = skin_suivi.setdefault(k, {"etat": "repos"})
+    if capture is not None:
+        # Aucun appel Discord ne suit : le nom relevé est écrit en fin de passe.
+        skin_snapshot[k] = {"nom": capture, "t": now,
+                            "source": "capture" if k not in skin_snapshot else "adopte"}
+    s.update(_skin_fiche_attendue(verdict, action, objet, lib, motif))
+    if verdict == "conforme":
+        if capture is not None and motif:
+            bilan["avertissements"].append({"id": k, "nom": lib, "detail": motif})
+        if action == "appliquer" and k not in skin_snapshot:
+            bilan["avertissements"].append({
+                "id": k, "nom": lib,
+                "detail": "nom normal inconnu : il faudra le renommer à la main hors saison"})
+        elif (action == "appliquer" and skin_snapshot[k].get("source") == "ancien"
+              and not isinstance((skin_ancien.get("applique") or {}).get(k), dict)):
+            # Déjà habillé au premier contact : le nom à rendre vient de l'archive
+            # du moteur précédent, et ce moteur ne l'a jamais vu en place.
+            bilan["avertissements"].append({
+                "id": k, "nom": lib,
+                "detail": (f"nom normal repris de l'ancien moteur, jamais revu depuis : "
+                           f"{skin_snapshot[k].get('nom')}")})
+        bilan["conformes"].append({"id": k, "nom": lib, "detail": motif})
+    elif verdict in ("laisse", "conflit"):
+        bilan["conflits"].append({"id": k, "nom": lib, "detail": motif})
+    else:
+        bilan["erreurs"].append({"id": k, "nom": lib, "detail": motif, "bloque": "oui"})
+    return verdict
+
+
+def _skin_statut(b):
+    if b.get("interrompu"):
+        return "interrompu"
+    if not b["trouves"]:
+        return "aucune_cible"
+    if b["erreurs"] or b["conflits"] or b["absents"]:
+        return "partiel"
+    return "complet"
+
+
+def _skin_bilan_neuf(guild, mode, action, source):
+    import time as _t
+    return {"t": _t.time(), "mode": mode, "action": action, "source": source,
+            "guild": getattr(guild, "id", None), "trouves": 0,
+            "modifies": [], "conformes": [], "absents": [], "conflits": [],
+            "erreurs": [], "avertissements": [], "non_traites": [], "interrompu": None}
+
+
+async def skin_synchroniser(guild, source="commande"):
+    """Met les 34 objets en accord avec le mode EFFECTIF, relu sous le verrou.
+    Blackwood → noms Blackwood ; tout autre mode → noms normaux (Wintervale
+    n'a pas de skin de serveur dans ce lot). Retourne le bilan."""
+    import time as _t
+    async with _SKIN_LOCK:
+        skin_charger()            # jamais une passe sans l'état sauvegardé
+        skin_reprendre_ancien()
+        mode = saison_mode()
+        action = "appliquer" if mode == "blackwood" else "restaurer"
+        # Le serveur tel que le cache du bot le montre MAINTENANT (voir plus bas).
+        gid = getattr(guild, "id", None)
+        if gid is not None:
+            guild = bot.get_guild(gid) or guild
+        bilan = _skin_bilan_neuf(guild, mode, action, source)
+        if getattr(guild, "unavailable", False):
+            # Discord ne montre pas ce serveur pour l'instant : rien n'est lu,
+            # rien n'est modifié ni enregistré. La veille reprendra à son retour.
+            bilan["interrompu"] = "serveur momentanément indisponible côté Discord"
+            bilan["non_traites"] = [{"id": str(o[0]), "nom": f"{o[4]} (id {o[0]})",
+                                     "detail": bilan["interrompu"]} for o in SKIN_BLACKWOOD]
+            bilan["statut"] = "interrompu"
+            return bilan
+        echecs, limite_globale = 0, False
+        for i, objet in enumerate(SKIN_BLACKWOOD):
+            # Après une reconnexion complète, discord.py a reconstruit le serveur
+            # et ses salons : la passe continue sur les objets du cache ACTUEL —
+            # un nom posé à la main pendant la coupure y est visible —, pas sur
+            # ceux d'avant, qui ne sont plus mis à jour. (Serveur sorti du cache
+            # du bot : l'objet reçu est gardé, Discord refusera ses renommages.)
+            if gid is not None:
+                guild = bot.get_guild(gid) or guild
+            if saison_mode() != mode:
+                bilan["interrompu"] = "le mode a changé pendant l'opération"
+            elif limite_globale:
+                bilan["interrompu"] = "limite globale de Discord : nouvel essai plus tard"
+            elif echecs >= SKIN_ECHECS_MAX:
+                bilan["interrompu"] = (f"{echecs} renommages d'affilée sans réponse "
+                                       f"(Discord ou la sauvegarde ne suit plus)")
+            elif getattr(guild, "unavailable", False):
+                bilan["interrompu"] = "serveur momentanément indisponible côté Discord"
+            if bilan["interrompu"]:
+                for o in SKIN_BLACKWOOD[i:]:
+                    bilan["non_traites"].append({
+                        "id": str(o[0]), "detail": bilan["interrompu"],
+                        "nom": _skin_lib(o, guild.get_channel(o[0]) if guild else None)})
+                break
+            r = await _skin_traiter(guild, objet, action, bilan, _t.time())
+            if r == "echec":
+                echecs += 1
+            elif r in ("modifie", "refus"):
+                echecs = 0
+            # Une limite GLOBALE constatée pendant ce renommage — qu'il ait
+            # abouti ou non — arrête la passe avant l'objet suivant.
+            limite_globale = bool(bilan.pop("limite_globale", False))
+        bilan["statut"] = _skin_statut(bilan)
+        gk = str(getattr(guild, "id", ""))
+        skin_bilans[gk] = bilan
+        # Nouveaux essais automatiques : le compte repart de zéro à chaque
+        # demande du staff, à chaque démarrage et à chaque changement de mode.
+        # Seul un renommage resté sans réponse ou refusé coûte un essai : ni un
+        # renommage différé par la limite de Discord, ni une passe interrompue
+        # sans erreur (serveur devenu indisponible, mode changé en route).
+        ve = skin_veille_etat.get(gk)
+        if (not isinstance(ve, dict) or ve.get("mode") != mode
+                or source not in _SKIN_SOURCES_AUTO):
+            ve = skin_veille_etat[gk] = {"essais": 0, "mode": mode}
+        if source == "veille":
+            rate = any(not e.get("differe") and not e.get("attente") for e in bilan["erreurs"])
+            ve["essais"] = ve.get("essais", 0) + 1 if rate else 0
+        skin_persister()
+    if bilan["modifies"] or bilan["avertissements"]:
+        # Copie de secours des noms normaux, dans data_social.json.
         try:
-            kw = {"name": base["nom"], "reason": "Retour à l'ambiance normale"}
-            if hasattr(c, "topic"):
-                kw["topic"] = base.get("topic")
-            await c.edit(**kw)
-            faits.append(f"{c.name} → {base['nom']}")
+            save_all_data()
         except Exception as e:
-            conflits.append((c.name, type(e).__name__))
-        finally:
-            skin_applique.pop(k, None)
-    return faits, conflits
+            print(f"[Skin] copie de secours non écrite : {type(e).__name__}: {e}")
+    return bilan
 
-async def skin_synchroniser(guild, mode=None):
-    """Met le serveur en accord avec la saison. Idempotent : si les noms
-    sont déjà bons, aucun appel à l'API n'est émis."""
+
+async def skin_consolider(guild):
+    """Remet les fiches en accord avec ce que montre Discord, SANS aucun
+    appel réseau : un habillage resté sans réponse mais bien en place, un
+    nom posé à la main hors saison… Les renommages à faire restent à faire
+    (skin_synchroniser). Retourne le nombre de fiches remises en accord."""
+    import time as _t
+    async with _SKIN_LOCK:
+        skin_charger()
+        skin_reprendre_ancien()
+        mode = saison_mode()
+        action = "appliquer" if mode == "blackwood" else "restaurer"
+        if getattr(guild, "unavailable", False):
+            return 0
+        jetable = _skin_bilan_neuf(guild, mode, action, "consolidation")
+        n = 0
+        for objet in SKIN_BLACKWOOD:
+            now = _t.time()
+            k = str(objet[0])
+            ch = guild.get_channel(objet[0]) if guild else None
+            if _skin_decider(objet, ch, action, now)[0] in _SKIN_SANS_APPEL:
+                avant = (dict(skin_suivi.get(k) or {}), dict(skin_snapshot.get(k) or {}))
+                await _skin_traiter(guild, objet, action, jetable, now)   # sans appel pour ces verdicts
+                if (dict(skin_suivi.get(k) or {}), dict(skin_snapshot.get(k) or {})) != avant:
+                    n += 1
+        skin_persister()
+    return n
+
+
+def skin_resume(b):
+    """Une ligne de journal."""
+    if not b:
+        return "aucun bilan"
+    return (f"{b['mode']} ({b['action']}, {b['source']}) : {b['statut']} — "
+            f"{len(b['modifies'])} modifié(s), {len(b['conformes'])} déjà conforme(s), "
+            f"{len(b['absents'])} absent(s), {len(b['conflits'])} conflit(s) manuel(s), "
+            f"{len(b['erreurs'])} erreur(s)"
+            + (f", {len(b['non_traites'])} non traité(s) — {b['interrompu']}"
+               if b.get("interrompu") else ""))
+
+
+def skin_diagnostic(guild, mode=None):
+    """Ce qu'une synchronisation ferait maintenant — sans rien modifier.
+      a_faire      : renommages possibles tout de suite ;
+      differes     : renommages qui attendent la limite de Discord ;
+      a_consolider : fiches à remettre en accord avec Discord, sans appel."""
+    import time as _t
     mode = mode or saison_mode()
-    skin_capturer(guild)                 # jamais destructif
-    if mode == "normal":
-        return await skin_restaurer(guild)
-    return await skin_appliquer(guild, mode)
+    action = "appliquer" if mode == "blackwood" else "restaurer"
+    d = {"mode": mode, "action": action, "total": len(SKIN_BLACKWOOD), "conformes": 0,
+         "a_faire": 0, "conflits": 0, "absents": 0, "bloques": 0, "en_erreur": 0,
+         "differes": 0, "reprise": None, "a_consolider": 0, "details": [],
+         "normaux": sum(1 for k in SKIN_IDS if (skin_snapshot.get(k) or {}).get("nom"))}
+    ve = skin_veille_etat.get(str(getattr(guild, "id", ""))) or {}
+    d["auto"] = not (ve.get("mode") == mode and isinstance(ve.get("essais"), int)
+                     and ve["essais"] >= SKIN_ESSAIS_AUTO)
+    now = _t.time()
+    for objet in SKIN_BLACKWOOD:
+        k = str(objet[0])
+        ch = guild.get_channel(objet[0]) if guild else None
+        v, _nom, motif, capture = _skin_decider(objet, ch, action, now)
+        s = skin_suivi.get(k) or {}
+        lib = _skin_lib(objet, ch, now)
+        if v in _SKIN_SANS_APPEL:
+            attendu = _skin_fiche_attendue(v, action, objet, lib, motif)
+            if capture is not None or any(s.get(c) != x for c, x in attendu.items() if c != "detail"):
+                d["a_consolider"] += 1
+        if v == "absent":
+            d["absents"] += 1
+            d["details"].append({"genre": "absent", "id": k, "nom": lib, "detail": motif})
+        elif v == "conforme":
+            d["conformes"] += 1
+        elif v == "renommer":
+            quand = _skin_prochain_renommage(s, now)
+            if quand is not None:
+                d["differes"] += 1
+                d["reprise"] = quand if d["reprise"] is None else max(d["reprise"], quand)
+            else:
+                d["a_faire"] += 1
+                if s.get("etat") == "erreur":
+                    d["en_erreur"] += 1
+        elif v in ("conflit", "laisse"):
+            d["conflits"] += 1
+            d["details"].append({"genre": "conflit", "id": k, "nom": lib, "detail": motif})
+        else:
+            d["bloques"] += 1
+            d["details"].append({"genre": "bloque", "id": k, "nom": lib, "detail": motif})
+    return d
 
-@bot.command(name="ambiance", aliases=["da", "saisonda", "modesaison"])
+
+# Ce que le moteur précédent posait en plus du nom : un topic de saison.
+SKIN_ANCIENS_TOPICS = frozenset({"🍂 Blackwood — l'automne s'est installé au QG.",
+                                 "❄️ Wintervale — la neige tient enfin."})
+
+
+def skin_restes_ancien(guild):
+    """LECTURE SEULE. Ce que le moteur précédent (renommage par nom, topic
+    compris) a pu laisser et que ce lot ne touche pas : un nom saisonnier sur
+    un objet HORS liste, un topic saisonnier. À corriger à la main ; la valeur
+    d'origine est rappelée quand le moteur précédent l'avait mémorisée."""
+    out = []
+    appl = skin_ancien.get("applique") or {}
+    snap = skin_ancien.get("snapshot") or {}
+    for ch in list(getattr(guild, "channels", None) or []):
+        k = str(getattr(ch, "id", ""))
+        nom, topic = getattr(ch, "name", None), getattr(ch, "topic", None)
+        a, o = appl.get(k) or {}, snap.get(k) or {}
+        nom_reste = k not in SKIN_IDS and (
+            _skin_nom_ancien_moteur(nom)
+            or (isinstance(a.get("nom"), str) and _skin_eq(nom, a["nom"])
+                and isinstance(o.get("nom"), str) and not _skin_eq(nom, o["nom"])))
+        topic_reste = isinstance(topic, str) and (
+            topic in SKIN_ANCIENS_TOPICS
+            or (isinstance(a.get("topic"), str) and bool(a["topic"]) and topic == a["topic"]
+                and topic != o.get("topic")))
+        if nom_reste or topic_reste:
+            out.append({"id": k, "nom": nom, "nom_reste": bool(nom_reste),
+                        "topic_reste": bool(topic_reste),
+                        "nom_origine": o.get("nom") if isinstance(o.get("nom"), str) else None,
+                        "topic_origine": o.get("topic") if isinstance(o.get("topic"), str) else None})
+    return out
+
+
+def skin_nom_hors_saison(ch):
+    """Le nom que porte ce salon hors saison : son nom normal mémorisé s'il
+    est en ce moment habillé par le bot (reconnu par son ID), sinon son nom
+    actuel."""
+    cur = getattr(ch, "name", None)
+    k = str(getattr(ch, "id", ""))
+    if k not in SKIN_IDS:
+        return cur
+    normal = (skin_snapshot.get(k) or {}).get("nom")
+    pose = (skin_suivi.get(k) or {}).get("pose")
+    objet = next(o for o in SKIN_BLACKWOOD if str(o[0]) == k)
+    if normal and ((pose and _skin_eq(cur, pose)) or _skin_eq(cur, skin_nom_cible(objet))):
+        return normal
+    return cur
+
+
+def salon_par_nom(guild, nom):
+    """`discord.utils.get(guild.text_channels, name=nom)` qui survit au skin :
+    un salon habillé compte sous son nom NORMAL, dans l'ordre des salons.
+    Résultat identique à l'ancienne recherche, en saison comme hors saison."""
+    for c in list(getattr(guild, "text_channels", None) or []):
+        if skin_nom_hors_saison(c) == nom:
+            return c
+    return None
+
+
+async def skin_demarrage():
+    """Synchronisation de démarrage, en tâche de fond (appelée par on_ready)."""
+    for g in list(bot.guilds):
+        try:
+            b = await skin_synchroniser(g, source="démarrage")
+            print(f"[Skin] {g.name} — {skin_resume(b)}")
+        except Exception as e:
+            print(f"[Skin] synchronisation ignorée : {type(e).__name__}: {e}")
+
+
+def skin_lancer_demarrage():
+    """Lance skin_demarrage sans bloquer on_ready (la tâche est retenue
+    jusqu'à sa fin, comme le recommande asyncio). Un on_ready qui se répète
+    (reconnexion complète) ne relance pas une passe de démarrage — elle
+    rendrait trois nouveaux essais à un renommage toujours refusé — mais un
+    tour de veille, soumis au même compte."""
+    premier = not _skin_charge["demarre"]
+    _skin_charge["demarre"] = True
+    _skin_confirmes.clear()            # on_ready : Discord vient de renvoyer l'état réel du serveur
+    t = asyncio.create_task(skin_demarrage() if premier else skin_veille.coro())
+    _skin_taches.add(t)
+    t.add_done_callback(_skin_taches.discard)
+    return t
+
+
+# Origines d'une passe AUTOMATIQUE (toute autre origine est une demande du
+# staff ou un démarrage, et remet à zéro le compte des nouveaux essais).
+_SKIN_SOURCES_AUTO = ("veille", "calendrier", "mode forcé")
+
+
+@tasks.loop(minutes=10)
+async def skin_veille():
+    """Suit le mode effectif (changement de mois à l'heure de Paris, mode
+    forcé) et termine ce qui reste à faire : un serveur ou un salon revenu,
+    une passe interrompue, un renommage refusé ou différé. Tant qu'il reste
+    des erreurs, SKIN_ESSAIS_AUTO nouveaux essais au plus par mode — ensuite
+    le staff décide. Un conflit manuel n'est jamais retenté ; quand il n'y a
+    rien à renommer, les fiches sont seulement remises en accord avec ce que
+    montre Discord, sans aucun appel."""
+    if _SKIN_LOCK.locked():
+        return
+    for g in list(bot.guilds):
+        if getattr(g, "unavailable", False):
+            continue                        # Discord ne montre pas ce serveur pour l'instant
+        try:
+            gk = str(g.id)
+            skin_charger()
+            mode = saison_mode()
+            ve = skin_veille_etat.get(gk)
+            if not isinstance(ve, dict) or ve.get("mode") != mode:
+                ve = skin_veille_etat[gk] = {"essais": 0, "mode": mode}
+            changement = (skin_bilans.get(gk) or {}).get("mode") != mode
+            d = skin_diagnostic(g, mode)
+            if (changement or d["a_faire"]) and ve.get("essais", 0) < SKIN_ESSAIS_AUTO:
+                source = "veille"
+                if changement and gk in skin_bilans:
+                    source = "mode forcé" if saison_override.get("mode") else "calendrier"
+                try:
+                    nb = await skin_synchroniser(g, source=source)
+                except Exception:
+                    ve["essais"] = ve.get("essais", 0) + 1      # une panne répétée s'arrête aussi
+                    raise
+                if not changement:
+                    n = (skin_veille_etat.get(gk) or {}).get("essais", 0)
+                    print("[Skin] " + (f"nouvel essai {n}/{SKIN_ESSAIS_AUTO}" if n else "reprise")
+                          + f" — {skin_resume(nb)}")
+            elif d["a_consolider"]:
+                n = await skin_consolider(g)
+                print(f"[Skin] {n} fiche(s) remise(s) en accord sans renommage — {g.name}")
+        except Exception as e:
+            print(f"[Skin] veille : {type(e).__name__}: {e}")
+
+
+@skin_veille.before_loop
+async def _skin_veille_attente():
+    await bot.wait_until_ready()
+
+
+# ── Commande staff ──
+
+def _skin_lib_mode(m):
+    p = SAISON_PACKS.get(m, SAISON_PACKS["normal"])
+    return f"{p['emoji']} {p['nom']}"
+
+
+def _skin_liste(entrees, fmt, maxi=8, suite=""):
+    """Des lignes pour un champ d'embed : autant qu'il en tient dans 1 024
+    unités UTF-16, `maxi` au plus. La mention « … et N autre(s) » et la
+    consigne `suite` ne sont jamais coupées."""
+    u = lambda t: len(t.encode("utf-16-le")) // 2
+    reserve = u(f"\n*… et {len(entrees)} autre(s)*") + u(suite)
+    lignes = []
+    for x in entrees[:maxi]:
+        l = _skin_tronquer(fmt(x), 320)
+        if u("\n".join(lignes + [l])) + reserve > 1024:
+            break
+        lignes.append(l)
+    reste = len(entrees) - len(lignes)
+    if reste:
+        lignes.append(f"*… et {reste} autre(s)*")
+    return "\n".join(lignes) + suite
+
+
+def _skin_champs(e, titre, entrees, fmt, suite="", maxi=10, champs=1):
+    """Ajoute à l'embed un champ (ou plusieurs, à la suite) qui nomme les
+    `entrees` : tout ce qui tient est nommé, le reste est compté."""
+    restant = list(entrees)
+    for i in range(champs):
+        if not restant:
+            break
+        dernier = i == champs - 1
+        u = lambda t: len(t.encode("utf-16-le")) // 2
+        if dernier:
+            valeur = _skin_liste(restant, fmt, maxi, suite)
+            restant = []
+        else:
+            # un champ plein de lignes entières, la suite au champ suivant
+            lignes = []
+            for x in restant[:maxi]:
+                l = _skin_tronquer(fmt(x), 320)
+                if u("\n".join(lignes + [l])) > 1024:
+                    break
+                lignes.append(l)
+            if len(lignes) == len(restant) and u("\n".join(lignes)) + u(suite) <= 1024:
+                valeur = "\n".join(lignes) + suite       # tout tient : la consigne ferme ce champ
+                restant = []
+            else:
+                if len(lignes) == len(restant) and len(lignes) > 1:
+                    lignes.pop()                           # la consigne ira avec la dernière ligne, au champ suivant
+                valeur = "\n".join(lignes)
+                restant = restant[len(lignes):]
+        e.add_field(name=titre if i == 0 else f"{titre} (suite)", value=valeur, inline=False)
+
+
+def skin_texte_etat(d):
+    """Le bloc « Skin du serveur » de `.saison`."""
+    n = d["total"]
+    appl = d["action"] == "appliquer"
+    quoi = "Application" if appl else "Restauration"
+    if d["absents"] == n:
+        tete = f"❌ **Aucune des {n} cibles n'est présente sur ce serveur.**"
+    elif not (d["a_faire"] or d["differes"] or d["conflits"] or d["absents"] or d["bloques"]):
+        tete = (f"✅ **Skin appliqué** — {n}/{n} conformes" if appl
+                else f"✅ **Noms normaux en place** — {n}/{n} conformes")
+    elif d["a_faire"] and d.get("auto", True):
+        tete = (f"⏳ **{quoi} incomplète** — reprise automatique sous 10 minutes, "
+                f"ou `.saison {d['mode']}` pour relancer tout de suite")
+    elif d["a_faire"]:                  # les nouveaux essais automatiques sont épuisés
+        tete = f"⏳ **{quoi} incomplète** — `.saison {d['mode']}` pour relancer"
+    elif d["differes"] and d.get("auto", True):
+        tete = (f"🕒 **{quoi} différée** — reprise automatique à partir de "
+                f"{_skin_heure(d['reprise'])}")
+    elif d["differes"]:                 # les nouveaux essais automatiques sont épuisés
+        tete = (f"🕒 **{quoi} différée** — `.saison {d['mode']}` à partir de "
+                f"{_skin_heure(d['reprise'])} pour relancer")
+    else:
+        tete = "⚠️ **En place, avec des exceptions** — détail ci-dessous"
+    attendu = ("noms Blackwood" if appl else
+               "noms normaux" + (" *(Wintervale n'a pas de skin de serveur)*"
+                                 if d["mode"] == "wintervale" else ""))
+    return (f"{tete}\n"
+            f"Attendu : **{attendu}**\n"
+            f"✅ Conformes : **{d['conformes']}/{n}** · ⏳ À faire : **{d['a_faire']}**"
+            + (f" *(dont {d['en_erreur']} en erreur)*" if d["en_erreur"] else "")
+            + (f" · 🕒 Différés : **{d['differes']}**" if d["differes"] else "") + "\n"
+            f"✋ Conflits manuels : **{d['conflits']}** · 🚫 Absents : **{d['absents']}**"
+            + (f" · ❌ Bloqués : **{d['bloques']}**" if d["bloques"] else "") + "\n"
+            f"💾 Noms normaux mémorisés : **{d['normaux']}/{n}**")
+
+
+_SKIN_AIDE_CONFLIT = ("\n-# Pour le rhabiller : `.saison normal` puis `.saison blackwood` — "
+                      "son nom actuel, s'il est simple, devient son nom normal.")
+_SKIN_AIDE_LIMITE = (f"Discord n'accepte que {SKIN_RENOMMAGES_MAX} changements de nom par salon "
+                     f"toutes les 10 minutes (une tentative restée sans réponse compte aussi).")
+
+
+def _skin_instant_texte(x):
+    """`differe` d'une entrée de bilan (nombre, ou texte après relecture du disque)."""
+    try:
+        return _skin_instant(float(x))
+    except Exception:
+        return None
+
+
+def skin_embed_bilan(b, choix=None, demande=None):
+    """Le compte rendu d'une synchronisation, pour le staff. `choix` : le
+    réglage EN VIGUEUR (auto ou un mode forcé) ; `demande` : ce que la
+    commande avait demandé, si une autre commande est passée entre-temps."""
+    m = b["mode"]
+    n = len(SKIN_BLACKWOOD)
+    appl = b["action"] == "appliquer"
+    ok = len(b["modifies"]) + len(b["conformes"])
+    differes = [x for x in b["erreurs"] if x.get("differe")]
+    erreurs = [x for x in b["erreurs"] if not x.get("differe")]
+    reprenables = [x for x in erreurs if not x.get("bloque")]
+    bloquees = [x for x in erreurs if x.get("bloque")]
+    e = discord.Embed(title=f"{SAISON_PACKS[m]['emoji']}  Saison : {SAISON_PACKS[m]['nom']}",
+                      color=season_color())
+    lignes = []
+    if choix == "auto":
+        lignes.append("🔁 Retour au calendrier (heure de Paris).")
+    elif choix:
+        lignes.append("📌 Mode forcé — `.saison auto` pour rendre la main au calendrier.")
+    if demande and choix and demande != choix:
+        lignes.append(f"⚠️ Entre-temps, une autre commande a choisi `.saison {choix}` : "
+                      f"c'est ce réglage qui s'applique.")
+    if m == "wintervale":
+        lignes.append("❄️ Wintervale n'a pas encore de skin de serveur : les noms normaux sont gardés.")
+    st = b.get("statut")
+    if st == "aucune_cible":
+        lignes.append(f"❌ **Aucune des {n} cibles n'a été trouvée sur ce serveur** : "
+                      f"rien n'a été modifié.")
+    elif st == "complet":
+        lignes.append(f"✅ **Skin appliqué** — {ok}/{n} objets conformes." if appl
+                      else f"✅ **Noms normaux en place** — {ok}/{n} objets conformes.")
+    elif st == "interrompu":
+        lignes.append(f"⏸️ **Opération interrompue** — {b['interrompu']}. "
+                      f"{ok}/{n} objets conformes.")
+    else:
+        lignes.append((f"⚠️ **Application partielle** — {ok}/{n} objets conformes." if appl
+                       else f"⚠️ **Restauration partielle** — {ok}/{n} objets conformes."))
+    if differes:
+        quand = max((t for t in (_skin_instant_texte(x.get("differe")) for x in differes)
+                     if t is not None), default=None)
+        lignes.append(f"🕒 **{len(differes)} renommage(s) différé(s)** — {_SKIN_AIDE_LIMITE} "
+                      f"Reprise automatique à partir de {_skin_heure(quand)} (heure de Paris).")
+    e.description = "\n".join(lignes)
+    e.add_field(name="✏️ Modifiés", value=str(len(b["modifies"])), inline=True)
+    e.add_field(name="✅ Déjà conformes", value=str(len(b["conformes"])), inline=True)
+    e.add_field(name="🚫 Absents", value=str(len(b["absents"])), inline=True)
+    e.add_field(name="✋ Conflits manuels", value=str(len(b["conflits"])), inline=True)
+    e.add_field(name="❌ Erreurs", value=str(len(erreurs)), inline=True)
+    if differes:
+        e.add_field(name="🕒 Différés", value=str(len(differes)), inline=True)
+    if b["non_traites"]:
+        e.add_field(name="⏸️ Non traités", value=str(len(b["non_traites"])), inline=True)
+    if b["modifies"]:
+        e.add_field(name="✏️ Détail des renommages",
+                    value=_skin_liste(b["modifies"], lambda x: f"• {x['avant']} → {x['apres']}"),
+                    inline=False)
+    ligne = lambda x: f"• **{x['nom']}** — {x['detail']}"
+    _skin_champs(e, "✋ Conflits manuels — jamais écrasés", b["conflits"], ligne,
+                 _SKIN_AIDE_CONFLIT if appl else "", champs=2)
+    _skin_champs(e, "❌ Erreurs — gardées pour un nouvel essai", reprenables, ligne,
+                 f"\n-# Nouvel essai : `.saison {m}` — ou automatiquement "
+                 f"({SKIN_ESSAIS_AUTO} fois au plus).")
+    _skin_champs(e, "❌ Erreurs — à régler à la main", bloquees, ligne)
+    if b["absents"]:
+        e.add_field(name="🚫 Absents",
+                    value=_skin_liste(b["absents"], lambda x: f"• {x['nom']}", 6), inline=False)
+    if b["avertissements"]:
+        e.add_field(name="ℹ️ À savoir",
+                    value=_skin_liste(b["avertissements"],
+                                      lambda x: f"• **{x['nom']}** — {x['detail']}", 5),
+                    inline=False)
+    e.set_footer(text="Seuls les noms changent : permissions, positions et topics restent intacts.")
+    # Garde-fou : un embed ne dépasse jamais 6 000 caractères.
+    while len(e.fields) > 5 and _skin_taille_embed(e) > 5800:
+        e.remove_field(len(e.fields) - 1)
+    return e
+
+
+def _skin_taille_embed(e):
+    """Taille d'un embed au sens de Discord, mesurée en unités UTF-16."""
+    u = lambda t: len((t or "").encode("utf-16-le")) // 2
+    n = u(e.title) + u(e.description) + u(getattr(e.footer, "text", None))
+    n += u(getattr(e.author, "name", None))
+    for f in e.fields:
+        n += u(f.name) + u(f.value)
+    return n
+
+
+@bot.command(name="saison", aliases=["ambiance", "da", "saisonda", "modesaison"])
 @commands.has_permissions(manage_guild=True)
-async def ambiance_cmd(ctx, choix: str = None):
-    """Direction artistique du serveur — .ambiance [auto|normal|blackwood|wintervale]"""
-    LIB = {m: f'{SAISON_PACKS[m]["emoji"]} {SAISON_PACKS[m]["nom"]}' for m in SAISON_MODES}
+async def saison_cmd(ctx, choix: str = None):
+    """Mode saisonnier et skin du serveur — .saison [auto|normal|blackwood|wintervale] (staff)"""
+    LIB = {m: _skin_lib_mode(m) for m in SAISON_MODES}
 
     if choix:
         c = choix.lower().strip()
-        if c == "auto":
-            saison_override["mode"] = None
-        elif c in SAISON_MODES:
-            saison_override["mode"] = c
-        else:
+        if c != "auto" and c not in SAISON_MODES:
             return await ctx.send(
-                "❌ Choix inconnu — `auto`, `normal`, `blackwood` ou `wintervale`.")
+                "❌ Choix inconnu — `.saison auto`, `.saison normal`, "
+                "`.saison blackwood` ou `.saison wintervale`.")
+        skin_charger()             # l'état d'abord : le choix du staff s'applique par-dessus
+        saison_override["mode"] = None if c == "auto" else c
+        _skin_charge["mode_connu"] = True
+        skin_persister()           # le mode forcé est d'abord écrit, de façon atomique, dans data_skin.json
         save_all_data()
         m = saison_mode()          # prend effet immédiatement
-        e = discord.Embed(
-            title=f"{SAISON_PACKS[m]['emoji']}  Ambiance : {SAISON_PACKS[m]['nom']}",
-            description=("🔁 Retour au calendrier." if c == "auto"
-                         else "📌 Mode forcé — `.ambiance auto` pour reprendre le calendrier."),
-            color=season_color())
-        # Le serveur lui-même suit : noms et topics, rien d'autre.
+        if _SKIN_LOCK.locked():
+            await ctx.send("⏳ Une synchronisation du skin est déjà en cours — "
+                           "la tienne suivra, avec le mode le plus récent.")
         try:
-            faits, ignores = await skin_synchroniser(ctx.guild, m)
-            if faits:
-                e.add_field(name=f"🏚️ Serveur — {len(faits)} salon(s)",
-                            value="\n".join(f"• {x}" for x in faits[:8]), inline=False)
-            if ignores:
-                e.add_field(
-                    name=f"⚠️ Laissés tels quels — {len(ignores)}",
-                    value="\n".join(f"• **{n}** — {r}" for n, r in ignores[:5])
-                          + "\n*Une modification manuelle n'est jamais écrasée.*",
-                    inline=False)
+            b = await skin_synchroniser(ctx.guild, source=f".saison {c}")
         except Exception as ex:
             print(f"[Skin] {type(ex).__name__}: {ex}")
-            e.add_field(name="⚠️ Serveur",
-                        value="Les salons n'ont pas pu être renommés.", inline=False)
-        e.set_footer(text="Les messages déjà envoyés ne changent pas.")
-        return await ctx.send(embed=e)
+            e = discord.Embed(
+                title=f"{SAISON_PACKS[m]['emoji']}  Saison : {SAISON_PACKS[m]['nom']}",
+                description=("⚠️ Le mode est enregistré, mais la synchronisation du skin a "
+                             "échoué avant la fin. `.saison` pour voir l'état réel."),
+                color=season_color("alerte"))
+            return await ctx.send(embed=e)
+        # Une autre commande a pu passer pendant l'attente du verrou : le compte
+        # rendu décrit le réglage réellement en vigueur, pas seulement la demande.
+        en_vigueur = saison_override.get("mode") or "auto"
+        return await ctx.send(embed=skin_embed_bilan(b, en_vigueur, demande=c))
 
+    skin_charger()
     m = saison_mode()
     auto = saison_auto()
     ov = saison_override.get("mode")
     e = discord.Embed(
-        title=f"{SAISON_PACKS[m]['emoji']}  AMBIANCE DU QG",
-        description=f"Mode effectif : **{LIB[m]}**",
+        title=f"{SAISON_PACKS[m]['emoji']}  SAISON DU QG",
+        description=(f"Mode effectif : **{LIB[m]}**\n"
+                     + ("📌 **Forcé** par le staff — `.saison auto` pour revenir au calendrier."
+                        if ov else "🔁 **Automatique** — le calendrier décide (heure de Paris).")),
         color=saison_valeur("couleur"))
     e.add_field(name="🗓️ Calendrier", value=LIB[auto], inline=True)
-    e.add_field(name="📌 Override",
-                value=LIB[ov] if ov else "*aucun*", inline=True)
+    e.add_field(name="📌 Mode forcé", value=LIB[ov] if ov else "*aucun*", inline=True)
     e.add_field(name="🕰️ Période", value=f"**{saison_periode()}**", inline=True)
     if not ov:
         suiv = saison_prochain_changement()
@@ -16359,13 +17811,74 @@ async def ambiance_cmd(ctx, choix: str = None):
             d, mode = suiv
             e.add_field(name="⏭️ Prochain changement",
                         value=f"{d.strftime('%d/%m/%Y')} → {LIB[mode]}", inline=False)
-    e.add_field(name="🏚️ Serveur",
-                value=(f"{len(skin_snapshot)} salon(s) mémorisés · "
-                       f"{len(skin_applique)} renommé(s) par la saison"), inline=False)
+    diag = skin_diagnostic(ctx.guild, m)
+    etat = skin_texte_etat(diag)
+    if _SKIN_LOCK.locked():
+        etat += "\n🔄 *Synchronisation en cours…*"
+    elif diag["differes"]:
+        etat += f"\n-# {_SKIN_AIDE_LIMITE}"
+    e.add_field(name="🏚️ Skin du serveur", value=_skin_tronquer(etat, 1024), inline=False)
+    # Qui est concerné, nommément : un conflit vu par une passe automatique
+    # (démarrage, veille, calendrier) se lit ici sans rien relancer.
+    for genre, titre, aide, champs in (
+            ("conflit", "✋ Conflits manuels — jamais écrasés",
+             _SKIN_AIDE_CONFLIT if diag["action"] == "appliquer" else "", 3),
+            ("bloque", "❌ Bloqués — à régler à la main", "", 1),
+            ("absent", "🚫 Absents", "", 1)):
+        concernes = [x for x in diag["details"] if x["genre"] == genre]
+        if concernes and diag["absents"] != diag["total"]:
+            _skin_champs(e, titre, concernes, (lambda x: f"• {x['nom']}") if genre == "absent"
+                         else (lambda x: f"• **{x['nom']}** — {x['detail']}"), aide, champs=champs)
+    b = skin_bilans.get(str(ctx.guild.id)) if ctx.guild else None
+    if b:
+        try:
+            quand = paris_maintenant(b.get("t")).strftime("%d/%m à %H:%M")
+        except Exception:
+            quand = "?"
+        lib = {"complet": "✅ complète", "partiel": "⚠️ partielle",
+               "interrompu": "⏸️ interrompue", "aucune_cible": "❌ aucune cible"}
+        nd = sum(1 for x in (b.get("erreurs") or []) if x.get("differe"))
+        e.add_field(
+            name="🧾 Dernière synchronisation",
+            value=_skin_tronquer(
+                f"{quand} · {LIB.get(b.get('mode'), b.get('mode'))} · "
+                f"{lib.get(b.get('statut'), b.get('statut'))} · origine : {b.get('source')}\n"
+                f"{len(b.get('modifies') or [])} modifié(s) · "
+                f"{len(b.get('conformes') or [])} déjà conforme(s) · "
+                f"{len(b.get('absents') or [])} absent(s) · "
+                f"{len(b.get('conflits') or [])} conflit(s) · "
+                f"{len(b.get('erreurs') or []) - nd} erreur(s)"
+                + (f" · {nd} différé(s)" if nd else ""), 1024),
+            inline=False)
+        if b.get("avertissements"):
+            # Une passe automatique (démarrage, calendrier) n'a pas d'autre lecteur.
+            e.add_field(name="ℹ️ À savoir (dernière synchronisation)",
+                        value=_skin_liste(b["avertissements"],
+                                          lambda x: f"• **{x.get('nom')}** — {x.get('detail')}", 5),
+                        inline=False)
+    restes = skin_restes_ancien(ctx.guild) if ctx.guild else []
+    if restes:
+        def _reste(x):
+            quoi = []
+            if x["nom_reste"]:
+                quoi.append("nom de saison" + (f" (avant : {x['nom_origine']})"
+                                               if x.get("nom_origine") else ""))
+            if x["topic_reste"]:
+                quoi.append("topic de saison" + (f" (avant : {x['topic_origine'][:120]})"
+                                                 if x.get("topic_origine") else ""))
+            return f"• <#{x['id']}> — {' · '.join(quoi)}"
+        e.add_field(
+            name="🧹 Restes de l'ancien moteur — à corriger à la main",
+            value=_skin_tronquer(
+                _skin_liste(restes, _reste, 6)
+                + "\n-# Ce lot ne touche ni aux topics ni aux salons hors liste.", 1024),
+            inline=False)
     e.add_field(name="⚙️ Commandes",
-                value=("`.ambiance auto` · `.ambiance normal`\n"
-                       "`.ambiance blackwood` · `.ambiance wintervale`"), inline=False)
+                value=("`.saison auto` · `.saison normal`\n"
+                       "`.saison blackwood` · `.saison wintervale`"), inline=False)
     e.set_footer(text=saison_valeur("footer"))
+    while len(e.fields) > 6 and _skin_taille_embed(e) > 5800:
+        e.remove_field(len(e.fields) - 2)          # garde « Commandes », retire le détail le plus bas
     await ctx.send(embed=e)
 
 @bot.command(name="lancerevent", aliases=["startevent"])
@@ -16693,9 +18206,9 @@ async def fit_cmd(ctx, *, description: str = None):
     if not description: return await ctx.send("❌ `.fit <description de ta tenue>`")
     channel = ctx.guild.get_channel(SALON_GIRLS_ID) if SALON_GIRLS_ID else ctx.channel
     embed = discord.Embed(
-        title="👗 Fit Check du QG !",
+        title=season_titre("👗 Fit Check du QG !"),
         description=f"**{ctx.author.display_name}** partage son look :\n\n*{description}*",
-        color=0xff6b9d
+        color=season_tint(0xff6b9d)
     )
     embed.set_thumbnail(url=ctx.author.display_avatar.url)
     msg = await (channel or ctx.channel).send(embed=embed)
@@ -17228,6 +18741,10 @@ JOURS_NOMS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dima
 # La liste des events programmables est dérivée du catalogue (voir EVENTS_CATALOGUE)
 
 def save_scheduled_events():
+    if _donnees["etat"] == "en_cours":      # demandée PENDANT le chargement (migration) :
+        return _donnees_differer("scheduler", save_scheduled_events)    # après validation seulement
+    if _donnees["etat"] != "pret":          # jamais avant le chargement, ni après un échec
+        return
     try:
         with open(SCHEDULED_EVENTS_FILE, "w", encoding="utf-8") as f:
             json.dump(scheduled_events, f, ensure_ascii=False)
@@ -17262,6 +18779,7 @@ def load_scheduled_events():
         print(f"[Scheduler] ✅ {len(scheduled_events)} event(s) programmé(s)")
     except Exception as e:
         print(f"[Scheduler] Erreur chargement : {e}")
+        _donnees_erreur("scheduler", e)
 
 async def trigger_scheduled_event(guild, event_name):
     """Déclenche un event programmé dans le salon events"""
@@ -17416,16 +18934,16 @@ async def planningauto_cmd(ctx):
     """Affiche le planning des events auto programmés — .planningauto"""
     if not scheduled_events:
         return await ctx.send(embed=discord.Embed(
-            title="📅 Planning des Events Auto",
+            title=season_titre("📅 Planning des Events Auto"),
             description="*Aucun event programmé pour l'instant.*\n\nUn admin peut en ajouter avec `.addevent <event> <jour> <heure>`",
-            color=0x3498db))
+            color=season_tint(0x3498db)))
     # Trier par jour puis heure
     sorted_events = sorted(scheduled_events, key=lambda e: (e["jour_num"], e["heure"], e.get("minute", 0)))
     # Grouper par jour
     embed = discord.Embed(
-        title="📅 Planning des Events Auto — QG Kdrama",
+        title=season_titre("📅 Planning des Events Auto — QG Kdrama"),
         description="Events programmés de la semaine :",
-        color=0x3498db)
+        color=season_tint(0x3498db))
     par_jour = {}
     for i, ev in enumerate(sorted_events):
         # Retrouver le numéro original
@@ -17438,7 +18956,7 @@ async def planningauto_cmd(ctx):
         if jour in par_jour:
             embed.add_field(name=f"📆 {jour}", value="\n".join(par_jour[jour]), inline=False)
     statut = "✅ Actifs" if planning_actif else "🛑 En pause (.eventon pour activer)"
-    embed.set_footer(text=f"Events auto : {statut} • .delevent <#> pour supprimer")
+    embed.set_footer(text=season_pied(f"Events auto : {statut} • .delevent <#> pour supprimer"))
     await ctx.send(embed=embed)
 
 # ============================================================
@@ -17601,9 +19119,9 @@ def anniv_embed(guild, uid_fete, nb=0):
     m = guild.get_member(int(uid_fete)) if guild else None
     nom = m.display_name if m else "un membre"
     e = discord.Embed(
-        title=f"🎂 JOYEUX ANNIVERSAIRE {nom.upper()} !",
+        title=season_titre(f"🎂 JOYEUX ANNIVERSAIRE {season_brut(nom.upper())} !"),
         description=f"*{random.choice(ANNIV_MOTS)}*",
-        color=0xff6b9d)
+        color=season_tint(0xff6b9d))
     if m:
         e.set_thumbnail(url=m.display_avatar.url)
         if getattr(m, "joined_at", None):
@@ -17632,7 +19150,7 @@ async def check_anniversaires():
         return
     for guild in bot.guilds:
         channel = (guild.get_channel(SALON_GENERAL_ID) if SALON_GENERAL_ID else None) \
-                  or discord.utils.get(guild.text_channels, name="général") \
+                  or salon_par_nom(guild, "général") \
                   or guild.system_channel
         if not channel:
             continue
@@ -17732,7 +19250,7 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
         c1 = "🔴" if p1 < 0.3 else ("🟡" if p1 < 0.6 else "🟢")
         c2 = "🔴" if p2 < 0.3 else ("🟡" if p2 < 0.6 else "🟢")
         embed = discord.Embed(
-            title=f"⚔️  {j1['membre'].display_name}  ✦  VS  ✦  {j2['membre'].display_name}",
+            title=season_titre(f"⚔️  {season_brut(j1['membre'].display_name)}  ✦  VS  ✦  {season_brut(j2['membre'].display_name)}"),
             color=season_color("alerte")
         )
         embed.add_field(name="\u200b", value=(
@@ -17759,7 +19277,7 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
                 value=f"> ⏳ En attente de la première action...",
                 inline=False
             )
-        embed.set_footer(text=f"Tour {tour_num} • Arène PvP — QG Kdrama")
+        embed.set_footer(text=season_pied(f"Tour {tour_num} • Arène PvP — QG Kdrama"))
         return embed
 
     def build_view_actions(attaquant):
@@ -17811,7 +19329,7 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
 
     # Embed de début
     embed_debut = discord.Embed(
-        title="⚔️ COMBAT COMMENCE ⚔️",
+        title=season_titre("⚔️ COMBAT COMMENCE ⚔️"),
         description=(
             f"**⚔️ {ctx.author.display_name} VS {adversaire.display_name} ⚔️**\n\n"
             f"🔴 {ctx.author.display_name} — {hp1_max} HP • {end1_max} END\n"
@@ -17821,7 +19339,7 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
         ),
         color=season_color("alerte")
     )
-    embed_debut.set_footer(text="Arène PvP — QG Kdrama")
+    embed_debut.set_footer(text=season_pied("Arène PvP — QG Kdrama"))
     await ctx.send(embed=embed_debut)
     combat_msg = await ctx.send(embed=build_embed_combat())
 
@@ -17927,14 +19445,14 @@ async def arene_cmd(ctx, adversaire: discord.Member = None):
             wname  = winner["membre"].display_name
             lname  = loser["membre"].display_name
             whp    = winner["hp"]; whpmax = winner["hp_max"]
-            embed_fin = discord.Embed(title="🏆 FIN DU COMBAT 🏆", color=season_color("or"))
+            embed_fin = discord.Embed(title=season_titre("🏆 FIN DU COMBAT 🏆"), color=season_color("or"))
             embed_fin.description = (
                 f"**{wname} remporte l'arène !**\n\n"
                 f"`{barre(whp, whpmax)}` **{whp} / {whpmax} HP restants**\n\n"
                 f"💰 **+{prize} pièces** • ⭐ **+{xp_gain} XP**\n\n"
                 f"*{lname} s'effondre... ☠️*"
             )
-            embed_fin.set_footer(text="Arène PvP — QG Kdrama")
+            embed_fin.set_footer(text=season_pied("Arène PvP — QG Kdrama"))
             await ctx.send(embed=embed_fin)
             return
 
@@ -18029,10 +19547,10 @@ async def attaque_cmd(ctx):
                 f"💰 Tous les participants reçoivent **{recompense} pièces** !\n"
                 f"🎯 Coup fatal : **{ctx.author.display_name}** +250 pièces bonus !"
             ),
-            color=0xf1c40f
+            color=season_tint(0xf1c40f)
         )
         win_embed.set_thumbnail(url=boss["image"])
-        win_embed.set_footer(text="⚔️ Boss Event terminé — QG Kdrama")
+        win_embed.set_footer(text=season_pied("⚔️ Boss Event terminé — QG Kdrama"))
 
         try:
             await game["msg"].edit(embed=win_embed)
@@ -18678,7 +20196,7 @@ def unlock_achievement(uid, ach_id, channel=None):
                 e_t, lib_t = TITRES[tid][0], TITRES[tid][1]
                 txt += f"\n👑 Nouveau titre : **{e_t} {lib_t}** — `.pins` pour l'équiper."
             asyncio.create_task(channel.send(embed=discord.Embed(
-                description=txt, color=0xf1c40f)))
+                description=txt, color=season_tint(0xf1c40f))))
         except Exception:
             pass
     return True
@@ -18785,8 +20303,8 @@ async def records_cmd(ctx, membre: discord.Member = None):
 
     def emb_qg():
         e = discord.Embed(
-            title=("🏆 CE QUE BLACKWOOD SE RAPPELLE"
-                   if saison_mode() == "blackwood" else "🏆 RECORDS DU QG"),
+            title=season_titre("🏆 CE QUE BLACKWOOD SE RAPPELLE"
+                               if saison_mode() == "blackwood" else "🏆 RECORDS DU QG"),
             description="*Les plus hauts jamais atteints sur le serveur.*",
             color=season_color("or"))
         lignes = []
@@ -18799,12 +20317,12 @@ async def records_cmd(ctx, membre: discord.Member = None):
             lignes.append(f"{emo} **{lib}**\n　{nom} — **{val:,}** {unite}")
         e.description += "\n\n" + ("\n".join(lignes) if lignes
                                    else "*Aucun record enregistré pour l'instant.*")
-        e.set_footer(text=f"Suivi depuis la v{RECORDS_DEPUIS} — les maxima antérieurs "
-                          f"n'avaient jamais été enregistrés")
+        e.set_footer(text=season_pied(f"Suivi depuis la v{RECORDS_DEPUIS} — les maxima antérieurs "
+                          f"n'avaient jamais été enregistrés"))
         return e
 
     def emb_perso():
-        e = discord.Embed(title=f"👤 Records de {cible.display_name}", color=0x3498db)
+        e = discord.Embed(title=season_titre(f"👤 Records de {season_brut(cible.display_name)}"), color=season_tint(0x3498db))
         lignes = []
         for cle, (emo, lib, unite, _t) in RECORDS_DEF.items():
             val, d = record_perso(uid, cle)
@@ -18822,12 +20340,12 @@ async def records_cmd(ctx, membre: discord.Member = None):
 
     def emb_souvenirs():
         sv = memoire_chercher(uid=uid, importance_min=2, limite=12)
-        e = discord.Embed(title=f"🧠 Ce qu'Akari retient de {cible.display_name}",
-                          color=0x9b59b6)
+        e = discord.Embed(title=season_titre(f"🧠 Ce qu'Akari retient de {season_brut(cible.display_name)}"),
+                          color=season_tint(0x9b59b6))
         e.description = ("\n".join(f"`{memoire_date(s)}`  {memoire_libelle(s)}" for s in sv)
                          if sv else "*Rien de mémorable pour l'instant.*")
         total = len(memoire_chercher(uid=uid, importance_min=1, limite=0))
-        e.set_footer(text=f"{total} souvenir(s) enregistré(s)")
+        e.set_footer(text=season_pied(f"{total} souvenir(s) enregistré(s)"))
         return e
 
     class RecView(ui.View):
@@ -18866,7 +20384,7 @@ async def succes_cmd(ctx, membre: discord.Member = None):
             if neufs_t:
                 bloc.append("👑 " + " · ".join(f"**{TITRES[t][0]} {TITRES[t][1]}**" for t in neufs_t))
             await ctx.send(embed=discord.Embed(
-                title="✨ Rattrapage",
+                title=season_titre("✨ Rattrapage"),
                 description="Voilà ce que tu avais déjà mérité :\n\n" + "\n".join(bloc),
                 color=season_color("or")))
     unlocked = achievements_data[uid]
@@ -18881,7 +20399,7 @@ async def succes_cmd(ctx, membre: discord.Member = None):
     nb_ok = len(unlocked)
     for cat, achs in cats.items():
         embed = discord.Embed(
-            title=f"🏆 Succès de {target.display_name} — {nb_ok}/{total}",
+            title=season_titre(f"🏆 Succès de {season_brut(target.display_name)} — {season_brut(nb_ok)}/{season_brut(total)}"),
             description=f"## {cat}",
             color=season_color("or"))
         lignes = []
@@ -19294,9 +20812,9 @@ async def donner_aliment(source, uid, nom):
            "neutre": ("😐", "Ça lui est égal."), "deteste": ("😖", "Il n'aime pas du tout.")}
     e_g, t_g = SYM[gout]
     embed = discord.Embed(
-        title=f"🍖  REPAS DE {(pst.get('surnom') or pdb['nom']).upper()}",
+        title=season_titre(f"🍖  REPAS DE {season_brut((pst.get('surnom') or pdb['nom']).upper())}"),
         description=f"### {emo} {nom}\n\n{texte}",
-        color={"adore":0xf1c40f,"aime":0x2ecc71,"neutre":0x95a5a6,"deteste":0xe74c3c}[gout])
+        color=season_tint({"adore":0xf1c40f,"aime":0x2ecc71,"neutre":0x95a5a6,"deteste":0xe74c3c}[gout]))
     embed.add_field(name="🍖 Faim",
                     value=f"`{'▰'*f_a}{'▱'*(10-f_a)}` {avant_faim} %\n"
                           f"`{'▰'*f_p}{'▱'*(10-f_p)}` **{apres_faim} %**", inline=False)
@@ -19305,8 +20823,8 @@ async def donner_aliment(source, uid, nom):
     embed.add_field(name="🎒 Il t'en reste", value=f"**×{reste}**" if reste else "*plus aucun*", inline=True)
     embed.add_field(name="⭐ XP", value=f"**+{xp}**", inline=True)
     if premiere:
-        embed.set_footer(text=f"✨ Première fois qu'il goûte ça · "
-                              f"{len(gouts)}/{len(PET_NOURRITURE)} aliments découverts")
+        embed.set_footer(text=season_pied(f"✨ Première fois qu'il goûte ça · "
+                              f"{len(gouts)}/{len(PET_NOURRITURE)} aliments découverts"))
         if gout in ("adore", "deteste"):
             pet_carnet_note(uid, f"{emo} A découvert qu'il "
                                  f"{'adore' if gout == 'adore' else 'déteste'} **{nom}**.", important=True)
@@ -19413,7 +20931,7 @@ async def jouer_avec(source, uid, jouet):
     if jouet == "__rien__":
         texte = _remplir(uid, _sans_repet(uid, "jouer_rien",
                           _pool_contextuel(uid, JOUER_SANS, JOUER_SANS_CTX)))
-        titre, emo_j = "🐾 Une partie improvisée", "🐾"
+        titre, emo_j = season_titre("🐾 Une partie improvisée"), "🐾"
         gain_h, gain_x = 12, 20
         extra = ""
     else:
@@ -19443,11 +20961,11 @@ async def jouer_avec(source, uid, jouet):
     st["dernier"]["jouer"] = _t.time()
     save_all_data()
 
-    e = discord.Embed(title=titre, description=texte + extra, color=0xe91e63)
+    e = discord.Embed(title=titre, description=texte + extra, color=season_tint(0xe91e63))
     e.add_field(name="✨ Effets",
                 value=f"❤️ Humeur **+{gain_h}**  ·  ⚡ Énergie **−10**  ·  ⭐ **+{gain_x} XP**",
                 inline=False)
-    e.set_footer(text=pet_humeur_texte(st))
+    e.set_footer(text=season_pied(pet_humeur_texte(st)))
     await envoyer(embed=e)
 
 @bot.command(name="jouer", aliases=["jouets-jouer"])
@@ -19462,9 +20980,9 @@ async def jouer_cmd(ctx, *, jouet: str = None):
     st = pet_etat(uid)
     if st["energie"] < 15:
         return await ctx.send(embed=discord.Embed(
-            title="😴 Il est épuisé",
+            title=season_titre("😴 Il est épuisé"),
             description="*Laisse-le récupérer avant de rejouer.*\n\n➡️ `.dormir`",
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
     if _t.time() - st["dernier"].get("jouer", 0) < 90:
         return await ctx.send("⏳ Doucement — laisse-lui le temps de souffler.", delete_after=6)
 
@@ -19480,10 +20998,10 @@ async def jouer_cmd(ctx, *, jouet: str = None):
         return await jouer_avec(ctx, uid, "__rien__")
 
     e = discord.Embed(
-        title=f"🎾 Avec quoi jouer avec {pst.get('surnom') or pdb['nom']} ?",
+        title=season_titre(f"🎾 Avec quoi jouer avec {season_brut(pst.get('surnom') or pdb['nom'])} ?"),
         description=(f"*{len(jouets)} jouet(s) dans ton inventaire.*\n"
                      f"⚡ Énergie : **{int(st['energie'])} %**"),
-        color=0xe91e63)
+        color=season_tint(0xe91e63))
     await ctx.send(embed=e, view=JouerView(uid, jouets))
 
 @bot.command(name="nourrir", aliases=["gamelle", "repas"])
@@ -19505,7 +21023,7 @@ async def nourrir_cmd(ctx, *, aliment: str = None):
 
     if not stock:
         return await ctx.send(embed=discord.Embed(
-            title="🎒 Garde-manger vide",
+            title=season_titre("🎒 Garde-manger vide"),
             description=("Tu n'as aucune nourriture en réserve.\n\n"
                          "*`.petshop` → rayon nourriture pour en acheter.*\n"
                          "*Il y a **56 aliments** à lui faire goûter.*"),
@@ -19515,7 +21033,7 @@ async def nourrir_cmd(ctx, *, aliment: str = None):
     faim = int(100 - st["faim"])
     f = max(0, min(10, faim // 10))
     await ctx.send(embed=discord.Embed(
-        title=f"🍖 Que veux-tu donner à {pst.get('surnom') or pdb['nom']} ?",
+        title=season_titre(f"🍖 Que veux-tu donner à {season_brut(pst.get('surnom') or pdb['nom'])} ?"),
         description=(f"🍖 **Faim actuelle**\n`{'▰'*f}{'▱'*(10-f)}` {faim} %\n\n"
                      f"*{len(stock)} aliment(s) en réserve.*"),
         color=season_color("or")), view=NourrirView(uid, stock))
@@ -19527,7 +21045,7 @@ async def petaction_cmd(ctx):
     action = ctx.invoked_with.lower()
     if action == "petaction":
         return await ctx.send(embed=discord.Embed(
-            title="🐾 S'occuper de son compagnon",
+            title=season_titre("🐾 S'occuper de son compagnon"),
             description=("*Plus de temps d'attente : c'est **son état** qui décide.*\n\n"
                          "`.nourrir` 🍖 — choisis un aliment de ta réserve\n"
                          "`.laver` 🛁 — 150 p · le rend propre, +20 XP\n"
@@ -19536,7 +21054,7 @@ async def petaction_cmd(ctx):
                          "`.dormir` 😴 — gratuit · récupère de l'énergie, +15 XP\n"
                          "`.caresser` 🫶 — gratuit · un petit plus, +10 XP\n\n"
                          "*`.pet` pour voir son état complet.*"),
-            color=0xe91e63))
+            color=season_tint(0xe91e63)))
 
     uid = str(ctx.author.id)
     pid, pdb, _ = get_active_pet(uid)
@@ -19571,11 +21089,11 @@ async def petaction_cmd(ctx):
             if st["humeur"] < 60: besoins.append("🎾 `.jouer`")
             besoins = [b for b in besoins if action not in b]
             return await ctx.send(embed=discord.Embed(
-                title=titre_ko,
+                title=season_titre(titre_ko),
                 description=(f"*{desc_ko}*"
                              + (f"\n\n**En revanche, il aimerait bien :**\n"
                                 + "  ·  ".join(besoins) if besoins else "")),
-                color=0x95a5a6))
+                color=season_tint(0x95a5a6)))
         URGENCES = {"dormir": ("energie", 35), "nourrir": ("faim", 65),
                     "laver": ("proprete", 35), "jouer": ("humeur", 40),
                     "promener": ("humeur", 40), "caresser": ("humeur", 50)}
@@ -19612,7 +21130,7 @@ async def petaction_cmd(ctx):
     embed = discord.Embed(
         title=f"{conf['emoji']}  {action.capitalize()}",
         description=(f"*{texte}*" + (f"\n\n> {raison} — c'était vraiment nécessaire." if urgent else "")),
-        color=0xe91e63)
+        color=season_tint(0xe91e63))
     embed.add_field(name="❤️ Humeur", value=f"{_jauge(st['humeur'])}\n{pet_humeur_texte(st)}", inline=False)
     embed.add_field(name="✨ Gain", value=f"+{conf['xp']} XP" + (f" · −{conf['cout']} p" if conf["cout"] else ""), inline=True)
     if leveled:
@@ -19622,22 +21140,22 @@ async def petaction_cmd(ctx):
     await ctx.send(embed=embed)
     for _e, _n in verifier_habitudes(uid):
         await ctx.send(embed=discord.Embed(
-            description=f"🧬 **Nouvelle habitude** — {_e} **{pdb['nom']}** {_n.lower()}.", color=0xe91e63))
+            description=f"🧬 **Nouvelle habitude** — {_e} **{pdb['nom']}** {_n.lower()}.", color=season_tint(0xe91e63)))
     for _e, _n in verifier_titres_pet(uid):
         await ctx.send(embed=discord.Embed(
-            title="🏅 Nouveau titre !",
-            description=f"# {_e}\n**{pdb['nom']}** devient **« {_n} »**", color=0xf1c40f))
+            title=season_titre("🏅 Nouveau titre !"),
+            description=f"# {_e}\n**{pdb['nom']}** devient **« {_n} »**", color=season_tint(0xf1c40f)))
     if pet_peut_evoluer(uid):
         _pid, _pdb, _pst = get_active_pet(uid)
         _s = pet_evolution_suivante(_pst["level"])
         await ctx.send(embed=discord.Embed(
-            title="🌟 ÉVOLUTION DISPONIBLE !",
+            title=season_titre("🌟 ÉVOLUTION DISPONIBLE !"),
             description=(f"**{_pst.get('surnom') or pdb['nom']}** a atteint le niveau maximum "
                          f"de son évolution actuelle !\n\n"
                          f"➡️ **Évolution {_s[1]} — {_s[2]}**  ·  💰 **{_s[5]:,} pièces**\n\n"
                          f"*Il ne gagnera plus d'XP tant qu'il n'aura pas évolué.*\n"
                          f"**➜ `.petevoluer`**"),
-            color=0xf1c40f))
+            color=season_tint(0xf1c40f)))
     await verifier_traits_acquis(uid, ctx.channel)
     await verifier_traits_histoire(uid, ctx.channel)
     if random.random() < 0.06:
@@ -20512,85 +22030,77 @@ async def dramastop_cmd(ctx):
     salon = (ctx.guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None) or ctx.channel
     await cloturer_saison(ctx.guild, salon)
 
-@bot.command(name="saison", aliases=["dramacollectif", "masaison", "episode"])
-async def saison_cmd(ctx):
-    """Où en est la saison — .saison"""
-    s = drama_saison
-    _drama_valide()
-    if not s["en_cours"]:
-        apercu = "\n".join(f"{v['trope']} **{v['titre']}**\n└ *« {v['accroche']} »*"
-                           for v in list(DRAMA_TROPES.values())[:4])
-        return await ctx.send(embed=discord.Embed(
-            title="📖 La Chronique",
-            description=(
-                "**Aucune saison en cours pour l'instant.**\n"
-                "-# Le système actuel est `.chronique`.\n\n"
-                "━━━━━━━━━━━━━━━━━━━━\n\n"
-                "### Le principe\n"
-                "Une romance en **12 épisodes**, avec **deux membres du serveur** comme "
-                "personnages principaux.\n\n"
-                "Pas de coup de foudre : ils se supportent à peine au premier épisode. "
-                "L'attirance met du temps à venir, comme dans un vrai drama.\n\n"
-                "À la fin de chaque épisode, **le serveur vote** entre trois suites possibles. "
-                "L'épisode suivant reprend exactement là où votre choix l'a mené — "
-                "et commence par le rappel des résultats.\n\n"
-                "💰 **150 pièces** à chaque votant.\n\n"
-                "━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"### {len(DRAMA_TROPES)} histoires possibles\n{apercu}\n\n"
-                f"*…et {len(DRAMA_TROPES)-4} autres — `.drama-tropes` pour tout voir.*\n\n"
-                "*Le staff lance une saison avec `.drama-start`.*"),
-            color=0x95a5a6))
-
-    tr = DRAMA_TROPES[s["trope_cle"]]
-    ep = s["episode"]
-    total = len(DRAMA_EPISODES)
-    f = max(0, min(12, int(ep / total * 12)))
-
-    recap = "\n".join(f"▪️ {t}" for t in s["historique"][-6:]) or "*Le premier vote est en cours.*"
-    if len(s["historique"]) > 6:
-        recap = f"*…les {len(s['historique'])-6} premiers épisodes sont plus haut*\n" + recap
-
-    embed = discord.Embed(
-        title=f"🎬  {tr['titre']}",
-        description=(f"## « {tr['accroche']} »\n\n"
-                     f"`{'▰'*f}{'▱'*(12-f)}`  **Épisode {ep}/{total}**\n\n"
-                     f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                     f"### 🎭 Au casting\n"
-                     f"{s['casting'].get('a','?')}\n└ *{tr['role_a']}*\n\n"
-                     f"{s['casting'].get('b','?')}\n└ *{tr['role_b']}*"
-                     + (f"\n\n> 🆕 **{s['casting']['fictif']['nom']}** — personnage inventé, "
-                        f"reconnaissable à {s['casting']['fictif']['trait']}."
-                        if s['casting'].get('fictif') else "")),
-        color=0xff6b9d)
-    embed.set_author(name=tr["trope"])
-
-    if ep and ep <= total:
-        E = DRAMA_EPISODES[ep-1]
-        embed.add_field(name=f"📖 Épisode en cours — {E['titre']}",
-                        value=f"*{E['etape']}*", inline=False)
-    embed.add_field(name="🗳️ Vos choix jusqu'ici", value=recap[:1024], inline=False)
-
-    votes = s.get("votes") or {}
-    if votes:
-        cnt = {}
-        for v in votes.values():
-            cnt[int(v)] = cnt.get(int(v), 0) + 1
-        tot = sum(cnt.values())
-        ch = s.get("dernier_choix") or []
-        embed.add_field(name=f"⏳ Vote en cours — {tot} participant(s)",
-                        value="\n".join(
-                            f"{['🅰️','🅱️','🇨'][k]} {ch[k][:44] if k < len(ch) else ''} — "
-                            f"**{v}** ({v/tot*100:.0f} %)"
-                            for k, v in sorted(cnt.items(), key=lambda x: -x[1])), inline=False)
-    elif ep:
-        embed.add_field(name="⏳ Vote en cours",
-                        value="*Personne n'a encore voté sur cet épisode.*", inline=False)
-
-    if ep < total:
-        embed.set_footer(text=f"Prochain épisode : « {DRAMA_EPISODES[ep]['titre']} » — publié par le staff")
-    else:
-        embed.set_footer(text="Dernier épisode — la saison se termine au prochain dépouillement.")
-    await ctx.send(embed=embed)
+@bot.command(name="chapitre", aliases=["dramacollectif", "masaison", "episode"])
+async def chapitre_cmd(ctx):
+    """Le chapitre en cours de la Chronique — .chapitre"""
+    # Lecture seule de la Chronique (le système narratif actuel) : aucune
+    # écriture, aucun vote, aucune récompense, aucun lecteur compté.
+    # L'ancien drama collectif n'est pas relancé : s'il est encore en cours,
+    # il est seulement signalé.
+    ancien = (f"Encore en cours — épisode {drama_saison.get('episode', 0)}/{len(DRAMA_EPISODES)}."
+              if drama_saison.get("en_cours") else None)
+    s = chro_saison() if chro_active() else None
+    if not s:
+        e = discord.Embed(
+            title=season_titre("📖  La Chronique"),
+            description=("*Aucun chapitre en cours pour le moment.*\n\n"
+                         "La Chronique est une histoire interactive : à chaque épisode, "
+                         "le serveur vote et la suite change vraiment.\n"
+                         "-# `.chronique` pour la suivre dès la prochaine saison."),
+            color=season_tint(0x9b59b6))
+        if ancien:
+            e.add_field(name="🎬 Ancien drama collectif", value=ancien, inline=False)
+        e.set_footer(text=season_footer("QG Kdrama"))
+        return await ctx.send(embed=e)
+    total = len(s["episodes"])
+    num = min(CHRONIQUE.get("episode", 1), total)
+    publies = CHRONIQUE.get("publies") or []
+    fsm, _det = chro_etat_ui()
+    ep = chro_episode()
+    e = discord.Embed(
+        title=season_titre(f"📖  {s['titre']}"),
+        description=f"### {s['genre']}\n*{s['accroche']}*",
+        color=season_tint(0xff9ec7))
+    plein = max(0, min(12, round(len([x for x in publies if x <= total]) / total * 12))) if total else 0
+    chap = f"`{'▰' * plein}{'▱' * (12 - plein)}`  Épisode **{num}/{total}**"
+    if ep and num in publies and ep.get("titre"):
+        chap += f"\n« {ep['titre']} »"
+    e.add_field(name="📍 Chapitre en cours", value=chap, inline=False)
+    actes = [(s.get("arcs") or {}).get(a) for a in chro_arcs_episode(ep)
+             if str(a).startswith("acte")]
+    acte = next((a.get("nom") for a in actes if isinstance(a, dict) and a.get("nom")), None)
+    if acte is None:
+        acte = next((a.get("nom") for cle, a in (s.get("arcs") or {}).items()
+                     if str(cle).startswith("acte") and isinstance(a, dict)
+                     and num in (a.get("episodes") or [])), None)
+    if acte:
+        e.add_field(name="🎬 Acte", value=acte, inline=True)
+    votes = CHRONIQUE.get("votes") or {}
+    lien = None
+    if CHRONIQUE.get("salon_vote") and CHRONIQUE.get("msg_vote") and ctx.guild:
+        lien = (f"https://discord.com/channels/{ctx.guild.id}/"
+                f"{CHRONIQUE['salon_vote']}/{CHRONIQUE['msg_vote']}")
+    etat = {
+        "READY_EPISODE": ("⏸️ Le prochain épisode arrive bientôt." if num in publies
+                          else f"⏸️ L'épisode {num} n'est pas encore publié."),
+        "PUBLISHING": "📖 L'épisode est en cours de publication.",
+        "VOTE_OPEN": f"💌 **Le vote est ouvert** — {len(votes)} vote(s) pour l'instant.",
+        "VOTE_TIE": "⚖️ **Égalité** — le vote est prolongé pour départager.",
+        "VOTE_ERROR": "⏳ Le vote de cet épisode va être republié.",
+    }.get(fsm, "⏸️ La suite arrive bientôt.")
+    if lien and fsm in ("VOTE_OPEN", "VOTE_TIE"):
+        etat += f"\n[🗳️ Aller voter]({lien})"
+    e.add_field(name="🗳️ Où en est-on", value=etat, inline=False)
+    if CHRONIQUE.get("derniere_decision"):
+        e.add_field(name="💌 Votre dernière décision",
+                    value=f"*{CHRONIQUE['derniere_decision']}*"[:1024], inline=False)
+    sc = chro_salon(ctx.guild)                 # (None en message privé)
+    if sc:
+        e.add_field(name="📚 Où lire", value=sc.mention, inline=True)
+    if ancien:
+        e.add_field(name="🎬 Ancien drama collectif", value=ancien, inline=False)
+    e.set_footer(text=season_footer(f"{len(CHRONIQUE_LU)} lecteur(s) · .chronique pour le résumé"))
+    await ctx.send(embed=e)
 
 
 @bot.command(name="drama-reset", aliases=["dramareset"])
@@ -20721,12 +22231,12 @@ async def avent_cmd(ctx):
     now = datetime.datetime.now()
     if not avent_actif():
         return await ctx.send(embed=discord.Embed(
-            title="🎄 Calendrier de l'Avent",
+            title=season_titre("🎄 Calendrier de l'Avent"),
             description=("Le calendrier n'est disponible que **du 1er au 24 décembre**.\n\n"
                          "24 cases, une par jour, avec des récompenses qui montent :\n"
                          "pièces, rolls, items, un **rôle exclusif** le 12…\n"
                          "et un **compagnon unique** le 24 décembre. 🎁"),
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
 
     jour = now.day
     ouvertes = avent_data[uid]
@@ -20734,11 +22244,11 @@ async def avent_cmd(ctx):
     deja = str(jour) in ouvertes
 
     embed = discord.Embed(
-        title=f"🎄  Calendrier de l'Avent  —  {jour} décembre",
+        title=season_titre(f"🎄  Calendrier de l'Avent  —  {season_brut(jour)} décembre"),
         description=(f"{grille}\n\n"
                      f"✅ ouverte  ·  🎁 disponible  ·  🔒 verrouillée\n\n"
                      f"**{nb}/31 cases ouvertes**"),
-        color=0xc0392b if not deja else 0x27ae60)
+        color=season_tint(0xc0392b if not deja else 0x27ae60))
     if AVENT_NARRATION.get(jour):
         embed.add_field(name="\u200b", value=f"*{AVENT_NARRATION[jour]}*", inline=False)
     if deja:
@@ -20749,9 +22259,9 @@ async def avent_cmd(ctx):
                         value="Tape `.ouvrircase` pour l'ouvrir.", inline=False)
     manquees = [n for n in range(1, jour) if str(n) not in ouvertes]
     if manquees:
-        embed.set_footer(text=f"⚠️ {len(manquees)} case(s) manquée(s) — elles sont perdues !")
+        embed.set_footer(text=season_pied(f"⚠️ {len(manquees)} case(s) manquée(s) — elles sont perdues !"))
     else:
-        embed.set_footer(text="🔥 Aucune case manquée — continue comme ça !")
+        embed.set_footer(text=season_pied("🔥 Aucune case manquée — continue comme ça !"))
     await ctx.send(embed=embed)
 
 @bot.command(name="ouvrircase", aliases=["case", "ouvriravent"])
@@ -20831,16 +22341,16 @@ async def ouvrircase_cmd(ctx):
     save_all_data()
     grille, nb = build_calendrier(uid)
     embed = discord.Embed(
-        title=f"🎁  Case {jour} ouverte !",
+        title=season_titre(f"🎁  Case {season_brut(jour)} ouverte !"),
         description=(f"{AVENT_NARRATION.get(jour, 'La case s ouvre dans un petit bruit de papier.')}\n\n"
                      f"### Tu reçois : **{libelle}**{extra}"),
-        color=0xf1c40f if jour < 24 else 0xc0392b)
+        color=season_tint(0xf1c40f if jour < 24 else 0xc0392b))
     embed.add_field(name=f"📅 Ta progression — {nb}/31", value=grille, inline=False)
     if jour == 24:
-        embed.set_footer(text="🎄 Dernière case. Merci d'avoir fait vivre le QG cette année.")
+        embed.set_footer(text=season_pied("🎄 Dernière case. Merci d'avoir fait vivre le QG cette année."))
     else:
-        embed.set_footer(text=(f"Prochaine case demain : {AVENT_CASES[jour+1][2]}"
-                               if jour + 1 in AVENT_CASES else "Dernière case de l'année !"))
+        embed.set_footer(text=(season_pied(f"Prochaine case demain : {AVENT_CASES[jour+1][2]}"
+                               if jour + 1 in AVENT_CASES else "Dernière case de l'année !")))
     await ctx.send(embed=embed)
     gazette_fait("divers", f"**{ctx.author.display_name}** a ouvert la case {jour} du calendrier.", 1)
 
@@ -20857,9 +22367,9 @@ async def topavent_cmd(ctx):
         parfait = " 🔥" if n == datetime.datetime.now().day else ""
         lignes.append(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{m.display_name}** — {n}/24 cases{parfait}")
     await ctx.send(embed=discord.Embed(
-        title="🎄 Les plus assidus du calendrier",
+        title=season_titre("🎄 Les plus assidus du calendrier"),
         description="\n".join(lignes) or "*Aucun participant.*",
-        color=0xc0392b))
+        color=season_tint(0xc0392b)))
 
 
 # ============================================================
@@ -22181,9 +23691,9 @@ async def construire_gazette(guild, publication=False):
 
     num = gazette_semaine["num"]
     embed = discord.Embed(
-        title=(f"📰  LA GAZETTE DE BLACKWOOD  —  N°{num}"
-               if saison_mode() == "blackwood"
-               else f"📰  LA GAZETTE DU QG  —  N°{num}"),
+        title=season_titre(f"📰  LA GAZETTE DE BLACKWOOD  —  N°{num}"
+                           if saison_mode() == "blackwood"
+                           else f"📰  LA GAZETTE DU QG  —  N°{num}"),
         description=f"*{random.choice(GAZETTE_INTROS)}*",
         color=season_color("or"))
     if guild.icon:
@@ -22349,22 +23859,22 @@ async def gazette_cmd(ctx):
             base.add_field(name="🕰️ Ce jour-là…",
                            value=f"{ce_jour_la_texte(ans).capitalize()}, "
                                  f"{memoire_libelle(e).lower()}", inline=False)
-        base.set_footer(text=f"Semaine du {time.strftime('%d/%m', time.localtime(debut))} "
+        base.set_footer(text=season_pied(f"Semaine du {time.strftime('%d/%m', time.localtime(debut))} "
                              f"au {time.strftime('%d/%m', time.localtime(fin_p - 1))}"
-                             f"  ·  {len(faits)} fait(s) retenu(s)")
+                             f"  ·  {len(faits)} fait(s) retenu(s)"))
         return base
 
     def emb_archives(annee=None):
         annees = archives_annees()
         if not annees:
             return discord.Embed(
-                title="🗃️ ARCHIVES DU QG",
+                title=season_titre("🗃️ ARCHIVES DU QG"),
                 description="*Les archives sont vides. L'histoire commence maintenant.*",
                 color=season_color("neutre")), annees
         annee = annee if annee in annees else annees[0]
         e = discord.Embed(
-            title=f"🗃️ ARCHIVES DU QG — {annee}",
-            description="*Ce que le QG retiendra.*", color=0x8e6f47)
+            title=season_titre(f"🗃️ ARCHIVES DU QG — {season_brut(annee)}"),
+            description="*Ce que le QG retiendra.*", color=season_tint(0x8e6f47))
         for (m, lib), entrees in archives_par_mois(annee).items():
             lignes = []
             for x in entrees[:5]:
@@ -22373,13 +23883,13 @@ async def gazette_cmd(ctx):
                 lignes.append(f"`{jour}` {memoire_libelle(x)}{who}")
             e.add_field(name=f"📅 {lib.capitalize()} {annee}",
                         value="\n".join(lignes), inline=False)
-        e.set_footer(text=f"{len(archives_entrees(annee))} entrée(s) en {annee}  ·  "
-                          f"années : {' · '.join(str(a) for a in annees)}")
+        e.set_footer(text=season_pied(f"{len(archives_entrees(annee))} entrée(s) en {annee}  ·  "
+                          f"années : {' · '.join(str(a) for a in annees)}"))
         return e, annees
 
     def emb_cejour():
         cj = ce_jour_la(limite=5)
-        e = discord.Embed(title="🕰️ CE JOUR-LÀ…", color=season_color("info"))
+        e = discord.Embed(title=season_titre("🕰️ CE JOUR-LÀ…"), color=season_color("info"))
         if not cj:
             e.description = ("*Rien de particulier ne s'est passé un "
                              f"{time.strftime('%d %B', time.localtime())} au QG.*\n\n"
@@ -22739,9 +24249,9 @@ class CadeauView(ui.View):
             info = ANIME_CARDS_DB.get(res["valeur"]["cle"], {})
             reveal = (f"{RARETE_EMOJI.get(info.get('rarete',''),'🎴')} "
                       f"**{info.get('nom','?')}** — {info.get('rarete','?')}")
-        e = discord.Embed(title="🎀 Ouvert !",
+        e = discord.Embed(title=season_titre("🎀 Ouvert !"),
                           description=f"{reveal}\n\n*{random.choice(CADEAU_MOTS)}*",
-                          color=0x2ecc71)
+                          color=season_tint(0x2ecc71))
         if res["msg"]:
             e.add_field(name="💌 Mot de l'expéditeur", value=f"*« {res['msg']} »*", inline=False)
         save_all_data()
@@ -22823,16 +24333,16 @@ SAISON_PACKS = {
         "ton": "chaleureux",
     },
     "blackwood": {
-        "nom": "Blackwood", "emoji": "🍂",
-        # Le jour on veut y vivre ; la nuit on regrette d'être resté.
-        "couleur": {"DAY": 0xc8791f, "DUSK": 0x8a5a3c, "NIGHT": 0x2b2018},
-        "separateur": {"DAY": "🍂 ─────────────── 🍂",
-                       "DUSK": "🕯️ ─────────────── 🕯️",
-                       "NIGHT": "· · ─────────────── · ·"},
-        "ornement": {"DAY": "🍂", "DUSK": "🕯️", "NIGHT": "🌑"},
-        "footer": {"DAY": "Blackwood — l'automne s'installe",
-                   "DUSK": "Blackwood — la pluie commence",
-                   "NIGHT": "Blackwood — tout le monde est rentré"},
+        "nom": "Blackwood", "emoji": "🎃",
+        # Halloween rétro : orange citrouille à toute heure — plus profond à
+        # la nuit tombée, jamais éteint (lisible sur mobile, thème sombre).
+        "couleur": {"DAY": 0xFF7518, "DUSK": 0xF2691E, "NIGHT": 0xE35D16},
+        "separateur": {"DAY": "─────── 🎃 ───────",
+                       "DUSK": "─────── 🕯️ ───────",
+                       "NIGHT": "─────── 🌙 ───────"},
+        "ornement": {"DAY": "🎃", "DUSK": "🕯️", "NIGHT": "🌙"},
+        # Pied de page compact : la saison se reconnaît sans prendre de place.
+        "footer": {"DAY": "🎃 Blackwood", "DUSK": "🕯️ Blackwood", "NIGHT": "🌙 Blackwood"},
         "ton": {"DAY": "cosy", "DUSK": "feutré", "NIGHT": "inquiet"},
     },
     "wintervale": {
@@ -22855,15 +24365,20 @@ SAISON_ROLES = {
     "normal": {
         "principal": 0xff6b9d, "succes": 0x2ecc71, "alerte": 0xe74c3c,
         "info": 0x3498db, "neutre": 0x95a5a6, "or": 0xf1c40f,
+        "accent": 0x9b59b6,
     },
     "blackwood": {
-        # DAY chaud, DUSK cuivré, NIGHT presque éteint.
-        "principal": {"DAY": 0xc8791f, "DUSK": 0x8a5a3c, "NIGHT": 0x2b2018},
-        "succes":    {"DAY": 0x8ba642, "DUSK": 0x6e7f3a, "NIGHT": 0x3d4a2a},
-        "alerte":    {"DAY": 0xa8391f, "DUSK": 0x8a2d1a, "NIGHT": 0x5c1f12},
-        "info":      {"DAY": 0xb08d57, "DUSK": 0x7d6b4a, "NIGHT": 0x4a4038},
-        "neutre":    {"DAY": 0x8d7b6a, "DUSK": 0x6b5c4f, "NIGHT": 0x3a332d},
-        "or":        {"DAY": 0xd9a441, "DUSK": 0xb08830, "NIGHT": 0x6e5620},
+        # Orange citrouille, touches de violet, lumière de lanterne. Chaque
+        # couleur d'état garde sa famille — un succès reste vert, une erreur
+        # rouge, un gain doré — seule la nuance change avec l'heure.
+        "principal": {"DAY": 0xFF7518, "DUSK": 0xF2691E, "NIGHT": 0xE35D16},
+        "accent":    {"DAY": 0x9B59D0, "DUSK": 0x8E44AD, "NIGHT": 0x7D3C98},
+        "or":        {"DAY": 0xFFC845, "DUSK": 0xF5B83D, "NIGHT": 0xE8A935},
+        "succes":    {"DAY": 0x6AB04C, "DUSK": 0x5E9F43, "NIGHT": 0x52903A},
+        "alerte":    {"DAY": 0xD83A3A, "DUSK": 0xC93434, "NIGHT": 0xB82E2E},
+        "info":      {"DAY": 0x5B7FDB, "DUSK": 0x5272CC, "NIGHT": 0x4A66BD},
+        "neutre":    {"DAY": 0x8F8A9E, "DUSK": 0x837E92, "NIGHT": 0x777285},
+        "nuit":      {"DAY": 0x3B2A50, "DUSK": 0x332446, "NIGHT": 0x2B1E3C},
     },
     "wintervale": {
         "principal": 0x7fb3d5, "succes": 0x76c7a1, "alerte": 0xc0576b,
@@ -22897,6 +24412,147 @@ def season_title(base, emoji=None, ts=None):
     """Habille un titre : l'emoji de la saison remplace celui d'origine."""
     e = emoji or season_emoji(ts=ts)
     return f"{e}  {base}" if base else e
+
+# ── 🎃 Habillage Blackwood des embeds (lot DA-1) ──
+# Trois helpers explicites, appelés là où l'embed est construit : aucune
+# transformation globale de discord.py, aucun envoi modifié en douce.
+# Hors Blackwood, chacun rend sa valeur d'entrée À L'IDENTIQUE.
+
+def _saison_famille(couleur):
+    """Famille d'une couleur écrite en dur, pour garder son SENS en
+    changeant de palette : vert = succès, rouge = erreur, or = gain,
+    bleu = info, violet = accent, gris = neutre. Rose et orange — la
+    couleur du QG — deviennent l'orange citrouille. Blanc : inchangé."""
+    import colorsys
+    r, g, b = ((couleur >> 16) & 255) / 255, ((couleur >> 8) & 255) / 255, (couleur & 255) / 255
+    h, s, v = colorsys.rgb_to_hsv(r, g, b)
+    h *= 360
+    if v < 0.22:
+        return "nuit"
+    if s < 0.18:
+        return "neutre" if v < 0.92 else None
+    if h < 15 or h >= 345:
+        return "alerte"
+    if h < 40:
+        return "principal"
+    if h < 66:
+        return "or"
+    if h < 165:
+        return "succes"
+    if h < 255:
+        return "info"
+    if h < 290:
+        return "accent"
+    return "principal"
+
+def season_tint(couleur, ts=None):
+    """Couleur d'embed écrite en dur → sa teinte Blackwood, par famille.
+    Hors Blackwood : la couleur d'origine, au bit près. Les couleurs de
+    rareté et celles choisies par un membre ne passent jamais par ici."""
+    try:
+        if (isinstance(couleur, bool) or not isinstance(couleur, int)
+                or saison_mode(ts) != "blackwood"):
+            return couleur
+        fam = _saison_famille(couleur)
+        return couleur if fam is None else season_color(fam, ts=ts)
+    except Exception:
+        return couleur
+
+# Dans un titre habillé, ce que season_brut a encadré reste en écriture
+# normale (un pseudo, un nom propre, un nombre) : seuls les mots FIXES du
+# titre changent de style. Deux caractères privés, retirés avant l'envoi.
+_SAISON_BRUT = ("\ue000", "\ue001")
+
+
+class _SaisonBrut:
+    """Valeur insérée dans un titre et gardée telle quelle (voir season_brut)."""
+    __slots__ = ("v",)
+
+    def __init__(self, v):
+        self.v = v
+
+    def __format__(self, spec):
+        return f"{_SAISON_BRUT[0]}{format(self.v, spec)}{_SAISON_BRUT[1]}"
+
+    def __str__(self):
+        return f"{_SAISON_BRUT[0]}{self.v}{_SAISON_BRUT[1]}"
+
+    def __repr__(self):
+        return f"{_SAISON_BRUT[0]}{self.v!r}{_SAISON_BRUT[1]}"
+
+
+def season_brut(valeur, ts=None):
+    """À l'intérieur d'un titre passé à season_titre : garde cette valeur
+    (pseudo, nom d'un compagnon, d'une carte, nombre…) en écriture normale.
+    Hors Blackwood : la valeur elle-même, à l'identique."""
+    try:
+        if saison_mode(ts) != "blackwood":
+            return valeur
+        return _SaisonBrut(valeur)
+    except Exception:
+        return valeur
+
+
+def _saison_sans_marques(texte):
+    if isinstance(texte, str) and _SAISON_BRUT[0] in texte:
+        return texte.replace(_SAISON_BRUT[0], "").replace(_SAISON_BRUT[1], "")
+    return texte
+
+
+def _saison_parties(texte):
+    """[(morceau, libre)] : `libre` vaut False pour ce que season_brut a encadré."""
+    a, b = _SAISON_BRUT
+    out, i = [], 0
+    while True:
+        j = texte.find(a, i)
+        if j < 0:
+            out.append((texte[i:], True))
+            return out
+        out.append((texte[i:j], True))
+        k = texte.find(b, j + 1)
+        if k < 0:
+            out.append((texte[j + 1:], False))
+            return out
+        out.append((texte[j + 1:k], False))
+        i = k + 1
+
+
+def season_titre(titre, blackwood=None, ts=None):
+    """Titre court habillé. En Blackwood, les LETTRES des mots fixes changent
+    de style : un titre surtout en capitales passe en « Cassette VHS »
+    (monospace, casse conservée), les autres en « Grimoire rétro » (gothique).
+    Emojis, chiffres, ponctuation et valeurs protégées par season_brut
+    restent normaux. `blackwood` donne un intitulé propre à la saison
+    (« Moon Casino »…). Hors Blackwood : le titre d'origine, inchangé.
+    Jamais un pseudo, une mention, une commande ou un identifiant décoré."""
+    try:
+        if not titre or saison_mode(ts) != "blackwood":
+            return _saison_sans_marques(titre)
+        t = blackwood if blackwood is not None else titre
+        parties = _saison_parties(t)
+        lettres = [c for morceau, libre in parties if libre
+                   for c in morceau if c.isalpha() and c.isascii()]
+        style = (deco_mono if lettres and sum(c.isupper() for c in lettres) / len(lettres) >= 0.6
+                 else deco_gothique)
+        return "".join(style(morceau) if libre else morceau for morceau, libre in parties)
+    except Exception:
+        return _saison_sans_marques(titre)
+
+def season_pied(texte, ts=None):
+    """Pied de page : en Blackwood, la mention compacte de la saison est
+    ajoutée à la fin ; le texte fonctionnel (pages, délais…) reste en tête.
+    Hors Blackwood : le texte d'origine, inchangé (même vide)."""
+    try:
+        if saison_mode(ts) != "blackwood":
+            return texte
+        marque = saison_valeur("footer", "", ts=ts)
+        if not texte:
+            return marque
+        if SAISON_PACKS["blackwood"]["nom"] in str(texte):
+            return texte                     # déjà signé : jamais deux fois
+        return f"{texte}  ·  {marque}"
+    except Exception:
+        return texte
 
 # Formulations. Une clé, plusieurs saisons, éventuellement plusieurs périodes.
 SAISON_TEXTES = {
@@ -23092,11 +24748,11 @@ AKARI_PACKS = {"normal": {}}
 # Ajoutés APRÈS coup : les moteurs du Guide et de la Boutique n'ont pas
 # bougé, ils lisent simplement une entrée de plus.
 GUIDE_HABILLAGE["blackwood"] = {
-    "titre": "🍂  BIENVENUE À BLACKWOOD",
+    "titre": "🎃  " + deco_gothique("Bienvenue à Blackwood"),
     "intro": ("Les feuilles s'entassent devant la porte et personne ne les ramasse.\n"
               "Il fait bon à l'intérieur.\n\n"
               "*Prends une tasse. Reste un moment.*"),
-    "couleur": 0xc8791f,
+    "couleur": 0xFF7518,
 }
 GUIDE_HABILLAGE["wintervale"] = {
     "titre": "❄️  BIENVENUE À WINTERVALE",
@@ -23105,12 +24761,12 @@ GUIDE_HABILLAGE["wintervale"] = {
     "couleur": 0x7fb3d5,
 }
 BOUTIQUE_HABILLAGE["blackwood"] = {
-    "titre": "🕯️  LE COMPTOIR DE BLACKWOOD",
-    "intro": "La boutique sent la cannelle et le bois humide. Prends ton temps.",
-    "couleur": 0xc8791f,
-    "separateur": "🍂 ─────────────── 🍂",
-    "label_une": "🕯️ SOUS LA LAMPE",
-    "label_selection": "🍂 CE QUE L'ON SORT CETTE SEMAINE",
+    "titre": "🕯️  " + deco_gothique("Dark Shop"),
+    "intro": "La boutique sent la cannelle et la cire chaude. Prends ton temps.",
+    "couleur": 0xFF7518,
+    "separateur": "─────── 🕯️ ───────",
+    "label_une": "🕯️ SOUS LA LANTERNE",
+    "label_selection": "🎃 CE QUE L'ON SORT CETTE SEMAINE",
 }
 BOUTIQUE_HABILLAGE["wintervale"] = {
     "titre": "❄️  LE COMPTOIR DE WINTERVALE",
@@ -23464,7 +25120,7 @@ class SurpriseView(ui.View):
         txt = corps.replace("{v}", f"{v:,}").replace("{q}", "quelqu'un")
         save_all_data()
         await itx.response.edit_message(
-            embed=discord.Embed(title=f"{emo} {titre}", description=txt, color=0x9b59b6),
+            embed=discord.Embed(title=f"{emo} {titre}", description=txt, color=season_tint(0x9b59b6)),
             view=self)
 
     @ui.button(label="Laisser", emoji="🚪", style=discord.ButtonStyle.secondary)
@@ -23478,7 +25134,7 @@ class SurpriseView(ui.View):
             embed=discord.Embed(
                 description="Tu laisses l'enveloppe où elle est.\n\n"
                             "*Akari ne dit rien. Elle a l'air d'approuver.*",
-                color=0x95a5a6), view=self)
+                color=season_tint(0x95a5a6)), view=self)
 
 async def surprise_proposer(channel, membre, action):
     """À appeler après une action légitime. Ne fait rien la plupart du temps."""
@@ -23490,7 +25146,7 @@ async def surprise_proposer(channel, membre, action):
         await channel.send(
             membre.mention,
             embed=discord.Embed(title=f"{emo} {titre}",
-                                description="*Personne ne l'a posée là.*", color=0x9b59b6),
+                                description="*Personne ne l'a posée là.*", color=season_tint(0x9b59b6)),
             view=SurpriseView(membre.id, s))
         return True
     except Exception:
@@ -23634,7 +25290,7 @@ async def liens_cmd(ctx, membre: discord.Member = None):
         lignes = [f"{LIENS_TYPES[t][0]} **{n}** {LIENS_TYPES[t][1]}"
                   for t, n in sorted(detail.items(), key=lambda x: -x[1]) if n and t in LIENS_TYPES]
         embed = discord.Embed(
-            title=f"🤝 Ton lien avec {membre.display_name}",
+            title=season_titre(f"🤝 Ton lien avec {season_brut(membre.display_name)}"),
             description=f"### {nom}\n**{pts} points de lien**",
             color=coul)
         embed.set_thumbnail(url=membre.display_avatar.url)
@@ -23652,14 +25308,14 @@ async def liens_cmd(ctx, membre: discord.Member = None):
         else:
             embed.add_field(name="👑 Palier maximum",
                             value="Vous avez atteint le sommet. Respect.", inline=False)
-        embed.set_footer(text="Duels, quiz, échanges, rencontres de compagnons et events renforcent le lien.")
+        embed.set_footer(text=season_pied("Duels, quiz, échanges, rencontres de compagnons et events renforcent le lien."))
         return await ctx.send(embed=embed)
 
     # ── Tous tes liens ──
     mes = [(a, p) for a, p in liens_data[uid].items() if p > 0]
     if not mes:
         return await ctx.send(embed=discord.Embed(
-            title="🤝 Tes liens",
+            title=season_titre("🤝 Tes liens"),
             description=("Tu n'as encore tissé aucun lien.\n\n"
                          "**Comment ça marche ?**\n"
                          "Chaque fois que tu joues **avec** quelqu'un — duel, quiz, échange de carte, "
@@ -23667,7 +25323,7 @@ async def liens_cmd(ctx, membre: discord.Member = None):
                          "Les paliers débloquent des **titres partagés** et un **bonus de pièces** "
                          "quand vous jouez ensemble.\n\n"
                          "*Lance un `.quizduel` ou un `.puissance4` pour commencer !*"),
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
     mes.sort(key=lambda x: -x[1])
     lignes = []
     for aid, pts in mes[:12]:
@@ -23677,10 +25333,10 @@ async def liens_cmd(ctx, membre: discord.Member = None):
         lignes.append(f"{titre.split()[0]} **{nom_m}** — {titre.split(' ', 1)[1]} · *{pts} pts*"
                       + (f" · +{bonus} %" if bonus else ""))
     embed = discord.Embed(
-        title=f"🤝 Les liens de {ctx.author.display_name}",
+        title=season_titre(f"🤝 Les liens de {season_brut(ctx.author.display_name)}"),
         description="\n".join(lignes),
-        color=0x9b59b6)
-    embed.set_footer(text=f"{len(mes)} lien(s) · `.liens @membre` pour le détail d'une relation")
+        color=season_tint(0x9b59b6))
+    embed.set_footer(text=season_pied(f"{len(mes)} lien(s) · `.liens @membre` pour le détail d'une relation"))
     await ctx.send(embed=embed)
 
 @bot.command(name="topliens", aliases=["topduos"])
@@ -23706,9 +25362,9 @@ async def topliens_cmd(ctx):
         medaille = "🥇🥈🥉"[i] if i < 3 else "▪️"
         lignes.append(f"{medaille} **{ma.display_name}** & **{mb.display_name}**\n└ {titre} · *{p} pts*")
     await ctx.send(embed=discord.Embed(
-        title="🤝 Les duos les plus soudés du QG",
+        title=season_titre("🤝 Les duos les plus soudés du QG"),
         description="\n".join(lignes) if lignes else "*Aucun duo actif.*",
-        color=0x9b59b6))
+        color=season_tint(0x9b59b6)))
 
 # ============================================================
 #  🌙 MODE NUIT — le QG change de visage entre minuit et 6 h
@@ -23756,7 +25412,7 @@ async def nuit_cmd(ctx):
         h = datetime.datetime.now()
         reste = (NUIT_FIN - h.hour - 1) * 60 + (60 - h.minute)
         embed = discord.Embed(
-            title="🌙  Mode Nuit — actif",
+            title=season_titre("🌙  Mode Nuit — actif"),
             description=(f"*{random.choice(NUIT_ACCUEIL)}*\n\n"
                          f"**Ce qui change à cette heure :**\n"
                          f"🎴 Taux **Épique et plus ×{NUIT_BONUS_ROLL}** sur tes tirages\n"
@@ -23764,19 +25420,19 @@ async def nuit_cmd(ctx):
                          f"💭 Le bot pose des questions plus personnelles\n"
                          f"🤫 `.confession` disponible uniquement la nuit\n\n"
                          f"⏳ Il reste **{reste // 60}h{reste % 60:02d}** avant le lever du jour."),
-            color=0x2c2f4a)
-        embed.set_footer(text="Les noctambules du QG se reconnaissent sans se parler.")
+            color=season_tint(0x2c2f4a))
+        embed.set_footer(text=season_pied("Les noctambules du QG se reconnaissent sans se parler."))
     else:
         h = datetime.datetime.now().hour
         dans = (24 - h) if h >= NUIT_FIN else (NUIT_DEBUT - h)
         embed = discord.Embed(
-            title="☀️  Mode Nuit — inactif",
+            title=season_titre("☀️  Mode Nuit — inactif"),
             description=(f"Le QG est bien réveillé.\n\n"
                          f"Le **Mode Nuit** s'active chaque jour de **minuit à 6 h** :\n"
                          f"taux de tirage augmentés, ambiance sombre, questions plus intimes, "
                          f"et le confessionnal qui s'ouvre.\n\n"
                          f"🌙 Prochaine ouverture dans environ **{dans} h**."),
-            color=0xf1c40f)
+            color=season_tint(0xf1c40f))
     await ctx.send(embed=embed)
 
 @bot.command(name="confession", aliases=["confesser"])
@@ -23785,7 +25441,7 @@ async def confession_cmd(ctx, *, texte: str = None):
     if not est_nuit():
         return await ctx.send(embed=discord.Embed(
             description="🌙 Le confessionnal n'ouvre qu'entre **minuit et 6 h**. Reviens plus tard.",
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
     if not texte:
         return await ctx.send("❌ `.confession <ton message>` — il sera posté anonymement.")
     if len(texte) > 500:
@@ -23795,10 +25451,10 @@ async def confession_cmd(ctx, *, texte: str = None):
     except Exception:
         pass
     embed = discord.Embed(
-        title="🕯️  Confession de la nuit",
+        title=season_titre("🕯️  Confession de la nuit"),
         description=texte,
-        color=0x2c2f4a)
-    embed.set_footer(text="Quelqu'un du QG, à une heure où on dit les vraies choses.")
+        color=season_tint(0x2c2f4a))
+    embed.set_footer(text=season_pied("Quelqu'un du QG, à une heure où on dit les vraies choses."))
     msg = await ctx.send(embed=embed)
     for e in ("❤️", "🫂", "🌙"):
         try: await msg.add_reaction(e)
@@ -23939,7 +25595,7 @@ def profil_apercu(membre, essai=None):
     uid = str(membre.id)
     nom, coul, _sep = profil_theme(uid)
     e = discord.Embed(
-        title=f"👁️  Aperçu — {membre.display_name}",
+        title=season_titre(f"👁️  Aperçu — {season_brut(membre.display_name)}"),
         description=("*Ceci est une simulation. Rien n'a été modifié.*"
                      + (f"\n\nThème : **{nom}**" if nom else "")),
         color=coul or 0x95a5a6)
@@ -23947,7 +25603,7 @@ def profil_apercu(membre, essai=None):
         e.add_field(name="🧪 Article testé",
                     value=" · ".join(f"`{k}`" for k in essai), inline=False)
     e.set_thumbnail(url=membre.display_avatar.url)
-    e.set_footer(text="Aucune donnée enregistrée")
+    e.set_footer(text=season_pied("Aucune donnée enregistrée"))
     return e
 
 
@@ -24051,9 +25707,9 @@ async def donner_pin(uid, pin_id, channel=None):
     if channel:
         try:
             await channel.send(embed=discord.Embed(
-                title=f"🎖️  Nouveau pin débloqué !",
+                title=season_titre(f"🎖️  Nouveau pin débloqué !"),
                 description=f"# {emo}\n### {nom}\n*{desc}*\n\nIl apparaît maintenant sur ton `.profil`.",
-                color=0xf1c40f))
+                color=season_tint(0xf1c40f)))
         except Exception:
             pass
     gazette_fait("divers", f"<@{uid}> a débloqué le pin {emo} **{nom}**.", 2)
@@ -24138,10 +25794,10 @@ async def pins_cmd(ctx, membre: discord.Member = None):
         obt = pins_data.get(uid, set())
         eq  = pins_affiches(uid)
         e = discord.Embed(
-            title=f"🎖️ Vitrine de {cible.display_name}",
+            title=season_titre(f"🎖️ Vitrine de {season_brut(cible.display_name)}"),
             description=(f"**{len(obt)}/{len(PINS)} pins** débloqués\n"
                          f"👑 Titre : **{titre_affiche(uid) or '*aucun*'}**"),
-            color=0xf1c40f)
+            color=season_tint(0xf1c40f))
         e.add_field(
             name=f"📌 Équipés ({len(eq)}/{PINS_MAX_EQUIPES})",
             value="  ".join(f"{PINS[p][0]} **{PINS[p][1]}**" for p in eq) or "*Aucun — clique ci-dessous.*",
@@ -24164,10 +25820,10 @@ async def pins_cmd(ctx, membre: discord.Member = None):
         vis = [k for k, v in TITRES.items() if not v[4] or k in obt]
         caches = sum(1 for k, v in TITRES.items() if v[4] and k not in obt)
         e = discord.Embed(
-            title=f"👑 Titres de {cible.display_name}",
+            title=season_titre(f"👑 Titres de {season_brut(cible.display_name)}"),
             description=(f"**{len(obt)}/{len(TITRES)}** débloqués\n"
                          f"Actuel : **{titre_affiche(uid) or '*aucun*'}**"),
-            color=0x9b59b6)
+            color=season_tint(0x9b59b6))
         for rar, lib in (("commun", "🟢 Courants"), ("rare", "🟣 Rares"), ("secret", "🕵️ Secrets")):
             lignes = [f"{'✅' if k in obt else '🔒'} {TITRES[k][0]} **{TITRES[k][1]}** — "
                       f"*{TITRES[k][2]}*"
@@ -24267,12 +25923,12 @@ async def vitrine_cmd(ctx, *, cartes: str = None):
         else:
             det = "*Vide pour l'instant.*"
         return await ctx.send(embed=discord.Embed(
-            title="🌟 Ta vitrine",
+            title=season_titre("🌟 Ta vitrine"),
             description=(f"{det}\n\n"
                          f"Expose **3 cartes** de ta collection sur ton profil.\n"
                          f"`.vitrine Gojo, Nezuko, Luffy`\n"
                          f"`.vitrine vider` pour tout retirer."),
-            color=0x9b59b6))
+            color=season_tint(0x9b59b6)))
     if normalize_str(cartes) in ("vider", "retirer", "clear"):
         profil_custom[uid].pop("vitrine", None)
         save_all_data()
@@ -24290,11 +25946,11 @@ async def vitrine_cmd(ctx, *, cartes: str = None):
     profil_custom[uid]["vitrine"] = choisies
     save_all_data()
     det = "\n".join(f"{RARETE_EMOJI.get(ANIME_CARDS_DB[k]['rarete'],'')} **{ANIME_CARDS_DB[k]['nom']}**{badge_legacy(k)}" for k in choisies)
-    e = discord.Embed(title="🌟 Vitrine mise à jour", description=det, color=0x9b59b6)
+    e = discord.Embed(title=season_titre("🌟 Vitrine mise à jour"), description=det, color=season_tint(0x9b59b6))
     if ANIME_CARDS_DB[choisies[0]].get("image"):
         e.set_thumbnail(url=ANIME_CARDS_DB[choisies[0]]["image"])
     if erreurs:
-        e.set_footer(text=f"Non trouvées dans ta collection : {', '.join(erreurs)}")
+        e.set_footer(text=season_pied(f"Non trouvées dans ta collection : {', '.join(erreurs)}"))
     await ctx.send(embed=e)
 
 @bot.command(name="mood", aliases=["humeur", "statut"])
@@ -24308,14 +25964,14 @@ async def mood_cmd(ctx, *, texte: str = None):
                          if actuel else
                          "🎵 Aucune humeur définie.\n\n`.mood écoute Track 09 en boucle`\n"
                          "*Elle s'affiche sur ton profil — gratuit, à changer quand tu veux.*"),
-            color=0x9b59b6))
+            color=season_tint(0x9b59b6)))
     if normalize_str(texte) in ("vider", "retirer", "clear"):
         profil_custom[uid].pop("mood", None)
         save_all_data()
         return await ctx.send("🎵 Humeur retirée.")
     profil_custom[uid]["mood"] = texte[:80]
     save_all_data()
-    await ctx.send(embed=discord.Embed(description=f"🎵 Humeur définie :\n*« {texte[:80]} »*", color=0x9b59b6))
+    await ctx.send(embed=discord.Embed(description=f"🎵 Humeur définie :\n*« {texte[:80]} »*", color=season_tint(0x9b59b6)))
 
 @bot.command(name="setcadre", aliases=["cadre", "setframe"])
 async def setcadre_cmd(ctx, *, cle: str = None):
@@ -24325,11 +25981,11 @@ async def setcadre_cmd(ctx, *, cle: str = None):
     if migres:
         save_all_data()
     e = discord.Embed(
-        title="🎨  Les cadres sont devenus des thèmes",
+        title=season_titre("🎨  Les cadres sont devenus des thèmes"),
         description=("Cadre et Thème faisaient presque la même chose. "
                      "Il n'y a plus qu'un seul réglage.\n\n"
                      "Un **thème** donne à ton profil sa couleur *et* ses séparateurs."),
-        color=0x9b59b6)
+        color=season_tint(0x9b59b6))
     if migres:
         e.add_field(name="🔄 Ton ancien cadre a été conservé",
                     value="\n".join(f"• {m}" for m in migres), inline=False)
@@ -24352,7 +26008,7 @@ async def settitre_cmd(ctx, *, texte: str = None):
     profil_custom[uid]["titre"] = texte[:40]
     save_all_data()
     await ctx.send(embed=discord.Embed(
-        description=f"📜 Titre défini :\n### ⟨ {texte[:40]} ⟩", color=0xff6fd8))
+        description=f"📜 Titre défini :\n### ⟨ {texte[:40]} ⟩", color=season_tint(0xff6fd8)))
 
 @bot.command(name="setemoji", aliases=["setsignature"])
 async def setemoji_cmd(ctx, emo: str = None):
@@ -24367,7 +26023,7 @@ async def setemoji_cmd(ctx, emo: str = None):
     profil_custom[uid]["emoji"] = emo
     save_all_data()
     await ctx.send(embed=discord.Embed(
-        description=f"✨ Emoji signature défini : {emo}\nIl apparaîtra à côté de ton nom.", color=0xff6fd8))
+        description=f"✨ Emoji signature défini : {emo}\nIl apparaîtra à côté de ton nom.", color=season_tint(0xff6fd8)))
 
 @bot.command(name="settheme", aliases=["setambiance"])
 async def settheme_cmd(ctx, nom: str = None):
@@ -24378,16 +26034,16 @@ async def settheme_cmd(ctx, nom: str = None):
     if not nom or nom.lower() not in PROFIL_THEMES:
         apercu = "\n".join(f"`{k}` — {v[0]}" for k, v in PROFIL_THEMES.items())
         return await ctx.send(embed=discord.Embed(
-            title="🌈 Thèmes de profil",
+            title=season_titre("🌈 Thèmes de profil"),
             description=(f"Un thème applique **couleur + cadre + séparateurs** d'un coup.\n\n{apercu}\n\n"
                          f"*Ex : `.settheme nuit`*"),
-            color=0xff6fd8))
+            color=season_tint(0xff6fd8)))
     label, couleur, cadre = PROFIL_THEMES[nom.lower()]
     profil_custom[uid].update({"couleur": couleur, "cadre": cadre, "theme": nom.lower()})
     save_all_data()
     _, _, sep = PROFIL_CADRES[cadre]
     await ctx.send(embed=discord.Embed(
-        title=f"🌈 Thème {label}",
+        title=season_titre(f"🌈 Thème {season_brut(label)}"),
         description=f"{sep}\nTon profil adopte cette ambiance.\n{sep}", color=couleur))
 
 @bot.command(name="macustom", aliases=["personnalisation", "customisation",
@@ -24403,7 +26059,7 @@ async def macustom_cmd(ctx):
         c = profil_custom.get(uid, {})
         t_nom, t_coul, _s = profil_theme(uid)
         e = discord.Embed(
-            title="⚙️  PERSONNALISATION",
+            title=season_titre("⚙️  PERSONNALISATION"),
             description="*Ce que tu possèdes, ce que tu portes, ce que tu montres.*",
             color=t_coul or 0x9b59b6)
         e.add_field(
@@ -24423,13 +26079,13 @@ async def macustom_cmd(ctx):
             e.add_field(name="🔄 Migration effectuée",
                         value="\n".join(f"• {m}" for m in migres)
                               + "\n*Rien n'a été perdu.*", inline=False)
-        e.set_footer(text="Les blocs masqués gardent leur contenu — tu peux les "
-                          "réafficher quand tu veux")
+        e.set_footer(text=season_pied("Les blocs masqués gardent leur contenu — tu peux les "
+                          "réafficher quand tu veux"))
         return e
 
     def emb_visibilite():
         e = discord.Embed(
-            title="👁️  AFFICHER / MASQUER",
+            title=season_titre("👁️  AFFICHER / MASQUER"),
             description=("Choisis ce qui apparaît sur ton `.profil`.\n\n"
                          "**Masquer ne supprime rien** : ta vitrine, ta citation et "
                          "ta bannière restent enregistrées et reviennent dès que tu "
@@ -24441,7 +26097,7 @@ async def macustom_cmd(ctx):
             lignes.append(f"{'✅' if on else '🙈'} {emo} **{nom}** — "
                           f"{'affiché' if on else 'masqué'}")
         e.add_field(name="État actuel", value="\n".join(lignes), inline=False)
-        e.set_footer(text="Le pseudo, l'avatar, le niveau et l'XP restent toujours visibles")
+        e.set_footer(text=season_pied("Le pseudo, l'avatar, le niveau et l'XP restent toujours visibles"))
         return e
 
     # Ce qu'un membre peut réellement équiper, et comment on le retire.
@@ -24464,7 +26120,7 @@ async def macustom_cmd(ctx):
     def emb_cosmetiques():
         c = profil_custom.get(uid, {})
         e = discord.Embed(
-            title="🎒  MES PERSONNALISATIONS",
+            title=season_titre("🎒  MES PERSONNALISATIONS"),
             description="*Ce que tu possèdes, et ce que tu portes.*",
             color=season_color("info"))
         lignes = []
@@ -24478,14 +26134,14 @@ async def macustom_cmd(ctx):
                    else f"*non possédé — `.shop`*"
             lignes.append(f"{'✅' if a else '🔒'} {emo} **{nom}** — {etat}")
         e.add_field(name="État", value="\n".join(lignes), inline=False)
-        e.set_footer(text="Retirer un élément ne fait pas perdre l'achat")
+        e.set_footer(text=season_pied("Retirer un élément ne fait pas perdre l'achat"))
         return e
 
     def emb_themes():
         c = profil_custom.get(uid, {})
         debloque = bool(c.get("theme_debloque") or c.get("cadre_debloque"))
         e = discord.Embed(
-            title="🎨  THÈMES",
+            title=season_titre("🎨  THÈMES"),
             description=("Un thème donne à ton profil sa **couleur** et ses "
                          "**séparateurs**.\n\n"
                          + ("*Tu as accès aux thèmes.*" if debloque
@@ -24627,7 +26283,7 @@ async def setbadge_cmd(ctx, *, texte: str = None):
         return await ctx.send("❌ `.setbadge <texte>` — 24 caractères max.")
     profil_custom[uid]["badge"] = texte[:24]
     save_all_data()
-    await ctx.send(embed=discord.Embed(description=f"📛 Badge défini : **{texte[:24]}**", color=0xff6fd8))
+    await ctx.send(embed=discord.Embed(description=f"📛 Badge défini : **{texte[:24]}**", color=season_tint(0xff6fd8)))
 
 @bot.command(name="setcouleur", aliases=["setcolor"])
 async def setcouleur_cmd(ctx, couleur: str = None):
@@ -24658,7 +26314,7 @@ async def setcitation_cmd(ctx, *, texte: str = None):
         return await ctx.send("❌ `.setcitation <texte>` — 100 caractères max.")
     profil_custom[uid]["citation"] = texte[:100]
     save_all_data()
-    await ctx.send(embed=discord.Embed(description=f"💬 Citation définie :\n*« {texte[:100]} »*", color=0xff6fd8))
+    await ctx.send(embed=discord.Embed(description=f"💬 Citation définie :\n*« {texte[:100]} »*", color=season_tint(0xff6fd8)))
 
 @bot.command(name="setbanniere", aliases=["setbanner"])
 async def setbanniere_cmd(ctx, url: str = None):
@@ -24670,7 +26326,7 @@ async def setbanniere_cmd(ctx, url: str = None):
         return await ctx.send("❌ `.setbanniere <url>` — un lien d'image valide (imgur recommandé).")
     profil_custom[uid]["banniere"] = url
     save_all_data()
-    await ctx.send(embed=discord.Embed(description="🏳️ Bannière définie !", color=0xff6fd8).set_image(url=url))
+    await ctx.send(embed=discord.Embed(description="🏳️ Bannière définie !", color=season_tint(0xff6fd8)).set_image(url=url))
 
 @bot.command(name="lettre", aliases=["anonyme"])
 async def lettre_cmd(ctx, salon: discord.TextChannel = None, *, message: str = None):
@@ -24685,9 +26341,9 @@ async def lettre_cmd(ctx, salon: discord.TextChannel = None, *, message: str = N
     inventaire[uid]["lettre"] -= 1
     try:
         await salon.send(embed=discord.Embed(
-            title="💌 Lettre anonyme",
+            title=season_titre("💌 Lettre anonyme"),
             description=message,
-            color=0xff6fd8).set_footer(text="Quelqu'un du QG a voulu dire ça sans se montrer."))
+            color=season_tint(0xff6fd8)).set_footer(text=season_pied("Quelqu'un du QG a voulu dire ça sans se montrer.")))
     except discord.Forbidden:
         inventaire[uid]["lettre"] += 1
         return await ctx.send("❌ Je ne peux pas écrire dans ce salon.")
@@ -25155,7 +26811,7 @@ async def petparler_cmd(ctx, *, message: str = None):
         title=f"💬 {pet_nom_decore(uid, pdb)}",
         description=(f"> {message}\n\n" if message else "")
                     + f"**{nom_pet}** {replique}",
-        color=0xe91e63)
+        color=season_tint(0xe91e63))
     if appris:
         cle_m, niv, nouveau = appris
         variantes, emo_m, action = MOTS_APPRIS[cle_m]
@@ -25183,9 +26839,9 @@ async def petparler_cmd(ctx, *, message: str = None):
                                f"❤️ Humeur **{signe}{conf_i['humeur']}**"
                                + (f"  ·  💞 Confiance **+{conf_i['confiance']}**" if conf_i['confiance'] else "")
                                + f"\n*Tu lui as dit ça **{n_fois} fois**.*"), inline=False)
-    embed.set_footer(text=f"{pet_humeur_texte(st)} · "
+    embed.set_footer(text=season_pied(f"{pet_humeur_texte(st)} · "
                           f"{nb_mots}/{len(MOTS_APPRIS)} expressions comprises · "
-                          f"{len(INTENTIONS)} intentions reconnues")
+                          f"{len(INTENTIONS)} intentions reconnues"))
     await ctx.send(embed=embed)
 
 @bot.command(name="petgouts", aliases=["gouts", "petpreferences"])
@@ -25205,9 +26861,9 @@ async def petgouts_cmd(ctx, membre: discord.Member = None):
     cle_r, emo_r, nom_r = routine_actuelle()
 
     embed = discord.Embed(
-        title=f"❤️ Les goûts de {pet_nom_decore(uid, pdb)}",
+        title=season_titre(f"❤️ Les goûts de {season_brut(pet_nom_decore(uid, pdb))}"),
         description="*Chaque compagnon développe ses propres préférences.*",
-        color=0xe91e63)
+        color=season_tint(0xe91e63))
     embed.add_field(name="🍖 Nourriture préférée", value=prefs.get("nourriture", "?"), inline=True)
     embed.add_field(name="🛏️ Endroit préféré", value=prefs.get("endroit", "?"), inline=True)
     embed.add_field(name="🎨 Couleur préférée", value=prefs.get("couleur", "?"), inline=True)
@@ -25216,7 +26872,7 @@ async def petgouts_cmd(ctx, membre: discord.Member = None):
     embed.add_field(name=f"{emo_r} En ce moment ({nom_r})", value=f"*Il {activite}.*", inline=False)
     traits = pst.get("traits", [])
     if traits:
-        embed.set_footer(text="Caractère : " + " · ".join(PET_TRAITS[t][1] for t in traits if t in PET_TRAITS))
+        embed.set_footer(text=season_pied("Caractère : " + " · ".join(PET_TRAITS[t][1] for t in traits if t in PET_TRAITS)))
     await ctx.send(embed=embed)
 
 
@@ -25325,12 +26981,12 @@ async def tenter_betise(ctx, uid):
     _reac = _remplir(uid, _sans_repet(uid, "betise_reac",
                      _pool_contextuel(uid, BETISE_REACTIONS["defaut"], BETISE_REACTIONS)))
     await ctx.send(embed=discord.Embed(
-        title=f"{emo} Une bêtise !",
+        title=season_titre(f"{season_brut(emo)} Une bêtise !"),
         description=(f"**{nom_pet}** {action}.\n*{detail}*\n\n{_reac}\n\n"
                      + (f"💸 **−{degats:,} pièces** de dégâts\n" if degats else "")
                      + f"❤️ Lui, il est **ravi** (+8 humeur)\n"
                      + f"🧹 Le refuge se salit un peu…{RAR_LABEL[rar]}"),
-        color=0xe67e22))
+        color=season_tint(0xe67e22)))
     return True
 
 
@@ -25380,11 +27036,11 @@ async def petcompetences_cmd(ctx, membre: discord.Member = None):
         lignes.append(f"{emo} **{nom}** `{f}` **{n}**/10\n└ *{desc}*")
     total = sum(niveau_competence(uid, k) for k in PET_COMPETENCES)
     embed = discord.Embed(
-        title=f"🎓 Compétences de {pet_nom_decore(uid, pdb)}",
+        title=season_titre(f"🎓 Compétences de {season_brut(pet_nom_decore(uid, pdb))}"),
         description=("*Elles montent toutes seules selon ce que tu fais avec lui.*\n\n"
                      + "\n".join(lignes)),
-        color=0xe91e63)
-    embed.set_footer(text=f"Total : {total}/100 · Son caractère lui donne des facilités naturelles")
+        color=season_tint(0xe91e63))
+    embed.set_footer(text=season_pied(f"Total : {total}/100 · Son caractère lui donne des facilités naturelles"))
     await ctx.send(embed=embed)
 
 
@@ -25499,13 +27155,13 @@ async def verifier_traits_histoire(uid, channel=None):
         if channel:
             try:
                 await channel.send(embed=discord.Embed(
-                    title="🌱 Quelque chose a changé en lui…",
+                    title=season_titre("🌱 Quelque chose a changé en lui…"),
                     description=(f"# {emo} {nom_t}\n"
                                  f"*« {phrase} »*\n\n"
                                  f"**{nom_pet}** n'est plus tout à fait le même compagnon "
                                  f"qu'au premier jour.\n\n"
                                  f"📖 *Enregistré dans son carnet.*"),
-                    color=0xf1c40f))
+                    color=season_tint(0xf1c40f)))
             except Exception:
                 pass
         gazette_fait("divers", f"Le compagnon de <@{uid}> a développé le trait {emo} **{nom_t}** !", 3)
@@ -25534,12 +27190,12 @@ async def verifier_traits_acquis(uid, channel=None):
         if channel:
             try:
                 await channel.send(embed=discord.Embed(
-                    title="🌱 Son caractère évolue !",
+                    title=season_titre("🌱 Son caractère évolue !"),
                     description=(f"# {emo} {nom_t}\n"
                                  f"{phrase}\n\n*{desc}*\n\n"
                                  f"**{nom_pet}** a maintenant **{len(st['traits'])} trait(s)** "
                                  f"de caractère."),
-                    color=0x2ecc71))
+                    color=season_tint(0x2ecc71)))
             except Exception:
                 pass
         return trait
@@ -25564,8 +27220,8 @@ async def petbebe_cmd(ctx, ami: discord.Member = None):
 
     # ── Voir sa famille ──
     if not ami:
-        e = discord.Embed(title=f"👨‍👩‍👧 La famille de {pet_nom_decore(uid, pdb)}",
-                          color=0xe91e63)
+        e = discord.Embed(title=season_titre(f"👨‍👩‍👧 La famille de {season_brut(pet_nom_decore(uid, pdb))}"),
+                          color=season_tint(0xe91e63))
         parents = pst.get("parents")
         if parents:
             e.add_field(name="🐣 Ses parents",
@@ -25598,7 +27254,7 @@ async def petbebe_cmd(ctx, ami: discord.Member = None):
             e.description = ("*Pas encore de famille.*\n\n"
                              "Deux compagnons **👑 Duo légendaire** *(35 rencontres)* "
                              "peuvent avoir un petit qui hérite de leurs deux caractères.")
-        e.set_footer(text="`.petvisite @ami` pour renforcer une relation")
+        e.set_footer(text=season_pied("`.petvisite @ami` pour renforcer une relation"))
         return await ctx.send(embed=e)
 
     # ── Créer un petit ──
@@ -25613,7 +27269,7 @@ async def petbebe_cmd(ctx, ami: discord.Member = None):
         return await ctx.send(embed=discord.Embed(
             description=(f"💖 Leurs compagnons sont à **{pts}/35** rencontres.\n"
                          f"*Il faut atteindre **👑 Duo légendaire** pour avoir un petit.*"),
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
     if pst.get("bebe_avec") == aid:
         return await ctx.send("🍼 Vous avez déjà eu un petit ensemble !")
 
@@ -25670,7 +27326,7 @@ async def petbebe_cmd(ctx, ami: discord.Member = None):
     save_all_data()
 
     embed = discord.Embed(
-        title="🍼  Un petit est né !",
+        title=season_titre("🍼  Un petit est né !"),
         description=(f"# {pdb_bebe['emoji']}\n"
                      f"**{pdb['emoji']} {nom_a}**  ×  **{a_pdb['emoji']} {nom_b}**\n\n"
                      f"Un petit **{pdb_bebe['nom']}** rejoint la famille de {ctx.author.mention} !\n\n"
@@ -25678,9 +27334,9 @@ async def petbebe_cmd(ctx, ami: discord.Member = None):
                      + " · ".join(f"{PET_TRAITS[t][0]} {PET_TRAITS[t][1]}" for t in traits_b) + "\n"
                      f"✨ Il a une **particularité cachée** — à toi de la découvrir.\n\n"
                      f"💰 **−{COUT:,} pièces**"),
-        color=0xf1c40f)
-    embed.set_footer(text=f"`.petnom <nom>` après l'avoir équipé avec `.pet equiper` · "
-                          f"`.petbebe` pour voir la famille")
+        color=season_tint(0xf1c40f))
+    embed.set_footer(text=season_pied(f"`.petnom <nom>` après l'avoir équipé avec `.pet equiper` · "
+                          f"`.petbebe` pour voir la famille"))
     await ctx.send(f"{ami.mention}", embed=embed)
     gazette_fait("divers", f"Les compagnons de **{ctx.author.display_name}** et "
                            f"**{ami.display_name}** ont eu un petit ! 🍼", 5)
@@ -25693,8 +27349,8 @@ def _pages_petshop(uid, guild=None):
 
     # ── 🐾 Compagnons ──
     possedes = set(pets_data.get(uid, {}).get("owned", {}))
-    e = discord.Embed(title="🐾  Compagnons",
-        description=f"*Adopte un nouveau compagnon.*\n💰 **{solde:,} pièces**", color=0xe91e63)
+    e = discord.Embed(title=season_titre("🐾  Compagnons"),
+        description=f"*Adopte un nouveau compagnon.*\n💰 **{solde:,} pièces**", color=season_tint(0xe91e63))
     for rar in ["Commun", "Rare", "Épique", "Légendaire", "Mythique"]:
         lot = [(k, v) for k, v in PETS_DB.items()
                if v["rarete"] == rar and not k.startswith("bebe_")]
@@ -25703,7 +27359,7 @@ def _pages_petshop(uid, guild=None):
         e.add_field(name=f"{rar} — {PETS_PRIX[rar]:,} p",
                     value="  ·  ".join(f"{v['emoji']} **{v['nom']}**" + (" ✅" if k in possedes else "")
                                        for k, v in lot)[:1024], inline=False)
-    e.set_footer(text="`.acheter <nom du compagnon>` pour adopter")
+    e.set_footer(text=season_pied("`.acheter <nom du compagnon>` pour adopter"))
     pages.append(("🐾", "Compagnons", e))
 
     # ── 🍖 Nourriture, une page par catégorie ──
@@ -25714,8 +27370,8 @@ def _pages_petshop(uid, guild=None):
         lot = [(n, v) for n, v in PET_NOURRITURE.items() if v[1] == cat and nourriture_dispo(n)]
         if not lot:
             continue
-        e = discord.Embed(title=f"{c_emo}  Nourriture — {c_nom}",
-            description=f"*{c_desc}*\n💰 **{solde:,} pièces**", color=0xe67e22)
+        e = discord.Embed(title=season_titre(f"{season_brut(c_emo)}  Nourriture — {season_brut(c_nom)}"),
+            description=f"*{c_desc}*\n💰 **{solde:,} pièces**", color=season_tint(0xe67e22))
         lignes = []
         for n, v in sorted(lot, key=lambda x: x[1][3]):
             g = SYM.get(gouts.get(n), "")
@@ -25724,7 +27380,7 @@ def _pages_petshop(uid, guild=None):
         for i in range(0, len(lignes), 8):
             e.add_field(name="\u200b" if i else "🛒 Au menu",
                         value="\n".join(lignes[i:i+8]), inline=False)
-        e.set_footer(text="`.petacheter <aliment> [quantité]` · `.petmanger <aliment>` pour lui donner")
+        e.set_footer(text=season_pied("`.petacheter <aliment> [quantité]` · `.petmanger <aliment>` pour lui donner"))
         pages.append((c_emo, f"Nourriture · {c_nom}", e))
 
     # ── 🧸 Jouets ──
@@ -25732,15 +27388,15 @@ def _pages_petshop(uid, guild=None):
     TYPES = {"lance": "🎾 À lancer", "roule": "⚽ À faire rouler", "chasse": "🪶 À chasser",
              "calin": "🧸 Doudous", "tire": "🪢 Tir à la corde", "reflechit": "🧩 Réflexion",
              "bruit": "🎹 Bruyants", "cachette": "📦 Cachettes", "creatif": "🎨 Créatifs"}
-    e = discord.Embed(title="🧸  Jouets",
+    e = discord.Embed(title=season_titre("🧸  Jouets"),
         description=(f"*{len(coffre)}/{len(PET_JOUETS)} possédés · chaque jouet a ses propres réactions.*\n"
-                     f"💰 **{solde:,} pièces**"), color=0x9b59b6)
+                     f"💰 **{solde:,} pièces**"), color=season_tint(0x9b59b6))
     for typ, lab in TYPES.items():
         lot = [(k, v) for k, v in PET_JOUETS.items() if v[2] == typ]
         e.add_field(name=lab, value="  ·  ".join(
             f"{v[0]} **{k}**" + (" ✅" if k in coffre else f" `{v[1]:,}p`") for k, v in lot)[:1024],
             inline=False)
-    e.set_footer(text="`.petjouets acheter <jouet>` · `.petjouets jouer <jouet>`")
+    e.set_footer(text=season_pied("`.petjouets acheter <jouet>` · `.petjouets jouer <jouet>`"))
     pages.append(("🧸", "Jouets", e))
 
     # ── 🪑 Meubles, une page par pièce ──
@@ -25754,9 +27410,9 @@ def _pages_petshop(uid, guild=None):
             v = PET_MEUBLES[m]
             etat = "✅" if m in ref else f"`{v[2]:,}p`"
             lignes_p.append(f"　{v[0]} **{v[1]}** — {etat} · {EFF[v[3]]}+{v[4]}")
-    e = discord.Embed(title="🪑  Meubles du refuge",
+    e = discord.Embed(title=season_titre("🪑  Meubles du refuge"),
         description=f"*{len(ref)}/{len(PET_MEUBLES)} installés.*\n💰 **{solde:,} pièces**",
-        color=0x1abc9c)
+        color=season_tint(0x1abc9c))
     bloc, taille = [], 0
     for l in lignes_p:
         if taille + len(l) > 950:
@@ -25765,26 +27421,26 @@ def _pages_petshop(uid, guild=None):
         bloc.append(l); taille += len(l) + 1
     if bloc:
         e.add_field(name="\u200b", value="\n".join(bloc), inline=False)
-    e.set_footer(text="`.refuge acheter <meuble>` · `.refuge` pour visiter la maison")
+    e.set_footer(text=season_pied("`.refuge acheter <meuble>` · `.refuge` pour visiter la maison"))
     pages.append(("🪑", "Meubles", e))
 
     # ── 👗 Accessoires ──
     porte = set(pst.get("garderobe", [])) if pst else set()
     LAB = {"humeur": "❤️", "coins": "💰", "xp": "⭐", "roll": "🎰"}
-    e = discord.Embed(title="👗  Accessoires",
+    e = discord.Embed(title=season_titre("👗  Accessoires"),
         description=("*Visibles à côté de son nom partout. Trois portés maximum.*\n"
-                     f"💰 **{solde:,} pièces**"), color=0xff6fd8)
+                     f"💰 **{solde:,} pièces**"), color=season_tint(0xff6fd8))
     lignes = [f"{v[0]} **{k}** — " + ("✅ possédé" if k in porte else f"{v[2]:,} p")
               + f" · {LAB[v[3]]}+{v[4]} %" for k, v in PET_ACCESSOIRES.items()]
     for i in range(0, len(lignes), 6):
         e.add_field(name="\u200b" if i else "🛍️ Garde-robe",
                     value="\n".join(lignes[i:i+6]), inline=False)
-    e.set_footer(text="`.garderobe acheter <objet>` · `.garderobe porter <objet>`")
+    e.set_footer(text=season_pied("`.garderobe acheter <objet>` · `.garderobe porter <objet>`"))
     pages.append(("👗", "Accessoires", e))
 
     # ── 🎁 Cadeaux ──
-    e = discord.Embed(title="🎁  Cadeaux",
-        description=f"*À offrir au compagnon d'un ami.*\n💰 **{solde:,} pièces**", color=0xf1c40f)
+    e = discord.Embed(title=season_titre("🎁  Cadeaux"),
+        description=f"*À offrir au compagnon d'un ami.*\n💰 **{solde:,} pièces**", color=season_tint(0xf1c40f))
     e.add_field(name="🎁 À offrir", value=(
         "🍖 **Friandise** — 400 p · ❤️ humeur +20\n"
         "🧸 **Jouet** — 700 p · ⭐ +60 XP\n"
@@ -25792,7 +27448,7 @@ def _pages_petshop(uid, guild=None):
         "🎂 **Gâteau** — 1 200 p · ❤️ humeur +35\n"
         "📿 **Collier** — 1 500 p · 💖 relation +2\n\n"
         "*Tu peux aussi offrir n'importe quel accessoire de la garde-robe.*"), inline=False)
-    e.set_footer(text="`.petcadeau @ami <objet>` pour offrir")
+    e.set_footer(text=season_pied("`.petcadeau @ami <objet>` pour offrir"))
     pages.append(("🎁", "Cadeaux", e))
     return pages
 
@@ -25817,7 +27473,7 @@ class PetShopView(ui.View):
         e = self.pages[self.i][2]
         base = e.footer.text or ""
         base = base.split("  ·  Page")[0]
-        e.set_footer(text=f"{base}  ·  Page {self.i+1}/{len(self.pages)}")
+        e.set_footer(text=season_pied(f"{base}  ·  Page {self.i+1}/{len(self.pages)}"))
         return e
 
     async def maj(self, interaction):
@@ -25864,8 +27520,8 @@ async def petinventaire_cmd(ctx):
     par = inventaire_par_cat(uid)
 
     e = discord.Embed(
-        title=f"🎒 Ton inventaire" + (f" — {pst.get('surnom') or pdb['nom']}" if pid else ""),
-        color=0xf1c40f)
+        title=season_titre(f"🎒 Ton inventaire") + (f" — {pst.get('surnom') or pdb['nom']}" if pid else ""),
+        color=season_tint(0xf1c40f))
     total = 0
     for cat, (c_emo, c_nom, cmd) in CAT_INVENTAIRE.items():
         lot = par.get(cat, [])
@@ -25889,9 +27545,9 @@ async def petinventaire_cmd(ctx):
     else:
         e.description = f"**{total}** objet(s) au total"
     if rattrapes:
-        e.set_footer(text=f"🔧 {rattrapes} objet(s) manquant(s) ont été récupérés automatiquement")
+        e.set_footer(text=season_pied(f"🔧 {rattrapes} objet(s) manquant(s) ont été récupérés automatiquement"))
     else:
-        e.set_footer(text="`.petreparer` si un objet acheté n'apparaît pas")
+        e.set_footer(text=season_pied("`.petreparer` si un objet acheté n'apparaît pas"))
     await ctx.send(embed=e)
 
 @bot.command(name="petreparer", aliases=["reparerinventaire", "fixpet"])
@@ -25910,7 +27566,7 @@ async def petreparer_cmd(ctx):
         if oid not in reg:
             orphelins.append(oid)
     save_all_data()
-    e = discord.Embed(title="🔧 Vérification de l'inventaire", color=0x2ecc71 if n else 0x95a5a6)
+    e = discord.Embed(title=season_titre("🔧 Vérification de l'inventaire"), color=season_tint(0x2ecc71 if n else 0x95a5a6))
     if n:
         e.description = (f"✅ **{n} objet(s)** récupéré(s) et remis dans ton inventaire.\n\n"
                          f"*Tape `.petinventaire` pour les voir.*")
@@ -25977,11 +27633,11 @@ async def petentrainer_cmd(ctx, exercice: str = None):
     if cle not in EX:
         v = pst.get("vecu", {})
         return await ctx.send(embed=discord.Embed(
-            title=f"🎯 Entraîner {pst.get('surnom') or pdb['nom']}",
+            title=season_titre(f"🎯 Entraîner {season_brut(pst.get('surnom') or pdb['nom'])}"),
             description=("\n".join(f"{e} **{n}** — `{k}`\n└ *{d}*" for k, (e, n, d) in EX.items())
                          + f"\n\n*Réussi **{v.get('entrainements_ok',0)}** fois "
                            f"sur **{v.get('entrainements',0)}** sessions.*"),
-            color=0x3498db).set_footer(text="Une session par heure · les réussites font monter ses compétences"))
+            color=season_tint(0x3498db)).set_footer(text=season_pied("Une session par heure · les réussites font monter ses compétences")))
 
     reste = 3600 - (_t.time() - st["dernier"].get("entrainement", 0))
     if reste > 0:
@@ -26000,7 +27656,7 @@ async def petentrainer_cmd(ctx, exercice: str = None):
                          "📦 Boîte  ·  🛏️ Panier  ·  🪴 Plante\n\n"
                          "*Aide-le : où crois-tu qu'il va chercher ?*").replace(
                              "{p}", f"**{pet_nom_decore(uid, pdb)}**"),
-            color=0x3498db), view=vue)
+            color=season_tint(0x3498db)), view=vue)
     elif cle == "memoire":
         n = 3 if pst.get("level", 1) < 15 else 4
         seq = [random.randrange(4) for _ in range(n)]
@@ -26008,23 +27664,23 @@ async def petentrainer_cmd(ctx, exercice: str = None):
         msg = await ctx.send(embed=discord.Embed(
             title=f"{emo} {nom}",
             description=f"Mémorise la séquence…\n\n# {aff}\n\n*Elle disparaît dans 4 secondes.*",
-            color=0x3498db))
+            color=season_tint(0x3498db)))
         await asyncio.sleep(4)
         vue = SequenceView(uid, seq)
         try:
             await msg.edit(embed=discord.Embed(
                 title=f"{emo} {nom}",
                 description=f"**Reproduis la séquence !** *({n} couleurs)*",
-                color=0x3498db), view=vue)
+                color=season_tint(0x3498db)), view=vue)
         except Exception:
             await ctx.send(embed=discord.Embed(description="**Reproduis la séquence !**",
-                                               color=0x3498db), view=vue)
+                                               color=season_tint(0x3498db)), view=vue)
     else:
         vue = ReflexeView(uid)
         vue.message = await ctx.send(embed=discord.Embed(
             title=f"{emo} {nom}",
             description="Le bouton va passer au **vert**.\n*Ne clique pas avant !*",
-            color=0xe74c3c), view=vue)
+            color=season_tint(0xe74c3c)), view=vue)
         await asyncio.sleep(random.uniform(3, 9))
         if not vue.fini:
             await vue.ouvrir()
@@ -27026,8 +28682,8 @@ class ChroVoteView(ui.View):
         if rappel:
             desc += f"*{rappel}*\n\n"
         desc += f"### {self.choix['question']}\n{CHRO_SEP}"
-        e = discord.Embed(title="💌  À VOUS D'ÉCRIRE LA SUITE",
-                          description=desc, color=0xff9ec7)
+        e = discord.Embed(title=season_titre("💌  À VOUS D'ÉCRIRE LA SUITE"),
+                          description=desc, color=season_tint(0xff9ec7))
         for i, (cle, emo, lib) in enumerate(self.choix["options"]):
             pour = [u for u, v in votes.items() if v == cle]
             noms = " · ".join(f"<@{u}>" for u in pour[:15]) if pour else "*—*"
@@ -27037,8 +28693,8 @@ class ChroVoteView(ui.View):
             val = (f"*{detail}*\n{noms}" if detail else noms)
             e.add_field(name=f"{chro_puce(i)}  {lib}   —   {len(pour)}",
                         value=val[:1024], inline=False)
-        e.set_footer(text=(f"👥 {len(votes)} lecteur(s) ont voté  ·  "
-                           f"tu peux changer d'avis jusqu'à la fermeture"))
+        e.set_footer(text=(season_pied(f"👥 {len(votes)} lecteur(s) ont voté  ·  "
+                           f"tu peux changer d'avis jusqu'à la fermeture")))
         return e
 
 
@@ -27121,9 +28777,9 @@ async def chro_publier_episode(guild, salon=None):
 
     # ── Teaser ──
     tete = discord.Embed(
-        title=f"🎬  {s['titre']} — Épisode {num}",
+        title=season_titre(f"🎬  {s['titre']} — Épisode {season_brut(num)}"),
         description=f"### {ep['titre']}",
-        color=0x9b59b6)
+        color=season_tint(0x9b59b6))
     prec = ep.get("precedemment")
     if not prec and CHRONIQUE.get("historique"):
         dernier = CHRONIQUE["historique"][-1]
@@ -27145,7 +28801,7 @@ async def chro_publier_episode(guild, salon=None):
         corps = ("\n\n" + CHRO_SEP + "\n\n").join(
             chro_rendu_scene(t, pov=p) for t, p in paquet)
         try:
-            await salon.send(embed=discord.Embed(description=corps[:4090], color=0x9b59b6))
+            await salon.send(embed=discord.Embed(description=corps[:4090], color=season_tint(0x9b59b6)))
         except Exception as e:
             print(f"[Chronique] scène : {type(e).__name__}: {e}")
 
@@ -27171,7 +28827,7 @@ async def chro_publier_episode(guild, salon=None):
         try:
             await salon.send(embed=discord.Embed(
                 description=f"{CHRO_SEP}\n### FIN DE L'ÉPISODE {num}\n*La suite arrive bientôt…*",
-                color=0x2c2f33))
+                color=season_tint(0x2c2f33)))
         except Exception:
             pass
         return True, salon
@@ -27187,7 +28843,7 @@ async def chro_publier_episode(guild, salon=None):
             await salon.send(embed=discord.Embed(
                 description=("⚠️ *La décision n'a pas pu être publiée.*\n"
                              "-# Un admin va la remettre en ligne dans un instant."),
-                color=0xe74c3c))
+                color=season_tint(0xe74c3c)))
         except Exception:
             pass
     return True, salon
@@ -27201,19 +28857,19 @@ async def chro_publier_interlude(salon, inter):
             for qui, txt in inter["lignes"]:
                 lignes.append(f"*{txt}*" if qui == "_système_" else f"**{qui}**\n> {txt}")
             await salon.send(embed=discord.Embed(
-                title=f"📱  MESSAGES — {inter.get('heure', '')}",
-                description="\n\n".join(lignes), color=0x2c2f33))
+                title=season_titre(f"📱  MESSAGES — {season_brut(inter.get('heure', ''))}"),
+                description="\n\n".join(lignes), color=season_tint(0x2c2f33)))
         else:
             e = discord.Embed(
-                title=f"📱  INSTAGRAM — {inter.get('compte', '')}",
-                description=inter["texte"], color=0x2c2f33)
+                title=season_titre(f"📱  INSTAGRAM — {season_brut(inter.get('compte', ''))}"),
+                description=inter["texte"], color=season_tint(0x2c2f33))
             bas = []
             if inter.get("likes"):
                 bas.append(f"❤️ {inter['likes']:,}".replace(",", " "))
             if inter.get("detail"):
                 bas.append(inter["detail"])
             if bas:
-                e.set_footer(text="   ·   ".join(bas))
+                e.set_footer(text=season_pied("   ·   ".join(bas)))
             await salon.send(embed=e)
     except Exception as e:
         print(f"[Chronique] interlude : {type(e).__name__}: {e}")
@@ -27255,12 +28911,12 @@ async def chro_fermer_vote(guild, salon=None):
             libs = [next(l for c_, e_, l in choix["options"] if c_ == g) for g in gagnants]
             try:
                 await salon.send(embed=discord.Embed(
-                    title="⚖️  ÉGALITÉ",
+                    title=season_titre("⚖️  ÉGALITÉ"),
                     description=("Le serveur est partagé :\n"
                                  + "\n".join(f"• **{l}** — {top} voix" for l in libs)
                                  + f"\n\n*Vous avez {CHRO_PROLONGATION // 60} minutes de plus "
                                    f"pour départager. L'admin peut aussi trancher.*"),
-                    color=0xe67e22))
+                    color=season_tint(0xe67e22)))
             except Exception:
                 pass
             return False, "Égalité — vote prolongé."
@@ -27273,7 +28929,7 @@ async def chro_fermer_vote(guild, salon=None):
                 await salon.send(embed=discord.Embed(
                     description=("👥 *Personne n'a voté.*\n"
                                  "-# La régie peut trancher pour faire avancer l'histoire."),
-                    color=0xe67e22))
+                    color=season_tint(0xe67e22)))
             except Exception:
                 pass
             return False, "Aucun vote — à la régie de trancher."
@@ -27366,7 +29022,7 @@ async def chro_publier_resultat(guild, salon=None):
     for v in votes.values():
         compte[v] = compte.get(v, 0) + 1
     total = sum(compte.values()) or 1
-    e = discord.Embed(title="🔒  LE SERVEUR A DÉCIDÉ", color=0x2c2f33)
+    e = discord.Embed(title=season_titre("🔒  LE SERVEUR A DÉCIDÉ"), color=season_tint(0x2c2f33))
     lignes = []
     for i, (c_, emo, l) in enumerate(choix["options"]):
         pct = round(compte.get(c_, 0) / total * 100)
@@ -27378,7 +29034,7 @@ async def chro_publier_resultat(guild, salon=None):
                 value=(f"### {lib}\n"
                        f"-# Cette décision fait désormais partie de votre histoire."),
                 inline=False)
-    e.set_footer(text=f"👥 {len(votes)} lecteur(s) ont voté")
+    e.set_footer(text=season_pied(f"👥 {len(votes)} lecteur(s) ont voté"))
 
     _mid, _cid = paquet.get("msg_vote"), paquet.get("salon_vote")
     if _mid and _cid and guild:
@@ -27394,7 +29050,7 @@ async def chro_publier_resultat(guild, salon=None):
         await asyncio.sleep(2)
         await salon.send(embed=discord.Embed(
             description=chro_rendu_scene(choix["suites"][cle]["texte"])[:4090],
-            color=0x9b59b6))
+            color=season_tint(0x9b59b6)))
     except Exception as ex:
         print(f"[Chronique] publication du résultat : {type(ex).__name__}: {ex}")
     # Publié : le paquet disparaît, la reprise ne le rejouera pas.
@@ -27414,10 +29070,10 @@ async def chro_finale(guild, salon):
     try:
         await asyncio.sleep(CHRO_DELAI_SCENE)
         await salon.send(embed=discord.Embed(
-            description=chro_rendu_scene(fin.get("texte", "*Fin.*"))[:4090], color=0xff9ec7))
+            description=chro_rendu_scene(fin.get("texte", "*Fin.*"))[:4090], color=season_tint(0xff9ec7)))
         await asyncio.sleep(CHRO_DELAI_SCENE)
         jours = max(1, int((time.time() - CHRONIQUE.get("debut", time.time())) // 86400))
-        e = discord.Embed(title="FIN.", color=0x2c2f33,
+        e = discord.Embed(title=season_titre("FIN."), color=season_tint(0x2c2f33),
             description=(f"**{s['titre']}**\n\n"
                          f"📖 {len(s['episodes'])} épisodes\n"
                          f"💌 {len(CHRONIQUE.get('historique', []))} décisions\n"
@@ -27429,18 +29085,18 @@ async def chro_finale(guild, salon):
         await asyncio.sleep(CHRO_DELAI_SCENE)
         dec = chro_choix_decisifs()
         if dec:
-            e2 = discord.Embed(title="🦋  VOS CHOIX QUI ONT CHANGÉ L'HISTOIRE",
-                               color=0x9b59b6)
+            e2 = discord.Embed(title=season_titre("🦋  VOS CHOIX QUI ONT CHANGÉ L'HISTOIRE"),
+                               color=season_tint(0x9b59b6))
             e2.description = "\n\n".join(
                 f"**Épisode {d['episode']}**\n*{d['libelle']}*" for d in dec[:6])
             autres = len(s["endings"]) - 1
-            e2.set_footer(text=f"🔒 {autres} autres fins existaient.")
+            e2.set_footer(text=season_pied(f"🔒 {autres} autres fins existaient."))
             await salon.send(embed=e2)
         # ── Épilogue ──
         if s.get("epilogue"):
             await asyncio.sleep(CHRO_DELAI_SCENE)
             await salon.send(embed=discord.Embed(
-                description=chro_rendu_scene(s["epilogue"])[:4090], color=0x2c2f33))
+                description=chro_rendu_scene(s["epilogue"])[:4090], color=season_tint(0x2c2f33)))
     except Exception as ex:
         print(f"[Chronique] finale : {type(ex).__name__}: {ex}")
     return True, fin_cle
@@ -27776,18 +29432,18 @@ class SortieView(ui.View):
         if self.fin is not None:
             e = discord.Embed(title=f"{a['emoji']}  {a['nom']}",
                               description=f"*« {self.fin['t'].format(nom=nom)} »*",
-                              color=0x1abc9c)
+                              color=season_tint(0x1abc9c))
             if getattr(self, "gains", None):
                 e.add_field(name="\u200b",
                             value="\n".join(f"{k} **{v}**" for k, v in self.gains.items()),
                             inline=False)
-            e.set_footer(text="`.petensemble` pour une autre sortie")
+            e.set_footer(text=season_pied("`.petensemble` pour une autre sortie"))
             return e
         sc = a["scenes"][self.etape]
         desc = (f"*{a['intro'].format(nom=nom)}*\n\n" if self.etape == 0 else "")
         desc += f"**{sc['q'].format(nom=nom)}**"
-        e = discord.Embed(title=f"{a['emoji']}  {a['nom']}", description=desc, color=0x1abc9c)
-        e.set_footer(text=f"Étape {self.etape + 1} sur {len(a['scenes'])}")
+        e = discord.Embed(title=f"{a['emoji']}  {a['nom']}", description=desc, color=season_tint(0x1abc9c))
+        e.set_footer(text=season_pied(f"Étape {self.etape + 1} sur {len(a['scenes'])}"))
         return e
 
 class DuoView(ui.View):
@@ -27904,12 +29560,12 @@ class DuoView(ui.View):
             e = discord.Embed(
                 title=f"{act['emoji']}  {act['nom']}",
                 description=f"*{act['intro'].format(a=a, b=b)}*\n\n**{act['q']}**",
-                color=0xff9ec7)
+                color=season_tint(0xff9ec7))
             return e
         f = get_foyer(self.uid, self.pid_b) or {}
         emo_p, nom_p = foyer_palier(f.get("complicite", 50))
         e = discord.Embed(title=f"{act['emoji']}  {act['nom']}",
-                          description=f"*« {self.texte} »*", color=0xff9ec7)
+                          description=f"*« {self.texte} »*", color=season_tint(0xff9ec7))
         lignes = [f"💕 Complicité **+{self.gain}**   ·   {emo_p} {nom_p}"]
         if self.fin.get("obj"):
             lignes.append(f"🎁 **{self.fin['obj']}**")
@@ -27973,15 +29629,15 @@ class FrictionView(ui.View):
     def embed(self):
         a, b = self.noms()
         if self.fait is None:
-            return discord.Embed(title="😅  Petite tension",
+            return discord.Embed(title=season_titre("😅  Petite tension"),
                                  description=f"*{self.fr['t'].format(a=a, b=b)}*",
-                                 color=0xffc4d6)
+                                 color=season_tint(0xffc4d6))
         cle, gain, lab = self.fait
         f = get_foyer(self.uid, self.pid_b) or {}
         emo_p, nom_p = foyer_palier(f.get("complicite", 50))
-        e = discord.Embed(title="😅  Petite tension",
+        e = discord.Embed(title=season_titre("😅  Petite tension"),
                           description=f"*{self.fr['t'].format(a=a, b=b)}*\n\n"
-                                      f"→ **{lab.format(a=a, b=b)}**", color=0xffc4d6)
+                                      f"→ **{lab.format(a=a, b=b)}**", color=season_tint(0xffc4d6))
         e.add_field(name="\u200b",
                     value=f"💕 Complicité **{gain:+d}**   ·   {emo_p} {nom_p}", inline=False)
         return e
@@ -28131,7 +29787,7 @@ class BebeView(ui.View):
         idx, emo, nom_ph, desc = bebe_phase(st)
         fiche = pet_espece(self.uid, self.pid) or {}
         e = discord.Embed(title=f"{fiche.get('emoji', '🐾')}  {self.nom()}",
-                          color=0xffd479)
+                          color=season_tint(0xffd479))
         if self.education is not None:
             conf = BEBE_EDUCATION[self.education]
             e.title = conf["titre"]
@@ -28169,7 +29825,7 @@ class BebeView(ui.View):
             if manque:
                 e.add_field(name="Il lui faut encore", value=" · ".join(manque), inline=False)
         if getattr(self, "dernier_msg", None):
-            e.set_footer(text=self.dernier_msg[:200])
+            e.set_footer(text=season_pied(self.dernier_msg[:200]))
         return e
 
 SS_JOURS = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
@@ -28769,16 +30425,16 @@ async def chronique_cmd(ctx):
         return await ctx.send(embed=vue.embed(), view=vue)
     if not chro_active():
         return await ctx.send(embed=discord.Embed(
-            description="📖 *Aucune saison en cours pour le moment.*", color=0x9b59b6))
+            description="📖 *Aucune saison en cours pour le moment.*", color=season_tint(0x9b59b6)))
     s = chro_saison()
-    e = discord.Embed(title=f"📖  {s['titre']}", color=0xff9ec7,
+    e = discord.Embed(title=season_titre(f"📖  {s['titre']}"), color=season_tint(0xff9ec7),
         description=(f"### {s['genre']}\n*{s['accroche']}*\n\n"
                      f"Épisode **{min(CHRONIQUE.get('episode', 1), len(s['episodes']))}"
                      f"/{len(s['episodes'])}**"))
     if CHRONIQUE.get("derniere_decision"):
         e.add_field(name="💌 Votre dernière décision",
                     value=f"*{CHRONIQUE['derniere_decision']}*", inline=False)
-    e.set_footer(text=f"{len(CHRONIQUE_LU)} lecteur(s) suivent cette saison")
+    e.set_footer(text=season_pied(f"{len(CHRONIQUE_LU)} lecteur(s) suivent cette saison"))
     await ctx.send(embed=e)
 
 @bot.command(name="secretstory", aliases=["ss", "secret"])
@@ -28821,10 +30477,10 @@ async def petensemble_cmd(ctx, activite: str = None):
             lignes.append(f"{a['emoji']} **{a['nom']}** — `{k}`{marque}{cout}\n└ *{a['desc']}*"
                           + (f"  ·  *{n} fois*" if n else ""))
         return await ctx.send(embed=discord.Embed(
-            title=f"🐾 Une sortie avec {pst.get('surnom') or pdb['nom']} ?",
+            title=season_titre(f"🐾 Une sortie avec {season_brut(pst.get('surnom') or pdb['nom'])} ?"),
             description="\n".join(lignes) + "\n\n*`.petensemble peche` par exemple.*",
-            color=0x1abc9c).set_footer(
-                text=f"{len(dispo)} sorties · chacune a plusieurs déroulements possibles"))
+            color=season_tint(0x1abc9c)).set_footer(
+                text=season_pied(f"{len(dispo)} sorties · chacune a plusieurs déroulements possibles")))
 
     st = pet_etat(uid)
     a = dispo[cle]
@@ -28908,15 +30564,15 @@ async def marchand_cmd(ctx, achat: str = None):
                         important=(cible is secret))
         save_all_data()
         return await ctx.send(embed=discord.Embed(
-            title=f"{emo} Marché conclu",
+            title=season_titre(f"{season_brut(emo)} Marché conclu"),
             description=(f"{s_emo} **{cible['obj']}**\n*Série : {s_nom}*\n\n"
                          f"💰 **−{cible['prix']:,} pièces**\n\n"
                          f"*« Prends-en soin. »*"),
-            color=coul))
+            color=season_tint(coul)))
 
     # ── Vitrine ──
     e = discord.Embed(title=f"{emo}  {nom}",
-        description=f"*{desc}*\n\n> {_sans_repet(uid, "marchand_dit", MARCHAND_REPLIQUES)}", color=coul)
+        description=f"*{desc}*\n\n> {_sans_repet(uid, "marchand_dit", MARCHAND_REPLIQUES)}", color=season_tint(coul))
     if dispo:
         e.add_field(name="🛒 Sa marchandise du jour", value="\n".join(
             f"{COLLECTIONS_SERIES[x['serie']][0]} **{x['obj']}** — **{x['prix']:,} p**\n"
@@ -28931,7 +30587,7 @@ async def marchand_cmd(ctx, achat: str = None):
                            f"**{secret['prix']:,} p**"), inline=False)
     e.add_field(name="\u200b",
                 value=f"💰 Tu as **{economy_data[uid]['coins']:,} pièces**", inline=False)
-    e.set_footer(text="`.marchand <objet>` pour acheter · un marchand différent chaque jour")
+    e.set_footer(text=season_pied("`.marchand <objet>` pour acheter · un marchand différent chaque jour"))
     await ctx.send(embed=e)
 
 # ============================================================
@@ -29019,9 +30675,9 @@ async def tenter_combo(ctx, uid):
     st = pet_etat(uid)
     st["humeur"] = min(100, st["humeur"] + 5)
     save_all_data()
-    e = discord.Embed(title=f"{emo}  {nom}", description=f"*{texte}*", color=0x9b59b6)
-    e.set_footer(text=f"Un comportement né de : "
-                      + " + ".join(PET_TRAITS[t][1] for t in paire if t in PET_TRAITS))
+    e = discord.Embed(title=f"{emo}  {nom}", description=f"*{texte}*", color=season_tint(0x9b59b6))
+    e.set_footer(text=season_pied(f"Un comportement né de : "
+                      + " + ".join(PET_TRAITS[t][1] for t in paire if t in PET_TRAITS)))
     await ctx.send(embed=e)
     return True
 
@@ -29357,7 +31013,7 @@ async def nettoyer_cmd(ctx):
     if avant >= 92:
         return await ctx.send(embed=discord.Embed(
             description=f"{emo_a} Le refuge est déjà **{nom_a.lower()}**.\n*{desc_a}*",
-            color=0x2ecc71))
+            color=season_tint(0x2ecc71)))
     d = pets_data[uid]
     reste = 3600 - (_t.time() - d.get("dernier_menage", 0))
     if reste > 0:
@@ -29383,14 +31039,14 @@ async def nettoyer_cmd(ctx):
         pet_carnet_note(uid, "✨ Le refuge a atteint **100 % de propreté**.", important=True)
     save_all_data()
     await ctx.send(embed=discord.Embed(
-        title="🧹  Grand ménage !",
+        title=season_titre("🧹  Grand ménage !"),
         description=(f"*{scene}*\n\n"
                      f"🏠 **Propreté du refuge**\n"
                      f"`{'▰'*f_a}{'▱'*(10-f_a)}` {avant} %\n"
                      f"⬇️\n"
                      f"`{'▰'*f_p}{'▱'*(10-f_p)}` **{apres} %**  {emo_p} *{nom_p}*\n\n"
                      f"❤️ Humeur **+12**  ·  ⭐ **+30 XP**  ·  💰 **+{gain:,} pièces**"),
-        color=0x2ecc71))
+        color=season_tint(0x2ecc71)))
 
 # ============================================================
 #  🎒 SÉRIES DE COLLECTION
@@ -29487,11 +31143,11 @@ async def ajouter_objet_serie(uid, objet, channel=None):
             if channel:
                 try:
                     await channel.send(embed=discord.Embed(
-                        title=f"{emo}  COLLECTION COMPLÈTE !",
+                        title=season_titre(f"{season_brut(emo)}  COLLECTION COMPLÈTE !"),
                         description=(f"# {nom}\n*{COLLECTIONS_SERIES[cle][2]}*\n\n"
                                      f"**{len(lot)}/{len(lot)}** objets réunis.\n\n"
                                      f"🏅 Titre débloqué : **{t_nom}**"),
-                        color=0xf1c40f))
+                        color=season_tint(0xf1c40f)))
                 except Exception:
                     pass
     return True
@@ -29517,26 +31173,26 @@ async def petseries_cmd(ctx, serie: str = None):
             title=f"{emo}  {nom}",
             description=(f"*{desc}*\n\n**{len([o for o in lot if o in poss])} / {len(lot)}**"
                          + ("  ·  🏅 **complétée !**" if match in faits else "")),
-            color=0xf1c40f if match in faits else 0xe91e63)
+            color=season_tint(0xf1c40f if match in faits else 0xe91e63))
         for i in range(0, len(lignes), 8):
             e.add_field(name="\u200b", value="\n".join(lignes[i:i+8]), inline=True)
-        e.set_footer(text="Il les trouve en expédition, en sortie et lors des événements")
+        e.set_footer(text=season_pied("Il les trouve en expédition, en sortie et lors des événements"))
         return await ctx.send(embed=e)
 
     total = sum(len(v[3]) for v in COLLECTIONS_SERIES.values())
     e = discord.Embed(
-        title=f"🎒 Les collections de {pet_nom_decore(uid, pdb)}",
+        title=season_titre(f"🎒 Les collections de {season_brut(pet_nom_decore(uid, pdb))}"),
         description=(f"**{len(poss)} / {total}** objets réunis  ·  "
                      f"**{len(faits)} / {len(COLLECTIONS_SERIES)}** séries complètes\n"
                      f"*`.petseries <nom>` pour le détail d'une série.*"),
-        color=0xe91e63)
+        color=season_tint(0xe91e63))
     for k, (emo, nom, desc, lot) in COLLECTIONS_SERIES.items():
         n = len([o for o in lot if o in poss])
         f = max(0, min(8, int(n / len(lot) * 8)))
         marque = " 🏅" if k in faits else ""
         e.add_field(name=f"{emo} {nom}{marque}",
                     value=f"`{'▰'*f}{'▱'*(8-f)}` {n}/{len(lot)}", inline=True)
-    e.set_footer(text="Compléter une série débloque un titre pour ton compagnon")
+    e.set_footer(text=season_pied("Compléter une série débloque un titre pour ton compagnon"))
     await ctx.send(embed=e)
 
 # ============================================================
@@ -29718,7 +31374,7 @@ async def petjouets_cmd(ctx, action: str = None, *, nom: str = None):
             title=f"{emo} {cle}",
             description=(f"**{pet_nom_decore(uid, pdb)}** l'inspecte déjà sous tous les angles.\n\n"
                          f"*`.petjouets jouer {cle.lower()}` pour l'utiliser.*"),
-            color=0x2ecc71))
+            color=season_tint(0x2ecc71)))
 
     if act in ("jouer", "utiliser"):
         if nom:
@@ -29757,8 +31413,8 @@ async def petjouets_cmd(ctx, action: str = None, *, nom: str = None):
             extra = f"\n\n❤️ **{cle}** est devenu son jouet préféré !"
             pet_carnet_note(uid, f"{emo} **{cle}** est devenu son jouet préféré.", important=True)
         save_all_data()
-        e = discord.Embed(title=f"{emo} {cle}", description=texte + extra, color=0xe91e63)
-        e.set_footer(text=f"❤️ +14 humeur · ⭐ +25 XP · joué {cpt[cle]} fois")
+        e = discord.Embed(title=f"{emo} {cle}", description=texte + extra, color=season_tint(0xe91e63))
+        e.set_footer(text=season_pied(f"❤️ +14 humeur · ⭐ +25 XP · joué {cpt[cle]} fois"))
         await ctx.send(embed=e)
         return await verifier_traits_acquis(uid, ctx.channel)
 
@@ -29766,9 +31422,9 @@ async def petjouets_cmd(ctx, action: str = None, *, nom: str = None):
     pref = pst.get("jouet_prefere")
     cpt = pst.get("jouets_cpt", {})
     e = discord.Embed(
-        title=f"🧸 Les jouets de {pet_nom_decore(uid, pdb)}",
+        title=season_titre(f"🧸 Les jouets de {season_brut(pet_nom_decore(uid, pdb))}"),
         description=f"**{len(coffre)} / {len(PET_JOUETS)}** jouets possédés",
-        color=0xe91e63)
+        color=season_tint(0xe91e63))
     if coffre:
         lignes = [f"{PET_JOUETS[j][0]} **{j}**" + (" ❤️" if j == pref else "")
                   + (f" · *{cpt[j]}×*" if cpt.get(j) else "") for j in coffre]
@@ -29781,7 +31437,7 @@ async def petjouets_cmd(ctx, action: str = None, *, nom: str = None):
         if lot:
             e.add_field(name=lab, value="  ·  ".join(
                 f"{v[0]} **{k}** `{v[1]:,}p`" for k, v in lot)[:1024], inline=False)
-    e.set_footer(text="`.petjouets acheter <jouet>` · `.petjouets jouer <jouet>`")
+    e.set_footer(text=season_pied("`.petjouets acheter <jouet>` · `.petjouets jouer <jouet>`"))
     await ctx.send(embed=e)
 
 @bot.command(name="petreve", aliases=["reve", "petdodo"])
@@ -29798,7 +31454,7 @@ async def petreve_cmd(ctx):
         return await ctx.send(embed=discord.Embed(
             description=(f"😳 **{pet_nom_decore(uid, pdb)}** est parfaitement réveillé.\n"
                          f"*Reviens quand il sera fatigué, ou la nuit.*"),
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
     reste = 5400 - (_t.time() - st["dernier"].get("reve", 0))
     if reste > 0:
         return await ctx.send(f"😴 Il dort paisiblement — reviens dans **{int(reste//60)} min**.",
@@ -29821,8 +31477,8 @@ async def petreve_cmd(ctx):
     await ctx.send(embed=discord.Embed(
         title=f"💤  {CAT_EMO[cat]}",
         description=f"**{pet_nom_decore(uid, pdb)}** {texte}",
-        color=0x2c2f4a if cat == "cauchemar" else 0x9b59b6
-    ).set_footer(text=f"{pet_humeur_texte(st)} · il récupère un peu d'énergie"))
+        color=season_tint(0x2c2f4a if cat == "cauchemar" else 0x9b59b6)
+    ).set_footer(text=season_pied(f"{pet_humeur_texte(st)} · il récupère un peu d'énergie")))
 
 @bot.command(name="petacheter", aliases=["acheternourriture", "petcourses"])
 async def petacheter_cmd(ctx, *, arg: str = None):
@@ -29856,7 +31512,7 @@ async def petacheter_cmd(ctx, *, arg: str = None):
     await ctx.send(embed=discord.Embed(
         description=(f"{emo} **{nom}** ×{qte} ajouté au garde-manger.\n"
                      f"💰 **−{total:,} pièces**\n\n*`.petmanger {nom.lower()}` pour lui donner.*"),
-        color=0x2ecc71))
+        color=season_tint(0x2ecc71)))
 
 
 # ============================================================
@@ -29997,16 +31653,16 @@ async def petproteger_cmd(ctx):
 
     f = max(0, min(10, int(ch * 33)))
     embed = discord.Embed(
-        title=f"🛡️ {pet_nom_decore(uid, pdb)} veille sur toi",
+        title=season_titre(f"🛡️ {season_brut(pet_nom_decore(uid, pdb))} veille sur toi"),
         description=(f"Quand quelqu'un tente de **te voler**, il peut intervenir.\n\n"
                      f"`{'▰'*f}{'▱'*(10-f)}`  **{ch*100:.0f} %** de chance d'intervenir\n"
                      f"*Cooldown de 4 h entre deux interventions.*"),
-        color=0x3498db)
+        color=season_tint(0x3498db))
     embed.add_field(name="📊 Ce qui compte", value="\n".join(facteurs), inline=False)
     embed.add_field(name="🏅 Son bilan",
                     value=(f"Il t'a protégé **{nb} fois**." if nb
                            else "*Il n'a pas encore eu l'occasion de te défendre.*"), inline=False)
-    embed.set_footer(text="65 % des interventions bloquent le vol · 35 % en limitent les dégâts")
+    embed.set_footer(text=season_pied("65 % des interventions bloquent le vol · 35 % en limitent les dégâts"))
     await ctx.send(embed=embed)
 
 @bot.command(name="resetniveaupets", aliases=["resetpetlevels", "resetniveauxpets"])
@@ -30249,7 +31905,7 @@ class ActiviteView(ui.View):
             return await interaction.response.edit_message(embed=discord.Embed(
                 title=f"{ACTIVITES[self.cle][0]} {ACTIVITES[self.cle][1]}",
                 description=f"➡️ *{label}*\n\n**{SUITES[self.cle]}**\n\n*Et maintenant ?*",
-                color=0x1abc9c), view=self)
+                color=season_tint(0x1abc9c)), view=self)
         pid, pdb, pst = get_active_pet(self.uid)
         res = _sans_repet(self.uid, "act_" + self.cle, self.RESULTATS[self.cle], memoire=8)
         res = res.replace("{p}", f"**{pet_nom_decore(self.uid, pdb)}**")
@@ -30286,11 +31942,11 @@ class ActiviteView(ui.View):
             title=f"{emo_a} {nom_a}",
             description=(f"*{parcours}*\n\n{resultat}{bonus}\n\n"
                          f"❤️ Humeur **+18**  ·  💞 Confiance **+6**  ·  ⭐ **+50 XP**"),
-            color=0x2ecc71)
+            color=season_tint(0x2ecc71))
         if extra:
             e.add_field(name="\u200b", value=extra, inline=False)
         if premiere:
-            e.set_footer(text="📖 Première fois — enregistré dans son carnet")
+            e.set_footer(text=season_pied("📖 Première fois — enregistré dans son carnet"))
         await interaction.response.edit_message(embed=e, view=self)
         self.stop()
 
@@ -30338,7 +31994,7 @@ class SequenceView(ui.View):
                         " ".join(self.COULEURS[x][0] for x in self.seq), self)
                 await interaction.response.edit_message(embed=discord.Embed(
                     description=f"🧠 **{len(self.saisie)}/{len(self.seq)}** — continue…",
-                    color=0x3498db), view=self)
+                    color=season_tint(0x3498db)), view=self)
             b.callback = cb
             self.add_item(b)
 
@@ -30362,7 +32018,7 @@ class ReflexeView(ui.View):
         if self.message:
             try:
                 await self.message.edit(embed=discord.Embed(
-                    title="🟢 MAINTENANT !", color=0x2ecc71), view=self)
+                    title=season_titre("🟢 MAINTENANT !"), color=season_tint(0x2ecc71)), view=self)
             except Exception: pass
 
 async def fin_entrainement(interaction, uid, reussi, competence, solution, vue):
@@ -30395,7 +32051,7 @@ async def fin_entrainement(interaction, uid, reussi, competence, solution, vue):
         coul = 0xe67e22
     save_all_data()
     await interaction.response.edit_message(embed=discord.Embed(
-        title="🎯 Entraînement", description=txt, color=coul), view=vue)
+        title=season_titre("🎯 Entraînement"), description=txt, color=season_tint(coul)), view=vue)
     vue.stop()
 
 @bot.command(name="petmanger", aliases=["petnourriture", "faimanger"])
@@ -30415,11 +32071,11 @@ async def petmenu_cmd(ctx, membre: discord.Member = None):
     gouts = gouts_repas(uid)
     if not gouts:
         return await ctx.send(embed=discord.Embed(
-            title="🍽️ Menu inconnu",
+            title=season_titre("🍽️ Menu inconnu"),
             description=("*Tu ne sais pas encore ce qu'il aime.*\n\n"
                          "Donne-lui différents aliments avec `.petmanger` pour découvrir ses goûts.\n"
                          f"*Il y a **{len(PET_NOURRITURE)} aliments** à faire goûter.*"),
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
     par_gout = {"adore": [], "aime": [], "neutre": [], "deteste": []}
     for nom, g in gouts.items():
         if nom in PET_NOURRITURE:
@@ -30427,9 +32083,9 @@ async def petmenu_cmd(ctx, membre: discord.Member = None):
     TITRES = {"adore":("😍","Il adore"), "aime":("😊","Il aime bien"),
               "neutre":("😐","Ça lui est égal"), "deteste":("😖","Il déteste")}
     embed = discord.Embed(
-        title=f"🍽️ Le menu de {pet_nom_decore(uid, pdb)}",
+        title=season_titre(f"🍽️ Le menu de {season_brut(pet_nom_decore(uid, pdb))}"),
         description=f"**{len(gouts)} / {len(PET_NOURRITURE)}** aliments goûtés",
-        color=0xe91e63)
+        color=season_tint(0xe91e63))
     pref = pst.get("repas_prefere")
     if pref and pref in PET_NOURRITURE:
         embed.add_field(name="❤️ Son plat préféré",
@@ -30439,7 +32095,7 @@ async def petmenu_cmd(ctx, membre: discord.Member = None):
             e_g, t_g = TITRES[g]
             embed.add_field(name=f"{e_g} {t_g} ({len(par_gout[g])})",
                             value="  ·  ".join(par_gout[g])[:1024], inline=False)
-    embed.set_footer(text="`.petmanger <aliment>` pour lui faire goûter autre chose")
+    embed.set_footer(text=season_pied("`.petmanger <aliment>` pour lui faire goûter autre chose"))
     await ctx.send(embed=embed)
 
 @bot.command(name="petutiliser", aliases=["utilisermeuble", "petmeuble"])
@@ -30459,7 +32115,7 @@ async def petutiliser_cmd(ctx, *, meuble: str = None):
             return await ctx.send(embed=discord.Embed(
                 description=("🏡 Son refuge est vide — installe des meubles avec `.refuge acheter <meuble>`.\n"
                              "*Chaque meuble installé peut ensuite être **utilisé** par ton compagnon.*"),
-                color=0x95a5a6))
+                color=season_tint(0x95a5a6)))
         lignes = []
         for m in utilisables:
             emo, verbe, _, eff, val = MEUBLES_INTERACTIONS[m]
@@ -30469,9 +32125,9 @@ async def petutiliser_cmd(ctx, *, meuble: str = None):
             lignes.append(f"{emo} **{PET_MEUBLES[m][1]}** — `{m}` · *{verbe}*  ·  "
                           f"{LAB[eff]} {signe}{val}")
         return await ctx.send(embed=discord.Embed(
-            title=f"🪑 Que peut faire {pst.get('surnom') or pdb['nom']} ?",
+            title=season_titre(f"🪑 Que peut faire {season_brut(pst.get('surnom') or pdb['nom'])} ?"),
             description="\n".join(lignes) + "\n\n*`.petutiliser <meuble>` — une utilisation par heure et par meuble.*",
-            color=0xe91e63))
+            color=season_tint(0xe91e63)))
 
     cle = normalize_str(meuble).replace(" ", "")
     if cle not in MEUBLES_INTERACTIONS:
@@ -30512,7 +32168,7 @@ async def petutiliser_cmd(ctx, *, meuble: str = None):
     await ctx.send(embed=discord.Embed(
         title=f"{emo} {PET_MEUBLES[cle][1]}",
         description=f"**{nom_pet}** {scene}\n\n{resultat}",
-        color=0xe91e63).set_footer(text=f"{pet_humeur_texte(st)} · un meuble par heure"))
+        color=season_tint(0xe91e63)).set_footer(text=season_pied(f"{pet_humeur_texte(st)} · un meuble par heure")))
 
 @bot.command(name="petobjets", aliases=["objetspet", "petcollection"])
 async def petobjets_cmd(ctx, action: str = None, *, nom: str = None):
@@ -30535,14 +32191,14 @@ async def petobjets_cmd(ctx, action: str = None, *, nom: str = None):
         save_all_data()
         return await ctx.send(embed=discord.Embed(
             description=f"❤️ {PET_OBJETS_TROUVES[trouve][0]} **{trouve}** est maintenant son objet préféré.",
-            color=0xe91e63))
+            color=season_tint(0xe91e63)))
 
     prefere = pst.get("objet_prefere")
     embed = discord.Embed(
-        title=f"🎒 La collection de {pet_nom_decore(uid, pdb)}",
+        title=season_titre(f"🎒 La collection de {season_brut(pet_nom_decore(uid, pdb))}"),
         description=(f"**{len(possedes)} / {len(PET_OBJETS_TROUVES)}** objets trouvés\n"
                      f"*Il les ramasse lors des **événements du quotidien** et des **expéditions**.*"),
-        color=0xe91e63)
+        color=season_tint(0xe91e63))
     for rar, (r_emo, r_nom, r_coul, _) in PET_OBJ_RARETES.items():
         lot = [(n, v) for n, v in PET_OBJETS_TROUVES.items() if v[4] == rar]
         a_lui = [n for n, _ in lot if n in possedes]
@@ -30554,8 +32210,8 @@ async def petobjets_cmd(ctx, action: str = None, *, nom: str = None):
     bonus = [f"{lab} **+{bonus_objets(uid, t)} %**" for t, lab in LAB.items() if bonus_objets(uid, t)]
     if bonus:
         embed.add_field(name="✨ Bonus de collection", value="  ·  ".join(bonus), inline=False)
-    embed.set_footer(text=(f"Objet préféré : {prefere} · `.petobjets prefere <nom>` pour changer"
-                           if prefere else "Le premier objet trouvé devient son préféré."))
+    embed.set_footer(text=(season_pied(f"Objet préféré : {prefere} · `.petobjets prefere <nom>` pour changer"
+                           if prefere else "Le premier objet trouvé devient son préféré.")))
     await ctx.send(embed=embed)
 
 @bot.command(name="petcarnet", aliases=["carnet", "journalpet"])
@@ -30592,7 +32248,7 @@ async def petcarnet_cmd(ctx, action: str = None, numero: int = None):
     quotidiens = [e for e in carnet if not e.get("imp") and not e.get("pin")]
 
     embed = discord.Embed(
-        title=f"📖 Le carnet de {pet_nom_decore(uid, pdb)}",
+        title=season_titre(f"📖 Le carnet de {season_brut(pet_nom_decore(uid, pdb))}"),
         description=(f"*Adopté il y a **{jours} jour(s)** par {ctx.author.display_name}.*\n"
                      f"*{len(carnet)} souvenir(s) — les grands moments restent pour toujours.*"),
         color=season_color("principal"))
@@ -30615,8 +32271,8 @@ async def petcarnet_cmd(ctx, action: str = None, numero: int = None):
                         inline=False)
 
     amis = sum(1 for k, v in petamitie.items() if uid in k.split("|") and v > 0)
-    embed.set_footer(text=f"Niveau {st.get('level',1)} · {amis} ami(s) · "
-                          f"`.petcarnet epingler <n°>` pour garder un souvenir")
+    embed.set_footer(text=season_pied(f"Niveau {st.get('level',1)} · {amis} ami(s) · "
+                          f"`.petcarnet epingler <n°>` pour garder un souvenir"))
     await ctx.send(embed=embed)
 
 
@@ -30651,12 +32307,12 @@ async def anniversaires_pets():
             pet_carnet_note(uid, f"🎂 A fêté ses **{ans} an(s)** avec {m.display_name}.", important=True)
             try:
                 await salon.send(embed=discord.Embed(
-                    title="🎂  Joyeux anniversaire !",
+                    title=season_titre("🎂  Joyeux anniversaire !"),
                     description=(f"**{pet_nom_decore(uid, pdb)}** fête ses **{ans} an(s)** "
                                  f"aux côtés de {m.mention} !\n\n"
                                  f"🎁 **{5000*ans:,} pièces** et **+500 XP** pour l'occasion.\n\n"
                                  f"*Un an de gamelles, de siestes et de bêtises. Merci d'avoir été là.*"),
-                    color=0xf1c40f))
+                    color=season_tint(0xf1c40f)))
             except Exception:
                 pass
             gazette_fait("divers", f"Le compagnon de **{m.display_name}** a fêté ses {ans} an(s).", 3)
@@ -30720,30 +32376,30 @@ async def run_course_pets(channel, guild):
             liste = "\n".join(f"{i+1}. {x['nom']} *({x['membre'].display_name})*"
                               for i, x in enumerate(self.coureurs))
             await interaction.response.edit_message(embed=discord.Embed(
-                title="🏃 COURSE DE COMPAGNONS — Inscriptions",
+                title=season_titre("🏃 COURSE DE COMPAGNONS — Inscriptions"),
                 description=(f"**{len(self.coureurs)}/8 inscrits**\n\n{liste}\n\n"
                              f"🏆 **{gain:,} pièces** au vainqueur\n"
                              f"*La vitesse dépend du niveau, de l'humeur et des accessoires !*"),
-                color=0xe67e22))
+                color=season_tint(0xe67e22)))
             if len(self.coureurs) >= 8:
                 self.stop()
 
     if salon:
         await annoncer_event(guild, channel, "everyone", discord.Embed(
-            title="🏃 COURSE DE COMPAGNONS !",
+            title=season_titre("🏃 COURSE DE COMPAGNONS !"),
             description=f"Inscris ton compagnon — **{gain:,} pièces** au vainqueur !",
-            color=0xe67e22), salon)
+            color=season_tint(0xe67e22)), salon)
     insc = InscriptionCourse()
     insc.message = await cible.send(
         get_event_ping(guild, "everyone") if cible is channel else "",
         embed=discord.Embed(
-            title="🏃 COURSE DE COMPAGNONS — Inscriptions",
+            title=season_titre("🏃 COURSE DE COMPAGNONS — Inscriptions"),
             description=(f"**8 places** — inscris ton compagnon !\n\n"
                          f"🏆 **{gain:,} pièces** au vainqueur\n"
                          f"🥈 500 p · 🥉 300 p · les autres 150 p\n\n"
                          f"*Un compagnon **heureux** et bien **équipé** court plus vite.*\n"
                          f"⏰ 60 secondes pour s'inscrire"),
-            color=0xe67e22), view=insc)
+            color=season_tint(0xe67e22)), view=insc)
     await insc.wait()
     for it in insc.children: it.disabled = True
     try: await insc.message.edit(view=insc)
@@ -30751,7 +32407,7 @@ async def run_course_pets(channel, guild):
 
     if len(insc.coureurs) < 2:
         await cible.send(embed=discord.Embed(
-            description="😴 Pas assez de coureurs — course annulée.", color=0x95a5a6))
+            description="😴 Pas assez de coureurs — course annulée.", color=season_tint(0x95a5a6)))
         # Fermeture confiée au wrapper : lancer_event_standard() supprime
         # le salon une seule fois, dans son finally.
         return
@@ -30768,9 +32424,9 @@ async def run_course_pets(channel, guild):
             med = "🥇🥈🥉"[i] if i < 3 else "▪️"
             lignes.append(f"{med} {x['nom']}\n`{'▰'*f}{'▱'*(14-f)}` {min(LIGNE,int(x['pos']))}/{LIGNE}")
         return discord.Embed(
-            title="🏃 COURSE EN DIRECT",
+            title=season_titre("🏃 COURSE EN DIRECT"),
             description=(fin or "**Ils sont partis !**") + "\n\n" + "\n".join(lignes),
-            color=0x2ecc71 if fin else 0xe67e22)
+            color=season_tint(0x2ecc71 if fin else 0xe67e22))
 
     msg = await cible.send(embed=tableau())
     gagnant = None
@@ -30872,7 +32528,7 @@ async def petexpedition_cmd(ctx, lieu: str = None):
         reussi = random.random() < min(0.92, chance)
         recit = random.choice(EXPE_RECITS["succes" if reussi else "echec"]).format(
             p=f"**{pet_nom_decore(uid, pdb)}**")
-        embed = discord.Embed(title=f"🎒 Retour de {nom_l}", description=f"*{recit}*", color=season_color("succes") if reussi else 0x95a5a6)
+        embed = discord.Embed(title=season_titre(f"🎒 Retour de {season_brut(nom_l)}"), description=f"*{recit}*", color=season_color("succes") if reussi else 0x95a5a6)
         # 🍂 Blackwood : le lieu a une voix selon l'heure. Les expéditions
         # permanentes ne sont pas concernées — elles gardent leur récit.
         _amb = blackwood_ambiance(expe["lieu"], f"**{pet_nom_decore(uid, pdb)}**")
@@ -30952,7 +32608,7 @@ async def petexpedition_cmd(ctx, lieu: str = None):
         pst["vecu"]["expeditions"] = pst["vecu"].get("expeditions", 0) + 1
         pet_carnet_note(uid, f"A exploré **{nom_l}** — " + ("mission réussie." if reussi else "revenu bredouille."))
         save_all_data()
-        embed.set_footer(text="Il a besoin d'un bain et d'un repas · `.laver` `.nourrir`")
+        embed.set_footer(text=season_pied("Il a besoin d'un bain et d'un repas · `.laver` `.nourrir`"))
         return await ctx.send(embed=embed)
 
     if expe:
@@ -30969,7 +32625,7 @@ async def petexpedition_cmd(ctx, lieu: str = None):
     if cle not in expeditions_disponibles():
         lignes = "\n".join(f"{v[0]} — `{k}` · **{v[1]}h**\n└ *{v[2]}*" for k, v in expeditions_disponibles().items())
         return await ctx.send(embed=discord.Embed(
-            title="🎒 Expéditions",
+            title=season_titre("🎒 Expéditions"),
             description=(f"Envoie ton compagnon explorer. Il revient avec un butin — "
                          f"plus c'est long, plus c'est généreux.\n\n{lignes}\n\n"
                          f"*Ses chances de réussite dépendent de son **humeur** et de son **niveau**.*\n"
@@ -30990,7 +32646,7 @@ async def petexpedition_cmd(ctx, lieu: str = None):
     st["energie"] = max(0, st["energie"] - 10)
     save_all_data()
     await ctx.send(embed=discord.Embed(
-        title=f"🎒 Départ pour {nom_l}",
+        title=season_titre(f"🎒 Départ pour {season_brut(nom_l)}"),
         description=(f"**{pet_nom_decore(uid, pdb)}** part explorer.\n*{desc}*\n\n"
                      f"⏳ Retour dans **{heures}h** — retape `.petexpedition` pour le récupérer.\n"
                      f"❤️ Humeur actuelle : {pet_humeur_texte(st)} *(influence sa réussite)*"),
@@ -31917,7 +33573,7 @@ class MomentUniqueView(ui.View):
             title=self.moment["titre"],
             description=(f"{self.moment['_texte']}\n\n➡️ **{label}**\n\n{res}\n\n"
                          f"📖 *Enregistré dans son carnet.*"),
-            color=0x9b59b6), view=self)
+            color=season_tint(0x9b59b6)), view=self)
         self.stop()
 
 async def tenter_moment_unique(ctx, uid):
@@ -31954,8 +33610,8 @@ async def tenter_moment_unique(ctx, uid):
     e = discord.Embed(
         title=m["titre"],
         description=f"{texte}\n\n*Un moment rare. Que fais-tu ?*",
-        color=0x9b59b6)
-    e.set_footer(text="🌌 Moment unique — il sera gardé dans son carnet")
+        color=season_tint(0x9b59b6))
+    e.set_footer(text=season_pied("🌌 Moment unique — il sera gardé dans son carnet"))
     await ctx.send(embed=e, view=vue)
     return True
 
@@ -31991,8 +33647,8 @@ async def tenter_histoire(ctx, uid):
     texte = texte.replace("{p}", nom)
 
     embed = discord.Embed(
-        title=f"{conf['titre']}  ·  Épisode {h['ep']}/{len(conf['episodes'])}",
-        description=f"*{texte}*", color=0x8e44ad)
+        title=season_titre(f"{season_brut(conf['titre'])}  ·  Épisode {season_brut(h['ep'])}/{season_brut(len(conf['episodes']))}"),
+        description=f"*{texte}*", color=season_tint(0x8e44ad))
     if effet == "objet":
         o = tirer_objet(uid, bonus_rare=1.2)
         pst.setdefault("objets", [])
@@ -32010,7 +33666,7 @@ async def tenter_histoire(ctx, uid):
         embed.add_field(name="📖 Fin de l'histoire",
                         value="*Elle restera dans son carnet.*  ·  💞 **+8 confiance**", inline=False)
     if h["ep"] < len(conf["episodes"]):
-        embed.set_footer(text="🧩 À suivre… reviens dans quelques jours")
+        embed.set_footer(text=season_pied("🧩 À suivre… reviens dans quelques jours"))
     save_all_data()
     await ctx.send(embed=embed)
     return True
@@ -32269,7 +33925,7 @@ class SceneView(ui.View):
         await interaction.response.edit_message(embed=discord.Embed(
             description=(f"*{self.decor}*\n\n{self.reaction}\n\n"
                          f"➡️ **{label}**\n\n" + "  ·  ".join(parts)),
-            color=0xe91e63), view=self)
+            color=season_tint(0xe91e63)), view=self)
         self.stop()
 
 async def tenter_scene(ctx, uid):
@@ -32304,13 +33960,13 @@ async def tenter_scene(ctx, uid):
         vue = SceneView(uid, decor, reaction)
         await ctx.send(embed=discord.Embed(
             description=f"*{decor}*\n\n{reaction}\n\n**Que fais-tu ?**",
-            color=0xf39c12), view=vue)
+            color=season_tint(0xf39c12)), view=vue)
     else:
         st = pet_etat(uid)
         st["humeur"] = min(100, st["humeur"] + 3)
         save_all_data()
         await ctx.send(embed=discord.Embed(
-            description=f"*{decor}*\n\n{reaction}", color=0xe91e63))
+            description=f"*{decor}*\n\n{reaction}", color=season_tint(0xe91e63)))
     return True
 
 class PetEventView(ui.View):
@@ -32394,8 +34050,8 @@ class PetEventView(ui.View):
             title=self.evt["titre"],
             description=f"*{self.evt['texte'].format(p=f'**{pet_nom_decore(uid, pdb)}**')}*\n\n"
                         f"➡️ **{label}**\n\n{resultat}",
-            color=0xe91e63)
-        e.set_footer(text=pet_humeur_texte(st))
+            color=season_tint(0xe91e63))
+        e.set_footer(text=season_pied(pet_humeur_texte(st)))
         await interaction.response.edit_message(embed=e, view=self)
         self.stop()
 
@@ -32423,7 +34079,7 @@ async def tenter_event_vie(ctx, uid):
         title=f"⚠️ {evt['titre']}",
         description=(f"*{evt['texte'].format(p=f'**{pet_nom_decore(uid, pdb)}**')}*\n\n"
                      f"**Que fais-tu ?**"),
-        color=0xf39c12).set_footer(text="Ton choix aura un effet."), view=vue)
+        color=season_tint(0xf39c12)).set_footer(text=season_pied("Ton choix aura un effet.")), view=vue)
     return True
 
 # ============================================================
@@ -39239,13 +40895,13 @@ async def decouvrir_particularite(uid, channel):
     if channel:
         try:
             await channel.send(embed=discord.Embed(
-                title="❓ Quelque chose semble étrange…",
+                title=season_titre("❓ Quelque chose semble étrange…"),
                 description=(f"### ✨ PARTICULARITÉ DÉCOUVERTE\n\n"
                              f"# {emo} {nom}\n"
                              f"*{desc}*\n\n"
                              f"**{rarete}** — *{poids/10:.1f} % des compagnons*\n\n"
                              f"Elle est désormais visible sur `.pet`."),
-                color=0xf1c40f))
+                color=season_tint(0xf1c40f)))
         except Exception:
             pass
     gazette_fait("divers", f"Le compagnon de <@{uid}> a révélé sa particularité {emo} **{nom}** !",
@@ -39418,9 +41074,9 @@ async def garderobe_cmd(ctx, action: str = None, *, objet: str = None):
         gouts_a = gouts_accessoires(uid)
         SYM = {"adore":"❤️","neutre":"😐","deteste":"😖"}
         e = discord.Embed(
-            title=f"🎀 Garde-robe de {pet_nom_decore(uid, pdb)}",
+            title=season_titre(f"🎀 Garde-robe de {season_brut(pet_nom_decore(uid, pdb))}"),
             description="*Trois accessoires portés maximum. Ils s'ajoutent au bonus de race.*",
-            color=0xe91e63)
+            color=season_tint(0xe91e63))
 
         # ── Portés ──
         if d["portes"]:
@@ -39453,7 +41109,7 @@ async def garderobe_cmd(ctx, action: str = None, *, objet: str = None):
             for i in range(0, len(lignes), 6):
                 e.add_field(name="🛍️ À acheter" if i == 0 else "\u200b",
                             value="\n".join(lignes[i:i+6]), inline=False)
-        e.set_footer(text="`.garderobe acheter <objet>` · `porter` · `retirer`")
+        e.set_footer(text=season_pied("`.garderobe acheter <objet>` · `porter` · `retirer`"))
         return await ctx.send(embed=e)
 
     if not objet:
@@ -39483,7 +41139,7 @@ async def garderobe_cmd(ctx, action: str = None, *, objet: str = None):
             description=(f"**{pet_nom_decore(uid, pdb)}**\n\n*{desc}*\n\n"
                          + ("✅ Porté immédiatement !" if cle in d["portes"]
                             else "🎒 Rangé dans la garde-robe — `.garderobe porter " + cle + "`")),
-            color=0xe91e63))
+            color=season_tint(0xe91e63)))
 
     if act in ("porter", "equiper", "mettre"):
         if cle not in d["garderobe"]:
@@ -39504,12 +41160,12 @@ async def garderobe_cmd(ctx, action: str = None, *, objet: str = None):
                "neutre": ("😐", "Ça lui est égal."),
                "deteste": ("😖", "Il ne l'aime pas trop.")}
         e_g, t_g = SYM[gouts_a[cle]]
-        emb = discord.Embed(title=f"{emo} {nom}", description=reaction, color=0xe91e63)
+        emb = discord.Embed(title=f"{emo} {nom}", description=reaction, color=season_tint(0xe91e63))
         if premiere:
             emb.add_field(name=f"{e_g} Première fois", value=f"*{t_g}*", inline=False)
             if gouts_a[cle] == "adore":
                 pet_carnet_note(uid, f"{emo} A adoré porter **{nom}**.", important=True)
-        emb.set_footer(text=f"Porté : {len(d['portes'])}/3")
+        emb.set_footer(text=season_pied(f"Porté : {len(d['portes'])}/3"))
         save_all_data()
         return await ctx.send(embed=emb)
 
@@ -39540,7 +41196,7 @@ async def refuge_cmd(ctx, action: str = None, *, objet: str = None):
                     "energie_lente": "⚡ énergie conservée", "proprete_lente": "🧼 propreté conservée", "saletes_lente": "🧹 refuge salit moins vite",
                     "xp_passif": "⭐ XP passive"}
         e = discord.Embed(
-            title="🏡 Catalogue du refuge",
+            title=season_titre("🏡 Catalogue du refuge"),
             description=("*Chaque meuble se range dans une pièce et aide ton compagnon au quotidien.*\n"
                          f"*Tu en as **{len(ref)}/{len(PET_MEUBLES)}**.*"),
             color=season_color("principal"))
@@ -39554,7 +41210,7 @@ async def refuge_cmd(ctx, action: str = None, *, objet: str = None):
                               f"　*{desc}*")
             e.add_field(name=f"{p_emo} {p_nom}  ·  {sum(1 for k in meubles if k in ref)}/{len(meubles)}",
                         value="\n".join(lignes), inline=False)
-        e.set_footer(text="`.refuge acheter <meuble>` pour installer")
+        e.set_footer(text=season_pied("`.refuge acheter <meuble>` pour installer"))
         return await ctx.send(embed=e)
 
 
@@ -39593,7 +41249,7 @@ async def refuge_cmd(ctx, action: str = None, *, objet: str = None):
                      f"Il devient **{_ap[2]}** *(niveau {_ap[4]})*\n*{_ap[3]}*")
             pet_carnet_note(uid, f"{_ap[1]} Son refuge est devenu **{_ap[2]}**.", important=True)
         return await ctx.send(embed=discord.Embed(
-            title=f"🏡 {emo} {nom} installé !",
+            title=season_titre(f"🏡 {season_brut(emo)} {season_brut(nom)} installé !"),
             description=_msg, color=season_color("succes")))
 
     # ── Visite du refuge ──
@@ -39606,7 +41262,7 @@ async def refuge_cmd(ctx, action: str = None, *, objet: str = None):
     f_ref = max(0, min(10, p_ref // 10))
     scenes = scene_actuelle(uid)
     embed = discord.Embed(
-        title=f"{n_emo}  Refuge de {nom_pet}",
+        title=season_titre(f"{season_brut(n_emo)}  Refuge de {season_brut(nom_pet)}"),
         description=(f"✨ **{n_nom}** — Niveau **{n_num}**\n*{n_desc}*\n\n"
                      f"━━━━━━━━━━━━━━━━━━\n\n"
                      f"### 🏡 En ce moment\n" + "\n".join(scenes) + "\n\n"
@@ -39675,9 +41331,9 @@ async def refuge_cmd(ctx, action: str = None, *, objet: str = None):
                             for k, v in lot)
                         + (f"\n\n*…et {len(dispo)-5} autre(s) — `.refuge liste`*"
                            if len(dispo) > 5 else ""), inline=False)
-        embed.set_footer(text=f"{nb}/{len(PET_MEUBLES)} meubles · `.refuge acheter <meuble>`")
+        embed.set_footer(text=season_pied(f"{nb}/{len(PET_MEUBLES)} meubles · `.refuge acheter <meuble>`"))
     else:
-        embed.set_footer(text="🌴 Refuge complet — il ne manque plus rien.")
+        embed.set_footer(text=season_pied("🌴 Refuge complet — il ne manque plus rien."))
     await ctx.send(embed=embed)
 
 
@@ -39807,7 +41463,7 @@ async def petvisite_cmd(ctx, ami: discord.Member = None):
         barre = "💗💗💗💗💗💗💗💗💗💗"
         suite = "👑 *Relation au maximum — rien ne les séparera.*"
 
-    embed = discord.Embed(title=f"{emo_t}  {titre_t.upper()}", color=0xe91e63)
+    embed = discord.Embed(title=f"{emo_t}  {titre_t.upper()}", color=season_tint(0xe91e63))
 
     # ── 1. Le duo, deux colonnes ──
     embed.add_field(
@@ -39864,7 +41520,7 @@ async def petvisite_cmd(ctx, ami: discord.Member = None):
 
     _reste = int(6 * 3600 - (_t.time() - e1["dernier"].get(cle_cd, 0)))
     _h, _m = divmod(max(0, _reste) // 60, 60)
-    embed.set_footer(text=f"⏳ Prochaine visite : {_h}h {_m:02d}min  ·  .petamis → toutes leurs relations")
+    embed.set_footer(text=season_pied(f"⏳ Prochaine visite : {_h}h {_m:02d}min  ·  .petamis → toutes leurs relations"))
     await ctx.send(f"{ami.mention}", embed=embed)
 
 
@@ -39923,17 +41579,17 @@ class EvolutionView(ui.View):
             (f"⚡ **{nom_pet}** brille de tout son être !", 0xfab005),
         ]
         msg = await interaction.followup.send(embed=discord.Embed(
-            description=etapes[0][0], color=etapes[0][1]), wait=True)
+            description=etapes[0][0], color=season_tint(etapes[0][1])), wait=True)
         for txt, coul in etapes[1:]:
             await asyncio.sleep(1.6)
             try:
-                await msg.edit(embed=discord.Embed(description=txt, color=coul))
+                await msg.edit(embed=discord.Embed(description=txt, color=season_tint(coul)))
             except Exception:
                 pass
         await asyncio.sleep(1.8)
 
         embed = discord.Embed(
-            title="🎉  ÉVOLUTION RÉUSSIE !",
+            title=season_titre("🎉  ÉVOLUTION RÉUSSIE !"),
             description=(f"# {pdb['emoji']} {nom_pet}\n\n"
                          f"*Évolution {ancienne[1]} — {ancienne[2]}*\n"
                          f"⬇️\n"
@@ -39942,8 +41598,8 @@ class EvolutionView(ui.View):
                          f"💰 **−{cout:,} pièces**\n\n"
                          f"*Il peut de nouveau gagner de l'XP. Ses stats, ses accessoires, "
                          f"ses amitiés et ses souvenirs sont intacts.*"),
-            color=0xf1c40f)
-        embed.set_footer(text=f"Ses bonus continuent de monter : +1 % par niveau")
+            color=season_tint(0xf1c40f))
+        embed.set_footer(text=season_pied(f"Ses bonus continuent de monter : +1 % par niveau"))
         try:
             await msg.edit(embed=embed)
         except Exception:
@@ -39978,7 +41634,7 @@ async def petevoluer_cmd(ctx):
                 description=(f"✨ **Évolution {rom} — {nom_ev}**  ·  Niveau **{niveau}**\n\n"
                              f"Il a atteint le **dernier palier disponible**.\n"
                              f"*De nouvelles évolutions arriveront plus tard.*"),
-                color=0xf1c40f))
+                color=season_tint(0xf1c40f)))
         return await ctx.send(embed=discord.Embed(
             title=f"✨ {pet_nom_decore(uid, pdb)}",
             description=(f"{pet_niveau_texte(uid, pdb, st)}\n\n"
@@ -39986,13 +41642,13 @@ async def petevoluer_cmd(ctx):
                          f"➡️ Prochaine étape : **Évolution {suiv[1]} — {suiv[2]}** "
                          f"*(niveaux {suiv[3]} à {suiv[4]})*\n"
                          f"💰 Coût prévu : **{suiv[5]:,} pièces**"),
-            color=0xe91e63))
+            color=season_tint(0xe91e63)))
 
     suiv = pet_evolution_suivante(niveau)
     cout = suiv[5]
     assez = economy_data[uid]["coins"] >= cout
     embed = discord.Embed(
-        title="🌟  ÉVOLUTION DISPONIBLE !",
+        title=season_titre("🌟  ÉVOLUTION DISPONIBLE !"),
         description=(f"# {pdb['emoji']} {nom_pet}\n\n"
                      f"**{nom_pet} a atteint le niveau maximum de son évolution actuelle !**\n"
                      f"*Il ne gagne plus d'XP tant qu'il n'a pas évolué.*\n\n"
@@ -40003,9 +41659,9 @@ async def petevoluer_cmd(ctx):
                      f"💰 **Coût : {cout:,} pièces**\n"
                      f"*Tu en as {economy_data[uid]['coins']:,}*"
                      + ("" if assez else f"\n\n❌ **Il te manque {cout - economy_data[uid]['coins']:,} pièces.**")),
-        color=0xf1c40f if assez else 0x95a5a6)
+        color=season_tint(0xf1c40f if assez else 0x95a5a6))
     embed.set_thumbnail(url=ctx.author.display_avatar.url)
-    embed.set_footer(text="Rien n'est réinitialisé — stats, accessoires, amitiés et souvenirs sont conservés.")
+    embed.set_footer(text=season_pied("Rien n'est réinitialisé — stats, accessoires, amitiés et souvenirs sont conservés."))
     if not assez:
         return await ctx.send(embed=embed)
     vue = EvolutionView(uid)
@@ -40026,7 +41682,7 @@ async def petnom_cmd(ctx, *, nouveau: str = None):
                          if actuel else
                          f"🐾 Il s'appelle **{pdb['nom']}**.\n\n"
                          f"`.petnom Mochi` par exemple — 20 caractères max."),
-            color=0xe91e63))
+            color=season_tint(0xe91e63)))
     if normalize_str(nouveau) in ("reset", "defaut", "annuler", "retirer"):
         pst.pop("surnom", None)
         save_all_data()
@@ -40041,10 +41697,10 @@ async def petnom_cmd(ctx, *, nouveau: str = None):
     pet_carnet_note(uid, f"✏️ S'appelle désormais **{nom}**.", important=True)
     save_all_data()
     await ctx.send(embed=discord.Embed(
-        title="✏️ Nouveau nom !",
+        title=season_titre("✏️ Nouveau nom !"),
         description=f"**{ancien}** s'appelle désormais **{pdb['emoji']} {nom}**.\n\n"
                     f"*Espèce : {pdb['nom']}*",
-        color=0xe91e63))
+        color=season_tint(0xe91e63)))
 
 PET_RELATIONS = [
     (-40, "😡", "Ennemis",       "Ils ne peuvent plus se voir en peinture.", 0),
@@ -40148,7 +41804,7 @@ class PetDuoView(ui.View):
             title=f"💖 {na} × {nb}",
             description=(f"*{random.choice(SCENES[cle])}*\n\n"
                          f"💰 **+{pieces:,} pièces** chacun  ·  ❤️ Humeur **+{humeur}**  ·  ⭐ **+{xp} XP**"),
-            color=0xe91e63), view=self)
+            color=season_tint(0xe91e63)), view=self)
         self.stop()
 
 @bot.command(name="petduo", aliases=["duo"])
@@ -40166,13 +41822,13 @@ async def petduo_cmd(ctx, ami: discord.Member = None):
     (seuil, emo, nom, desc, bonus), suivant = palier_relation(pts)
     if pts < 13:
         return await ctx.send(embed=discord.Embed(
-            title="💖 Duo — pas encore débloqué",
+            title=season_titre("💖 Duo — pas encore débloqué"),
             description=(f"{emo} Leur relation : **{nom}** *({pts} rencontre(s))*\n"
                          f"*{desc}*\n\n"
                          f"Il faut atteindre **💛 Inséparables** *(13 rencontres)* "
                          f"pour débloquer les activités de duo.\n\n"
                          f"*Continue avec `.petvisite @{ami.display_name}` !*"),
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
     cle_cd = "duo_" + aid
     e1 = pet_etat(uid)
     reste = 4 * 3600 - (_t.time() - e1["dernier"].get(cle_cd, 0))
@@ -40187,7 +41843,7 @@ async def petduo_cmd(ctx, ami: discord.Member = None):
         description=(f"{emo} **{nom}** — *{desc}*\n"
                      f"**{pts} rencontres** ensemble\n\n"
                      f"**Que font-ils aujourd'hui ?**"),
-        color=0xe91e63).set_footer(text="Une activité de duo toutes les 4 heures"),
+        color=season_tint(0xe91e63)).set_footer(text=season_pied("Une activité de duo toutes les 4 heures")),
         view=PetDuoView(uid, aid))
 
 @bot.command(name="petcadeau", aliases=["offrirpet"])
@@ -40226,19 +41882,19 @@ async def petcadeau_cmd(ctx, ami: discord.Member = None, *, objet: str = None):
             pet_carnet_note(aid, f"🎁 A reçu {emo} **{nom}** de {ctx.author.display_name}.")
             save_all_data()
             return await ctx.send(f"{ami.mention}", embed=discord.Embed(
-                title="🎁 Un cadeau !",
+                title=season_titre("🎁 Un cadeau !"),
                 description=(f"**{ctx.author.display_name}** offre {emo} **{nom}** à "
                              f"**{sb.get('surnom') or db['nom']}** !\n\n"
                              f"🥰 Il semble avoir adoré.\n💖 Relation **+1**"),
-                color=0xe91e63))
+                color=season_tint(0xe91e63)))
         lignes = "\n".join(f"{v[0]} **{v[1]}** — `{k}` · {v[2]:,} p" for k, v in CADEAUX.items())
         return await ctx.send(embed=discord.Embed(
-            title="🎁 Offrir un cadeau",
+            title=season_titre("🎁 Offrir un cadeau"),
             description=(f"{lignes}\n\n"
                          f"*Tu peux aussi offrir un **accessoire** de la garde-robe :*\n"
                          f"`.petcadeau @ami noeud` · `.petcadeau @ami couronne`\n\n"
                          f"*Chaque cadeau renforce la relation entre vos compagnons.*"),
-            color=0xe91e63))
+            color=season_tint(0xe91e63)))
 
     cle = normalize_str(objet)
     emo, nom, prix, typ, val = CADEAUX[cle]
@@ -40266,11 +41922,11 @@ async def petcadeau_cmd(ctx, ami: discord.Member = None, *, objet: str = None):
                  "🤗 Il est venu remercier à sa manière.", "✨ Ses yeux se sont illuminés.",
                  "🎉 Il fait le tour de la pièce en courant."]
     await ctx.send(f"{ami.mention}", embed=discord.Embed(
-        title="🎁 Un cadeau est arrivé !",
+        title=season_titre("🎁 Un cadeau est arrivé !"),
         description=(f"**{ctx.author.display_name}** offre {emo} **{nom}** à "
                      f"{db['emoji']} **{nb}**\n\n"
                      f"{random.choice(REACTIONS)}\n\n{reaction}\n💖 Relation **+1**"),
-        color=0xe91e63))
+        color=season_tint(0xe91e63)))
 
 @bot.command(name="petamis", aliases=["amitiepet", "petfriends", "petrelations"])
 async def petamis_cmd(ctx, membre: discord.Member = None):
@@ -40309,21 +41965,21 @@ async def petamis_cmd(ctx, membre: discord.Member = None):
 
     if not relations:
         return await ctx.send(embed=discord.Embed(
-            title=f"🐾 Les relations de {nom_moi}",
+            title=season_titre(f"🐾 Les relations de {season_brut(nom_moi)}"),
             description=("*Il n'a encore rencontré personne.*\n\n"
                          "`.petvisite @ami` — chaque rencontre renforce leur relation.\n"
                          "*De 😡 Ennemis à 👑 Duo légendaire — plus ils se voient, "
                          "plus les récompenses grossissent.*"),
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
 
     relations.sort(key=lambda x: -x["pts"])
     amis = [r for r in relations if r["pts"] > 0]
     rivaux = [r for r in relations if r["pts"] < 0]
 
     embed = discord.Embed(
-        title=f"🐾 Les relations de {nom_moi}",
+        title=season_titre(f"🐾 Les relations de {season_brut(nom_moi)}"),
         description=f"*{len(relations)} relation(s) tissée(s) au fil des rencontres.*",
-        color=0xe91e63)
+        color=season_tint(0xe91e63))
 
     if amis:
         lignes = []
@@ -40346,7 +42002,7 @@ async def petamis_cmd(ctx, membre: discord.Member = None):
                    f"*`.petduo @{meilleur['membre'].display_name}` pour leurs activités exclusives.*"),
             inline=False)
 
-    embed.set_footer(text="`.petvisite @membre` pour renforcer une relation")
+    embed.set_footer(text=season_pied("`.petvisite @membre` pour renforcer une relation"))
     await ctx.send(embed=embed)
 
 
@@ -40440,23 +42096,23 @@ async def petsouvenirs_cmd(ctx, action: str = None, *, arg: str = None):
         return await ctx.send(embed=discord.Embed(
             description=f"{o['emoji']} **{o['nom']}** s'appelle désormais **{nouveau}**.\n"
                         f"*Le bot l'utilisera dans ses scènes et ses rêves.*",
-            color=0xe91e63))
+            color=season_tint(0xe91e63)))
 
     if not lst:
         return await ctx.send(embed=discord.Embed(
-            title=f"🧸 Les objets de {pst.get('surnom') or pdb['nom']}",
+            title=season_titre(f"🧸 Les objets de {season_brut(pst.get('surnom') or pdb['nom'])}"),
             description=("*Il n'a encore rien de vraiment important.*\n\n"
                          "Les objets sentimentaux arrivent au fil de sa vie : "
                          "sa première trouvaille, un cadeau d'un ami, un souvenir d'expédition…"),
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
     lignes = []
     for i, o in enumerate(lst, 1):
         nom_aff = f"**{o['surnom']}**" + f" *({o['nom']})*" if o.get("surnom") else f"**{o['nom']}**"
         lignes.append(f"`{i}` {o['emoji']} {nom_aff}\n　*{o['origine']}*")
     await ctx.send(embed=discord.Embed(
-        title=f"🧸 Les objets importants de {pet_nom_decore(uid, pdb)}",
+        title=season_titre(f"🧸 Les objets importants de {season_brut(pet_nom_decore(uid, pdb))}"),
         description="\n".join(lignes) + "\n\n*`.petsouvenirs nommer <n°> <nom>` pour en baptiser un.*",
-        color=0xe91e63).set_footer(text="Ces objets racontent son histoire — ils apparaissent dans ses rêves"))
+        color=season_tint(0xe91e63)).set_footer(text=season_pied("Ces objets racontent son histoire — ils apparaissent dans ses rêves")))
 
 # ── 📊 Bilan de vie ──
 BILANS = [30, 100, 365, 730]
@@ -40503,9 +42159,9 @@ async def verifier_bilan(uid, channel):
     if channel:
         try:
             await channel.send(embed=discord.Embed(
-                title=f"🎂  {cap} JOURS AVEC {nom_pet.upper()}",
+                title=season_titre(f"🎂  {season_brut(cap)} JOURS AVEC {season_brut(nom_pet.upper())}"),
                 description="\n".join(lignes) + f"\n\n*« Avec toi depuis {cap} jours. »*",
-                color=0xf1c40f).set_footer(text="📖 Enregistré dans son carnet"))
+                color=season_tint(0xf1c40f)).set_footer(text=season_pied("📖 Enregistré dans son carnet")))
         except Exception:
             pass
     return True
@@ -40584,7 +42240,7 @@ class PetHubView(ui.View):
             print(f"[PetHub] écran {ecran} : {type(e).__name__}: {e}")
             emb = discord.Embed(
                 description="😿 Cet écran n'a pas pu s'afficher. Refais `.pet`.",
-                color=0xe74c3c)
+                color=season_tint(0xe74c3c))
             self.clear_items()
             self.bouton("Accueil", "◀️", "accueil", 0)
         try:
@@ -40903,7 +42559,7 @@ class PetHubView(ui.View):
         pid, pdb, pst = get_active_pet(uid)
         part = (pst or {}).get("bebe_avec")
         f = get_foyer(uid, part) if part else None
-        e = discord.Embed(title="📖  Album familial", color=0xff9ec7)
+        e = discord.Embed(title=season_titre("📖  Album familial"), color=season_tint(0xff9ec7))
         moments = []
         if f:
             import datetime as _dt
@@ -40921,12 +42577,12 @@ class PetHubView(ui.View):
             e.description = "\n".join(f"{m[0]} {m[1]}" for m in moments[:14])
         else:
             e.description = "*L'album est encore vide. Vos moments s'y ajouteront tout seuls.*"
-        e.set_footer(text=f"{len(moments)} moment(s)")
+        e.set_footer(text=season_pied(f"{len(moments)} moment(s)"))
         return e
 
     def ec_choisir(self):
         d = pets_data.get(self.uid, {})
-        e = discord.Embed(title="🔄  Choisir un compagnon", color=0xff9ec7)
+        e = discord.Embed(title=season_titre("🔄  Choisir un compagnon"), color=season_tint(0xff9ec7))
         lignes = []
         for k, st_ in (d.get("owned") or {}).items():
             if st_.get("est_bebe") and not st_.get("adulte"):
@@ -40937,7 +42593,7 @@ class PetHubView(ui.View):
             origine = "  ·  *né au foyer*" if st_.get("adulte") else ""
             lignes.append(f"{f_.get('emoji', '🐾')} **{nom}** — niveau {st_.get('level', 1)}{marque}{origine}")
         e.description = "\n".join(lignes) if lignes else "*Aucun compagnon disponible.*"
-        e.set_footer(text="Le compagnon actif ne change que si tu le choisis")
+        e.set_footer(text=season_pied("Le compagnon actif ne change que si tu le choisis"))
         return e
 
     async def nettoyer(self, itx):
@@ -40984,7 +42640,7 @@ class PetHubView(ui.View):
         pid, pdb, pstate = get_active_pet(uid)
         if not pdb:
             return discord.Embed(description="🐾 Tu n'as pas de compagnon actif.",
-                                 color=0x95a5a6)
+                                 color=season_tint(0x95a5a6))
         st = pet_etat(uid) or {}
         pet_init_perso(uid)
         nom = pstate.get("surnom") or pdb["nom"]
@@ -41011,7 +42667,7 @@ class PetHubView(ui.View):
         if nref:
             bas.append(f"🏠 {nref} meuble(s)")
         if bas:
-            e.set_footer(text="   ·   ".join(bas))
+            e.set_footer(text=season_pied("   ·   ".join(bas)))
         return e
 
     def ec_interagir(self):
@@ -41027,17 +42683,17 @@ class PetHubView(ui.View):
         pr = st.get("proprete", 80)
         etats.append("🛁 Sale" if pr < 40 else "🛁 Propre")
         return discord.Embed(
-            title="🐾  Que fait-on ?",
+            title=season_titre("🐾  Que fait-on ?"),
             description=f"*{nom} te regarde, les oreilles dressées.*\n\n" + "   ·   ".join(etats),
-            color=HUB_COULEURS["interagir"])
+            color=season_tint(HUB_COULEURS["interagir"]))
 
     def ec_resultat(self):
         act, texte, gains = getattr(self, "dernier", ("", "", {}))
         emo = {"nourrir": "🍖", "jouer": "🎾", "laver": "🛁",
                "dormir": "🛏️", "caresser": "🤗"}.get(act, "🐾")
-        e = discord.Embed(title=f"{emo}  C'est fait",
+        e = discord.Embed(title=season_titre(f"{season_brut(emo)}  C'est fait"),
                           description=f"*« {texte} »*",
-                          color=HUB_COULEURS["interagir"])
+                          color=season_tint(HUB_COULEURS["interagir"]))
         if gains:
             e.add_field(name="\u200b",
                         value="   ·   ".join(f"{k} **{v}**" for k, v in gains.items()),
@@ -41050,9 +42706,9 @@ class PetHubView(ui.View):
         pid, pdb, pstate = get_active_pet(uid)
         nom = ((pstate or {}).get("surnom") or (pdb or {}).get("nom") or "ton compagnon")
         sal = 100 - d.get("saletes", 0)
-        e = discord.Embed(title=f"🏠  Refuge de {nom}",
+        e = discord.Embed(title=season_titre(f"🏠  Refuge de {season_brut(nom)}"),
                           description=f"🧹 Propreté du refuge   {jauge5(sal)}   **{sal} %**",
-                          color=HUB_COULEURS["refuge"])
+                          color=season_tint(HUB_COULEURS["refuge"]))
         lignes = []
         for pid_, (emo, n, desc, meubles, act) in REFUGE_PIECES.items():
             poss = meubles_piece(uid, pid_)
@@ -41062,7 +42718,7 @@ class PetHubView(ui.View):
         if getattr(self, "msg_refuge", None):
             e.add_field(name="\u200b", value=self.msg_refuge, inline=False)
             self.msg_refuge = None
-        e.set_footer(text="✨ = une activité y est disponible")
+        e.set_footer(text=season_pied("✨ = une activité y est disponible"))
         return e
 
     def ec_piece(self):
@@ -41070,7 +42726,7 @@ class PetHubView(ui.View):
         emo, nom, desc, meubles, act = REFUGE_PIECES[self.piece]
         poss = meubles_piece(uid, self.piece)
         e = discord.Embed(title=f"{emo}  {nom}", description=f"*{desc}*",
-                          color=HUB_COULEURS["refuge"])
+                          color=season_tint(HUB_COULEURS["refuge"]))
         if poss:
             lignes = []
             for m in poss:
@@ -41083,19 +42739,19 @@ class PetHubView(ui.View):
                         inline=False)
         manquants = [m for m in meubles if m not in poss]
         if manquants:
-            e.set_footer(text=f"{len(manquants)} meuble(s) encore disponible(s) à la boutique")
+            e.set_footer(text=season_pied(f"{len(manquants)} meuble(s) encore disponible(s) à la boutique"))
         return e
 
     def ec_sortir(self):
-        e = discord.Embed(title="🗺️  Où allez-vous ?",
+        e = discord.Embed(title=season_titre("🗺️  Où allez-vous ?"),
                           description="*Ton compagnon tourne déjà autour de la porte.*",
-                          color=HUB_COULEURS["sortir"])
+                          color=season_tint(HUB_COULEURS["sortir"]))
         e.add_field(name="\u200b",
                     value=("🧭 **`.petexpedition`** — la grande aventure\n"
                            "🤝 **`.petensemble`** — une activité tous les deux\n"
                            "👋 **`.petvisite @ami`** — rencontrer un autre compagnon"),
                     inline=False)
-        e.set_footer(text="Ces sorties gardent leur propre commande — elles sont trop riches pour un bouton")
+        e.set_footer(text=season_pied("Ces sorties gardent leur propre commande — elles sont trop riches pour un bouton"))
         return e
 
     def ec_famille(self):
@@ -41104,7 +42760,7 @@ class PetHubView(ui.View):
         pstate = pstate or {}
         pdb = pdb or {}
         nom = pstate.get("surnom") or pdb.get("nom", "ton compagnon")
-        e = discord.Embed(title=f"❤️  La famille de {nom}", color=HUB_COULEURS["famille"])
+        e = discord.Embed(title=season_titre(f"❤️  La famille de {season_brut(nom)}"), color=season_tint(HUB_COULEURS["famille"]))
         if not pid:
             e.description = "*Tu n'as pas encore de compagnon actif.*"
             return e
@@ -41146,7 +42802,7 @@ class PetHubView(ui.View):
                 lignes.append(f"{fiche.get('emoji', '🐾')} **{nom_b}**\n"
                               f"└ {emo_b} {ph_b}  ·  🌱 {barre}  {min(cur, req)}/{req}")
             e.add_field(name=f"👶 Ses petits ({len(bebes)})", value="\n".join(lignes), inline=False)
-        e.set_footer(text="`.petbebe` · `.petduo` · `.petamis` pour le détail")
+        e.set_footer(text=season_pied("`.petbebe` · `.petduo` · `.petamis` pour le détail"))
         return e
 
     def ec_affaires(self):
@@ -41157,8 +42813,8 @@ class PetHubView(ui.View):
         acc = len(pet_accessoires(uid))
         pid, pdb, pstate = get_active_pet(uid)
         souv = len((pstate or {}).get("objets", []))
-        e = discord.Embed(title="🎒  Les affaires de ton compagnon",
-                          color=HUB_COULEURS["affaires"])
+        e = discord.Embed(title=season_titre("🎒  Les affaires de ton compagnon"),
+                          color=season_tint(HUB_COULEURS["affaires"]))
         e.add_field(name="\u200b",
                     value=(f"🍖 **Nourriture**      {nour} article(s)\n"
                            f"🎾 **Jouets**          {jou} jouet(s)\n"
@@ -41177,7 +42833,7 @@ class PetHubView(ui.View):
                   "accessoires": ("🎀", "Accessoires", PET_ACCESSOIRES),
                   "souvenirs": ("🎁", "Souvenirs", None)}
         emo, nom, table = titres[cat]
-        e = discord.Embed(title=f"{emo}  {nom}", color=HUB_COULEURS["affaires"])
+        e = discord.Embed(title=f"{emo}  {nom}", color=season_tint(HUB_COULEURS["affaires"]))
         if cat == "souvenirs":
             objets = (pstate or {}).get("objets", [])
             e.description = ("\n".join(f"🎁 {o}" for o in objets[:15])
@@ -41187,7 +42843,7 @@ class PetHubView(ui.View):
                       f"**{table[k][1] if isinstance(table[k], (list, tuple)) else k}**  ×{v}"
                       for k, v in inv.items() if k in table and v > 0][:15]
             e.description = "\n".join(lignes) if lignes else "*Rien dans cette catégorie.*"
-        e.set_footer(text="`.petshop` pour en acheter")
+        e.set_footer(text=season_pied("`.petshop` pour en acheter"))
         return e
 
     def ec_vie(self):
@@ -41196,7 +42852,7 @@ class PetHubView(ui.View):
         pid, pdb, pst = get_active_pet(uid)
         pst, pdb = pst or {}, pdb or {}
         nom = pst.get("surnom") or pst.get("nom_bebe") or pdb.get("nom", "?")
-        e = discord.Embed(title=f"📖  Vie de {nom}", color=HUB_COULEURS["vie"])
+        e = discord.Embed(title=season_titre(f"📖  Vie de {season_brut(nom)}"), color=season_tint(HUB_COULEURS["vie"]))
         if not pid:
             e.description = "*Tu n'as pas de compagnon actif.*"
             return e
@@ -41262,7 +42918,7 @@ class PetHubView(ui.View):
             if fav:
                 bas.append(f"❤️ Préfère **{fav}**")
             e.add_field(name="\u200b", value="   ·   ".join(bas), inline=False)
-            e.set_footer(text="Page 1 sur 2 — Profil")
+            e.set_footer(text=season_pied("Page 1 sur 2 — Profil"))
             return e
 
         # ── Page Parcours ──
@@ -41314,7 +42970,7 @@ class PetHubView(ui.View):
         if obj:
             e.add_field(name=f"🎁 Souvenirs  ·  {len(obj)}",
                         value=" · ".join(obj[-5:]), inline=False)
-        e.set_footer(text=f"Page 2 sur 2 — Parcours  ·  {len(carnet)} entrée(s) au carnet")
+        e.set_footer(text=season_pied(f"Page 2 sur 2 — Parcours  ·  {len(carnet)} entrée(s) au carnet"))
         return e
 
 @bot.command(name="pet", aliases=["compagnon"])
@@ -41478,8 +43134,8 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
         import datetime as _dt
         _adopt = pstate.get("adoption")
         _date = _dt.datetime.fromtimestamp(_adopt).strftime("%d/%m/%Y") if _adopt else "?"
-        embed.set_footer(text=f"Adopté le {_date} · il y a {jours} jour(s) · "
-                              f"`.petcompetences` `.petcarnet` `.garderobe` `.refuge`")
+        embed.set_footer(text=season_pied(f"Adopté le {_date} · il y a {jours} jour(s) · "
+                              f"`.petcompetences` `.petcarnet` `.garderobe` `.refuge`"))
 
         await ctx.send(embed=embed, view=PetMenuLegacyView(uid))
         await verifier_bilan(uid, ctx.channel)
@@ -41489,7 +43145,7 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
                 color=season_color("principal")))
         for e_t, n_t in verifier_titres_pet(uid):
             await ctx.send(embed=discord.Embed(
-                title="🏅 Nouveau titre !",
+                title=season_titre("🏅 Nouveau titre !"),
                 description=f"# {e_t}\n**{nom_perso}** devient **« {n_t} »**", color=season_color("or")))
         await verifier_traits_histoire(uid, ctx.channel)
         save_all_data()
@@ -41523,7 +43179,7 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
                 lignes.append(f"{p['emoji']} **{p['nom']}**{(' ' + deco) if deco else ''} — "
                               f"✨{_rom} · Niv.{st['level']} · {icone} +{val} %{actif}")
         return await ctx.send(embed=discord.Embed(
-            title=f"🐾 Compagnons de {ctx.author.display_name}",
+            title=season_titre(f"🐾 Compagnons de {season_brut(ctx.author.display_name)}"),
             description="\n".join(lignes), color=season_color("principal")))
     if action in ("equiper", "équiper", "equip"):
         if not pet_name:
@@ -41559,6 +43215,10 @@ async def pet_cmd(ctx, action: str = None, *, pet_name: str = None):
 AUTOROLE_FILE = data_path("autorole_config.json")
 def save_autorole():
     """Sauvegarde les panels autorole dans un fichier JSON"""
+    if _donnees["etat"] == "en_cours":      # demandée PENDANT le chargement :
+        return _donnees_differer("autorole", save_autorole)             # après validation seulement
+    if _donnees["etat"] != "pret":          # jamais avant le chargement, ni après un échec
+        return
     try:
         with open(AUTOROLE_FILE, "w", encoding="utf-8") as f:
             json.dump(autorole_panels, f, ensure_ascii=False)
@@ -41576,6 +43236,7 @@ def load_autorole():
         print(f"[Autorole] ✅ {len(data)} serveur(s) chargé(s)")
     except Exception as e:
         print(f"[Autorole] Erreur chargement : {e}")
+        _donnees_erreur("autorole", e)
 
 # ============================================================
 #  BOSS LIST — pour la commande .boss (event manuel admin)
@@ -41911,14 +43572,14 @@ async def bracket_lancer_match(ctx, gid, match_idx):
     a, b = matchs[match_idx]
     emoji_theme = "🎬" if game["theme"] == "kdrama" else "✨"
     embed = discord.Embed(
-        title=f"{emoji_theme} MATCH {match_idx+1}/{len(matchs)} — Tour {game['tour']}",
+        title=season_titre(f"{season_brut(emoji_theme)} MATCH {season_brut(match_idx+1)}/{season_brut(len(matchs))} — Tour {season_brut(game['tour'])}"),
         description=(
             f"# {a['emoji']} {a['nom']}\n"
             f"## ⚔️ VS ⚔️\n"
             f"# {b['emoji']} {b['nom']}\n\n"
             f"Votez avec les réactions 🅰️ / 🅱️ !\n*Le créateur peut passer au match suivant avec le bouton.*"
         ),
-        color=0xf1c40f
+        color=season_tint(0xf1c40f)
     )
     channel = ctx.guild.get_channel(game["channel"]) if hasattr(ctx, 'guild') else ctx.channel
     if not channel:
@@ -41959,7 +43620,7 @@ async def bracket_resoudre_match(guild, gid, match_idx):
     game["votes_en_cours"].pop(match_idx, None)
     await channel.send(embed=discord.Embed(
         description=f"🏆 **{winner['emoji']} {winner['nom']}** remporte le match ! ({votes_a} vs {votes_b})",
-        color=0x2ecc71
+        color=season_tint(0x2ecc71)
     ))
     # Match suivant du même tour ?
     next_idx = match_idx + 1
@@ -41977,9 +43638,9 @@ async def bracket_resoudre_match(guild, gid, match_idx):
         if len(gagnants) == 1:
             champion = gagnants[0]
             await channel.send(embed=discord.Embed(
-                title="👑 CHAMPION DU TOURNOI !",
+                title=season_titre("👑 CHAMPION DU TOURNOI !"),
                 description=f"# {champion['emoji']} {champion['nom']}\n\nÉlu meilleur {'drama' if game['theme']=='kdrama' else 'animé'} du QG ! 🎉",
-                color=0xf1c40f
+                color=season_tint(0xf1c40f)
             ))
             del active_brackets[gid]
         else:
@@ -41989,7 +43650,7 @@ async def bracket_resoudre_match(guild, gid, match_idx):
             game["gagnants"] = []
             await channel.send(embed=discord.Embed(
                 description=f"🎖️ **TOUR {game['tour']}** — {len(game['matchs'])} match(s) restant(s) !",
-                color=0x3498db
+                color=season_tint(0x3498db)
             ))
             await asyncio.sleep(2)
             class FakeCtx:
@@ -42157,9 +43818,9 @@ async def avis_cmd(ctx, *, titre: str):
     titre_original = list(reviews_data[key].values())[0]["titre_original"]
     stars = "⭐" * round(moyenne / 2)
     embed = discord.Embed(
-        title=f"📊 Avis du serveur — {titre_original}",
+        title=season_titre(f"📊 Avis du serveur — {season_brut(titre_original)}"),
         description=f"{stars}\n**Moyenne : {moyenne:.1f}/10** — {len(notes)} vote{'s' if len(notes) > 1 else ''}",
-        color=0xf1c40f
+        color=season_tint(0xf1c40f)
     )
     top = sorted(reviews_data[key].items(), key=lambda x: x[1]["note"], reverse=True)[:5]
     details = ""
@@ -42245,10 +43906,10 @@ def build_boss_embed(gid, derniere_attaque=None):
         f"🏆 **{boss['recompense']} pièces** pour tous les participants "
         "+ **250 bonus** au coup fatal !"
     )
-    embed = discord.Embed(description=desc, color=color)
+    embed = discord.Embed(description=desc, color=season_tint(color))
     if boss.get("image"):
         embed.set_image(url=boss["image"])
-    embed.set_footer(text="QG Kdrama — Boss Event ⚔️")
+    embed.set_footer(text=season_pied("QG Kdrama — Boss Event ⚔️"))
     return embed
 
 async def spawn_boss(channel, guild, ping=""):
@@ -42294,11 +43955,11 @@ async def bracket_cmd(ctx, theme: str = None, taille: int = 8):
     if cle not in THEMES:
         lignes = "\n".join(f"`{k}` — {v[0]} *({len(v[1])} candidats)*" for k, v in THEMES.items())
         return await ctx.send(embed=discord.Embed(
-            title="🏆 Tournoi du QG",
+            title=season_titre("🏆 Tournoi du QG"),
             description=(f"**Usage :** `.bracket <thème>`\n\n{lignes}\n\n"
                          f"*Ajoute `16` pour un tournoi à 16 : `.bracket anime 16`*\n"
                          f"Le serveur vote à chaque match, jusqu'au grand gagnant."),
-            color=0xf1c40f))
+            color=season_tint(0xf1c40f)))
 
     gid = ctx.guild.id
     if gid in active_brackets:
@@ -42329,7 +43990,7 @@ async def bracket_cmd(ctx, theme: str = None, taille: int = 8):
         f"{a['emoji']} **{a['nom']}**  🆚  {b['emoji']} **{b['nom']}**"
         for a, b in matchs)
     embed = discord.Embed(
-        title=f"🏆  TOURNOI — {nom_theme}",
+        title=season_titre(f"🏆  TOURNOI — {season_brut(nom_theme)}"),
         description=(f"**{taille} candidats s'affrontent !**\n"
                      f"Le serveur vote à chaque duel — le créateur peut passer au suivant "
                      f"avec le bouton.\n\n"
@@ -42337,8 +43998,8 @@ async def bracket_cmd(ctx, theme: str = None, taille: int = 8):
                      f"### 🥊 Premier tour\n{tableau}\n\n"
                      f"━━━━━━━━━━━━━━━━━━\n\n"
                      f"🏆 Le champion sera couronné **{nom_theme.split(' ', 1)[1]} du QG** !"),
-        color=couleur)
-    embed.set_footer(text=f"{taille} candidats · {taille-1} matchs · Que le meilleur gagne")
+        color=season_tint(couleur))
+    embed.set_footer(text=season_pied(f"{taille} candidats · {taille-1} matchs · Que le meilleur gagne"))
     await ctx.send(get_event_ping(ctx.guild, "everyone"), embed=embed)
     await asyncio.sleep(3)
 
@@ -42388,12 +44049,12 @@ async def devine_cmd(ctx):
 
     active_devine[salon.id] = {"running": True, "manche": 0, "scores": {}, "vus": []}
     await salon.send(embed=discord.Embed(
-        title="🎭 Devine le Personnage",
+        title=season_titre("🎭 Devine le Personnage"),
         description=("Je te donne des indices, tu trouves le personnage.\n"
                      "Écris **`indice`** pour en obtenir un de plus *(mais tu gagnes moins)*.\n\n"
                      f"🏆 **150 pièces** au premier indice, puis **-30** par indice supplémentaire.\n"
                      f"Les manches s'enchaînent — tape **`.devinerstop`** quand tu veux arrêter."),
-        color=0x9b59b6))
+        color=season_tint(0x9b59b6)))
     await asyncio.sleep(2)
 
     def check(m):
@@ -42412,10 +44073,10 @@ async def devine_cmd(ctx):
         game["indice_idx"] = 0
 
         await salon.send(embed=discord.Embed(
-            title=f"🎭 Manche {game['manche']} — {perso['univers']}",
+            title=season_titre(f"🎭 Manche {season_brut(game['manche'])} — {season_brut(perso['univers'])}"),
             description=f"**Indice 1 :** {perso['indices'][0]}\n\n*Qui suis-je ?*",
-            color=0x9b59b6
-        ).set_footer(text="⏳ 90 s • `indice` pour un indice de plus • `.devinerstop` pour arrêter"))
+            color=season_tint(0x9b59b6)
+        ).set_footer(text=season_pied("⏳ 90 s • `indice` pour un indice de plus • `.devinerstop` pour arrêter")))
 
         trouve = False
         game["skip"] = False
@@ -42433,7 +44094,7 @@ async def devine_cmd(ctx):
                 game["skip"] = True
                 await salon.send(embed=discord.Embed(
                     description=f"⏭️ Passé — c'était **{perso['nom']}** *({perso['univers']})*",
-                    color=0x95a5a6))
+                    color=season_tint(0x95a5a6)))
                 break
             if contenu.startswith("."):
                 continue
@@ -42441,7 +44102,7 @@ async def devine_cmd(ctx):
                 game["indice_idx"] = min(game["indice_idx"] + 1, len(perso["indices"]) - 1)
                 idx = game["indice_idx"]
                 await salon.send(embed=discord.Embed(
-                    description=f"💡 **Indice {idx+1} :** {perso['indices'][idx]}", color=0xf39c12))
+                    description=f"💡 **Indice {idx+1} :** {perso['indices'][idx]}", color=season_tint(0xf39c12)))
                 continue
             if _devine_valide(msg.content, perso["nom"]):
                 prize = max(60, 150 - game["indice_idx"] * 30)
@@ -42453,13 +44114,13 @@ async def devine_cmd(ctx):
                 await salon.send(embed=discord.Embed(
                     description=(f"🎉 **{msg.author.display_name}** trouve ! C'était **{perso['nom']}** "
                                  f"*({perso['univers']})*\n💰 **+{prize} pièces** · ⭐ +20 XP"),
-                    color=0x2ecc71))
+                    color=season_tint(0x2ecc71)))
                 trouve = True
                 break
         if not trouve and salon.id in active_devine and not game.get("skip"):
             await salon.send(embed=discord.Embed(
                 description=f"⏰ Temps écoulé ! C'était **{perso['nom']}** *({perso['univers']})*",
-                color=0xe74c3c))
+                color=season_tint(0xe74c3c)))
         if salon.id not in active_devine:
             break
         await asyncio.sleep(3)
@@ -42471,8 +44132,8 @@ async def devine_cmd(ctx):
         detail = "\n".join(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{n}** — {s} trouvé(s)"
                             for i, (n, s) in enumerate(classement[:5]))
         await salon.send(embed=discord.Embed(
-            title="🎭 Partie terminée",
-            description=f"**{game['manche']} manche(s) jouée(s)**\n\n{detail}", color=0x9b59b6))
+            title=season_titre("🎭 Partie terminée"),
+            description=f"**{game['manche']} manche(s) jouée(s)**\n\n{detail}", color=season_tint(0x9b59b6)))
     if temporaire:
         await close_event_channel(salon, 60)
 
@@ -42486,7 +44147,7 @@ async def devinetteskip_cmd(ctx):
     perso = game["perso"]
     await ctx.send(embed=discord.Embed(
         description=f"⏭️ Devinette passée — c'était **{perso['nom']}** *({perso['univers']})*",
-        color=0x95a5a6))
+        color=season_tint(0x95a5a6)))
 
 @bot.command(name="devinerstop", aliases=["devinestop", "stopdevine"])
 async def devinerstop_cmd(ctx):
@@ -42494,7 +44155,7 @@ async def devinerstop_cmd(ctx):
     if ctx.channel.id in active_devine:
         active_devine[ctx.channel.id]["running"] = False
         return await ctx.send(embed=discord.Embed(
-            description="🛑 Partie arrêtée — résultats à la fin de la manche.", color=0xe74c3c))
+            description="🛑 Partie arrêtée — résultats à la fin de la manche.", color=season_tint(0xe74c3c)))
     await ctx.send("❌ Aucune partie de Devine en cours ici !")
 
 
@@ -42765,7 +44426,7 @@ async def gacha_cmd(ctx, sous_cmd: str = None, *args):
             for i, k in enumerate(new_order) if k in ANIME_CARDS_DB
         ])
         embed = discord.Embed(
-            title="✅ Collection réorganisée !",
+            title=season_titre("✅ Collection réorganisée !"),
             description=result,
             color=season_color("succes")
         )
@@ -42785,7 +44446,7 @@ async def gacha_cmd(ctx, sous_cmd: str = None, *args):
                     rarete_emoji = RARETE_EMOJI.get(c["rarete"], "🔵")
                     lines.append(f"{rarete_emoji} **{c['nom']}** — claimé par **{name}**")
             embed = discord.Embed(
-                title="🕐 Dernières cartes claimées",
+                title=season_titre("🕐 Dernières cartes claimées"),
                 description="\n".join(lines) if lines else "Aucune carte récente",
                 color=season_color("info")
             )
@@ -43112,9 +44773,9 @@ async def process_jackpot(message):
         uid = str(message.author.id)
         economy_data[uid]["coins"] += jackpot_cagnotte
         await message.channel.send(embed=discord.Embed(
-            title="💰 JACKPOT !",
+            title=season_titre("💰 JACKPOT !"),
             description=f"🎉 {message.author.mention} remporte **{jackpot_cagnotte} pièces** !",
-            color=0xf1c40f
+            color=season_tint(0xf1c40f)
         ))
         jackpot_cagnotte = 0
 loterie_data = {}  # {guild_id: {participants, cagnotte, active}}
@@ -43158,13 +44819,13 @@ async def gachatrade_cmd(ctx, membre: discord.Member = None, ma_carte: str = Non
     r2 = RARETE_EMOJI.get(c2["rarete"], "🔵")
 
     embed = discord.Embed(
-        title="🔄 Proposition d'échange !",
+        title=season_titre("🔄 Proposition d'échange !"),
         description=(
             f"{ctx.author.mention} propose à {membre.mention} :\n\n"
             f"**{c1['nom']}** {r1} ↔️ **{c2['nom']}** {r2}\n\n"
             f"{membre.mention} — réponds ✅ pour accepter ou ❌ pour refuser !"
         ),
-        color=0xf1c40f
+        color=season_tint(0xf1c40f)
     )
     view = AcceptView(membre, timeout=60)
     msg = await ctx.send(embed=embed, view=view)
@@ -43184,21 +44845,21 @@ async def gachatrade_cmd(ctx, membre: discord.Member = None, ma_carte: str = Non
                 gacha_collections[target_uid].pop(key2, None)
                 gacha_collections[target_uid][key1] = {"fusion": 0}
             embed_ok = discord.Embed(
-                title="✅ Échange effectué !",
+                title=season_titre("✅ Échange effectué !"),
                 description=f"**{c1['nom']}** {r1} ↔️ **{c2['nom']}** {r2}\nL'échange a bien eu lieu !",
-                color=0x2ecc71
+                color=season_tint(0x2ecc71)
             )
             await msg.edit(embed=embed_ok)
     elif view.value is False:
             embed_no = discord.Embed(
                 description=f"❌ **{membre.display_name}** a refusé l'échange.",
-                color=0xe74c3c
+                color=season_tint(0xe74c3c)
             )
             await msg.edit(embed=embed_no)
     else:
         embed_to = discord.Embed(
             description="⏰ Échange expiré — pas de réponse dans les 60 secondes.",
-            color=0x95a5a6
+            color=season_tint(0x95a5a6)
         )
         await msg.edit(embed=embed_to)
 
@@ -43210,9 +44871,9 @@ async def invitations_cmd(ctx, membre: discord.Member = None):
     cible = membre or ctx.author
     count = invite_counts[str(cible.id)]
     embed = discord.Embed(
-        title="🔗 Invitations",
+        title=season_titre("🔗 Invitations"),
         description=f"**{cible.display_name}** a invité **{count}** membre(s) sur le serveur ! 🎉",
-        color=0x2ecc71
+        color=season_tint(0x2ecc71)
     )
     await ctx.send(embed=embed)
 
@@ -43230,12 +44891,12 @@ async def noter_cmd(ctx, note: int, *, titre: str):
     notes = [v["note"] for v in reviews_data[key].values()]
     moyenne = sum(notes) / len(notes)
     embed = discord.Embed(
-        title=f"⭐ Note enregistrée — {titre}",
+        title=season_titre(f"⭐ Note enregistrée — {season_brut(titre)}"),
         description=(
             f"{ctx.author.mention} a noté **{titre}** : **{note}/10**\n\n"
             f"📊 Moyenne du serveur : **{moyenne:.1f}/10** ({len(notes)} vote{'s' if len(notes) > 1 else ''})"
         ),
-        color=0xf1c40f
+        color=season_tint(0xf1c40f)
     )
     await ctx.send(embed=embed)
 
@@ -43251,12 +44912,12 @@ async def pendu_cmd(ctx):
 
     active_pendu[salon.id] = {"running": True, "manche": 0, "scores": {}, "vus": []}
     await salon.send(embed=discord.Embed(
-        title="🎮 Le Pendu",
+        title=season_titre("🎮 Le Pendu"),
         description=("Devine le titre ou le personnage, **lettre par lettre**.\n"
                      "Écris **`skip`** pour passer un mot.\n\n"
                      "🏆 **100 pièces** par mot trouvé · ❌ 6 erreurs maximum\n"
                      "Les manches s'enchaînent — tape **`.pendustop`** quand tu veux arrêter."),
-        color=0x2ecc71))
+        color=season_tint(0x2ecc71)))
     await asyncio.sleep(2)
 
     def check(m):
@@ -43293,7 +44954,7 @@ async def pendu_cmd(ctx):
                 msg = await bot.wait_for("message", check=check, timeout=120)
             except asyncio.TimeoutError:
                 await salon.send(embed=discord.Embed(
-                    description=f"⏰ Temps écoulé ! Le mot était **{mot.upper()}**", color=0xe74c3c))
+                    description=f"⏰ Temps écoulé ! Le mot était **{mot.upper()}**", color=season_tint(0xe74c3c)))
                 break
             if salon.id not in active_pendu:
                 return
@@ -43307,15 +44968,15 @@ async def pendu_cmd(ctx):
                 game["indice_donne"] = True
                 nb_lettres = len(mot.replace(" ", ""))
                 await salon.send(embed=discord.Embed(
-                    title="💡 Indice",
+                    title=season_titre("💡 Indice"),
                     description=(f"**{game['indice']}**\n"
                                  f"📏 {nb_lettres} lettres · {len(mot.split())} mot(s)\n"
                                  f"🔤 Commence par **{mot[0].upper()}** et finit par **{mot[-1].upper()}**"),
-                    color=0xf39c12))
+                    color=season_tint(0xf39c12)))
                 continue
             if contenu in ("skip", "passer"):
                 await salon.send(embed=discord.Embed(
-                    description=f"⏭️ Mot passé ! C'était **{mot.upper()}**", color=0x95a5a6))
+                    description=f"⏭️ Mot passé ! C'était **{mot.upper()}**", color=season_tint(0x95a5a6)))
                 break
             # Proposition du mot entier
             if len(contenu) > 2:
@@ -43326,7 +44987,7 @@ async def pendu_cmd(ctx):
                     etat["scores"][msg.author.display_name] = etat["scores"].get(msg.author.display_name, 0) + 1
                     await salon.send(embed=discord.Embed(
                         description=f"🎉 **{msg.author.display_name}** trouve le mot entier — **{mot.upper()}** !\n💰 **+150 pièces**",
-                        color=0x2ecc71))
+                        color=season_tint(0x2ecc71)))
                     fini = True
                 continue
             lettre = contenu
@@ -43345,7 +45006,7 @@ async def pendu_cmd(ctx):
                     etat["scores"][msg.author.display_name] = etat["scores"].get(msg.author.display_name, 0) + 1
                     await salon.send(embed=discord.Embed(
                         description=f"🎉 **{msg.author.display_name}** complète **{mot.upper()}** !\n💰 **+100 pièces**",
-                        color=0x2ecc71))
+                        color=season_tint(0x2ecc71)))
                     fini = True
                     continue
                 await salon.send(embed=_pendu_embed(game))
@@ -43353,7 +45014,7 @@ async def pendu_cmd(ctx):
                 game["erreurs"] += 1
                 if game["erreurs"] >= game["max_erreurs"]:
                     await salon.send(embed=discord.Embed(
-                        description=f"💀 Perdu ! Le mot était **{mot.upper()}**", color=0xe74c3c))
+                        description=f"💀 Perdu ! Le mot était **{mot.upper()}**", color=season_tint(0xe74c3c)))
                     break
                 await salon.send(embed=_pendu_embed(game))
         if salon.id not in active_pendu:
@@ -43366,8 +45027,8 @@ async def pendu_cmd(ctx):
         detail = "\n".join(f"{'🥇🥈🥉'[i] if i < 3 else '▪️'} **{n}** — {s} mot(s)"
                             for i, (n, s) in enumerate(classement[:5]))
         await salon.send(embed=discord.Embed(
-            title="🎮 Partie terminée",
-            description=f"**{etat['manche']} manche(s) jouée(s)**\n\n{detail}", color=0x2ecc71))
+            title=season_titre("🎮 Partie terminée"),
+            description=f"**{etat['manche']} manche(s) jouée(s)**\n\n{detail}", color=season_tint(0x2ecc71)))
     if temporaire:
         await close_event_channel(salon, 60)
 
@@ -43377,7 +45038,7 @@ async def pendustop_cmd(ctx):
     if ctx.channel.id in active_pendu:
         active_pendu[ctx.channel.id]["running"] = False
         return await ctx.send(embed=discord.Embed(
-            description="🛑 Partie arrêtée — résultats à la fin de la manche.", color=0xe74c3c))
+            description="🛑 Partie arrêtée — résultats à la fin de la manche.", color=season_tint(0xe74c3c)))
     await ctx.send("❌ Aucune partie de Pendu en cours ici !")
 
 
@@ -43385,15 +45046,15 @@ def _pendu_embed(game):
     stage = PENDU_STAGES[max(0, len(PENDU_STAGES) - 1 - game["erreurs"])]
     couleur = 0xe74c3c if game["erreurs"] >= 4 else (0xf39c12 if game["erreurs"] >= 2 else 0x2ecc71)
     embed = discord.Embed(
-        title=f"🎮 Pendu — Manche {game.get('manche', 1)}   {stage}",
+        title=season_titre(f"🎮 Pendu — Manche {season_brut(game.get('manche', 1))}   {season_brut(stage)}"),
         description=(
             f"📂 **Thème : {game.get('theme', 'Divers')}**\n\n"
             f"# `{' '.join(game['trouve'])}`\n"
             f"❌ Erreurs : **{game['erreurs']}/{game['max_erreurs']}**\n"
             f"📝 Lettres proposées : {', '.join(sorted(game['lettres'])) if game['lettres'] else 'aucune'}"
         ),
-        color=couleur)
-    embed.set_footer(text="Tape une lettre · le mot entier · `indice` · `skip` · `.pendustop` pour arrêter")
+        color=season_tint(couleur))
+    embed.set_footer(text=season_pied("Tape une lettre · le mot entier · `indice` · `skip` · `.pendustop` pour arrêter"))
     return embed
 
 # ============================================================
@@ -43584,7 +45245,7 @@ async def gachabattle_cmd(ctx, adversaire: discord.Member = None):
         return chosen if len(chosen) >= 3 else None
 
     await ctx.send(embed=discord.Embed(
-        title="🎴 GACHA BATTLE",
+        title=season_titre("🎴 GACHA BATTLE"),
         description=(
             f"⚡ **{ctx.author.mention}** défie **{adversaire.mention}** en **3 contre 3** !\n\n"
             "**3 cartes chacun. Le dernier debout gagne.**\n"
@@ -43624,7 +45285,7 @@ async def gachabattle_cmd(ctx, adversaire: discord.Member = None):
         game = active_gachabattles.get(ctx.channel.id, {})
         j1_g, j2_g = game.get("j1"), game.get("j2")
         if not j1_g or not j2_g:
-            return discord.Embed(title="Combat terminé")
+            return discord.Embed(title=season_titre("Combat terminé"))
         c1, c2 = carte_active(j1_g), carte_active(j2_g)
 
         def barre(cc):
@@ -43655,7 +45316,7 @@ async def gachabattle_cmd(ctx, adversaire: discord.Member = None):
         actif = j1_g if tour_de == j1_g["membre"].id else j2_g
 
         embed = discord.Embed(
-            title="🎴  GACHA BATTLE",
+            title=season_titre("🎴  GACHA BATTLE"),
             description=(
                 f"### {c1['emoji']} {c1['nom']}\n"
                 f"{barre(c1)}  **{c1['hp_actuel']}**/{c1['pv']}\n"
@@ -43671,7 +45332,7 @@ async def gachabattle_cmd(ctx, adversaire: discord.Member = None):
         journal = game.get("journal", [])
         if journal:
             embed.add_field(name="\u200b", value="\n".join(journal[-2:]), inline=False)
-        embed.set_footer(text=f"🎯 Au tour de {actif['membre'].display_name}")
+        embed.set_footer(text=season_pied(f"🎯 Au tour de {actif['membre'].display_name}"))
         return embed
 
 
@@ -43694,7 +45355,7 @@ async def gachabattle_cmd(ctx, adversaire: discord.Member = None):
             desc_fin = f"🎉 **{j2_g['membre'].mention}** remporte le combat 3v3 !\n💰 **+300 pièces** • ⭐ **+60 XP**"
             if lvlups_win:
                 desc_fin += "\n\n📈 **Cartes qui montent de niveau :**\n" + "\n".join([f"⬆️ **{nom}** → Niv. {lvl}" for nom, lvl in lvlups_win])
-            await ctx.send(embed=discord.Embed(title="🏆 FIN DU COMBAT !", description=desc_fin, color=season_color("or")))
+            await ctx.send(embed=discord.Embed(title=season_titre("🏆 FIN DU COMBAT !"), description=desc_fin, color=season_color("or")))
             return
         if all(c["ko"] for c in j2_g["equipe"]):
             del active_gachabattles[ctx.channel.id]
@@ -43709,7 +45370,7 @@ async def gachabattle_cmd(ctx, adversaire: discord.Member = None):
             desc_fin = f"🎉 **{j1_g['membre'].mention}** remporte le combat 3v3 !\n💰 **+300 pièces** • ⭐ **+60 XP**"
             if lvlups_win:
                 desc_fin += "\n\n📈 **Cartes qui montent de niveau :**\n" + "\n".join([f"⬆️ **{nom}** → Niv. {lvl}" for nom, lvl in lvlups_win])
-            await ctx.send(embed=discord.Embed(title="🏆 FIN DU COMBAT !", description=desc_fin, color=season_color("or")))
+            await ctx.send(embed=discord.Embed(title=season_titre("🏆 FIN DU COMBAT !"), description=desc_fin, color=season_color("or")))
             return
 
         current = j1_g if game["tour"] == j1_g["membre"].id else j2_g
@@ -45084,9 +46745,9 @@ async def topinvitations_cmd(ctx):
         name = member.display_name if member else f"Membre {uid}"
         desc += f"{medals[i]} **{name}** — {count} invitation(s)\n"
     embed = discord.Embed(
-        title="🏆 Top Invitations",
+        title=season_titre("🏆 Top Invitations"),
         description=desc,
-        color=0xf1c40f
+        color=season_tint(0xf1c40f)
     )
     await ctx.send(embed=embed)
 
@@ -45121,15 +46782,15 @@ async def utiliser_item_solo(ctx, uid, iid):
         roll_data[uid]["rolls"] = min(roll_data[uid]["rolls"] + 3, ROLLS_MAX + 5)
         await ctx.send(embed=discord.Embed(
             description=f"☕ Un café bien serré — **+3 rolls** ! *({roll_data[uid]['rolls']} disponibles)*",
-            color=0x2ecc71))
+            color=season_tint(0x2ecc71)))
     elif iid == "sablier":
         claim_cooldown.pop(uid, None)
         await ctx.send(embed=discord.Embed(
-            description="🕰️ Le sable s'inverse — ton **claim est de nouveau disponible** !", color=0x2ecc71))
+            description="🕰️ Le sable s'inverse — ton **claim est de nouveau disponible** !", color=season_tint(0x2ecc71)))
     elif iid == "rolls_5":
         roll_data[uid]["rolls"] = min(roll_data[uid]["rolls"] + 5, ROLLS_MAX + 10)
         await ctx.send(embed=discord.Embed(
-            description=f"🎰 **+5 rolls** ! *({roll_data[uid]['rolls']} disponibles)*", color=0x2ecc71))
+            description=f"🎰 **+5 rolls** ! *({roll_data[uid]['rolls']} disponibles)*", color=season_tint(0x2ecc71)))
     elif iid == "cadeau":
         CHANCES = [("Rare", 78), ("Épique", 19), ("Légendaire", 2.8), ("Mythique", 0.2)]
         libres = {r: [k for k, cc in ANIME_CARDS_DB.items()
@@ -45150,7 +46811,7 @@ async def utiliser_item_solo(ctx, uid, iid):
                                   f"{RARETE_EMOJI.get(cc['rarete'],'')} **{cc['nom']}** !",
                          10 if cc["rarete"] == "Mythique" else 5)
         e = discord.Embed(
-            title="🎁 Cadeau Mystère ouvert !",
+            title=season_titre("🎁 Cadeau Mystère ouvert !"),
             description=(f"{RARETE_EMOJI.get(cc['rarete'],'')} **{cc['nom']}**\n"
                          f"*{cc['serie']}*  ·  **{cc['rarete']}**\n\n"
                          f"Elle rejoint ta collection !"),
@@ -45162,53 +46823,53 @@ async def utiliser_item_solo(ctx, uid, iid):
         rarity_boost[uid] = 5
         await ctx.send(embed=discord.Embed(
             description="🎯 **Boost Rareté actif** — chances Épique+ fortement augmentées "
-                        "sur tes **5 prochains rolls** !", color=0x2ecc71))
+                        "sur tes **5 prochains rolls** !", color=season_tint(0x2ecc71)))
     elif iid == "oracle":
         oracle_actif[uid] = 3
         await ctx.send(embed=discord.Embed(
             description="🔮 **Oracle actif** — tes 3 prochains rolls ont 1 chance sur 5 "
-                        "de faire tomber une carte bonus.", color=0x2ecc71))
+                        "de faire tomber une carte bonus.", color=season_tint(0x2ecc71)))
     elif iid == "double_rien":
         if random.random() < 0.5:
             ajout = min(4, ROLLS_MAX + 5 - roll_data[uid]["rolls"])
             roll_data[uid]["rolls"] += max(0, ajout)
             await ctx.send(embed=discord.Embed(
-                title="🎰 Double !", description=f"**+{max(0,ajout)} rolls** ! *({roll_data[uid]['rolls']} au total)*",
-                color=0x2ecc71))
+                title=season_titre("🎰 Double !"), description=f"**+{max(0,ajout)} rolls** ! *({roll_data[uid]['rolls']} au total)*",
+                color=season_tint(0x2ecc71)))
         else:
             perdus = roll_data[uid]["rolls"]
             roll_data[uid]["rolls"] = 0
             await ctx.send(embed=discord.Embed(
-                title="💥 Rien…", description=f"Tu perds tes **{perdus} rolls**. Ça arrive.",
-                color=0xe74c3c))
+                title=season_titre("💥 Rien…"), description=f"Tu perds tes **{perdus} rolls**. Ça arrive.",
+                color=season_tint(0xe74c3c)))
     elif iid == "aimant":
         aimant_actif[uid] = True
         await ctx.send(embed=discord.Embed(
-            description="🧲 Ton **prochain roll** est garanti **Rare ou mieux** !", color=0x2ecc71))
+            description="🧲 Ton **prochain roll** est garanti **Rare ou mieux** !", color=season_tint(0x2ecc71)))
     elif iid == "oeil":
         oeil_destin[uid] = 3
         await ctx.send(embed=discord.Embed(
-            description="🧿 Tes **3 prochains rolls** te seront révélés à l'avance.", color=0x2ecc71))
+            description="🧿 Tes **3 prochains rolls** te seront révélés à l'avance.", color=season_tint(0x2ecc71)))
     elif iid == "shield":
         shield_active[uid] = _t.time() + 1800
         await ctx.send(embed=discord.Embed(
             description="🛡️ **Bouclier actif 30 min** — protégé du Sceau et des Malédictions.",
-            color=0x2ecc71))
+            color=season_tint(0x2ecc71)))
     elif iid == "amulette":
         amulette_active[uid] = _t.time() + 1200
         await ctx.send(embed=discord.Embed(
             description="🪬 **Amulette active 20 min** — tout sabotage sera renvoyé à l'attaquant.",
-            color=0x2ecc71))
+            color=season_tint(0x2ecc71)))
     elif iid == "protection":
         shield_active[uid] = _t.time() + 7200
         amulette_active[uid] = _t.time() + 7200
         await ctx.send(embed=discord.Embed(
             description="🌟 **Protection Divine** — immunité totale pendant **2 heures**.",
-            color=0xf1c40f))
+            color=season_tint(0xf1c40f)))
     elif iid == "cadenasp":
         cadenas_perso[uid] = _t.time() + 86400
         await ctx.send(embed=discord.Embed(
-            description="🔗 Tu es **immunisé contre le braquage** pendant **24 heures**.", color=0x2ecc71))
+            description="🔗 Tu es **immunisé contre le braquage** pendant **24 heures**.", color=season_tint(0x2ecc71)))
     elif iid == "antidote":
         n = 0
         for d in (claim_curse, claim_freeze, malediction_active, ghost_cards):
@@ -45217,7 +46878,7 @@ async def utiliser_item_solo(ctx, uid, iid):
         await ctx.send(embed=discord.Embed(
             description=(f"💊 Antidote bu — **{n} malédiction(s)** annulée(s)." if n
                          else "💊 Tu n'étais sous aucune malédiction… mais ça fait du bien."),
-            color=0x2ecc71))
+            color=season_tint(0x2ecc71)))
     elif iid == "potionxp":
         xp_data[uid]["xp"] += 500
         monte = 0
@@ -45229,27 +46890,27 @@ async def utiliser_item_solo(ctx, uid, iid):
             monte += 1
         await ctx.send(embed=discord.Embed(
             description="🧪 **+500 XP** !" + (f"\n🆙 **Niveau {xp_data[uid]['level']}** atteint !" if monte else ""),
-            color=0x2ecc71))
+            color=season_tint(0x2ecc71)))
     elif iid == "double_xp":
         double_xp_actif[uid] = _t.time() + 3600
         await ctx.send(embed=discord.Embed(
-            description="⚡ **Double XP actif pendant 1 heure** !", color=0x2ecc71))
+            description="⚡ **Double XP actif pendant 1 heure** !", color=season_tint(0x2ecc71)))
     elif iid == "trefle":
         trefle_actif[uid] = _t.time() + 3600
         await ctx.send(embed=discord.Embed(
-            description="🍀 Tes gains d'**events sont doublés** pendant **1 heure** !", color=0x2ecc71))
+            description="🍀 Tes gains d'**events sont doublés** pendant **1 heure** !", color=season_tint(0x2ecc71)))
     elif iid == "boost_daily":
         double_daily[uid] = True
         await ctx.send(embed=discord.Embed(
-            description="📅 Ton **prochain `.daily`** rapportera le **double** !", color=0x2ecc71))
+            description="📅 Ton **prochain `.daily`** rapportera le **double** !", color=season_tint(0x2ecc71)))
     elif iid == "megaphone":
         megaphone_actif[uid] = True
         await ctx.send(embed=discord.Embed(
-            description="📣 Ton **prochain message** sera annoncé en grand !", color=0x2ecc71))
+            description="📣 Ton **prochain message** sera annoncé en grand !", color=season_tint(0x2ecc71)))
     elif iid == "fanfare":
         fanfare_actif[uid] = True
         await ctx.send(embed=discord.Embed(
-            description="🎺 Ton **prochain passage de niveau** sera annoncé en grand !", color=0x2ecc71))
+            description="🎺 Ton **prochain passage de niveau** sera annoncé en grand !", color=season_tint(0x2ecc71)))
     elif iid == "reroll_pet":
         pid, pdb, pstate = get_active_pet(uid)
         if not pid:
@@ -45258,7 +46919,7 @@ async def utiliser_item_solo(ctx, uid, iid):
         leveled, lvl = give_pet_xp(uid, 300)
         await ctx.send(embed=discord.Embed(
             description=(f"🍬 **{pet_nom_decore(uid, pdb)}** dévore la friandise — **+300 XP** !"
-                         + (f"\n🆙 Niveau **{lvl}** !" if leveled else "")), color=0x2ecc71))
+                         + (f"\n🆙 Niveau **{lvl}** !" if leveled else "")), color=season_tint(0x2ecc71)))
     elif iid == "loupe":
         dispo = [k for k, cc in ANIME_CARDS_DB.items()
                  if k not in RETIRED_CARD_MAP
@@ -45268,11 +46929,11 @@ async def utiliser_item_solo(ctx, uid, iid):
             return False
         tirage = random.sample(dispo, min(3, len(dispo)))
         await ctx.send(embed=discord.Embed(
-            title="🔍 La loupe révèle…",
+            title=season_titre("🔍 La loupe révèle…"),
             description="\n".join(
                 f"{RARETE_EMOJI.get(ANIME_CARDS_DB[k]['rarete'],'')} **{ANIME_CARDS_DB[k]['nom']}** "
                 f"— *{ANIME_CARDS_DB[k]['serie']}*" for k in tirage)
-                + "\n\n*Ces cartes n'appartiennent à personne.*", color=0x9b59b6))
+                + "\n\n*Ces cartes n'appartiennent à personne.*", color=season_tint(0x9b59b6)))
     elif iid == "cristal":
         mes = set(gacha_collections.get(uid, {}))
         conv = []
@@ -45282,9 +46943,9 @@ async def utiliser_item_solo(ctx, uid, iid):
                 m = ctx.guild.get_member(int(autre)) if ctx.guild else None
                 conv.append(f"**{ANIME_CARDS_DB[k]['nom']}** — *{m.display_name if m else 'un membre'}*")
         await ctx.send(embed=discord.Embed(
-            title="🔮 La boule s'éclaircit…",
+            title=season_titre("🔮 La boule s'éclaircit…"),
             description="\n".join(conv[:15]) or "*Personne ne convoite tes cartes… pour l'instant.*",
-            color=0x9b59b6))
+            color=season_tint(0x9b59b6)))
     elif iid == "tirelire":
         gain = random.choices([0, 1500, 3000, 4500, 5500, 8000, 12000, 25000],
                               weights=[8, 16, 22, 20, 14, 12, 6, 2])[0]
@@ -45292,9 +46953,9 @@ async def utiliser_item_solo(ctx, uid, iid):
         gazette_gain(uid, gain)
         check_coins_achievements(uid, ctx.channel)
         await ctx.send(embed=discord.Embed(
-            title="🐷 Tu casses la tirelire…",
+            title=season_titre("🐷 Tu casses la tirelire…"),
             description=(f"Elle contenait **{gain:,} pièces** !" if gain
-                         else "💀 Elle était **vide**."), color=0x2ecc71 if gain else 0xe74c3c))
+                         else "💀 Elle était **vide**."), color=season_tint(0x2ecc71 if gain else 0xe74c3c)))
     else:
         return False
     return True
@@ -45308,8 +46969,8 @@ async def souvenirs_cmd(ctx, membre: discord.Member = None):
     objets = {k: v for k, v in inventaire.get(uid, {}).items()
               if v > 0 and k not in ITEMS_SOLO and k not in ITEMS_CIBLE}
     embed = discord.Embed(
-        title=f"🖼️ Souvenirs de {cible.display_name}",
-        color=0x9b59b6)
+        title=season_titre(f"🖼️ Souvenirs de {season_brut(cible.display_name)}"),
+        color=season_tint(0x9b59b6))
     embed.set_thumbnail(url=cible.display_avatar.url)
     if not objets:
         embed.description = ("*Aucun souvenir pour l'instant.*\n\n"
@@ -45326,7 +46987,7 @@ async def souvenirs_cmd(ctx, membre: discord.Member = None):
             embed.add_field(name="\u200b" if i else "Collection",
                             value="\n".join(lignes[i:i+8]), inline=False)
         if len(lignes) > 24:
-            embed.set_footer(text=f"…et {len(lignes)-24} autre(s)")
+            embed.set_footer(text=season_pied(f"…et {len(lignes)-24} autre(s)"))
     await ctx.send(embed=embed)
 
 @bot.command(name="inventaire", aliases=["sac", "objets", "moninventaire"])
@@ -45338,8 +46999,8 @@ async def inventaire_cmd(ctx, membre: discord.Member = None):
     objets = {k: v for k, v in inventaire.get(uid, {}).items() if v > 0}
 
     embed = discord.Embed(
-        title=f"🎒 Sac de {cible.display_name}",
-        color=0xf1c40f)
+        title=season_titre(f"🎒 Sac de {season_brut(cible.display_name)}"),
+        color=season_tint(0xf1c40f))
     embed.set_thumbnail(url=cible.display_avatar.url)
 
     if objets:
@@ -45395,7 +47056,7 @@ async def inventaire_cmd(ctx, membre: discord.Member = None):
     if actifs:
         embed.add_field(name="⏳ Effets actifs", value="\n".join(actifs), inline=False)
 
-    embed.set_footer(text=f"{sum(objets.values())} objet(s) · `.shop` pour en acheter")
+    embed.set_footer(text=season_pied(f"{sum(objets.values())} objet(s) · `.shop` pour en acheter"))
     await ctx.send(embed=embed)
 
 @bot.command(name="utiliser")
@@ -45410,16 +47071,16 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
             return await ctx.send(embed=discord.Embed(
                 description=("🎒 Ton sac est vide.\n\n"
                              "Achète dans `.shop`, envoie ton compagnon en `.petexpedition`, "
-                             "ou ouvre le calendrier de l'Avent."), color=0x95a5a6))
+                             "ou ouvre le calendrier de l'Avent."), color=season_tint(0x95a5a6)))
         lignes = []
         for iid, n in sorted(objets.items(), key=lambda x: -x[1]):
             nom, _ = _info_item(iid)
             besoin = " *(sur quelqu'un)*" if iid in ITEMS_CIBLE else ""
             lignes.append(f"`{iid}` — **{nom}** ×{n}{besoin}")
         return await ctx.send(embed=discord.Embed(
-            title="🎒 Que veux-tu utiliser ?",
+            title=season_titre("🎒 Que veux-tu utiliser ?"),
             description="\n".join(lignes) + "\n\n*`.utiliser <id>` · `.inventaire` pour le détail*",
-            color=0xf1c40f))
+            color=season_tint(0xf1c40f)))
 
     itype = item_type.lower().strip()
     if souvenir_permanent(itype):
@@ -45461,9 +47122,9 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
     if amulette_active.get(uid_cible, 0) > now_ts:
         inventaire[uid][itype] -= 1
         return await ctx.send(embed=discord.Embed(
-            title="🪬 Amulette activée !",
+            title=season_titre("🪬 Amulette activée !"),
             description=f"**{cible.display_name}** est protégé par une **Amulette** ! Le sabotage se retourne contre **{ctx.author.mention}** ! 😈",
-            color=0x9b59b6
+            color=season_tint(0x9b59b6)
         ))
 
     # Vérif protection divine
@@ -45482,20 +47143,20 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
     # ── FREEZE ───────────────────────────────────────────────
     if itype == "freeze":
         claim_freeze[uid_cible] = now_ts + 10
-        await ctx.send(embed=discord.Embed(title="🧊 Sceau des Ombres !",
-            description=f"**{cible.mention}** ne peut plus claim pendant **10 secondes** ! 😈", color=0x3498db))
+        await ctx.send(embed=discord.Embed(title=season_titre("🧊 Sceau des Ombres !"),
+            description=f"**{cible.mention}** ne peut plus claim pendant **10 secondes** ! 😈", color=season_tint(0x3498db)))
 
     # ── CURSE ────────────────────────────────────────────────
     elif itype == "curse":
         claim_curse[uid_cible] = now_ts + 300
-        await ctx.send(embed=discord.Embed(title="⏳ Malédiction !",
-            description=f"**{cible.mention}** a +5 min sur son claim cooldown ! 😈", color=0x9b59b6))
+        await ctx.send(embed=discord.Embed(title=season_titre("⏳ Malédiction !"),
+            description=f"**{cible.mention}** a +5 min sur son claim cooldown ! 😈", color=season_tint(0x9b59b6)))
 
     # ── CADENAS ──────────────────────────────────────────────
     elif itype == "cadenas":
         claim_freeze[uid_cible] = now_ts + 1800  # 30 min
-        await ctx.send(embed=discord.Embed(title="🔒 Cadenas !",
-            description=f"**{cible.mention}** ne peut plus claim pendant **30 minutes** ! 🔒", color=0xe74c3c))
+        await ctx.send(embed=discord.Embed(title=season_titre("🔒 Cadenas !"),
+            description=f"**{cible.mention}** ne peut plus claim pendant **30 minutes** ! 🔒", color=season_tint(0xe74c3c)))
 
     # ── BOMBE GACHA ──────────────────────────────────────────
     elif itype == "bombe_gacha":
@@ -45510,14 +47171,14 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
         if uid_cible in gacha_collections and lost_key in gacha_collections[uid_cible]:
             del gacha_collections[uid_cible][lost_key]
         r_emoji = RARETE_EMOJI.get(lost_card["rarete"], "🔵")
-        await ctx.send(embed=discord.Embed(title="💣 Bombe Gacha !",
+        await ctx.send(embed=discord.Embed(title=season_titre("💣 Bombe Gacha !"),
             description=f"**{cible.mention}** perd sa carte **{lost_card['nom']}** {r_emoji} ! 💥\n*Envoyée dans le néant...*",
-            color=0xe74c3c))
+            color=season_tint(0xe74c3c)))
         # Notifier la victime en MP
         try:
             await cible.send(embed=discord.Embed(
                 description=f"💣 **{ctx.author.display_name}** t'a posé une Bombe Gacha ! Tu as perdu **{lost_card['nom']}** {r_emoji} !",
-                color=0xe74c3c))
+                color=season_tint(0xe74c3c)))
         except: pass
 
     # ── FANTÔME ───────────────────────────────────────────────
@@ -45528,9 +47189,9 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
         ghost_key = random.choice(cible_cards)
         ghost_card = ANIME_CARDS_DB[ghost_key]
         ghost_cards[f"{uid_cible}_{ghost_key}"] = now_ts + 1800  # 30 min
-        await ctx.send(embed=discord.Embed(title="👻 Fantôme !",
+        await ctx.send(embed=discord.Embed(title=season_titre("👻 Fantôme !"),
             description=f"Une carte de **{cible.mention}** devient invisible pendant **30 min** ! 👻",
-            color=0x9b59b6))
+            color=season_tint(0x9b59b6)))
 
     # ── MALÉDICTION RARE ──────────────────────────────────────
     elif itype == "malediction":
@@ -45543,9 +47204,9 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
             return await ctx.send(f"❌ Tu as déjà maudit **{cible.display_name}** aujourd'hui !")
         bot.malediction_targets[key_mal] = True
         malediction_active[uid_cible] = now_ts + 3600  # 1h
-        await ctx.send(embed=discord.Embed(title="🎭 Malédiction Rare !",
+        await ctx.send(embed=discord.Embed(title=season_titre("🎭 Malédiction Rare !"),
             description=f"**{cible.mention}** ne tirera que des cartes **Communes** lors de son prochain roll ! 😈",
-            color=0x9b59b6))
+            color=season_tint(0x9b59b6)))
 
     # ── VOL DE ROLL ───────────────────────────────────────────
     elif itype == "vol_roll":
@@ -45560,9 +47221,9 @@ async def utiliser_cmd(ctx, item_type: str = None, cible: discord.Member = None)
         roll_data[uid_cible]["rolls"] = max(0, roll_data[uid_cible]["rolls"] - 1)
         roll_data[uid]["rolls"] = min(roll_data[uid]["rolls"] + 1, ROLLS_MAX + 5)
         bot.vol_roll_counts[count_key] = current + 1
-        await ctx.send(embed=discord.Embed(title="🎯 Vol de Roll !",
+        await ctx.send(embed=discord.Embed(title=season_titre("🎯 Vol de Roll !"),
             description=f"**{ctx.author.mention}** vole 1 roll à **{cible.mention}** ! ({current+1}/3 vols sur ce joueur)",
-            color=0xf39c12))
+            color=season_tint(0xf39c12)))
 
     else:
         await ctx.send(f"❌ Item `{itype}` inconnu !")
@@ -45585,13 +47246,13 @@ async def watch_cmd(ctx, action: str = None, *, title: str = None):
     uid = str(ctx.author.id)
     if not action:
         return await ctx.send(embed=discord.Embed(
-            title="📋 Ta Watchlist",
+            title=season_titre("📋 Ta Watchlist"),
             description=("`.watch ajouter <titre>` — ajouter à ta liste\n"
                          "`.watch liste [@membre]` — voir une watchlist\n"
                          "`.watch vu <titre>` — marquer comme **vu** ✅\n"
                          "`.watch revoir <titre>` — remettre à voir\n"
                          "`.watch supprimer <titre>` — retirer complètement"),
-            color=0xff6b9d))
+            color=season_tint(0xff6b9d)))
     action = action.lower()
 
     # ── AJOUTER ──
@@ -45611,7 +47272,7 @@ async def watch_cmd(ctx, action: str = None, *, title: str = None):
         icone = {"anime": "📺", "kdrama": "🎭"}.get(kind, "📌")
         return await ctx.send(embed=discord.Embed(
             description=f"✅ {icone} **{officiel}** ajouté à ta watchlist !",
-            color=0x2ecc71))
+            color=season_tint(0x2ecc71)))
 
     # ── LISTE ──
     if action in ("liste", "list", "voir"):
@@ -45623,8 +47284,8 @@ async def watch_cmd(ctx, action: str = None, *, title: str = None):
                 f"📋 {'Ta watchlist est vide' if cible == ctx.author else f'{cible.display_name} n a rien dans sa watchlist'} ! "
                 f"`.watch ajouter <titre>` pour commencer.")
         embed = discord.Embed(
-            title=f"📋 Watchlist de {cible.display_name}",
-            color=0xff6b9d)
+            title=season_titre(f"📋 Watchlist de {season_brut(cible.display_name)}"),
+            color=season_tint(0xff6b9d))
         embed.set_thumbnail(url=cible.display_avatar.url)
         for kind, titre_sec in (("anime", "📺 Animés"), ("kdrama", "🎭 K-Dramas"), ("autre", "📌 Autres")):
             lot = [i for i in items if i.get("type", "autre") == kind]
@@ -45643,7 +47304,7 @@ async def watch_cmd(ctx, action: str = None, *, title: str = None):
                     txt += f"\n*…et {len(vus)-12} autre(s)*"
             embed.add_field(name=f"{titre_sec}  ({len(lot)})", value=txt[:1024] or "—", inline=False)
         total, nb_vus = len(items), sum(1 for i in items if i["status"] == "Vu")
-        embed.set_footer(text=f"{total} titre(s) • {nb_vus} vu(s) • {total - nb_vus} à voir")
+        embed.set_footer(text=season_pied(f"{total} titre(s) • {nb_vus} vu(s) • {total - nb_vus} à voir"))
         return await ctx.send(embed=embed)
 
     # ── VU / REVOIR / SUPPRIMER ──
@@ -45659,16 +47320,16 @@ async def watch_cmd(ctx, action: str = None, *, title: str = None):
                     item["status"] = "Vu"
                     return await ctx.send(embed=discord.Embed(
                         description=f"✅ **{item['title']}** marqué comme **vu** ! 🎉\n*Il reste dans ta liste — ton historique est conservé.*",
-                        color=0x2ecc71))
+                        color=season_tint(0x2ecc71)))
                 if action == "revoir":
                     item["status"] = "À voir"
                     return await ctx.send(embed=discord.Embed(
                         description=f"🔄 **{item['title']}** est de nouveau dans les titres à voir.",
-                        color=0x3498db))
+                        color=season_tint(0x3498db)))
                 watchlist_data[uid].remove(item)
                 return await ctx.send(embed=discord.Embed(
                     description=f"🗑️ **{item['title']}** retiré de ta watchlist.",
-                    color=0xe74c3c))
+                    color=season_tint(0xe74c3c)))
         return await ctx.send(f"❌ **{title}** n'est pas dans ta watchlist.")
 
     await ctx.send("❌ Action inconnue. Tape `.watch` pour voir les options.")
@@ -45728,7 +47389,7 @@ async def liga_cmd(ctx):
         m = ctx.guild.get_member(int(uid))
         name = m.display_name if m else f"<@{uid}>"
         lines.append(f"{medal} **{name}** — Niv.{data['level']} • {economy_data[uid]['coins']} pièces")
-    embed = discord.Embed(title="🏆 Liga QG Kdrama — Classement Mensuel", description="\n".join(lines), color=0xf1c40f)
+    embed = discord.Embed(title=season_titre("🏆 Liga QG Kdrama — Classement Mensuel"), description="\n".join(lines), color=season_tint(0xf1c40f))
     await ctx.send(embed=embed)
 
 @bot.command(name="faction")
@@ -45743,30 +47404,30 @@ async def faction_cmd(ctx, action: str = None, *, args: str = None):
         bot.factions_membres = {}
     uid = str(ctx.author.id)
     if not action:
-        embed = discord.Embed(title="⚔️ Factions du QG", color=0xff6b9d)
+        embed = discord.Embed(title=season_titre("⚔️ Factions du QG"), color=season_tint(0xff6b9d))
         for fid, f in FACTIONS.items():
             membres = sum(1 for v in bot.factions_membres.values() if v == fid)
             embed.add_field(name=f"{f['nom']} (`{fid}`)", value=f"{f['desc']}\n👥 {membres} membres", inline=False)
-        embed.set_footer(text=".faction rejoindre <id> pour rejoindre")
+        embed.set_footer(text=season_pied(".faction rejoindre <id> pour rejoindre"))
         return await ctx.send(embed=embed)
     if action == "rejoindre":
         fid = args.lower().strip() if args else ""
         if fid not in FACTIONS:
             return await ctx.send(f"❌ Faction invalide ! Choisis : {', '.join(FACTIONS.keys())}")
         bot.factions_membres[uid] = fid
-        await ctx.send(embed=discord.Embed(description=f"✅ Tu as rejoint **{FACTIONS[fid]['nom']}** !", color=0x2ecc71))
+        await ctx.send(embed=discord.Embed(description=f"✅ Tu as rejoint **{FACTIONS[fid]['nom']}** !", color=season_tint(0x2ecc71)))
     elif action == "info":
         fid = bot.factions_membres.get(uid)
         if not fid:
             return await ctx.send("❌ Tu n'es dans aucune faction !")
         f = FACTIONS[fid]
         membres = sum(1 for v in bot.factions_membres.values() if v == fid)
-        await ctx.send(embed=discord.Embed(title=f"⚔️ {f['nom']}", description=f"{f['desc']}\n👥 {membres} membres", color=0xff6b9d))
+        await ctx.send(embed=discord.Embed(title=f"⚔️ {f['nom']}", description=f"{f['desc']}\n👥 {membres} membres", color=season_tint(0xff6b9d)))
     elif action == "classement":
         from collections import Counter
         counts = Counter(bot.factions_membres.values())
         lines = [f"**{FACTIONS[fid]['nom']}** — {n} membres" for fid, n in counts.most_common() if fid in FACTIONS]
-        await ctx.send(embed=discord.Embed(title="🏆 Classement Factions", description="\n".join(lines) or "Aucune donnée", color=0xf1c40f))
+        await ctx.send(embed=discord.Embed(title=season_titre("🏆 Classement Factions"), description="\n".join(lines) or "Aucune donnée", color=season_tint(0xf1c40f)))
 
 @bot.command(name="leavefaction")
 async def leavefaction_cmd(ctx):
@@ -45810,7 +47471,7 @@ async def burn_cmd(ctx, *, perso: str = None):
     r_emoji = RARETE_EMOJI.get(c["rarete"], "🔵")
     # Confirmation
     embed = discord.Embed(
-        title="🔥 Recycler cette carte ?",
+        title=season_titre("🔥 Recycler cette carte ?"),
         description=(
             f"{r_emoji} **{c['nom']}** — *{c['serie']}*\n"
             f"{'⭐'*fus if fus else ''} {'`Niv.'+str(lvl)+'`' if lvl > 1 else ''}\n\n"
@@ -45818,7 +47479,7 @@ async def burn_cmd(ctx, *, perso: str = None):
             + (f" *(base {gain} + bonus {bonus})*" if bonus else "")
             + "\n\n⚠️ **Action irréversible !** Clique sur **Confirmer**."
         ),
-        color=0xe67e22
+        color=season_tint(0xe67e22)
     )
     if c.get("image"):
         embed.set_thumbnail(url=c["image"])
@@ -45835,14 +47496,14 @@ async def burn_cmd(ctx, *, perso: str = None):
         economy_data[uid]["coins"] += total
         track_stat(uid, "burns", channel=ctx.channel)
         await msg.edit(embed=discord.Embed(
-            title="🔥 Carte recyclée !",
+            title=season_titre("🔥 Carte recyclée !"),
             description=f"**{c['nom']}** a été détruite.\n💰 **+{total:,} pièces** ! (total : {economy_data[uid]['coins']:,})",
-            color=0x2ecc71
+            color=season_tint(0x2ecc71)
         ), view=None)
     elif view.value is False:
-        await msg.edit(embed=discord.Embed(description="❌ Recyclage annulé.", color=0x95a5a6), view=None)
+        await msg.edit(embed=discord.Embed(description="❌ Recyclage annulé.", color=season_tint(0x95a5a6)), view=None)
     else:
-        await msg.edit(embed=discord.Embed(description="⏰ Recyclage annulé (timeout).", color=0x95a5a6), view=None)
+        await msg.edit(embed=discord.Embed(description="⏰ Recyclage annulé (timeout).", color=season_tint(0x95a5a6)), view=None)
 
 # ============================================================
 #  F. COLLECTION PAR SÉRIE — Voir progression & récompenses
@@ -45856,9 +47517,9 @@ async def serie_cmd(ctx, *, nom_serie: str = None):
     if not nom_serie:
         # Afficher la progression globale
         embed = discord.Embed(
-            title="📚 Tes Collections par Série",
+            title=season_titre("📚 Tes Collections par Série"),
             description="Complète une série entière pour gagner un **badge** et des **pièces** !\n`.serie <nom>` pour les détails.",
-            color=0x9b59b6
+            color=season_tint(0x9b59b6)
         )
         lignes = []
         for serie in toutes_series:
@@ -45872,7 +47533,7 @@ async def serie_cmd(ctx, *, nom_serie: str = None):
             embed.add_field(name="📊 Progression", value=chunk, inline=False)
         else:
             embed.add_field(name="📊 Progression", value="*Tu n'as encore aucune carte ! Fais `.ga` pour commencer.*", inline=False)
-        embed.set_footer(text=f"{len(toutes_series)} séries au total dans le gacha")
+        embed.set_footer(text=season_pied(f"{len(toutes_series)} séries au total dans le gacha"))
         return await ctx.send(embed=embed)
     # Détails d'une série précise
     match_serie = next((s for s in toutes_series if nom_serie.lower() in s.lower()), None)
@@ -45893,9 +47554,9 @@ async def serie_cmd(ctx, *, nom_serie: str = None):
         else:
             lignes.append(f"⬜ {r} ||{c['nom']}||")
     embed = discord.Embed(
-        title=f"📚 Collection — {match_serie}",
+        title=season_titre(f"📚 Collection — {season_brut(match_serie)}"),
         description=f"**{len(owned_keys)}/{len(serie_keys)}** cartes possédées",
-        color=0x2ecc71 if complete else 0x9b59b6
+        color=season_tint(0x2ecc71 if complete else 0x9b59b6)
     )
     # Paginer la liste si trop longue
     txt = "\n".join(lignes)
@@ -45916,11 +47577,11 @@ async def serie_cmd(ctx, *, nom_serie: str = None):
                 value=f"🏅 Badge **{match_serie}** débloqué !\n💰 **+{reward:,} pièces** de récompense !",
                 inline=False
             )
-            embed.color = 0xf1c40f
+            embed.color = season_tint(0xf1c40f)
     else:
         manquantes = len(serie_keys) - len(owned_keys)
         reward = serie_reward(len(serie_keys))
-        embed.set_footer(text=f"Encore {manquantes} carte(s) pour le badge + {reward:,} pièces !")
+        embed.set_footer(text=season_pied(f"Encore {manquantes} carte(s) pour le badge + {reward:,} pièces !"))
     await ctx.send(embed=embed)
 
 # ============================================================
@@ -45974,13 +47635,13 @@ async def cardinfo_cmd(ctx, *, perso: str = None):
             value=f"⭐ Fusion : {fus}/3\n{xp_txt}",
             inline=True
         )
-        embed.set_footer(text="💡 Combats en gachabattle pour faire monter le niveau !")
+        embed.set_footer(text=season_pied("💡 Combats en gachabattle pour faire monter le niveau !"))
     else:
         if owner:
             m = ctx.guild.get_member(int(owner))
-            embed.set_footer(text=f"Possédée par {m.display_name if m else 'quelqu’un'}")
+            embed.set_footer(text=season_pied(f"Possédée par {m.display_name if m else 'quelqu’un'}"))
         else:
-            embed.set_footer(text="Carte disponible — personne ne la possède !")
+            embed.set_footer(text=season_pied("Carte disponible — personne ne la possède !"))
     await ctx.send(embed=embed)
 
 @bot.command(name="gachastats")
@@ -45996,7 +47657,7 @@ async def gachastats_cmd(ctx):
         m = ctx.guild.get_member(int(uid))
         name = m.display_name if m else f"<@{uid}>"
         lines.append(f"{medal} **{name}** — {len(col)} cartes")
-    await ctx.send(embed=discord.Embed(title="🏆 Top Collectionneurs", description="\n".join(lines), color=0x9b59b6))
+    await ctx.send(embed=discord.Embed(title=season_titre("🏆 Top Collectionneurs"), description="\n".join(lines), color=season_tint(0x9b59b6)))
 
 @bot.command(name="tradeshistory")
 async def tradeshistory_cmd(ctx):
@@ -46007,7 +47668,7 @@ async def tradeshistory_cmd(ctx):
         return await ctx.send("📋 Aucun échange enregistré !")
     recents = bot.trades_history[-10:]
     lines = [f"• {t}" for t in reversed(recents)]
-    await ctx.send(embed=discord.Embed(title="🔄 Historique des Échanges", description="\n".join(lines), color=0x3498db))
+    await ctx.send(embed=discord.Embed(title=season_titre("🔄 Historique des Échanges"), description="\n".join(lines), color=season_tint(0x3498db)))
 
 @bot.command(name="raidstop")
 @commands.has_permissions(manage_guild=True)
@@ -46037,9 +47698,9 @@ async def marcheacheter_cmd(ctx, *, perso: str = None):
     economy_data[uid]["coins"] -= cout
     donner_carte(uid, key, ctx.channel)
     embed = discord.Embed(
-        title="🕶️ Marché Noir — Achat réussi !",
+        title=season_titre("🕶️ Marché Noir — Achat réussi !"),
         description=f"{RARETE_EMOJI.get(c['rarete'],'⚪')} **{c['nom']}** acquis pour **{cout} pièces** !",
-        color=0x2c3e50
+        color=season_tint(0x2c3e50)
     )
     if c.get("image"):
         embed.set_thumbnail(url=c["image"])
@@ -46142,7 +47803,7 @@ async def missions_cmd(ctx):
     restant = max(0, 86400 - (now - p["reset"]))
 
     embed = discord.Embed(
-        title="📋 Missions Journalières",
+        title=season_titre("📋 Missions Journalières"),
         description=f"**{ctx.author.display_name}** — Reset dans "
                     f"{int(restant // 3600)}h{int((restant % 3600) // 60):02d}",
         color=season_color("info"))
@@ -46186,13 +47847,13 @@ async def missions_cmd(ctx):
         pied = f"💰 +{gagne_coins} pièces & +{gagne_xp} XP — {len(nouvelles)} mission(s) encaissée(s)"
         if bonus:
             pied += f"\n🎉 BONUS TOUTES MISSIONS : +{MISSIONS_BONUS['coins']} pièces & +{MISSIONS_BONUS['xp']} XP"
-        embed.set_footer(text=pied)
+        embed.set_footer(text=season_pied(pied))
     else:
         restantes = MISSIONS_PAR_JOUR - nb_finies
         embed.set_footer(text=(
-            "✅ Tout est encaissé pour aujourd'hui — reviens demain !"
+            season_pied("✅ Tout est encaissé pour aujourd'hui — reviens demain !"
             if restantes == 0 else
-            f"💡 Encore {restantes} mission(s) — reviens ici pour encaisser au fur et à mesure."))
+            f"💡 Encore {restantes} mission(s) — reviens ici pour encaisser au fur et à mesure.")))
 
     # 🍂 Missions de Blackwood — bloc séparé, progression mensuelle.
     # L'encaissement suit le même principe que les journalières :
@@ -46305,10 +47966,10 @@ class LGLoupsView(ui.View):
         await interaction.response.send_message(f"🎯 Tu désignes **{nom}**.", ephemeral=True)
         try:
             await interaction.message.edit(embed=discord.Embed(
-                title="🐺 La meute délibère",
+                title=season_titre("🐺 La meute délibère"),
                 description=(f"*Vos crocs se découvrent. Il faut choisir — et vite.*\n\n"
                              f"**Votes ({len(votes)}/{len(loups)})**\n{detail}"),
-                color=0x2c3e50), view=self)
+                color=season_tint(0x2c3e50)), view=self)
         except Exception:
             pass
         if len(votes) >= len(loups) and loups:
@@ -46322,7 +47983,7 @@ class LGLoupsView(ui.View):
                 pass
             await interaction.channel.send(embed=discord.Embed(
                 description=f"🐺 La meute a tranché : **{self.game['players'][victime]['name']}** ne verra pas l'aube.",
-                color=0xe74c3c))
+                color=season_tint(0xe74c3c)))
             await _lg_inform_sorciere(self.ctx.guild, self.game, victime)
             self.stop()
 
@@ -46344,10 +48005,10 @@ class LGLoupBlancView(ui.View):
         self.game["loup_blanc_cible"] = cible
         for it in self.children: it.disabled = True
         await interaction.response.edit_message(embed=discord.Embed(
-            title="🤍 Ton choix est scellé",
+            title=season_titre("🤍 Ton choix est scellé"),
             description=(f"**{self.game['players'][cible]['name']}** mourra cette nuit.\n\n"
                          f"*Personne ne saura que c'était toi. Pas même la meute.*"),
-            color=0x95a5a6), view=self)
+            color=season_tint(0x95a5a6)), view=self)
         self.stop()
 
 class LGVoyanteView(ui.View):
@@ -46369,11 +48030,11 @@ class LGVoyanteView(ui.View):
         loup = p["role"] in ("Loup Garou", "Loup Blanc")
         for it in self.children: it.disabled = True
         await interaction.response.edit_message(embed=discord.Embed(
-            title="🔮 La vision se dissipe…",
+            title=season_titre("🔮 La vision se dissipe…"),
             description=(f"**{p['name']}** est {rd['emoji']} **{p['role']}**\n\n"
                          + ("🔴 *Un loup. Tu le sais maintenant — mais comment le dire sans te trahir ?*"
                             if loup else "✅ *Innocent. Une piste écartée.*")),
-            color=0xe74c3c if loup else 0x2ecc71), view=self)
+            color=season_tint(0xe74c3c if loup else 0x2ecc71)), view=self)
         self.stop()
 
 class LGSorciereView(ui.View):
@@ -46405,9 +48066,9 @@ class LGSorciereView(ui.View):
                 "*Ta fiole de vie ne ramène que la victime des loups.*" if pot.get("life")
                 else "*Ta fiole de vie est vide.*")
         await interaction.response.edit_message(embed=discord.Embed(
-            title="🧙‍♀️ Ton chaudron frémit",
+            title=season_titre("🧙‍♀️ Ton chaudron frémit"),
             description=f"Tu as désigné **{nom}**.\n\n{aide}\n\nQue fais-tu ?",
-            color=0x27ae60), view=self)
+            color=season_tint(0x27ae60)), view=self)
 
     @ui.button(label="Sauver", emoji="🌿", style=discord.ButtonStyle.success, row=1, disabled=True)
     async def soigner(self, interaction, button):
@@ -46419,9 +48080,9 @@ class LGSorciereView(ui.View):
         nom = self.game["players"][self.cible]["name"]
         for it in self.children: it.disabled = True
         await interaction.response.edit_message(embed=discord.Embed(
-            title="🌿 Fiole de vie brisée",
+            title=season_titre("🌿 Fiole de vie brisée"),
             description=f"**{nom}** respirera encore demain.\n\n*Il ne saura jamais qui l'a sauvé.*",
-            color=0x2ecc71), view=self)
+            color=season_tint(0x2ecc71)), view=self)
         await _lg_check_sorciere_potions(interaction.guild, self.game, self.uid_s)
         self.stop()
 
@@ -46434,9 +48095,9 @@ class LGSorciereView(ui.View):
         nom = self.game["players"][self.cible]["name"]
         for it in self.children: it.disabled = True
         await interaction.response.edit_message(embed=discord.Embed(
-            title="☠️ Fiole de mort versée",
+            title=season_titre("☠️ Fiole de mort versée"),
             description=f"**{nom}** ne se réveillera pas.\n\n*Le village croira que ce sont les loups.*",
-            color=0xe74c3c), view=self)
+            color=season_tint(0xe74c3c)), view=self)
         await _lg_check_sorciere_potions(interaction.guild, self.game, self.uid_s)
         self.stop()
 
@@ -46444,7 +48105,7 @@ class LGSorciereView(ui.View):
     async def passer(self, interaction, button):
         for it in self.children: it.disabled = True
         await interaction.response.edit_message(embed=discord.Embed(
-            description="⏭️ Tu ranges tes fioles. *Cette nuit, tu observes.*", color=0x95a5a6), view=self)
+            description="⏭️ Tu ranges tes fioles. *Cette nuit, tu observes.*", color=season_tint(0x95a5a6)), view=self)
         self.stop()
 
 class LGCupidonView(ui.View):
@@ -46473,9 +48134,9 @@ class LGCupidonView(ui.View):
             if self.a and self.a == self.b:
                 txt += "\n\n⚠️ *Choisis deux personnes différentes.*"
             await interaction.response.edit_message(embed=discord.Embed(
-                title="💘 Tes flèches sont prêtes",
+                title=season_titre("💘 Tes flèches sont prêtes"),
                 description=f"*Tu ne tues pas — tu lies. Pour le meilleur et surtout pour le pire.*\n\n{txt}",
-                color=0xff6b9d), view=self)
+                color=season_tint(0xff6b9d)), view=self)
         return cb
 
     @ui.button(label="Lier ces deux âmes", emoji="💞", style=discord.ButtonStyle.success, row=2, disabled=True)
@@ -46485,19 +48146,19 @@ class LGCupidonView(ui.View):
         for it in self.children: it.disabled = True
         na = self.game["players"][self.a]["name"]; nb = self.game["players"][self.b]["name"]
         await interaction.response.edit_message(embed=discord.Embed(
-            title="💞 Les âmes sont liées",
+            title=season_titre("💞 Les âmes sont liées"),
             description=f"**{na}** et **{nb}** vivront et mourront ensemble.\n\n*Ils viennent d'être prévenus en privé.*",
-            color=0xff6b9d), view=self)
+            color=season_tint(0xff6b9d)), view=self)
         for uid in (self.a, self.b):
             m = interaction.guild.get_member(int(uid))
             autre = self.b if uid == self.a else self.a
             if m:
                 try:
                     await m.send(embed=discord.Embed(
-                        title="💘 Une flèche t'a touché",
+                        title=season_titre("💘 Une flèche t'a touché"),
                         description=(f"Tu es lié à **{self.game['players'][autre]['name']}**.\n\n"
                                      f"*Si l'un de vous meurt, l'autre le suivra de chagrin.*"),
-                        color=0xff6b9d))
+                        color=season_tint(0xff6b9d)))
                 except Exception:
                     pass
         salon_id = self.game.get("salons_temp", {}).pop("cupidon", None)
@@ -46525,14 +48186,14 @@ class LGChasseurView(ui.View):
         nom = self.game["players"][cible]["name"]
         for it in self.children: it.disabled = True
         await interaction.response.edit_message(embed=discord.Embed(
-            title="🏹 Le coup part",
+            title=season_titre("🏹 Le coup part"),
             description=f"**{nom}** s'effondre à tes côtés.\n\n*Tu ne pars pas seul.*",
-            color=0xe67e22), view=self)
+            color=season_tint(0xe67e22)), view=self)
         ch_pub = interaction.guild.get_channel(self.game["channel"])
         if ch_pub:
             await ch_pub.send(embed=discord.Embed(
                 description=f"🏹 Dans un dernier souffle, le Chasseur emporte **{nom}** !",
-                color=0xe67e22))
+                color=season_tint(0xe67e22)))
         salon_id = self.game.get("salons_temp", {}).pop("chasseur", None)
         if salon_id:
             c2 = interaction.guild.get_channel(salon_id)
@@ -46571,10 +48232,10 @@ class LGVoteView(ui.View):
             f"🗳️ Ton vote va contre **{self.game['players'][cible]['name']}**.", ephemeral=True)
         try:
             await interaction.message.edit(embed=discord.Embed(
-                title="⚖️ Le village délibère",
+                title=season_titre("⚖️ Le village délibère"),
                 description=(f"*Les accusations fusent. Il faut trancher.*\n\n"
                              f"**Votes ({len(self.game['votes'])}/{len(vivants)})**\n{detail}"),
-                color=0xe67e22), view=self)
+                color=season_tint(0xe67e22)), view=self)
         except Exception:
             pass
         if len(self.game["votes"]) >= len(vivants):
@@ -46592,8 +48253,8 @@ async def lg_narrer(ctx, cle: str):
     if not textes:
         return
     texte = _r.choice(textes)
-    embed = discord.Embed(description=f"*{texte}*", color=0x2c2f33)
-    embed.set_footer(text="🐺 Loup Garou — QG Kdrama")
+    embed = discord.Embed(description=f"*{texte}*", color=season_tint(0x2c2f33))
+    embed.set_footer(text=season_pied("🐺 Loup Garou — QG Kdrama"))
     await ctx.send(embed=embed)
 
 def lg_get_compo(n, custom=None):
@@ -46640,9 +48301,9 @@ async def lg_reveal_roles(channel, game):
         status = "✅ Vivant" if p["alive"] else "💀 Éliminé"
         lines.append(f"{role_data['emoji']} **{p['name']}** — {role} ({status})")
     embed = discord.Embed(
-        title="🎭 Révélation des Rôles",
+        title=season_titre("🎭 Révélation des Rôles"),
         description="\n".join(lines),
-        color=0x2c3e50
+        color=season_tint(0x2c3e50)
     )
     await channel.send(embed=embed)
 
@@ -46759,12 +48420,12 @@ async def lg_nuit_annonces(guild, game, ctx_channel):
         if ch:
             v = LGLoupsView(game, guild.id, ctx)
             await ch.send(ping(loups), embed=discord.Embed(
-                title=f"🐺 Nuit {nuit} — la meute s'éveille",
+                title=season_titre(f"🐺 Nuit {season_brut(nuit)} — la meute s'éveille"),
                 description=("*Le village dort. Vos crocs se découvrent.*\n\n"
                              "**Ce que tu dois faire :** désigne une victime dans le menu. "
                              "Quand tous les loups auront choisi, la majorité l'emportera.\n"
                              "*Discutez ici — personne d'autre ne vous lit.*"),
-                color=0x2c3e50), view=v)
+                color=season_tint(0x2c3e50)), view=v)
 
     # ── 🤍 Le Loup Blanc ──
     lb = [u for u, p in players.items() if p["alive"] and p["role"] == "Loup Blanc"]
@@ -46772,12 +48433,12 @@ async def lg_nuit_annonces(guild, game, ctx_channel):
         ch = guild.get_channel(salons["loup_blanc"])
         if ch:
             await ch.send(ping(lb), embed=discord.Embed(
-                title=f"🤍 Nuit {nuit} — tu chasses seul",
+                title=season_titre(f"🤍 Nuit {season_brut(nuit)} — tu chasses seul"),
                 description=("*Ni la meute ni le village ne sont tes alliés. Un seul survivra, et ce sera toi.*\n\n"
                              "**Ce que tu dois faire :** tu peux frapper **n'importe qui** — "
                              "même un loup. Ton choix reste secret.\n"
                              "*Tu peux aussi ne rien faire cette nuit.*"),
-                color=0x95a5a6), view=LGLoupBlancView(game, lb[0], guild))
+                color=season_tint(0x95a5a6)), view=LGLoupBlancView(game, lb[0], guild))
 
     # ── 🔮 La Voyante ──
     voy = [u for u, p in players.items() if p["alive"] and p["role"] == "Voyante"]
@@ -46785,11 +48446,11 @@ async def lg_nuit_annonces(guild, game, ctx_channel):
         ch = guild.get_channel(salons["voyante"])
         if ch:
             await ch.send(ping(voy), embed=discord.Embed(
-                title=f"🔮 Nuit {nuit} — une seule vision",
+                title=season_titre(f"🔮 Nuit {season_brut(nuit)} — une seule vision"),
                 description=("*La boule s'éclaircit. Tu n'auras qu'un regard cette nuit.*\n\n"
                              "**Ce que tu dois faire :** choisis un joueur, son rôle exact te sera révélé.\n"
                              "*Le plus dur viendra demain : le dire sans te faire dévorer.*"),
-                color=0x9b59b6), view=LGVoyanteView(game, voy[0], guild))
+                color=season_tint(0x9b59b6)), view=LGVoyanteView(game, voy[0], guild))
 
     # ── 🧙 La Sorcière ──
     sorc = [u for u, p in players.items() if p["alive"] and p["role"] == "Sorcière"]
@@ -46798,14 +48459,14 @@ async def lg_nuit_annonces(guild, game, ctx_channel):
         if ch:
             pot = game["witch_potions"].get(sorc[0], {"life": True, "death": True})
             await ch.send(ping(sorc), embed=discord.Embed(
-                title=f"🧙‍♀️ Nuit {nuit} — deux fioles, deux destins",
+                title=season_titre(f"🧙‍♀️ Nuit {season_brut(nuit)} — deux fioles, deux destins"),
                 description=(f"*Ton antre sent le soufre et la menthe.*\n\n"
                              f"🌿 Fiole de vie : {'**disponible**' if pot.get('life') else '~~vide~~'}\n"
                              f"☠️ Fiole de mort : {'**disponible**' if pot.get('death') else '~~vide~~'}\n\n"
                              f"**Ce que tu dois faire :** désigne quelqu'un dans le menu, "
                              f"puis choisis ta fiole. Chacune ne sert **qu'une fois de toute la partie**.\n"
                              f"*Je te préviendrai dès que les loups auront frappé.*"),
-                color=0x27ae60), view=LGSorciereView(game, sorc[0], guild))
+                color=season_tint(0x27ae60)), view=LGSorciereView(game, sorc[0], guild))
 
     # ── 💘 Cupidon (nuit 1) ──
     cup = [u for u, p in players.items() if p["alive"] and p["role"] == "Cupidon"]
@@ -46813,12 +48474,12 @@ async def lg_nuit_annonces(guild, game, ctx_channel):
         ch = guild.get_channel(salons["cupidon"])
         if ch:
             await ch.send(ping(cup), embed=discord.Embed(
-                title="💘 Nuit 1 — tes flèches ne tuent pas",
+                title=season_titre("💘 Nuit 1 — tes flèches ne tuent pas"),
                 description=("*Elles lient. Pour le meilleur, et surtout pour le pire.*\n\n"
                              "**Ce que tu dois faire :** choisis **deux** joueurs dans les menus, "
                              "puis valide. Si l'un meurt, l'autre le suivra de chagrin.\n"
                              "*Tu peux te choisir toi-même — à tes risques.*"),
-                color=0xff6b9d), view=LGCupidonView(game, cup[0], guild))
+                color=season_tint(0xff6b9d)), view=LGCupidonView(game, cup[0], guild))
 
     # ── 👧 La Petite Fille ──
     pf = [u for u, p in players.items() if p["alive"] and p["role"] == "Petite Fille"]
@@ -46835,10 +48496,10 @@ async def lg_nuit_annonces(guild, game, ctx_channel):
                 indice = ("*Tu tends l'oreille longtemps… mais les voix restent indistinctes.*\n\n"
                           "# 🌫️ Rien cette nuit\n\n*Trop risqué d'insister.*")
             await ch.send(ping(pf), embed=discord.Embed(
-                title=f"👧 Nuit {nuit} — tu espionnes",
+                title=season_titre(f"👧 Nuit {season_brut(nuit)} — tu espionnes"),
                 description=indice + "\n\n**Ce que tu dois faire :** rien à cliquer — "
                                      "garde l'info et choisis bien tes mots demain.",
-                color=0xf39c12))
+                color=season_tint(0xf39c12)))
 
 # ============================================================
 #  COMMANDES LG
@@ -46855,7 +48516,7 @@ async def _lg_timer_nuit(ctx, gid, jour):
     try:
         await ctx.send(embed=discord.Embed(
             description="🌅 Le temps de la nuit est écoulé — l'aube se lève d'elle-même…",
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
         await lg_resoudre_nuit(ctx, game, gid)
     except Exception as e:
         print(f"[LG] Timer nuit : {e}")
@@ -46869,7 +48530,7 @@ async def _lg_timer_jour(ctx, gid, jour):
     try:
         await ctx.send(embed=discord.Embed(
             description="⏰ Le temps du débat est écoulé — dépouillement des votes !",
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
         await lg_resolve_vote(ctx, game, gid)
     except Exception as e:
         print(f"[LG] Timer jour : {e}")
@@ -46893,19 +48554,19 @@ async def _lg_chasseur(guild, game, uid, ctx_channel):
         return
     game["salons_temp"]["chasseur"] = ch.id
     await ch.send(m.mention, embed=discord.Embed(
-        title="🏹 Ton dernier geste",
+        title=season_titre("🏹 Ton dernier geste"),
         description=("*Tu tombes. Ta main se crispe une dernière fois sur la détente.*\n\n"
                      "**Ce que tu dois faire :** choisis qui part avec toi dans le menu.\n"
                      "*Tu as 2 minutes — après quoi ton doigt se relâchera.*"),
-        color=0xe67e22), view=LGChasseurView(game, uid, guild))
+        color=season_tint(0xe67e22)), view=LGChasseurView(game, uid, guild))
 
 @bot.command(name="lg")
 async def loup_garou_help(ctx):
     """Affiche l'aide du Loup Garou"""
     embed = discord.Embed(
-        title="🐺 Loup Garou — QG Kdrama",
+        title=season_titre("🐺 Loup Garou — QG Kdrama"),
         description="Le célèbre jeu de déduction social, version Discord !",
-        color=0x2c3e50
+        color=season_tint(0x2c3e50)
     )
     embed.add_field(name="📋 Commandes serveur", value=(
         "`.lgcreate` — Créer une partie\n"
@@ -46935,7 +48596,7 @@ async def loup_garou_help(ctx):
 
 @bot.command(name="lgroles")
 async def lg_roles_list(ctx):
-    embed = discord.Embed(title="🃏 Rôles du Loup Garou", color=0x8e44ad)
+    embed = discord.Embed(title=season_titre("🃏 Rôles du Loup Garou"), color=season_tint(0x8e44ad))
     for role, data in LG_ROLES.items():
         embed.add_field(name=f"{data['emoji']} {role}", value=data['desc'], inline=False)
     await ctx.send(embed=embed)
@@ -46975,7 +48636,7 @@ async def lgcompo_cmd(ctx, *, args: str = None):
             detail = "\n".join(f"{LG_ROLES[r]['emoji']} **{r}** × {nb}" for r, nb in auto.items())
             etat = f"**Composition automatique pour {max(n,5)} joueurs :**\n{detail}"
         return await ctx.send(embed=discord.Embed(
-            title="🃏 Composition de la partie",
+            title=season_titre("🃏 Composition de la partie"),
             description=(
                 f"{etat}\n\n"
                 f"**Pour la personnaliser :**\n"
@@ -46983,7 +48644,7 @@ async def lgcompo_cmd(ctx, *, args: str = None):
                 f"**Rôles disponibles :** `loup` `blanc` `voyante` `sorciere` "
                 f"`chasseur` `cupidon` `petitefille` `villageois`\n"
                 f"*`.lgcompo auto` pour revenir à la composition automatique.*"),
-            color=0x8e44ad))
+            color=season_tint(0x8e44ad)))
 
     if args.strip().lower() in ("auto", "reset", "defaut", "défaut"):
         game.pop("compo_custom", None)
@@ -47027,9 +48688,9 @@ async def lgcompo_cmd(ctx, *, args: str = None):
         note = (f"\n\n⚠️ Tu as **{n} joueur(s)** inscrit(s) pour **{total} rôle(s)**.\n"
                 f"*Les rôles en trop seront ignorés, les manquants complétés en Villageois.*")
     await ctx.send(embed=discord.Embed(
-        title="🃏 Composition enregistrée",
+        title=season_titre("🃏 Composition enregistrée"),
         description=f"{detail}\n\n**Total : {total} rôles** — {loups} loup(s) contre {total-loups} villageois.{note}",
-        color=0x2ecc71))
+        color=season_tint(0x2ecc71)))
 
 @bot.command(name="lgcreate")
 async def lg_create(ctx):
@@ -47059,7 +48720,7 @@ async def lg_create(ctx):
         "power_used": False,
     }
     embed = discord.Embed(
-        title="🐺 Partie de Loup Garou créée !",
+        title=season_titre("🐺 Partie de Loup Garou créée !"),
         description=(
             f"**{ctx.author.display_name}** ouvre une partie !\n\n"
             "Tape `.lgjoin` pour rejoindre.\n"
@@ -47067,9 +48728,9 @@ async def lg_create(ctx):
             "*Il peut aussi choisir les rôles avec `.lgcompo`.*\n\n"
             f"**Joueurs (1) :** {ctx.author.display_name}"
         ),
-        color=0x2c3e50
+        color=season_tint(0x2c3e50)
     )
-    embed.set_footer(text="Minimum 5 joueurs pour démarrer 🐺")
+    embed.set_footer(text=season_pied("Minimum 5 joueurs pour démarrer 🐺"))
     await ctx.send(embed=embed)
 
 @bot.command(name="lgjoin")
@@ -47093,7 +48754,7 @@ async def lg_join(ctx):
     names = ", ".join(p["name"] for p in game["players"].values())
     embed = discord.Embed(
         description=f"✅ **{ctx.author.display_name}** a rejoint ! **({len(game['players'])}) :** {names}",
-        color=0x27ae60
+        color=season_tint(0x27ae60)
     )
     await ctx.send(embed=embed)
 
@@ -47139,13 +48800,13 @@ async def _lg_start_inner(ctx):
         role = p["role"]
         role_data = LG_ROLES[role]
         embed = discord.Embed(
-            title="🃏 Ton rôle secret — QG Kdrama",
+            title=season_titre("🃏 Ton rôle secret — QG Kdrama"),
             description=(
                 f"**{role_data['emoji']} {role}**\n\n"
                 f"_{role_data['desc']}_\n\n"
                 f"**Équipe :** {'🐺 Loups' if role_data['team'] == 'loups' else ('🤍 Solitaire' if role_data['team'] == 'loup_blanc' else '👨‍🌾 Village')}"
             ),
-            color=0x8e44ad
+            color=season_tint(0x8e44ad)
         )
         if role in ["Loup Garou", "Loup Blanc"]:
             wolves = [pp["name"] for pid, pp in game["players"].items() 
@@ -47162,7 +48823,7 @@ async def _lg_start_inner(ctx):
             "Petite Fille": "👧 Tu recevras un indice chaque nuit dans **#petite-fille-secret**",
             "Villageois": "👨‍🌾 Débats et vote le jour pour trouver les loups !",
         }.get(role, "Participe aux débats !"), inline=False)
-        embed.set_footer(text="🔒 Ne montre ce message à personne !")
+        embed.set_footer(text=season_pied("🔒 Ne montre ce message à personne !"))
         try:
             member = ctx.guild.get_member(int(uid))
             if member:
@@ -47180,17 +48841,17 @@ async def _lg_start_inner(ctx):
     salons = await lg_create_salons(ctx.guild, game)
     if not salons:
         await ctx.send(embed=discord.Embed(
-            title="⚠️ Salons secrets non créés",
+            title=season_titre("⚠️ Salons secrets non créés"),
             description=("Je n'ai pas la permission **Gérer les salons**.\n"
                          "Les rôles spéciaux ne pourront pas agir — demande à un admin "
                          "de me donner la permission, puis relance la partie."),
-            color=0xe67e22))
+            color=season_tint(0xe67e22)))
 
     # Annonce publique
     dm_status = "⚠️ DM fermés : " + ", ".join(failed_dm) if failed_dm else "✅ Rôles envoyés en DM !"
     names_list = "\n".join([f"❓ {p['name']}" for p in game["players"].values()])
     embed = discord.Embed(
-        title="🐺 La partie commence !",
+        title=season_titre("🐺 La partie commence !"),
         description=(
             f"**{n} joueurs** ont reçu leur rôle en DM !\n"
             f"{dm_status}\n\n"
@@ -47198,7 +48859,7 @@ async def _lg_start_inner(ctx):
             "Des salons secrets ont été créés pour chaque rôle.\n"
             "Vérifiez vos salons — le bot vous a pingé !"
         ),
-        color=0x2c3e50
+        color=season_tint(0x2c3e50)
     )
     embed.add_field(name=f"👥 Joueurs ({n})", value=names_list, inline=False)
     await ctx.send(embed=embed)
@@ -47233,7 +48894,7 @@ async def lg_vote(ctx, target: discord.Member = None):
 
     embed = discord.Embed(
         description=f"🗳️ **{ctx.author.display_name}** vote contre **{target.display_name}** ({voted_count}/{len(alive_voters)})",
-        color=0xe67e22
+        color=season_tint(0xe67e22)
     )
     await ctx.send(embed=embed)
 
@@ -47265,7 +48926,7 @@ async def lg_kill(ctx, target: discord.Member = None):
         game["loup_blanc_cible"] = target_uid
         return await ctx.send(embed=discord.Embed(
             description=f"🤍 Ta cible secrète : **{game['players'][target_uid]['name']}**.\nLes autres loups n'en sauront rien.",
-            color=0x95a5a6))
+            color=season_tint(0x95a5a6)))
 
     game["kill_votes"][uid] = target_uid
     loups_vivants = [u for u, p in game["players"].items() if p["alive"] and p["role"] == "Loup Garou"]
@@ -47284,7 +48945,7 @@ async def lg_kill(ctx, target: discord.Member = None):
             victime_name = game["players"][victime_id]["name"]
             await ctx.send(embed=discord.Embed(
                 description=f"🐺 Les loups ont décidé... **{victime_name}** sera leur cible cette nuit.",
-                color=0x2c3e50
+                color=season_tint(0x2c3e50)
             ))
             # Informer la sorcière si elle existe
             await _lg_inform_sorciere(ctx.guild, game, victime_id)
@@ -47311,12 +48972,12 @@ async def lg_voir(ctx, target: discord.Member = None):
     role_data = LG_ROLES.get(cible_role, {"emoji": "❓"})
     is_wolf = cible_role in ["Loup Garou", "Loup Blanc"]
     embed = discord.Embed(
-        title="🔮 Révélation",
+        title=season_titre("🔮 Révélation"),
         description=(
             f"**{target.display_name}** est {role_data['emoji']} **{cible_role}**\n"
             f"{'🔴 **C\'est un LOUP !** Sois prudente...' if is_wolf else '✅ Innocent — ce n\'est pas un loup.'}"
         ),
-        color=0xe74c3c if is_wolf else 0x2ecc71
+        color=season_tint(0xe74c3c if is_wolf else 0x2ecc71)
     )
     await ctx.send(embed=embed)
 
@@ -47344,7 +49005,7 @@ async def lg_save(ctx, target: discord.Member = None):
         game["eliminated_tonight"] = None
     await ctx.send(embed=discord.Embed(
         description=f"🌿 **{target.display_name}** est sauvé cette nuit ! Potion de vie utilisée.",
-        color=0x2ecc71
+        color=season_tint(0x2ecc71)
     ))
     await _lg_check_sorciere_potions(ctx.guild, game, uid)
 
@@ -47370,7 +49031,7 @@ async def lg_poison(ctx, target: discord.Member = None):
     game["players"][target_uid]["alive"] = False
     await ctx.send(embed=discord.Embed(
         description=f"☠️ **{target.display_name}** a été empoisonné cette nuit...",
-        color=0xe74c3c
+        color=season_tint(0xe74c3c)
     ))
     await _lg_check_sorciere_potions(ctx.guild, game, uid)
 
@@ -47410,13 +49071,13 @@ async def _lg_inform_sorciere(guild, game, victime_id):
     v.soigner.disabled = not pot.get("life")
     v.empoisonner.disabled = not pot.get("death")
     await ch.send(m.mention if m else "", embed=discord.Embed(
-        title="☠️ Les crocs ont choisi",
+        title=season_titre("☠️ Les crocs ont choisi"),
         description=(f"*Une silhouette s'affaisse dans la nuit…*\n\n"
                      f"# {nom}\n\n"
                      f"**Ce que tu dois faire :** clique sur 🌿 **Sauver** pour le ramener, "
                      f"ou désigne quelqu'un d'autre et verse ☠️ ta fiole de mort.\n"
                      f"*Ou ne fais rien — c'est aussi un choix.*"),
-        color=0xe74c3c), view=v)
+        color=season_tint(0xe74c3c)), view=v)
 
 @bot.command(name="lglove")
 async def lg_love(ctx, j1: discord.Member = None, j2: discord.Member = None):
@@ -47442,13 +49103,13 @@ async def lg_love(ctx, j1: discord.Member = None, j2: discord.Member = None):
         try:
             await amoureux.send(embed=discord.Embed(
                 description=f"💘 Cupidon t'a lié à **{autre.display_name}** ! Si l'un de vous meurt, l'autre mourra de chagrin.",
-                color=0xff6b9d
+                color=season_tint(0xff6b9d)
             ))
         except:
             pass
     await ctx.send(embed=discord.Embed(
         description=f"💘 Les amoureux sont liés ! Ils mourront ensemble s'il le faut...",
-        color=0xff6b9d
+        color=season_tint(0xff6b9d)
     ))
     # Supprimer le salon cupidon
     salon_id = game.get("salons_temp", {}).get("cupidon")
@@ -47475,11 +49136,11 @@ async def lg_next(ctx):
         return await ctx.send("❌ Seul le créateur de la partie peut accélérer.", delete_after=6)
     if game["state"] == "night":
         await ctx.send(embed=discord.Embed(
-            description="⏭️ **L'hôte abrège la nuit** — l'aube se lève !", color=0xf1c40f))
+            description="⏭️ **L'hôte abrège la nuit** — l'aube se lève !", color=season_tint(0xf1c40f)))
         await lg_resoudre_nuit(ctx, game, gid)
     elif game["state"] == "day":
         await ctx.send(embed=discord.Embed(
-            description="⏭️ **L'hôte clôt le débat** — dépouillement des votes !", color=0xf1c40f))
+            description="⏭️ **L'hôte clôt le débat** — dépouillement des votes !", color=season_tint(0xf1c40f)))
         await lg_resolve_vote(ctx, game, gid)
     else:
         await ctx.send("❌ La partie n'a pas encore commencé.")
@@ -47516,16 +49177,16 @@ async def lg_resoudre_nuit(ctx, game, gid):
     if morts_nuit:
         desc_morts = "\n".join([f"💀 **{players[uid]['name']}** ({players[uid]['role']})" for uid in morts_nuit])
         embed = discord.Embed(
-            title="☀️ L'aube se lève...",
+            title=season_titre("☀️ L'aube se lève..."),
             description=f"Cette nuit, le village a perdu :\n{desc_morts}\n\n☀️ **Jour {game['day']} — Débat !**\nVotez avec `.lgvote @joueur` pour éliminer un suspect.",
-            color=0xe74c3c
+            color=season_tint(0xe74c3c)
         )
         await lg_narrer(ctx, "jour_mort")
     else:
         embed = discord.Embed(
-            title="☀️ L'aube se lève...",
+            title=season_titre("☀️ L'aube se lève..."),
             description="Cette nuit, personne n'est mort. Les loups ont raté leur cible !\n\n☀️ **Débat !** Votez avec `.lgvote @joueur`",
-            color=0x2ecc71
+            color=season_tint(0x2ecc71)
         )
         await lg_narrer(ctx, "jour_rien")
 
@@ -47536,7 +49197,7 @@ async def lg_resoudre_nuit(ctx, game, gid):
     # Check victoire
     won, msg = lg_check_win(game)
     if won:
-        await ctx.send(embed=discord.Embed(title="🏆 FIN DE PARTIE", description=msg, color=0xf1c40f))
+        await ctx.send(embed=discord.Embed(title=season_titre("🏆 FIN DE PARTIE"), description=msg, color=season_tint(0xf1c40f)))
         chan = ctx.guild.get_channel(game["channel"])
         if chan:
             await lg_reveal_roles(chan, game)
@@ -47552,11 +49213,11 @@ async def lg_resoudre_nuit(ctx, game, gid):
     game["eliminated_tonight"] = None
     game["loup_blanc_cible"] = None
     await ctx.send(embed=discord.Embed(
-        title="⚖️ Le village délibère",
+        title=season_titre("⚖️ Le village délibère"),
         description=("*Les accusations fusent. Il faut trancher avant la nuit.*\n\n"
                      "**Ce que vous devez faire :** votez dans le menu ci-dessous.\n"
                      f"*{LG_DUREE_JOUR//60} minutes — ou l'hôte peut couper court avec `.lgpass`.*"),
-        color=0xe67e22), view=LGVoteView(game, gid, ctx))
+        color=season_tint(0xe67e22)), view=LGVoteView(game, gid, ctx))
     asyncio.create_task(_lg_timer_jour(ctx, gid, game["day"]))
 
 async def lg_resolve_vote(ctx, game, gid):
@@ -47583,12 +49244,12 @@ async def lg_resolve_vote(ctx, game, gid):
         role_data = LG_ROLES.get(role, {"emoji": "❓"})
 
         embed = discord.Embed(
-            title="☀️ Fin du vote villageois",
+            title=season_titre("☀️ Fin du vote villageois"),
             description=(
                 f"**{p['name']}** est éliminé avec **{count[eliminated_id]} vote(s)** !\n"
                 f"Son rôle était : **{role_data['emoji']} {role}**"
             ),
-            color=0xe74c3c
+            color=season_tint(0xe74c3c)
         )
         await ctx.send(embed=embed)
 
@@ -47599,7 +49260,7 @@ async def lg_resolve_vote(ctx, game, gid):
                 players[autre_id[0]]["alive"] = False
                 await ctx.send(embed=discord.Embed(
                     description=f"💔 **{players[autre_id[0]]['name']}** meurt de chagrin !",
-                    color=0xff6b9d
+                    color=season_tint(0xff6b9d)
                 ))
 
         # Chasseur ?
@@ -47608,7 +49269,7 @@ async def lg_resolve_vote(ctx, game, gid):
     # Check victoire
     won, msg = lg_check_win(game)
     if won:
-        await ctx.send(embed=discord.Embed(title="🏆 FIN DE PARTIE", description=msg, color=0xf1c40f))
+        await ctx.send(embed=discord.Embed(title=season_titre("🏆 FIN DE PARTIE"), description=msg, color=season_tint(0xf1c40f)))
         chan = guild.get_channel(game["channel"])
         if chan:
             await lg_reveal_roles(chan, game)
@@ -47626,12 +49287,12 @@ async def lg_resolve_vote(ctx, game, gid):
 
     alive_list = "\n".join([f"• {p['name']}" for p in players.values() if p["alive"]])
     embed = discord.Embed(
-        title=f"🌙 Nuit {game['day']} — Le village s'endort...",
+        title=season_titre(f"🌙 Nuit {season_brut(game['day'])} — Le village s'endort..."),
         description=(
             "Les rôles spéciaux agissent dans leurs salons secrets !\n\n"
             f"**Joueurs en vie :**\n{alive_list}"
         ),
-        color=0x2c3e50
+        color=season_tint(0x2c3e50)
     )
     await ctx.send(embed=embed)
     await lg_narrer(ctx, "nuit")
@@ -47658,7 +49319,7 @@ async def lg_kill_chasseur(ctx, target: discord.Member = None):
     if ch_pub:
         await ch_pub.send(embed=discord.Embed(
             description=f"🏹 Le Chasseur emporte **{target.display_name}** dans sa chute !",
-            color=0xe67e22
+            color=season_tint(0xe67e22)
         ))
     # Supprimer salon chasseur
     salon_id = game.get("salons_temp", {}).get("chasseur")
@@ -47690,7 +49351,7 @@ async def lg_status(ctx):
     players = game["players"]
     alive = [p["name"] for p in players.values() if p["alive"]]
     dead = [p["name"] for p in players.values() if not p["alive"]]
-    embed = discord.Embed(title="🐺 Statut — Loup Garou", color=0x2c3e50)
+    embed = discord.Embed(title=season_titre("🐺 Statut — Loup Garou"), color=season_tint(0x2c3e50))
     embed.add_field(name=f"✅ Vivants ({len(alive)})", value="\n".join(alive) or "Aucun", inline=True)
     if dead:
         embed.add_field(name=f"💀 Éliminés ({len(dead)})", value="\n".join(dead), inline=True)
@@ -47921,9 +49582,149 @@ DATA_FILES = {
     "bank":    data_path("data_bank.json"),
 }
 
+# ── Initialisation des données : UNE fois par processus, AVANT toute utilisation ──
+#
+# Les données vivent en mémoire et sont réécrites en entier à chaque
+# sauvegarde. Tant qu'elles n'ont pas été relues du disque, la mémoire est
+# vide : s'en servir, c'est répondre à un membre sur un solde à zéro, et la
+# sauvegarder, c'est effacer les fichiers. D'où trois règles :
+#   1. le chargement a lieu avant la connexion à Discord (`setup_hook`, tout
+#      en bas du fichier) — aucun événement ne peut arriver avant lui ;
+#   2. toute entrée (commande, événement, on_ready) passe par
+#      `donnees_charger()`, qui ne charge qu'une fois : une reconnexion ne
+#      relit jamais le disque par-dessus les données vivantes ;
+#   3. `save_all_data()` n'écrit rien tant que le chargement n'a pas réussi.
+# Un fichier présent mais illisible (ou lu à moitié) n'est jamais réécrit :
+# le bot refuse de démarrer et laisse le fichier tel quel. Un fichier absent
+# est une première installation : il sera créé à la première sauvegarde.
+#   "vierge"   rien n'a été chargé          "en_cours" chargement en cours
+#   "pret"     données chargées             "echec"    fichier(s) illisible(s)
+# "differees" : écritures demandées pendant le chargement, en attente de sa validation.
+_donnees = {"etat": "vierge", "erreurs": {}, "refus": 0, "copies": [], "differees": []}
+
+# Démarrer malgré un fichier illisible, en connaissance de cause : le fichier
+# est d'abord copié à côté (`….illisible-AAAAMMJJ-HHMMSS`), puis le bot repart
+# de ce qu'il a pu lire — et la prochaine sauvegarde réécrit le fichier.
+DONNEES_TOLERANT = os.environ.get("AKARI_CHARGEMENT_TOLERANT") == "1"
+
+
+class DonneesIndisponibles(commands.CheckFailure):
+    """Les données du bot ne sont pas chargées : aucune commande n'est servie."""
+
+
+def _donnees_erreur(nom, e, bloc=None):
+    """Un fichier présent n'a pas pu être lu en entier (appelé par les chargeurs).
+    `bloc` : la partie du fichier dont la lecture s'est arrêtée en route — ce
+    qui la suivait dans ce bloc n'est pas en mémoire. Plusieurs erreurs sur un
+    même fichier s'ajoutent. À ne pas confondre avec les entrées qu'un chargeur
+    écarte volontairement (mauvais type, clé inconnue) : celles-là ne passent
+    pas par ici et n'empêchent pas le démarrage."""
+    detail = f"{type(e).__name__}: {e}"
+    if bloc:
+        detail = f"bloc {bloc} — {detail}"
+    deja = _donnees["erreurs"].get(nom)
+    _donnees["erreurs"][nom] = f"{deja} ; {detail}" if deja else detail
+
+
+def _donnees_differer(nom, ecriture):
+    """Une écriture demandée PENDANT le chargement (migration du planning,
+    mise de côté d'un état illisible…). Rien n'est écrit tant que le
+    chargement n'est pas validé en entier : donnees_charger() l'exécute
+    alors ; si le chargement échoue, elle est abandonnée et le fichier reste
+    tel qu'il était."""
+    if all(n != nom for n, _ in _donnees["differees"]):
+        _donnees["differees"].append((nom, ecriture))
+
+
+def donnees_pretes():
+    return _donnees["etat"] == "pret"
+
+
+def _donnees_fichiers():
+    return dict(DATA_FILES, autorole=AUTOROLE_FILE, scheduler=SCHEDULED_EVENTS_FILE, skin=SKIN_FICHIER)
+
+
+def donnees_charger():
+    """Charge les données si ce n'est pas déjà fait. Retourne True si elles
+    sont utilisables. Synchrone d'un bout à l'autre : deux sollicitations
+    simultanées ne peuvent pas lancer deux chargements, et une fois « pret »
+    plus rien n'est relu (reconnexion comprise)."""
+    if _donnees["etat"] == "pret":
+        return True
+    if _donnees["etat"] != "vierge":
+        return False                    # en cours (appel imbriqué) ou échec : pas de second chargement
+    _donnees["etat"] = "en_cours"
+    _donnees["erreurs"].clear()
+    _donnees["differees"].clear()
+    try:
+        load_all_data()
+        load_autorole()
+        load_scheduled_events()
+    except Exception as e:
+        _donnees_erreur("chargement", e)
+    if _donnees["erreurs"]:
+        chemins = _donnees_fichiers()
+        for nom, detail in _donnees["erreurs"].items():
+            print(f"[Données] ❌ {chemins.get(nom, nom)} : lecture impossible ou incomplète — {detail}")
+        if not DONNEES_TOLERANT:
+            _donnees["etat"] = "echec"
+            if _donnees["differees"]:
+                print("[Données] écriture(s) en attente abandonnée(s), fichier(s) laissé(s) tel(s) quel(s) : "
+                      + ", ".join(str(chemins.get(n, n)) for n, _ in _donnees["differees"]))
+                _donnees["differees"].clear()
+            print("[Données] ❌ Démarrage refusé : rien n'a été écrit, les fichiers sont intacts. "
+                  "Corrige ou retire le(s) fichier(s) ci-dessus puis relance ; ou relance avec "
+                  "AKARI_CHARGEMENT_TOLERANT=1 pour repartir de ce qui a pu être lu "
+                  "(chaque fichier illisible est d'abord copié à côté).")
+            return False
+        import shutil as _sh, time as _t
+        for nom in list(_donnees["erreurs"]):
+            src = chemins.get(nom)
+            if not src or not os.path.exists(src):
+                continue
+            copie = src + _t.strftime(".illisible-%Y%m%d-%H%M%S")
+            try:
+                _sh.copy2(src, copie)
+                _donnees["copies"].append(copie)
+                print(f"[Données] ⚠️ mode tolérant : {src} copié sous {copie}")
+            except Exception as e:
+                _donnees["etat"] = "echec"
+                _donnees["differees"].clear()
+                print(f"[Données] ❌ copie de {src} impossible ({type(e).__name__}: {e}) : démarrage refusé")
+                return False
+    _donnees["etat"] = "pret"
+    # Le chargement est validé : les écritures qu'il avait demandées (migration
+    # du planning, mise de côté d'un état de skin illisible) ont lieu maintenant.
+    differees = list(_donnees["differees"])
+    _donnees["differees"].clear()
+    for nom, ecriture in differees:
+        try:
+            ecriture()
+        except Exception as e:
+            print(f"[Données] ⚠️ écriture différée « {nom} » impossible : {type(e).__name__}: {e}")
+    return True
+
+
+@bot.check
+async def _donnees_avant_commande(ctx):
+    """Aucune commande ne tourne sur une mémoire non chargée. En marche
+    normale les données sont prêtes bien avant ; sinon elles sont chargées
+    ici même, et la commande s'exécute ensuite sur les vraies données."""
+    if donnees_charger():
+        return True
+    raise DonneesIndisponibles()
+
+
 def save_all_data():
-    """Sauvegarde toutes les données importantes dans des fichiers JSON"""
+    """Sauvegarde toutes les données importantes dans des fichiers JSON.
+    N'écrit RIEN tant que les données n'ont pas été chargées (retourne False)."""
     import json as _json
+    if _donnees["etat"] != "pret":
+        _donnees["refus"] += 1
+        if _donnees["refus"] <= 3:
+            print(f"[Save] ⛔ sauvegarde refusée : données non chargées (état « {_donnees['etat']} ») "
+                  f"— aucun fichier n'a été touché")
+        return False
     # Economy
     try:
         with open(DATA_FILES["economy"], "w", encoding="utf-8") as f:
@@ -47956,6 +49757,7 @@ def save_all_data():
         print(f"[Save] Erreur gacha: {e}")
     # Social
     try:
+        skin_lire_social()     # avant on_ready : ne rien effacer de ce que le skin garde ici
         social_save = {
             "mariages":     dict(mariages) if 'mariages' in dir() else {},
             "anniversaires": dict(anniversaire_data),
@@ -47982,10 +49784,15 @@ def save_all_data():
                             for p, m in girls_jours.items()},
             "cadeaux": cadeaux_data,
             "saison_override": saison_override.get("mode"),
+            "saison_override_fiable": bool(_skin_charge["mode_connu"]),
             "bw_missions_claims": bw_missions_claims,
-            "skin_schema": SKIN_SCHEMA,
-            "skin_snapshot": skin_snapshot,
-            "skin_applique": skin_applique,
+            # Données du moteur de skin précédent, gardées telles quelles ;
+            # le moteur DA-1 écrit son état dans data_skin.json.
+            "skin_schema": SKIN_SCHEMA_ANCIEN,
+            "skin_snapshot": skin_ancien["snapshot"],
+            "skin_applique": skin_ancien["applique"],
+            "skin_normaux": skin_normaux_a_sauver(),
+            "skin_conflits": skin_conflits_a_sauver(),
             "events_schema": EVENTS_SCHEMA,
             "event_salons": event_salons_suivis,
             "boutique_schema": BOUTIQUE_SCHEMA,
@@ -48051,6 +49858,7 @@ def save_all_data():
             _json.dump(dict(bank_data), f, ensure_ascii=False)
     except Exception as e:
         print(f"[Save] Erreur bank: {e}")
+    return True
 
 def load_all_data():
     """Charge toutes les données depuis les fichiers JSON au démarrage"""
@@ -48065,6 +49873,7 @@ def load_all_data():
             print(f"[Load] ✅ Economy: {len(data)} membres")
         except Exception as e:
             print(f"[Load] Erreur economy: {e}")
+            _donnees_erreur("economy", e)
     # XP
     if _os.path.exists(DATA_FILES["xp"]):
         try:
@@ -48075,6 +49884,7 @@ def load_all_data():
             print(f"[Load] ✅ XP: {len(data)} membres")
         except Exception as e:
             print(f"[Load] Erreur xp: {e}")
+            _donnees_erreur("xp", e)
     # Gacha
     if _os.path.exists(DATA_FILES["gacha"]):
         try:
@@ -48104,11 +49914,22 @@ def load_all_data():
             print(f"[Load] ✅ Gacha: {len(claimed_cards)} cartes claimées")
         except Exception as e:
             print(f"[Load] Erreur gacha: {e}")
+            _donnees_erreur("gacha", e)
     # Social
     if _os.path.exists(DATA_FILES["social"]):
         try:
             with open(DATA_FILES["social"], "r", encoding="utf-8") as f:
                 data = _json.load(f)
+            # En premier : rien de ce qui suit ne peut les empêcher d'être relus.
+            # (Un mode forcé perdu, et le calendrier rhabillerait le serveur.)
+            skin_ancien_charger(data)
+            # Un fichier écrit AVANT que les données soient chargées (commande
+            # servie avant on_ready) porte un mode forcé vide qui n'est pas celui
+            # du staff : il est marqué « non fiable » et n'est pas relu.
+            if data.get("saison_override_fiable", True) is not False:
+                _ov = data.get("saison_override")
+                saison_override["mode"] = _ov if isinstance(_ov, str) and _ov in SAISON_MODES else None
+                _skin_charge["social_lu"] = True
             anniversaire_data.update(data.get("anniversaires", {}))
             pets_data.update(data.get("pets", {}))
             for k, v in data.get("achievements", {}).items():
@@ -48136,6 +49957,7 @@ def load_all_data():
             except Exception as _e:
                 print(f"[Mémoire] chargement impossible, mémoire vide : {type(_e).__name__}")
                 memoire_data.clear(); memoire_vus.clear()
+                _donnees_erreur("social", _e, "Mémoire")
             try:
                 for _k, _p in (data.get("panier") or {}).items():
                     if isinstance(_p, dict) and isinstance(_p.get("items"), dict):
@@ -48150,17 +49972,10 @@ def load_all_data():
                                    if isinstance(x, dict) and "i" in x and "d" in x)
                 anniv_meta.update(data.get("anniv_meta", {}))
                 akari_meta.update(data.get("akari", {}))
-                for _k, _v in (data.get("skin_snapshot") or {}).items():
-                    if isinstance(_v, dict):
-                        skin_snapshot.setdefault(_k, _v)   # jamais écrasé
-                for _k, _v in (data.get("skin_applique") or {}).items():
-                    if isinstance(_v, dict):
-                        skin_applique[_k] = _v
                 for _u, _e in (data.get("bw_missions_claims") or {}).items():
                     if isinstance(_e, dict):
                         bw_missions_claims[_u] = {k: list(v) for k, v in _e.items()}
-                _ov = data.get("saison_override")
-                saison_override["mode"] = _ov if _ov in SAISON_MODES else None
+                # (Le mode forcé est relu plus haut, en tête de ce bloc.)
                 # Salons d'events : on retient d'où ils viennent pour pouvoir
                 # nettoyer ceux qu'une session interrompue a laissés derrière.
                 for _cid, _inf in (data.get("event_salons") or {}).items():
@@ -48192,6 +50007,7 @@ def load_all_data():
                             roll_data[_u].update(_v)
                 except Exception as _e:
                     print(f"[Boosts] chargement partiel : {type(_e).__name__}")
+                    _donnees_erreur("social", _e, "Boosts")
                 # ── Migration Cadre → Thème, une fois pour tous les profils ──
                 # Idempotente : la relancer ne double rien. Non destructive :
                 # la clé `cadre` d'origine reste en place.
@@ -48223,7 +50039,11 @@ def load_all_data():
                         cadeaux_data[_k] = _g
                 cadeaux_purger()
             except Exception as _e:
+                # Ce qui suivait dans ce bloc (favoris, ventes, salons d'events,
+                # effets achetés, cadeaux…) n'a pas été lu : une sauvegarde
+                # l'effacerait du fichier. L'erreur remonte.
                 print(f"[Social] chargement partiel : {type(_e).__name__}")
+                _donnees_erreur("social", _e, "Social (du panier aux cadeaux)")
             try:
                 bw_gz_vues[:] = list(data.get("bw_gz_vues") or [])[-BW_GZ_MEMOIRE:]
                 _ed = data.get("gazette_editions", [])
@@ -48236,6 +50056,7 @@ def load_all_data():
             except Exception as _e:
                 print(f"[Gazette] éditions non chargées : {type(_e).__name__}")
                 GAZETTE_EDITIONS.clear()
+                _donnees_erreur("social", _e, "Gazette")
             try:
                 for k, v in data.get("records_perso", {}).items():
                     if isinstance(v, dict):
@@ -48246,6 +50067,7 @@ def load_all_data():
                         records_qg[k] = v
             except Exception as _e:
                 print(f"[Records] chargement partiel : {type(_e).__name__}")
+                _donnees_erreur("social", _e, "Records")
             for k, v in data.get("activite", {}).items():
                 b = _act_neuf(); b.update(v); activite_data[k] = b
             for k, v in data.get("titres", {}).items():
@@ -48302,9 +50124,13 @@ def load_all_data():
             for k, v in data.get("liens_detail", {}).items():
                 for a, b in v.items():
                     liens_detail[k][a].update(b)
-            print(f"[Load] ✅ Social chargé")
+            if "social" in _donnees["erreurs"]:
+                print("[Load] ❌ Social : lecture incomplète (bloc(s) signalé(s) ci-dessus)")
+            else:
+                print(f"[Load] ✅ Social chargé")
         except Exception as e:
             print(f"[Load] Erreur social: {e}")
+            _donnees_erreur("social", e)
     # Bank
     if _os.path.exists(DATA_FILES["bank"]):
         try:
@@ -48315,6 +50141,16 @@ def load_all_data():
             print(f"[Load] ✅ Bank: {len(data)} membres")
         except Exception as e:
             print(f"[Load] Erreur bank: {e}")
+            _donnees_erreur("bank", e)
+    # Skin du serveur (data_skin.json) : une fois par processus.
+    try:
+        skin_charger()
+    except Exception as e:
+        print(f"[Load] Erreur skin: {type(e).__name__}: {e}")
+        _donnees_erreur("skin", e)
+    # Désormais, le mode forcé en mémoire est le dernier connu du staff (ou
+    # aucun, si rien n'a pu être relu) et les sauvegardes sont fiables.
+    _skin_charge["mode_connu"] = _skin_charge["social_vu"] = True
 
 @tasks.loop(minutes=10)
 async def autosave():
@@ -48352,9 +50188,9 @@ async def ouvrir_cmd(ctx):
     economy_data[uid]["coins"] += gain
     gazette_gain(uid, gain)
     embed = discord.Embed(
-        title="📦 Coffre ouvert !",
+        title=season_titre("📦 Coffre ouvert !"),
         description=f"🎉 **{ctx.author.mention}** a ouvert le coffre et gagné **{gain} pièces** ! 💰",
-        color=0xf1c40f
+        color=season_tint(0xf1c40f)
     )
     await ctx.send(embed=embed)
 
@@ -48386,12 +50222,57 @@ async def _find_inviter(guild):
 @bot.event
 async def on_invite_create(invite):
     """Garde le cache d'invitations à jour quand un lien est créé"""
+    if not donnees_charger():
+        return
     if invite.guild:
         guild_invites.setdefault(invite.guild.id, {})[invite.code] = invite.uses or 0
+
+# ── 🎃 Arrivées & départs à Blackwood ──
+# Ces textes ne servent que si Blackwood est le mode effectif ; sinon la
+# présentation habituelle revient telle quelle. Le format des embeds ne
+# change pas : miniature = avatar du membre, compteur en pied de page.
+BLACKWOOD_ACCUEIL = [
+    "Dehors, octobre s’installe. Ici, une place t’attend au chaud. 🍂",
+    "Le film va commencer, les bonbons sont prêts… il ne manquait plus que toi. 📼",
+    "Une lanterne vient de s’allumer à ton passage. Étrange… personne ne l’a touchée. 🕯️",
+    "Soyez gentils avec notre nouvelle recrue… les fantômes lui feront déjà assez peur. 👻",
+    "Le parquet a grincé, le chat noir a levé un œil : ta place était déjà gardée. 🐈‍⬛",
+    "On a laissé un plaid et une tasse fumante près de la cheminée. C’est pour toi. ☕",
+]
+BLACKWOOD_DEPART = [
+    "Les feuilles emportent ses derniers pas. Une lanterne restera allumée pour son retour.",
+    "La porte s’est refermée sans bruit. Sa tasse reste sur l’étagère, au cas où.",
+    "Le vent d’octobre raccompagne ses pas jusqu’au portail. Le chemin du retour est connu.",
+]
+# Salons du QG vers lesquels l'accueil renvoie, par identifiant.
+ACCUEIL_SALONS_QG = {"reglement": 1533215188868923556, "guide": 1533215188868923557,
+                     "roles": 1533215188868923558}
+
+def accueil_liens(guild):
+    """Les liens de l'accueil Blackwood : salon configuré (.setsalon), à
+    défaut celui du QG — toujours par ID, et seulement s'il existe."""
+    def salon(configure, cle):
+        for cid in (configure, ACCUEIL_SALONS_QG[cle]):
+            ch = guild.get_channel(cid) if cid else None
+            if ch:
+                return ch
+        return None
+    lignes = []
+    regl, guide, roles = (salon(SALON_REGLEMENT_ID, "reglement"), salon(SALON_GUIDE_ID, "guide"),
+                          salon(None, "roles"))
+    if regl:
+        lignes.append(f"🕯️ Commence par le règlement : {regl.mention}")
+    if guide:
+        lignes.append(f"🔮 Tout est expliqué dans {guide.mention}")
+    if roles:
+        lignes.append(f"🧙 Choisis tes rôles dans {roles.mention}")
+    return lignes
 
 @bot.event
 async def on_member_join(member):
     """Message de bienvenue (image + texte) + suivi des invitations"""
+    if not donnees_charger():
+        return
     # ── Qui l'a invité ? ──
     inviter = await _find_inviter(member.guild)
     if inviter and not inviter.bot:
@@ -48405,7 +50286,7 @@ async def on_member_join(member):
                             f"🔗 {member.mention} a rejoint grâce à {inviter.mention} !\n"
                             f"🎉 **{inviter.display_name}** en est à **{invite_counts[str(inviter.id)]} invitation(s)**."
                         ),
-                        color=0x2ecc71))
+                        color=season_tint(0x2ecc71)))
                 except Exception:
                     pass
 
@@ -48430,19 +50311,33 @@ async def on_member_join(member):
     lien_guide = (f"📖 Tout est expliqué dans {salon_guide.mention} — passe y jeter un œil.\n"
                   if salon_guide else "")
 
-    embed = discord.Embed(
-        title=f"{season_emoji()}  Bienvenue, {member.display_name} !",
-        description=(
-            f"🔮 **PROPHÉTIE N°{n:03d}**\n"
-            f"> *{prophetie}*\n\n"
-            f"{member.mention}, installe-toi — tu es chez toi ici.\n\n"
-            f"{lien_guide}"
-            f"🎬 Ou lance `.dramarec` tout de suite pour ta première recommandation."
-        ),
-        color=season_color())
+    if saison_mode() == "blackwood":
+        # Titre gothique court ; le texte, la mention, les liens (par ID) et
+        # la commande restent en écriture normale.
+        liens = accueil_liens(member.guild)
+        embed = discord.Embed(
+            title="🎃 " + deco_gothique("Bienvenue à Blackwood…"),
+            description=(
+                f"*{random.choice(BLACKWOOD_ACCUEIL)}*\n\n"
+                f"{member.mention}, installe-toi — tu es chez toi ici.\n\n"
+                + ("\n".join(liens) + "\n" if liens else "")
+                + "🎬 Ou lance `.dramarec` tout de suite pour ta première recommandation."
+            ),
+            color=season_color())
+    else:
+        embed = discord.Embed(
+            title=f"{season_emoji()}  Bienvenue, {member.display_name} !",
+            description=(
+                f"🔮 **PROPHÉTIE N°{n:03d}**\n"
+                f"> *{prophetie}*\n\n"
+                f"{member.mention}, installe-toi — tu es chez toi ici.\n\n"
+                f"{lien_guide}"
+                f"🎬 Ou lance `.dramarec` tout de suite pour ta première recommandation."
+            ),
+            color=season_color())
     embed.set_thumbnail(url=member.display_avatar.url)
     embed.set_footer(
-        text=f"Membre n°{n} • QG Kdrama",
+        text=season_pied(f"Membre n°{n} • QG Kdrama"),
         icon_url=member.guild.icon.url if member.guild.icon else None)
     try:
         await channel.send(embed=embed)
@@ -48475,6 +50370,8 @@ async def on_member_join(member):
 @bot.event
 async def on_member_remove(member):
     """Message d'aurevoir (image + texte)"""
+    if not donnees_charger():
+        return
     channel = member.guild.get_channel(SALON_AUREVOIR_ID) if SALON_AUREVOIR_ID else None
     if not channel:
         return
@@ -48489,16 +50386,26 @@ async def on_member_remove(member):
     ]
     citation, source = random.choice(citations)
 
-    embed = discord.Embed(
-        title=f"💔  {member.display_name} a quitté le QG",
-        description=(
-            f"> *« {citation} »*\n"
-            f"— {source}"
-        ),
-        color=0x5d6d7e)
+    if saison_mode() == "blackwood":
+        # Ton doux, sans reproche : le nom du membre reste en clair.
+        embed = discord.Embed(
+            title="🦇 " + deco_gothique("Une silhouette s’éloigne…"),
+            description=(
+                f"**{member.display_name}** a quitté le QG.\n\n"
+                f"> *{random.choice(BLACKWOOD_DEPART)}*"
+            ),
+            color=season_color("accent"))
+    else:
+        embed = discord.Embed(
+            title=f"💔  {member.display_name} a quitté le QG",
+            description=(
+                f"> *« {citation} »*\n"
+                f"— {source}"
+            ),
+            color=0x5d6d7e)
     embed.set_thumbnail(url=member.display_avatar.url)
     embed.set_footer(
-        text=f"Il reste {member.guild.member_count} membres • QG Kdrama",
+        text=season_pied(f"Il reste {member.guild.member_count} membres • QG Kdrama"),
         icon_url=member.guild.icon.url if member.guild.icon else None)
     try:
         await channel.send(embed=embed)
@@ -48508,6 +50415,8 @@ async def on_member_remove(member):
 @bot.event
 async def on_member_update(before, after):
     """Annonce quand un membre boost le serveur"""
+    if not donnees_charger():
+        return
     if before.premium_since is not None or after.premium_since is None:
         return
     if not SALON_BOOST_ID:
@@ -48517,16 +50426,16 @@ async def on_member_update(before, after):
         return
     total = after.guild.premium_subscription_count or 0
     embed = discord.Embed(
-        title="💎 NOUVEAU BOOST !",
+        title=season_titre("💎 NOUVEAU BOOST !"),
         description=(
             f"### 🌟 {after.mention} vient de booster le QG Kdrama !\n\n"
             f"Le serveur compte maintenant **{total} boost(s)**.\n"
             f"Merci du fond du cœur 💜"
         ),
-        color=0xff73fa)
+        color=season_tint(0xff73fa))
     embed.set_thumbnail(url=after.display_avatar.url)
     embed.set_footer(
-        text="QG Kdrama • Merci aux boosteurs 🚀",
+        text=season_pied("QG Kdrama • Merci aux boosteurs 🚀"),
         icon_url=after.guild.icon.url if after.guild.icon else None)
     try:
         await channel.send(embed=embed)
@@ -48590,7 +50499,18 @@ async def on_command_error(ctx, error):
     """Messages d'erreur clairs au lieu d'un silence total"""
     if isinstance(error, commands.CommandNotFound):
         return
+    if isinstance(error, DonneesIndisponibles):
+        try:
+            await ctx.send("⏳ Les données du bot ne sont pas disponibles pour l'instant : "
+                           "ta commande n'a pas été exécutée et rien n'a été modifié.", delete_after=15)
+        except Exception:
+            pass
+        return
     if isinstance(error, commands.MissingPermissions):
+        if getattr(ctx.command, "name", None) == "saison":
+            # Avant le lot DA-1, `.saison` affichait l'histoire en cours.
+            return await ctx.send("❌ `.saison` règle désormais la saison du serveur (staff). "
+                                  "L'histoire en cours se lit avec `.chapitre`.", delete_after=12)
         return await ctx.send("❌ Tu n'as pas la permission d'utiliser cette commande.", delete_after=8)
     if isinstance(error, commands.MissingRequiredArgument):
         return await ctx.send(f"❌ Il manque un argument : `{error.param.name}`\nTape `.help` pour voir l'usage.", delete_after=10)
@@ -48651,6 +50571,8 @@ async def on_command_error(ctx, error):
 @bot.event
 async def annoncer_arrivee(member):
     """Souhaite la bienvenue — une seule fois par membre, après le règlement."""
+    if not donnees_charger():
+        return
     uid = str(member.id)
     if uid in welcome_announced or member.bot:
         return
@@ -48661,14 +50583,16 @@ async def annoncer_arrivee(member):
     if not salon:
         return
     try:
+        _mot = (BLACKWOOD_ACCUEIL[3] if saison_mode() == "blackwood"
+                else "Soyez gentils… au moins pendant les cinq premières minutes. 😭")
         e = discord.Embed(
-            title="👋  SOUHAITEZ LA BIENVENUE !",
+            title=season_titre("👋  SOUHAITEZ LA BIENVENUE !"),
             description=(f"### ✨ {member.mention} vient officiellement de rejoindre le QG !\n\n"
-                         f"Soyez gentils… au moins pendant les cinq premières minutes. 😭\n\n"
+                         f"{_mot}\n\n"
                          f"-# Passe par `.guide` pour découvrir ce qu'on fait ici."),
-            color=0xff9ec7)
+            color=season_tint(0xff9ec7))
         e.set_thumbnail(url=member.display_avatar.url)
-        e.set_footer(text=f"{member.guild.member_count}e membre du QG Kdrama")
+        e.set_footer(text=season_pied(f"{member.guild.member_count}e membre du QG Kdrama"))
         await salon.send(content=member.mention, embed=e)
     except Exception as ex:
         print(f"[Bienvenue] Envoi impossible : {type(ex).__name__}")
@@ -48676,6 +50600,8 @@ async def annoncer_arrivee(member):
 @bot.event
 async def on_raw_reaction_add(payload):
     if payload.user_id == bot.user.id:
+        return
+    if not donnees_charger():
         return
     guild = bot.get_guild(payload.guild_id)
     if not guild:
@@ -48739,13 +50665,13 @@ async def on_raw_reaction_add(payload):
                 HOF_MESSAGES.add(msg.id)
                 embed = discord.Embed(
                     description=msg.content[:2000] or "*(message sans texte)*",
-                    color=0xf1c40f,
+                    color=season_tint(0xf1c40f),
                     timestamp=msg.created_at)
                 embed.set_author(name=msg.author.display_name, icon_url=msg.author.display_avatar.url)
                 embed.add_field(name="\u200b", value=f"[↗️ Aller au message]({msg.jump_url})", inline=False)
                 if msg.attachments and msg.attachments[0].content_type and "image" in msg.attachments[0].content_type:
                     embed.set_image(url=msg.attachments[0].url)
-                embed.set_footer(text=f"🏆 Hall of Fame • {total} réactions • #{channel.name}")
+                embed.set_footer(text=season_pied(f"🏆 Hall of Fame • {total} réactions • #{channel.name}"))
                 try:
                     await hof_channel.send(embed=embed)
                 except Exception as e:
@@ -48753,6 +50679,8 @@ async def on_raw_reaction_add(payload):
 
 @bot.event
 async def on_raw_reaction_remove(payload):
+    if not donnees_charger():
+        return
     guild = bot.get_guild(payload.guild_id)
     if not guild:
         return
@@ -48788,9 +50716,12 @@ async def on_raw_reaction_remove(payload):
 
 @bot.event
 async def on_ready():
-    load_all_data()
-    load_autorole()
-    load_scheduled_events()
+    # Déjà fait avant la connexion (setup_hook) : ici, ce n'est qu'un filet.
+    # À une reconnexion, rien n'est relu : les données vivantes font foi.
+    if not donnees_charger():
+        print("[Données] ❌ on_ready : données indisponibles — le bot s'arrête sans rien écrire")
+        await bot.close()
+        return
     bot.add_view(GirlsRoleView())
     # ── 🎁 Cadeaux encore ouvrables ──
     # Une View par cadeau valide, avec son custom_id : le bouton déjà
@@ -48968,19 +50899,16 @@ async def on_ready():
         print(f"[DN] reprise impossible : {type(e).__name__}: {e}")
 
     # ── 🏚️ Le serveur suit la saison ──
-    # Après le nettoyage des orphelins : les salons d'events sont alors
-    # connus et protégés. Idempotent — si les noms sont déjà bons, aucun
-    # appel à l'API n'est émis.
-    for g in bot.guilds:
-        try:
-            n = skin_capturer(g)
-            if n:
-                print(f"[Skin] {n} salon(s) ajoutés au snapshot normal")
-            faits, _ig = await skin_synchroniser(g)
-            if faits:
-                print(f"[Skin] {len(faits)} salon(s) mis à l'ambiance {saison_mode()}")
-        except Exception as e:
-            print(f"[Skin] synchronisation ignorée : {type(e).__name__}: {e}")
+    # Les 34 objets de SKIN_BLACKWOOD, par ID, et leur nom seulement. En
+    # tâche de fond et sous verrou : un renommage que Discord fait attendre
+    # ne retarde pas le démarrage, et un `.saison` simultané passe après.
+    # Idempotent — si les noms sont déjà bons, aucun appel à l'API.
+    try:
+        skin_lancer_demarrage()
+        if not skin_veille.is_running():
+            skin_veille.start()
+    except Exception as e:
+        print(f"[Skin] synchronisation ignorée : {type(e).__name__}: {e}")
     save_all_data()
     check_anniversaires.start()
     scheduler_task.start()
@@ -49021,4 +50949,19 @@ print("🚀 Démarrage du bot...")
 # On laisse donc l'exception remonter : le traceback d'origine s'affiche
 # en entier, le process sort en erreur, et l'hébergeur redémarre un
 # process neuf — avec un objet bot neuf, seule façon correcte de repartir.
+
+
+async def _demarrage_avant_connexion():
+    """discord.py appelle `setup_hook` après l'identification et AVANT
+    d'ouvrir la connexion aux événements : quand le premier message arrive,
+    les données sont déjà en mémoire. Si un fichier présent est illisible,
+    le bot ne se connecte pas — rien n'est écrasé."""
+    if not donnees_charger():
+        raise RuntimeError("Données illisibles : démarrage refusé, aucun fichier n'a été modifié "
+                           "(voir les lignes [Données] ci-dessus)")
+
+
+bot.setup_hook = _demarrage_avant_connexion
+
 bot.run(TOKEN)
+    
