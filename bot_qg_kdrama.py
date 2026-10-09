@@ -1543,7 +1543,7 @@ def build_help_pages(guild, is_admin=False):
         "`.announce <message>` — Annonce officielle\n"
         "`.diag` — 🔧 **Diagnostic** : volume, sauvegardes, dernière erreur\n"
         "`.forcegazette` — Publier la gazette immédiatement\n"
-        "`.forcemaj` — Republier l'annonce de mise à jour"
+        "`.forcemaj` — Republier l'annonce de mise à jour *(salon d'annonces du QG)*"
     ), inline=False)
     e.add_field(name="📖 Chronique — Régie", value=(
         "`.chronique` — Ouvrir la régie *(lancer une saison, publier l'épisode "
@@ -1566,7 +1566,11 @@ def build_help_pages(guild, is_admin=False):
     e.add_field(name="🎃 Saison du serveur", value=(
         "`.saison` — Mode effectif et état du skin des salons\n"
         "`.saison auto` — Suivre le calendrier *(octobre : Blackwood)*\n"
-        "`.saison normal|blackwood|wintervale` — Forcer un mode"
+        "`.saison normal|blackwood|wintervale` — Forcer un mode\n"
+        "-# `.saison blackwood` publie aussi l'annonce de Blackwood (@everyone) dans le "
+        "salon d'annonces : une fois par entrée dans la saison, quand tous les objets du skin "
+        "portent leur nom Blackwood. Un objet renommé à la main, absent ou bloqué la retient : "
+        "`.saison` dit lequel."
     ), inline=False)
     pages.append(("🛡️", "Admin — Modération", e))
 
@@ -16205,6 +16209,9 @@ SKIN_ECHECS_MAX = 3               # refus d'affilée avant d'interrompre une pas
 SKIN_ESSAIS_AUTO = 3              # nouveaux essais automatiques par mode, ensuite le staff décide
 SKIN_RENOMMAGES_MAX = 2           # Discord : 2 changements de nom par salon…
 SKIN_RENOMMAGES_FENETRE = 615     # … par fenêtre de 10 minutes (plus une marge)
+SKIN_REPRISE_MARGE = 2            # s après la fin de la fenêtre : la reprise programmée part
+SKIN_REPRISE_GROUPE = 60          # s : des fins de fenêtre aussi proches partent ensemble
+SKIN_REPRISE_PAS = 30             # s : l'attente relit l'heure réelle (la fenêtre est datée)
 
 # (ID, type, intitulé Blackwood en écriture normale, emoji, nom actuel de référence)
 # La dernière colonne ne sert qu'aux messages : le VRAI nom normal est
@@ -16272,6 +16279,27 @@ skin_suivi = {}         # {id: {"etat": repos|applique|conflit|erreur, "pose", "
                         #   "encours": opération écrite sur disque juste AVANT l'appel Discord.
 skin_bilans = {}        # {guild_id: bilan de la dernière synchronisation}
 skin_veille_etat = {}   # {guild_id: {"essais": n, "mode": m}} — nouveaux essais automatiques
+# Demande du staff dont des renommages attendent la limite de Discord : à qui
+# rendre compte quand la reprise l'aura terminée. {"mode", "salon", "t"}, ou {}.
+skin_demande = {}
+# Annonce de l'entrée dans Blackwood — une par entrée réelle dans la saison :
+#   attente : demandée par `.saison blackwood`, publiée dès que le skin est complet ;
+#   publiee : publiée pour ce passage dans Blackwood ("msg", "t") — rien de
+#             nouveau tant que le serveur n'a pas réellement quitté Blackwood ;
+#   envoi   : instant d'un envoi commencé mais pas conclu (réponse perdue, arrêt) ;
+#   salon   : où le staff a tapé la commande ; echec : dernier échec, à relancer ;
+#   activation : numéro de l'activation en cours (chaque mise en attente en
+#             ouvre une) — une tentative d'une activation passée ne publie rien ;
+#   signale : les exceptions qui retiennent l'annonce (texte et objets), telles
+#             que le staff les a déjà lues (réponse de commande ou compte rendu)
+#             — pas de redite ;
+#   ref     : la référence de l'activation en cours (8 caractères hexadécimaux,
+#             tirée au hasard à son ouverture), portée en pied de son annonce ;
+#   envoi_ref : la référence portée par l'envoi resté sans réponse (`envoi`) :
+#             seul un message qui la porte confirme cet envoi.
+skin_annonce = {"attente": False, "publiee": False, "msg": None, "t": None,
+                "envoi": None, "salon": None, "echec": None, "activation": 0, "signale": "",
+                "ref": None, "envoi_ref": None}
 # Relu depuis data_social.json et réécrit à chaque sauvegarde :
 #  · "snapshot" / "applique" : données du moteur précédent, telles quelles
 #    (rien n'est perdu ; avant de revenir à la version précédente, remettre
@@ -16426,7 +16454,8 @@ def skin_persister():
                "mode_force": saison_override.get("mode"),
                "snapshot": {k: v for k, v in skin_snapshot.items() if k in SKIN_IDS},
                "suivi": {k: v for k, v in skin_suivi.items() if k in SKIN_IDS},
-               "bilans": skin_bilans, "veille": skin_veille_etat}
+               "bilans": skin_bilans, "veille": skin_veille_etat,
+               "demande": skin_demande, "annonce": skin_annonce}
     tmp = SKIN_FICHIER + ".tmp"
     try:
         with open(tmp, "w", encoding="utf-8") as f:
@@ -16603,6 +16632,38 @@ def _skin_bilan_sain(b):
     return out
 
 
+def _skin_id_sur(x):
+    """Un identifiant Discord plausible, ou None."""
+    return x if isinstance(x, int) and not isinstance(x, bool) and 0 < x < 2 ** 64 else None
+
+
+def _skin_demande_saine(v):
+    """La demande du staff relue du disque, ou {} si elle n'a pas la forme attendue."""
+    if (not isinstance(v, dict) or v.get("mode") not in SAISON_MODES
+            or _skin_id_sur(v.get("salon")) is None):
+        return {}
+    return {"mode": v["mode"], "salon": v["salon"], "t": _skin_instant(v.get("t"))}
+
+
+def _skin_annonce_saine(v):
+    """Le suivi de l'annonce Blackwood relu du disque, ramené à des types sûrs
+    (absent ou abîmé : aucune annonce en attente, aucune publiée)."""
+    v = v if isinstance(v, dict) else {}
+    return {"attente": v.get("attente") is True, "publiee": v.get("publiee") is True,
+            "msg": _skin_id_sur(v.get("msg")), "t": _skin_instant(v.get("t")),
+            "envoi": _skin_instant(v.get("envoi")), "salon": _skin_id_sur(v.get("salon")),
+            "echec": _skin_tronquer(v["echec"], 1000) if _skin_texte_sur(v.get("echec")) else None,
+            "activation": _skin_id_sur(v.get("activation")) or 0,
+            "signale": _skin_tronquer(v["signale"], 2000) if _skin_texte_sur(v.get("signale")) else "",
+            # Absentes d'un état écrit par une version précédente : None.
+            "ref": _annonce_ref_sure(v.get("ref")), "envoi_ref": _annonce_ref_sure(v.get("envoi_ref"))}
+
+
+def _annonce_ref_sure(x):
+    """Une référence d'annonce valide (8 caractères hexadécimaux), ou None."""
+    return x if isinstance(x, str) and len(x) == 8 and all(c in "0123456789abcdef" for c in x) else None
+
+
 def _skin_interpreter(d):
     """L'état relu du disque, ramené à des types sûrs, sans rien modifier :
     (snapshot, suivi, bilans, veille, nombre d'entrées écartées)."""
@@ -16693,6 +16754,8 @@ def skin_charger():
     skin_suivi.update(suivi)
     skin_bilans.update(bilans)
     skin_veille_etat.update(veille)
+    skin_demande.update(_skin_demande_saine(d.get("demande")))
+    skin_annonce.update(_skin_annonce_saine(d.get("annonce")))
     if rejets:
         print(f"[Skin] ⚠️ {rejets} entrée(s) mal formée(s) ignorée(s) à la lecture de l'état")
     # Mode forcé : celui de data_social.json fait foi. S'il n'a pas pu être
@@ -16945,6 +17008,10 @@ def _skin_limite_globale_libre():
 # {id: {"tache", "action", "nom", "t", "ch", "attendu", …}}
 _skin_en_vol = {}
 _skin_rattrapage = {"tache": None}
+# Reprise programmée de chaque serveur : {guild_id: {"tache", "quand", "lancee"}}.
+# Mémoire du processus : après un redémarrage, la passe de démarrage la
+# reprogramme d'après les fiches, où les instants des renommages sont écrits.
+_skin_reprises = {}
 
 
 def _skin_classer_echec(exc):
@@ -17044,6 +17111,70 @@ def _skin_rattraper():
     _skin_rattrapage["tache"] = t
     _skin_taches.add(t)
     t.add_done_callback(_skin_taches.discard)
+
+
+def _skin_regrouper(fins):
+    """L'échéance d'une reprise : la fin de la plus proche attente de
+    renommage — ou, si d'autres fins tombent dans les SKIN_REPRISE_GROUPE
+    secondes suivantes, la dernière d'entre elles, pour qu'elles partent
+    ensemble — plus SKIN_REPRISE_MARGE. None si rien n'attend."""
+    if not fins:
+        return None
+    premiere = min(fins)
+    return max(q for q in fins if q <= premiere + SKIN_REPRISE_GROUPE) + SKIN_REPRISE_MARGE
+
+
+def skin_programmer_reprise(guild):
+    """Programme, reprogramme ou annule la reprise de ce serveur : une seule
+    tâche par serveur, réveillée à la fin de la fenêtre de Discord — sans
+    attendre le prochain tour de veille. Rien n'est programmé quand les
+    nouveaux essais automatiques sont épuisés (le staff décide). Une reprise
+    qui dormait encore est remplacée ; une reprise déjà lancée termine sa
+    passe. Retourne l'instant prévu, ou None."""
+    gk = str(getattr(guild, "id", ""))
+    d = skin_diagnostic(guild)
+    quand = d["reprise"] if (d["differes"] and d["auto"]) else None
+    r = _skin_reprises.get(gk)
+    if r is not None and not r["tache"].done() and not r["lancee"]:
+        if quand is not None and abs(r["quand"] - quand) < 1:
+            return r["quand"]                       # déjà prévue à cette heure-là
+        r["tache"].cancel()                         # elle dormait : remplacée, ou plus utile
+    if quand is None:
+        if r is not None and (r["tache"].done() or not r["lancee"]):
+            _skin_reprises.pop(gk, None)
+        return None
+    try:
+        t = asyncio.get_running_loop().create_task(_skin_reprise_tache(guild.id, quand))
+    except RuntimeError:
+        return None                                 # plus de boucle : le bot s'arrête
+    _skin_reprises[gk] = {"tache": t, "quand": quand, "lancee": False}
+    _skin_taches.add(t)
+    t.add_done_callback(_skin_taches.discard)
+    return quand
+
+
+async def _skin_reprise_tache(gid, quand):
+    """La reprise programmée : attend l'échéance en relisant l'heure réelle,
+    puis fait une passe ordinaire — sous le verrou, avec le mode du MOMENT :
+    un choix du staff fait entre-temps l'emporte toujours."""
+    import time as _t
+    while (reste := quand - _t.time()) > 0:
+        await asyncio.sleep(min(reste, SKIN_REPRISE_PAS))
+    r = _skin_reprises.get(str(gid))
+    if r is not None and r["tache"] is asyncio.current_task():
+        r["lancee"] = True
+    g = bot.get_guild(gid)
+    if g is None or getattr(g, "unavailable", False):
+        return                                      # la veille reprendra au retour du serveur
+    try:
+        d = skin_diagnostic(g)
+        if d["a_faire"] and d["auto"]:
+            b = await skin_synchroniser(g, source="reprise")
+            print(f"[Skin] reprise programmée — {skin_resume(b)}")
+        elif d["differes"]:
+            skin_programmer_reprise(g)              # l'heure a bougé : nouvelle échéance
+    except Exception as e:
+        print(f"[Skin] reprise programmée : {type(e).__name__}: {e}")
 
 
 async def _skin_renommer(ch, objet, action, nom, capture, motif, bilan, now):
@@ -17323,7 +17454,7 @@ async def skin_synchroniser(guild, source="commande"):
         if (not isinstance(ve, dict) or ve.get("mode") != mode
                 or source not in _SKIN_SOURCES_AUTO):
             ve = skin_veille_etat[gk] = {"essais": 0, "mode": mode}
-        if source == "veille":
+        if source in ("veille", "reprise"):
             rate = any(not e.get("differe") and not e.get("attente") for e in bilan["erreurs"])
             ve["essais"] = ve.get("essais", 0) + 1 if rate else 0
         skin_persister()
@@ -17333,6 +17464,11 @@ async def skin_synchroniser(guild, source="commande"):
             save_all_data()
         except Exception as e:
             print(f"[Skin] copie de secours non écrite : {type(e).__name__}: {e}")
+    try:
+        await skin_apres_passe(guild, bilan)        # reprise, demande du staff, annonce
+    except Exception as e:
+        # La passe est faite et écrite : sa suite ne doit pas en cacher le compte rendu.
+        print(f"[Skin] suite de la passe : {type(e).__name__}: {e}")
     return bilan
 
 
@@ -17380,24 +17516,46 @@ def skin_diagnostic(guild, mode=None):
     """Ce qu'une synchronisation ferait maintenant — sans rien modifier.
       a_faire      : renommages possibles tout de suite ;
       differes     : renommages qui attendent la limite de Discord ;
+      reprise      : quand une reprise sera utile (fin de la plus proche attente) ;
+      prevue       : l'heure de la reprise réellement programmée, s'il y en a une ;
+      en_vol       : renommages envoyés dont Discord n'a pas encore répondu ;
+      en_place     : ce que montre réellement le serveur (Blackwood, normal, autre) ;
       a_consolider : fiches à remettre en accord avec Discord, sans appel."""
     import time as _t
     mode = mode or saison_mode()
     action = "appliquer" if mode == "blackwood" else "restaurer"
     d = {"mode": mode, "action": action, "total": len(SKIN_BLACKWOOD), "conformes": 0,
          "a_faire": 0, "conflits": 0, "absents": 0, "bloques": 0, "en_erreur": 0,
-         "differes": 0, "reprise": None, "a_consolider": 0, "details": [],
+         "differes": 0, "reprise": None, "prevue": None, "en_vol": 0,
+         "en_place": {"blackwood": 0, "normal": 0, "autre": 0}, "a_consolider": 0, "details": [],
          "normaux": sum(1 for k in SKIN_IDS if (skin_snapshot.get(k) or {}).get("nom"))}
-    ve = skin_veille_etat.get(str(getattr(guild, "id", ""))) or {}
+    gk = str(getattr(guild, "id", ""))
+    ve = skin_veille_etat.get(gk) or {}
     d["auto"] = not (ve.get("mode") == mode and isinstance(ve.get("essais"), int)
                      and ve["essais"] >= SKIN_ESSAIS_AUTO)
+    r = _skin_reprises.get(gk)
+    if r is not None and not r["tache"].done() and not r["lancee"]:
+        d["prevue"] = r["quand"]
     now = _t.time()
+    fins = []
     for objet in SKIN_BLACKWOOD:
         k = str(objet[0])
         ch = guild.get_channel(objet[0]) if guild else None
         v, _nom, motif, capture = _skin_decider(objet, ch, action, now)
         s = skin_suivi.get(k) or {}
         lib = _skin_lib(objet, ch, now)
+        if k in _skin_en_vol:
+            d["en_vol"] += 1
+        if ch is not None and v != "type":
+            cur = _skin_nom_actuel(k, ch, now)
+            normal = (skin_snapshot.get(k) or {}).get("nom")
+            if _skin_eq(cur, skin_nom_cible(objet)) or (s.get("pose") is not None
+                                                         and _skin_eq(cur, s["pose"])):
+                d["en_place"]["blackwood"] += 1
+            elif normal is not None and _skin_eq(cur, normal):
+                d["en_place"]["normal"] += 1
+            else:
+                d["en_place"]["autre"] += 1
         if v in _SKIN_SANS_APPEL:
             attendu = _skin_fiche_attendue(v, action, objet, lib, motif)
             if capture is not None or any(s.get(c) != x for c, x in attendu.items() if c != "detail"):
@@ -17411,7 +17569,7 @@ def skin_diagnostic(guild, mode=None):
             quand = _skin_prochain_renommage(s, now)
             if quand is not None:
                 d["differes"] += 1
-                d["reprise"] = quand if d["reprise"] is None else max(d["reprise"], quand)
+                fins.append(quand)
             else:
                 d["a_faire"] += 1
                 if s.get("etat") == "erreur":
@@ -17422,6 +17580,7 @@ def skin_diagnostic(guild, mode=None):
         else:
             d["bloques"] += 1
             d["details"].append({"genre": "bloque", "id": k, "nom": lib, "detail": motif})
+    d["reprise"] = _skin_regrouper(fins)
     return d
 
 
@@ -17511,7 +17670,7 @@ def skin_lancer_demarrage():
 
 # Origines d'une passe AUTOMATIQUE (toute autre origine est une demande du
 # staff ou un démarrage, et remet à zéro le compte des nouveaux essais).
-_SKIN_SOURCES_AUTO = ("veille", "calendrier", "mode forcé")
+_SKIN_SOURCES_AUTO = ("veille", "calendrier", "mode forcé", "reprise")
 
 
 @tasks.loop(minutes=10)
@@ -17550,9 +17709,17 @@ async def skin_veille():
                     n = (skin_veille_etat.get(gk) or {}).get("essais", 0)
                     print("[Skin] " + (f"nouvel essai {n}/{SKIN_ESSAIS_AUTO}" if n else "reprise")
                           + f" — {skin_resume(nb)}")
-            elif d["a_consolider"]:
+                continue                            # la passe a fait le reste (skin_apres_passe)
+            if d["a_consolider"]:
                 n = await skin_consolider(g)
                 print(f"[Skin] {n} fiche(s) remise(s) en accord sans renommage — {g.name}")
+            a = skin_annonce
+            if (d["differes"] or d["en_vol"] or a["attente"] or skin_demande
+                    or (mode != "blackwood" and (a["publiee"] or a["envoi"] is not None))):
+                # Sans passe : une attente reçoit toujours sa reprise programmée ; un
+                # renommage terminé en retard peut compléter le skin (annonce, compte
+                # rendu au staff) ou achever une sortie de Blackwood.
+                await skin_apres_passe(g, {"source": "veille"})
         except Exception as e:
             print(f"[Skin] veille : {type(e).__name__}: {e}")
 
@@ -17618,6 +17785,16 @@ def _skin_champs(e, titre, entrees, fmt, suite="", maxi=10, champs=1):
         e.add_field(name=titre if i == 0 else f"{titre} (suite)", value=valeur, inline=False)
 
 
+def skin_texte_en_place(d):
+    """Ce que montre réellement le serveur, en une ligne."""
+    p, n = d["en_place"], d["total"]
+    t = (f"{SAISON_PACKS['blackwood']['emoji']} Blackwood **{p['blackwood']}**/{n} · "
+         f"{SAISON_PACKS['normal']['emoji']} noms normaux **{p['normal']}**/{n}")
+    if p["autre"]:
+        t += f" · ✋ autres noms **{p['autre']}**"
+    return t
+
+
 def skin_texte_etat(d):
     """Le bloc « Skin du serveur » de `.saison`."""
     n = d["total"]
@@ -17634,8 +17811,8 @@ def skin_texte_etat(d):
     elif d["a_faire"]:                  # les nouveaux essais automatiques sont épuisés
         tete = f"⏳ **{quoi} incomplète** — `.saison {d['mode']}` pour relancer"
     elif d["differes"] and d.get("auto", True):
-        tete = (f"🕒 **{quoi} différée** — reprise automatique à partir de "
-                f"{_skin_heure(d['reprise'])}")
+        tete = (f"🕒 **{SAISON_PACKS[d['mode']]['nom']} est demandé** — en attente de renommage, "
+                f"reprise automatique prévue à **{_skin_heure(d.get('prevue') or d['reprise'])}**")
     elif d["differes"]:                 # les nouveaux essais automatiques sont épuisés
         tete = (f"🕒 **{quoi} différée** — `.saison {d['mode']}` à partir de "
                 f"{_skin_heure(d['reprise'])} pour relancer")
@@ -17645,7 +17822,7 @@ def skin_texte_etat(d):
                "noms normaux" + (" *(Wintervale n'a pas de skin de serveur)*"
                                  if d["mode"] == "wintervale" else ""))
     return (f"{tete}\n"
-            f"Attendu : **{attendu}**\n"
+            f"Attendu : **{attendu}** · Réellement en place : {skin_texte_en_place(d)}\n"
             f"✅ Conformes : **{d['conformes']}/{n}** · ⏳ À faire : **{d['a_faire']}**"
             + (f" *(dont {d['en_erreur']} en erreur)*" if d["en_erreur"] else "")
             + (f" · 🕒 Différés : **{d['differes']}**" if d["differes"] else "") + "\n"
@@ -17668,10 +17845,12 @@ def _skin_instant_texte(x):
         return None
 
 
-def skin_embed_bilan(b, choix=None, demande=None):
+def skin_embed_bilan(b, choix=None, demande=None, diag=None, annonce=None):
     """Le compte rendu d'une synchronisation, pour le staff. `choix` : le
     réglage EN VIGUEUR (auto ou un mode forcé) ; `demande` : ce que la
-    commande avait demandé, si une autre commande est passée entre-temps."""
+    commande avait demandé, si une autre commande est passée entre-temps ;
+    `diag` : l'état du serveur après la passe (ce qui est réellement en
+    place, la reprise programmée) ; `annonce` : une ligne sur l'annonce."""
     m = b["mode"]
     n = len(SKIN_BLACKWOOD)
     appl = b["action"] == "appliquer"
@@ -17680,7 +17859,9 @@ def skin_embed_bilan(b, choix=None, demande=None):
     erreurs = [x for x in b["erreurs"] if not x.get("differe")]
     reprenables = [x for x in erreurs if not x.get("bloque")]
     bloquees = [x for x in erreurs if x.get("bloque")]
-    e = discord.Embed(title=f"{SAISON_PACKS[m]['emoji']}  Saison : {SAISON_PACKS[m]['nom']}",
+    attente = bool(differes) and diag is not None and bool(diag["differes"])
+    e = discord.Embed(title=(f"🕒  Saison : {SAISON_PACKS[m]['nom']} — en attente" if attente
+                             else f"{SAISON_PACKS[m]['emoji']}  Saison : {SAISON_PACKS[m]['nom']}"),
                       color=season_color())
     lignes = []
     if choix == "auto":
@@ -17693,7 +17874,28 @@ def skin_embed_bilan(b, choix=None, demande=None):
     if m == "wintervale":
         lignes.append("❄️ Wintervale n'a pas encore de skin de serveur : les noms normaux sont gardés.")
     st = b.get("statut")
-    if st == "aucune_cible":
+    if attente:
+        # Rien n'est encore fini : ni « appliqué », ni « partiel » — ce qui est
+        # demandé, ce qui est réellement en place, et quand la suite viendra.
+        cible = "blackwood" if appl else "normal"
+        quand = diag.get("prevue") or diag["reprise"]
+        sujet = ("Les noms restent" if not diag["en_place"][cible]
+                 else f"{diag['differes']} nom(s) restent")
+        suite = (f"Reprise automatique prévue à **{_skin_heure(quand)}** (heure de Paris)."
+                 if diag.get("auto", True) else
+                 f"Nouveaux essais automatiques épuisés : `.saison {m}` à partir de "
+                 f"{_skin_heure(quand)} pour relancer.")
+        lignes.append(f"🕒 **{SAISON_PACKS[m]['nom']} est demandé.** {sujet} temporairement "
+                      f"{'en normal' if appl else 'en Blackwood'} pendant l'attente de renommage. "
+                      + suite)
+        lignes.append(f"🎯 Mode demandé : **{_skin_lib_mode(m)}** · "
+                      f"Réellement en place : {skin_texte_en_place(diag)}")
+        lignes.append(f"⏳ En attente de renommage : **{diag['differes']}** objet(s) — {_SKIN_AIDE_LIMITE}")
+        if erreurs:
+            lignes.append(f"⚠️ **{len(erreurs)} renommage(s) en erreur** — détail ci-dessous.")
+        if st == "interrompu":
+            lignes.append(f"⏸️ **Opération interrompue** — {b['interrompu']}.")
+    elif st == "aucune_cible":
         lignes.append(f"❌ **Aucune des {n} cibles n'a été trouvée sur ce serveur** : "
                       f"rien n'a été modifié.")
     elif st == "complet":
@@ -17705,11 +17907,13 @@ def skin_embed_bilan(b, choix=None, demande=None):
     else:
         lignes.append((f"⚠️ **Application partielle** — {ok}/{n} objets conformes." if appl
                        else f"⚠️ **Restauration partielle** — {ok}/{n} objets conformes."))
-    if differes:
+    if differes and not attente:
         quand = max((t for t in (_skin_instant_texte(x.get("differe")) for x in differes)
                      if t is not None), default=None)
         lignes.append(f"🕒 **{len(differes)} renommage(s) différé(s)** — {_SKIN_AIDE_LIMITE} "
                       f"Reprise automatique à partir de {_skin_heure(quand)} (heure de Paris).")
+    if annonce:
+        lignes.append(annonce)
     e.description = "\n".join(lignes)
     e.add_field(name="✏️ Modifiés", value=str(len(b["modifies"])), inline=True)
     e.add_field(name="✅ Déjà conformes", value=str(len(b["conformes"])), inline=True)
@@ -17756,6 +17960,393 @@ def _skin_taille_embed(e):
     return n
 
 
+# ── 📣 Annonce de l'entrée dans Blackwood ──
+# Publiée dans le salon d'annonces du QG (SALON_ANNONCES_QG), avec un vrai
+# ping @everyone, UNE fois par entrée réelle dans la saison, et seulement
+# quand le skin est complet. Déclenchée par `.saison blackwood` ; ni `.saison`
+# seul, ni une commande répétée, ni une reconnexion ou un redémarrage n'en
+# publient une nouvelle. Aucune permission n'est jamais modifiée pour elle.
+ANNONCE_BLACKWOOD_TITRE = "🎃 BLACKWOOD A OUVERT SES PORTES"
+ANNONCE_BLACKWOOD_TEXTE = (
+    "Le vent s’est levé devant les portes du QG. Les feuilles ont envahi les allées, "
+    "les lanternes se sont allumées… et les noms familiers ont laissé place à quelque "
+    "chose d’un peu plus étrange.\n\n"
+    "Les cassettes attendent leur prochaine séance. Une lumière vacille au fond du Dark "
+    "Shop. Dans les couloirs, certains jurent avoir entendu des pas alors qu’ils étaient "
+    "seuls.\n\n"
+    "Le serveur vient de plonger dans les couleurs d’octobre. Installez-vous, prenez "
+    "quelques bonbons et retrouvez vos habitudes dans ce nouveau décor.\n\n"
+    "Bienvenue à Blackwood.\n"
+    "Si quelqu’un frappe après minuit… regardez bien avant d’ouvrir. 🕯️")
+ANNONCE_BLACKWOOD_COULEUR = 0xFF7518          # orange citrouille
+# Pied de l'annonce : discret, il porte la référence de son activation.
+ANNONCE_BLACKWOOD_PIED = "🕯️ Blackwood · {}"
+_ANNONCE_LOCK = asyncio.Lock()
+# Envoi resté sans réponse : le message, s'il a été créé, l'a été entre
+# 2 minutes avant (écart d'horloge) et 15 minutes après l'instant noté. Au
+# plus tant de messages relus dans cette fenêtre ; au-delà, rien ne prouve
+# son absence : il n'est pas renvoyé.
+ANNONCE_HISTORIQUE_MAX = 500
+
+
+def annonce_blackwood_embed(ref):
+    """Titre court décoré (lettres « Cassette VHS » de la saison), corps en
+    écriture normale, orange citrouille. En pied, la référence de
+    l'activation : relue dans l'historique, elle reconnaît CE message parmi
+    les annonces du salon."""
+    e = discord.Embed(title=season_titre(ANNONCE_BLACKWOOD_TITRE),
+                      description=ANNONCE_BLACKWOOD_TEXTE, color=ANNONCE_BLACKWOOD_COULEUR)
+    e.set_footer(text=ANNONCE_BLACKWOOD_PIED.format(ref))
+    return e
+
+
+def skin_est_qg(guild):
+    """Le serveur du skin : celui qui porte au moins un des objets de
+    SKIN_BLACKWOOD. La demande du staff et l'annonce de Blackwood ne
+    suivent que lui (le bot peut être présent sur d'autres serveurs)."""
+    return guild is not None and any(guild.get_channel(o[0]) is not None for o in SKIN_BLACKWOOD)
+
+
+def skin_complet(d):
+    """Les objets du skin portent TOUS leur nom Blackwood : conformes, sans
+    renommage à faire, différé ou en vol. Un objet renommé à la main, absent
+    ou bloqué retient l'annonce : il est signalé au staff, jamais forcé
+    (aucun renommage manuel écrasé, aucune permission modifiée)."""
+    return d["conformes"] == d["total"] and not (d["a_faire"] or d["differes"] or d["en_vol"])
+
+
+def annonce_reste(d):
+    """Ce qui retient encore l'annonce, en clair : (ce que le moteur reprend
+    seul, les exceptions que seul le staff peut régler) — "" pour une part
+    vide. Exceptions : objet renommé à la main, absent ou bloqué, renommage
+    dont les nouveaux essais automatiques sont épuisés."""
+    def compte(n, un, plusieurs):
+        return f"{n} {un if n == 1 else plusieurs}"
+    auto = d["a_faire"] if d["auto"] else 0
+    moteur = [compte(n, *t) for n, t in (
+        (auto, ("renommage à faire ou à réessayer", "renommages à faire ou à réessayer")),
+        (d["differes"], ("renommage qui attend la limite de Discord",
+                         "renommages qui attendent la limite de Discord")),
+        (d["en_vol"], ("renommage qui attend la réponse de Discord",
+                       "renommages qui attendent la réponse de Discord"))) if n]
+    staff = [compte(n, *t) for n, t in (
+        (d["conflits"], ("objet renommé à la main", "objets renommés à la main")),
+        (d["absents"], ("objet introuvable", "objets introuvables")),
+        (d["bloques"], ("objet bloqué", "objets bloqués")),
+        (d["a_faire"] - auto, ("renommage en échec", "renommages en échec"))) if n]
+    if d["a_faire"] - auto:
+        staff[-1] += ", nouveaux essais épuisés (`.saison blackwood` pour relancer)"
+    return " · ".join(moteur), ", ".join(staff)
+
+
+def annonce_demander(salon_id):
+    """`.saison blackwood` : l'annonce est mise en attente — sauf si elle a
+    déjà été publiée pour ce passage dans Blackwood. Une mise en attente
+    ouvre une nouvelle activation, avec sa propre référence ; une commande
+    répétée reste dans la même, et garde sa référence.
+    Un échec précédent est oublié : c'est la nouvelle tentative demandée par
+    le staff."""
+    a = skin_annonce
+    if a["publiee"]:
+        return False
+    if not a["attente"]:
+        import secrets as _s
+        a.update(activation=a["activation"] + 1, signale="", ref=_s.token_hex(4))
+    a.update(attente=True, salon=salon_id, echec=None)
+    return True
+
+
+def annonce_abandonner():
+    """Blackwood n'est plus demandé : l'annonce en attente est abandonnée.
+    Un envoi resté sans réponse reste noté : si Blackwood est redemandé sans
+    être réellement quitté, le bot regardera d'abord dans le salon."""
+    a = skin_annonce
+    if not a["attente"]:
+        return False
+    a.update(attente=False, echec=None)
+    print("[Annonce] annonce Blackwood en attente abandonnée : Blackwood n'est plus demandé")
+    skin_persister()
+    return True
+
+
+def _annonce_echec(texte):
+    skin_annonce["echec"] = texte
+    skin_persister()
+    print(f"[Annonce] annonce Blackwood non publiée : {texte}")
+    return "echec", texte
+
+
+async def _annonce_retrouver(salon, depuis, titre, ref):
+    """Un envoi précédent n'a pas été conclu (réponse perdue, arrêt) : son
+    message est-il quand même dans le salon ? Lecture seule, dans la fenêtre
+    où il a pu être créé. Seul un message du bot dont le pied se termine par
+    la référence de CET envoi (`ref`) le confirme ; l'annonce d'une autre
+    activation ne prouve ni qu'il est arrivé, ni qu'il ne l'est pas. Sans
+    référence (envoi fait par une version précédente), aucune annonce de la
+    fenêtre ne peut être reconnue comme la sienne. Retourne
+      ("trouve", message) ;
+      ("absent", None)    — TOUS les messages de la fenêtre ont été lus et
+                            aucun ne porte cette référence ;
+      ("inconnu", raison) — historique illisible, fenêtre pas encore close,
+                            plus de messages dans la fenêtre que la recherche
+                            n'en lit, ou envoi sans référence près d'une
+                            annonce du bot : rien ne prouve l'absence."""
+    import datetime as _dt, time as _t
+    moi = getattr(getattr(salon.guild, "me", None), "id", None)
+    lus, ambigues = 0, []
+    try:
+        apres = _dt.datetime.fromtimestamp(depuis - 120, tz=_dt.timezone.utc)
+        avant = _dt.datetime.fromtimestamp(depuis + 900, tz=_dt.timezone.utc)
+        async for m in salon.history(limit=ANNONCE_HISTORIQUE_MAX + 1, after=apres, before=avant):
+            lus += 1
+            if getattr(m.author, "id", None) != moi:
+                continue
+            for x in m.embeds:
+                pied = getattr(getattr(x, "footer", None), "text", None) or ""
+                if ref and pied.split()[-1:] == [ref]:
+                    return "trouve", m
+                if not ref and getattr(x, "title", None) == titre:
+                    ambigues.append(m)               # marquée ou non : peut-être la sienne
+    except Exception as e:
+        print(f"[Annonce] historique illisible : {type(e).__name__}: {e}")
+        return "inconnu", f"historique de <#{salon.id}> illisible ({type(e).__name__})"
+    if lus > ANNONCE_HISTORIQUE_MAX:
+        return "inconnu", (f"plus de {ANNONCE_HISTORIQUE_MAX} messages dans <#{salon.id}> autour de "
+                           f"l'envoi : recherche incomplète")
+    if ambigues:
+        # Envoi sans référence (version précédente) : une annonce du bot près de
+        # lui peut être la sienne, ou celle d'une activation précédente. Ni
+        # validée, ni tenue pour absente.
+        lien = getattr(ambigues[0], "jump_url", "?")
+        quoi = (f"une annonce Blackwood ({lien})" if len(ambigues) == 1
+                else f"{len(ambigues)} annonces Blackwood (la première : {lien})")
+        return "inconnu", (f"l'envoi de {_skin_heure(depuis)} n'a pas de référence (état écrit par la version "
+                           f"précédente), et {quoi} est près de lui dans <#{salon.id}> : impossible de savoir "
+                           f"si c'est la sienne. Si c'est elle, laisse-la : rien ne repartira, et l'annonce "
+                           f"restera « non confirmée » jusqu'à la sortie de Blackwood ; sinon, supprime-la "
+                           f"puis relance")
+    if _t.time() < depuis + 900:
+        # Discord peut encore créer le message d'une requête restée sans réponse.
+        return "inconnu", (f"le message a pu être créé jusqu'à {_skin_heure(depuis + 900)} "
+                           f"(relance possible à partir de cette heure)")
+    return "absent", None
+
+
+async def annonce_publier(guild, staff=False):
+    """Publie l'annonce si elle est en attente, que Blackwood est toujours le
+    mode effectif et que le skin est complet. Sous verrou : deux demandes
+    simultanées n'en publient qu'une. Une tentative appartient à l'activation
+    en cours à son début ; après chaque attente (lecture de l'historique,
+    envoi), elle vérifie qu'elle l'est toujours — sinon elle ne publie, ne
+    valide un message retrouvé ni ne touche au suivi de la suivante. Mode
+    effectif et skin complet sont revérifiés juste avant tout nouvel envoi.
+    Un envoi refusé n'est jamais marqué publié ; une vérification impossible
+    ne renvoie rien ; après un échec, seule une nouvelle demande du staff
+    (`staff=True`) relance. Retourne (statut, détail), statut ∈ publiee ·
+    attente · echec (échec de CET essai) · rien."""
+    import time as _t
+    async with _ANNONCE_LOCK:
+        a = skin_annonce
+        jeton = a["activation"]
+
+        def courante():
+            return (a["attente"] and not a["publiee"] and a["activation"] == jeton
+                    and saison_mode() == "blackwood")
+
+        if not courante():
+            return "rien", ""
+        if a["echec"] and not staff:
+            return "attente", a["echec"]             # déjà signalé : le staff relancera
+        salon = guild.get_channel(SALON_ANNONCES_QG) if guild is not None else None
+        if salon is None:
+            return _annonce_echec(f"salon d'annonces introuvable (id {SALON_ANNONCES_QG})")
+        if not skin_complet(skin_diagnostic(guild, "blackwood")):
+            return "attente", "le skin n'est pas encore complet"
+        p = salon.permissions_for(guild.me)
+        manque = [n for n, v in (("Voir le salon", p.view_channel),
+                                 ("Envoyer des messages", p.send_messages),
+                                 ("Intégrer des liens", p.embed_links),
+                                 ("Mentionner @everyone", p.mention_everyone)) if not v]
+        if a["envoi"] is not None and not p.read_message_history:
+            manque.append("Voir les anciens messages (pour vérifier l'envoi précédent)")
+        if manque:
+            return _annonce_echec(f"permission manquante dans <#{salon.id}> : {', '.join(manque)} "
+                                  f"(aucune permission n'a été modifiée)")
+        if a["ref"] is None:                          # suivi écrit par une version précédente
+            import secrets as _s
+            a["ref"] = _s.token_hex(4)
+        ref = a["ref"]
+        e = annonce_blackwood_embed(ref)
+        if a["envoi"] is not None:
+            verdict, deja = await _annonce_retrouver(salon, a["envoi"], e.title, a["envoi_ref"])
+            if not courante():
+                return "rien", ""                    # activation abandonnée ou remplacée pendant la lecture
+            if verdict == "trouve":
+                a.update(attente=False, publiee=True, msg=deja.id, t=_t.time(), envoi=None, echec=None)
+                skin_persister()
+                return "publiee", f"<#{salon.id}> (envoi précédent retrouvé, rien de renvoyé)"
+            if verdict == "inconnu":
+                return _annonce_echec(f"impossible de vérifier si l'envoi précédent est arrivé : {deja}. "
+                                      f"Rien n'a été renvoyé, pour ne pas pinger deux fois ; à la relance, "
+                                      f"le bot cherchera de nouveau")
+            a["envoi"] = None                        # absence établie : l'envoi précédent n'est pas arrivé
+            if not skin_complet(skin_diagnostic(guild, "blackwood")):
+                skin_persister()
+                return "attente", "le skin n'est plus complet"
+        mon_envoi = _t.time()
+        a.update(envoi=mon_envoi, envoi_ref=ref)      # la référence est écrite AVANT l'envoi
+        if not skin_persister():
+            a["envoi"] = None
+            return _annonce_echec("sauvegarde impossible : rien n'a été envoyé")
+        try:
+            msg = await salon.send(content="@everyone", embed=e,
+                                   allowed_mentions=discord.AllowedMentions(everyone=True, users=False,
+                                                                            roles=False))
+        except Exception as ex:
+            code = getattr(ex, "status", None) if isinstance(ex, discord.HTTPException) else None
+            # Refus net (4xx hors 429) : rien n'est parti. Un 429 peut clore des
+            # essais dont le premier a abouti (discord.py réessaie de lui-même).
+            net = isinstance(code, int) and code < 500 and code != 429
+            if net and a["envoi"] == mon_envoi:
+                a["envoi"] = None
+            if not courante():
+                skin_persister()
+                return "rien", ""
+            if net:
+                return _annonce_echec(f"envoi refusé par Discord dans <#{salon.id}>"
+                                      if isinstance(ex, discord.Forbidden) else f"refus de Discord (HTTP {code})")
+            # Pas de réponse, limite de Discord ou erreur de son côté (5xx) : le
+            # message est peut-être parti. L'envoi reste noté ; la prochaine
+            # tentative regarde d'abord dans le salon.
+            return _annonce_echec(f"Discord n'a pas confirmé l'envoi "
+                                  f"({f'HTTP {code}' if code is not None else type(ex).__name__}) ; à la "
+                                  f"relance, le bot regarde d'abord si le message est arrivé")
+        if not courante():
+            # Parti pour une activation qui n'est plus en cours : le suivi de la
+            # suivante n'est pas touché. L'envoi reste noté tant que le serveur
+            # n'a pas réellement quitté Blackwood : la suivante le retrouvera.
+            print(f"[Annonce] message {getattr(msg, 'id', '?')} parti pour une activation abandonnée")
+            return "rien", ""
+        a.update(attente=False, publiee=True, msg=getattr(msg, "id", None), t=_t.time(),
+                 envoi=None, echec=None)
+        skin_persister()
+        print(f"[Annonce] annonce Blackwood publiée (message {getattr(msg, 'id', '?')})")
+        return "publiee", f"<#{salon.id}>"
+
+
+def annonce_texte(depuis=None, demande=None, diag=None):
+    """L'annonce Blackwood en une ligne, pour le staff ; None s'il n'y a rien
+    à en dire. `depuis` : début de la commande (publiée par elle ?) ;
+    `diag` : diagnostic du moment — ce qui retient encore l'annonce."""
+    a = skin_annonce
+    if a["publiee"]:
+        if depuis is not None and (a["t"] or 0) >= depuis:
+            return f"📣 **Annonce Blackwood publiée** dans <#{SALON_ANNONCES_QG}>, avec @everyone."
+        if demande is None:                         # `.saison` seul
+            try:
+                quand = paris_maintenant(a["t"]).strftime("le %d/%m à %H:%M") if a["t"] else "?"
+            except Exception:
+                quand = "?"
+            return (f"📣 Publiée {quand} — la suivante attendra une nouvelle entrée "
+                    f"dans Blackwood.")
+        if demande == "blackwood":
+            return ("📣 Annonce Blackwood déjà publiée pour cette entrée dans la saison : "
+                    "pas de nouveau ping.")
+        return None
+    if a["attente"]:
+        if a["echec"]:
+            # Un envoi précédent non confirmé a peut-être abouti : « non publiée » serait faux.
+            entete = ("⚠️ **Annonce Blackwood non confirmée**" if a["envoi"] is not None
+                      else "❌ **Annonce Blackwood non publiée**")
+            return f"{entete} — {a['echec']}. Elle reste en attente : `.saison blackwood` pour réessayer."
+        moteur, staff = (annonce_reste(diag) if diag is not None and diag["mode"] == "blackwood"
+                         else ("", ""))
+        reste = " · ".join(x for x in (moteur, staff and staff + " — à régler par le staff "
+                                       "(détail dans `.saison`)") if x)
+        return (f"📣 Annonce Blackwood **en attente** : elle partira dans <#{SALON_ANNONCES_QG}> "
+                f"quand les {len(SKIN_BLACKWOOD)} objets du skin porteront leur nom Blackwood"
+                + (f" — encore : {reste}." if reste else ".")
+                + (" Un envoi précédent n'a pas été confirmé : avant tout nouvel envoi, le bot "
+                   "regardera s'il est arrivé." if a["envoi"] is not None else ""))
+    return None
+
+
+async def _skin_noter_staff(guild, salon_id, lignes):
+    """Rend compte au staff, dans le salon de sa commande, de ce qui s'est
+    fait sans lui : reprise terminée, annonce publiée ou en échec."""
+    ch = guild.get_channel_or_thread(salon_id) if (guild is not None and salon_id) else None
+    if ch is None:
+        print("[Skin] compte rendu non remis (salon introuvable) : " + " · ".join(lignes))
+        return
+    try:
+        await ch.send(embed=discord.Embed(description="\n".join(lignes), color=season_color("neutre")))
+    except Exception as e:
+        print(f"[Skin] compte rendu non remis : {type(e).__name__}: {e}")
+
+
+async def skin_apres_passe(guild, bilan):
+    """Après chaque passe sur le serveur du skin, quelle qu'en soit l'origine :
+    la reprise est (re)programmée à l'échéance utile ; la demande du staff et
+    l'annonce Blackwood suivent l'état RÉEL du serveur. Ce qu'une passe
+    automatique a fait sans le staff lui est rapporté dans le salon de sa
+    commande. Un autre serveur (ou le QG momentanément vide de ses salons)
+    ne touche à rien."""
+    if not skin_est_qg(guild):
+        return
+    try:
+        skin_programmer_reprise(guild)
+    except Exception as e:
+        print(f"[Skin] reprise non programmée : {type(e).__name__}: {e}")
+    commande = str(bilan.get("source", "")).startswith(".saison")
+    mode = saison_mode()
+    d = skin_diagnostic(guild, mode)
+    termine = not (d["a_faire"] or d["differes"] or d["en_vol"])
+    notes = {}
+    fin_reprise = False
+    dem = skin_demande
+    if dem and not commande and (dem.get("mode") != mode or termine):
+        if dem.get("mode") == mode:
+            fait = d["en_place"]["blackwood" if mode == "blackwood" else "normal"]
+            notes.setdefault(dem.get("salon"), []).append(
+                f"✅ **Reprise terminée** — {_skin_lib_mode(mode)} : {fait}/{d['total']} objets en place.")
+            fin_reprise = True
+        dem.clear()
+        skin_persister()
+    a = skin_annonce
+    if mode != "blackwood":
+        if annonce_abandonner() and not commande:
+            notes.setdefault(a["salon"], []).append(
+                "📣 L'annonce Blackwood en attente est abandonnée : le serveur a quitté Blackwood.")
+        if (a["publiee"] or a["envoi"] is not None) and termine and not d["en_place"]["blackwood"]:
+            # Le serveur a réellement quitté Blackwood : plus rien à rendre, plus
+            # aucun nom Blackwood en place ; la prochaine entrée aura son annonce.
+            # Un salon resté sous son nom Blackwood retient la sortie jusqu'à ce
+            # qu'il soit renommé (à la main au besoin) : la veille la constate
+            # alors. Un envoi resté sans réponse appartenait à l'entrée qui finit.
+            a.update(publiee=False, msg=None, t=None, envoi=None)
+            skin_persister()
+    elif a["attente"]:
+        statut, detail = await annonce_publier(guild, staff=commande)
+        if not commande and statut == "publiee":
+            notes.setdefault(a["salon"], []).append(f"📣 **Annonce Blackwood publiée** dans {detail}.")
+        elif statut in ("attente", "echec"):
+            # Un échec, une reprise finie sans skin complet, ou une exception
+            # nouvelle (objet renommé à la main, absent, bloqué, essais épuisés)
+            # vue par une passe automatique : le staff sait ce qui retient
+            # l'annonce. La réponse d'une commande le dit déjà ; pas de redite.
+            d2 = skin_diagnostic(guild, "blackwood")
+            exceptions = annonce_reste(d2)[1]
+            cle = exceptions and exceptions + " · " + ",".join(sorted(x["id"] for x in d2["details"]))
+            if not commande and (statut == "echec" or fin_reprise
+                                 or (cle and cle != a["signale"] and not a["echec"])):
+                notes.setdefault(a["salon"], []).append(annonce_texte(diag=d2))
+            if cle != a["signale"]:
+                a["signale"] = cle
+                skin_persister()
+    for salon_id, lignes in notes.items():
+        await _skin_noter_staff(guild, salon_id, lignes)
+
+
 @bot.command(name="saison", aliases=["ambiance", "da", "saisonda", "modesaison"])
 @commands.has_permissions(manage_guild=True)
 async def saison_cmd(ctx, choix: str = None):
@@ -17768,12 +18359,22 @@ async def saison_cmd(ctx, choix: str = None):
             return await ctx.send(
                 "❌ Choix inconnu — `.saison auto`, `.saison normal`, "
                 "`.saison blackwood` ou `.saison wintervale`.")
+        import time as _t
+        debut = _t.time()
         skin_charger()             # l'état d'abord : le choix du staff s'applique par-dessus
         saison_override["mode"] = None if c == "auto" else c
         _skin_charge["mode_connu"] = True
+        m = saison_mode()          # prend effet immédiatement
+        # L'annonce de Blackwood suit le choix du staff : demandée par
+        # `.saison blackwood`, abandonnée dès que Blackwood n'est plus demandé.
+        abandon = False
+        salon_staff = getattr(ctx.channel, "id", None)
+        if c == "blackwood" and skin_est_qg(ctx.guild):
+            annonce_demander(salon_staff)
+        elif m != "blackwood":
+            abandon = annonce_abandonner()
         skin_persister()           # le mode forcé est d'abord écrit, de façon atomique, dans data_skin.json
         save_all_data()
-        m = saison_mode()          # prend effet immédiatement
         if _SKIN_LOCK.locked():
             await ctx.send("⏳ Une synchronisation du skin est déjà en cours — "
                            "la tienne suivra, avec le mode le plus récent.")
@@ -17790,7 +18391,19 @@ async def saison_cmd(ctx, choix: str = None):
         # Une autre commande a pu passer pendant l'attente du verrou : le compte
         # rendu décrit le réglage réellement en vigueur, pas seulement la demande.
         en_vigueur = saison_override.get("mode") or "auto"
-        return await ctx.send(embed=skin_embed_bilan(b, en_vigueur, demande=c))
+        diag = skin_diagnostic(ctx.guild)
+        # Des renommages attendent la limite de Discord : la reprise programmée,
+        # quand elle les aura faits, le rapportera dans ce salon. Seule une
+        # commande tapée sur le serveur du skin remplace la demande en cours.
+        if skin_est_qg(ctx.guild):
+            skin_demande.clear()
+            if diag["differes"] and salon_staff:
+                skin_demande.update(mode=diag["mode"], salon=salon_staff, t=_t.time())
+            skin_persister()
+        texte = ("📣 L'annonce Blackwood en attente est abandonnée." if abandon
+                 else annonce_texte(depuis=debut, demande=c, diag=diag))
+        return await ctx.send(embed=skin_embed_bilan(b, en_vigueur, demande=c, diag=diag,
+                                                     annonce=texte))
 
     skin_charger()
     m = saison_mode()
@@ -17838,11 +18451,15 @@ async def saison_cmd(ctx, choix: str = None):
         lib = {"complet": "✅ complète", "partiel": "⚠️ partielle",
                "interrompu": "⏸️ interrompue", "aucune_cible": "❌ aucune cible"}
         nd = sum(1 for x in (b.get("erreurs") or []) if x.get("differe"))
+        statut = lib.get(b.get("statut"), b.get("statut"))
+        if (b.get("statut") == "partiel" and nd == len(b.get("erreurs") or [])
+                and not (b.get("conflits") or b.get("absents"))):
+            statut = "🕒 en attente de renommage"     # seule la limite de Discord retient la passe
         e.add_field(
             name="🧾 Dernière synchronisation",
             value=_skin_tronquer(
                 f"{quand} · {LIB.get(b.get('mode'), b.get('mode'))} · "
-                f"{lib.get(b.get('statut'), b.get('statut'))} · origine : {b.get('source')}\n"
+                f"{statut} · origine : {b.get('source')}\n"
                 f"{len(b.get('modifies') or [])} modifié(s) · "
                 f"{len(b.get('conformes') or [])} déjà conforme(s) · "
                 f"{len(b.get('absents') or [])} absent(s) · "
@@ -17856,6 +18473,9 @@ async def saison_cmd(ctx, choix: str = None):
                         value=_skin_liste(b["avertissements"],
                                           lambda x: f"• **{x.get('nom')}** — {x.get('detail')}", 5),
                         inline=False)
+    t_annonce = annonce_texte(diag=diag)
+    if t_annonce:
+        e.add_field(name="📣 Annonce Blackwood", value=_skin_tronquer(t_annonce, 1024), inline=False)
     restes = skin_restes_ancien(ctx.guild) if ctx.guild else []
     if restes:
         def _reste(x):
@@ -22375,12 +22995,42 @@ async def topavent_cmd(ctx):
 # ============================================================
 #  📢 ANNONCE DE MISE À JOUR
 # ============================================================
-BOT_VERSION = "7.10.0"
+BOT_VERSION = "7.11.0"
+
+# Les annonces publiques — nouvelle version, entrée dans Blackwood — partent
+# dans CE salon, désigné par son identifiant : « 📢 annonces » hors saison,
+# « 🦉 gazette » en Blackwood. Jamais ailleurs, même en cas d'erreur.
+SALON_ANNONCES_QG = 1533215189384695812
 
 # ── SOURCE DE VÉRITÉ UNIQUE DES MISES À JOUR ──
 # Une entrée par version. `get_current_update()` lit celle de BOT_VERSION.
 # L'annonce automatique et `.forcemaj` passent tous deux par `build_update_embed()`.
 UPDATES = {
+ "7.11.0": {
+   "titre": "LE QG S'HABILLE POUR HALLOWEEN 🎃",
+   "ajouts": [
+     "🏚️ **Les salons se mettent à l'heure de Blackwood.** Pendant la saison, "
+     "les salons et les catégories prennent leurs noms d'Halloween : le "
+     "général devient le salon hanté, la boutique le Dark Shop, le casino le "
+     "Moon Casino… Rien d'autre ne bouge : mêmes salons, mêmes accès.",
+     "🎃 **Blackwood s'invite dans les messages du bot.** Titres, couleurs et "
+     "pieds de page prennent l'ambiance de la saison dans les commandes de "
+     "tous les jours, et l'accueil des nouveaux comme les au revoir ont leurs "
+     "mots d'octobre.",
+     "📖 **`.chapitre`** te montre où en est la Chronique : la saison, "
+     "l'épisode en cours, le vote et la dernière décision.",
+     "🕯️ **`.saison`** permet au staff de régler l'ambiance du serveur : "
+     "Blackwood, normal, ou le calendrier.",
+     "🔁 **À la fin de la saison, chaque salon retrouve son nom habituel**, "
+     "à l'identique.",
+   ],
+   "correctifs": [
+     "🛡️ **Démarrage plus sûr** : si un fichier de données est abîmé, le bot "
+     "s'arrête au lieu d'effacer quoi que ce soit.",
+     "🕒 **Quand Discord demande de patienter**, le bot attend sans se "
+     "bloquer, puis reprend de lui-même à l'heure prévue.",
+   ],
+ },
  "7.10.0": {
    "titre": "BLACKWOOD 🍂",
    "ajouts": [
@@ -23008,53 +23658,74 @@ def build_update_embed():
 # Compatibilité : d'anciens affichages lisent encore CHANGELOG
 CHANGELOG = UPDATES.get(BOT_VERSION) or {"titre": f"v{BOT_VERSION}", "ajouts": [], "correctifs": []}
 
-def _salon_annonces(guild):
-    """Trouve le salon d'annonces : configuré, sinon système, sinon par son nom."""
-    s = guild.get_channel(SALON_ANNONCES_ID) if SALON_ANNONCES_ID else None
-    if s:
-        return s, "configuré"
-    if guild.system_channel:
-        return guild.system_channel, "salon système"
-    for nom in ("annonce", "annonces", "general", "général", "chat"):
-        s = discord.utils.find(lambda ch: nom in ch.name.lower(), guild.text_channels)
-        if s:
-            return s, f"trouvé par son nom (#{s.name})"
-    return None, "aucun"
+def salon_annonces_qg():
+    """Le salon d'annonces du QG, par son identifiant — quel que soit son nom
+    du moment. None s'il est introuvable : rien n'est alors publié ailleurs."""
+    for g in list(bot.guilds):
+        s = g.get_channel(SALON_ANNONCES_QG)
+        if s is not None:
+            return s
+    return None
 
-async def annoncer_maj(guild):
-    """Publie les notes de la version courante. Retourne (succès, détail).
-    La version n'est JAMAIS marquée annoncée si l'envoi échoue."""
+async def annoncer_maj():
+    """Publie les notes de la version courante dans le salon d'annonces du QG.
+    Retourne (succès, détail). La version n'est JAMAIS marquée annoncée si
+    l'envoi échoue, et rien n'est publié dans un autre salon."""
     embed = build_update_embed()
     if embed is None:
-        return False, f"aucune entrée CHANGELOG pour v{BOT_VERSION}"
-    if SALON_ANNONCES_ID:
-        salon = guild.get_channel(SALON_ANNONCES_ID)
-        if not salon:
-            return False, (f"le salon d'annonces configuré (id {SALON_ANNONCES_ID}) "
-                           f"est introuvable sur {guild.name}")
-        origine = "configuré"
-    else:
-        salon = guild.system_channel
-        if not salon:
-            return False, "aucun salon d'annonces configuré — fais `.setsalon annonces`"
-        origine = "salon système"
-    perms = salon.permissions_for(guild.me)
-    manque = [n for n, v in (("Envoyer des messages", perms.send_messages),
+        return False, f"aucune entrée UPDATES pour v{BOT_VERSION}"
+    salon = salon_annonces_qg()
+    if salon is None:
+        return False, (f"salon d'annonces introuvable (id {SALON_ANNONCES_QG}) : "
+                       f"rien n'est publié ailleurs")
+    perms = salon.permissions_for(salon.guild.me)
+    manque = [n for n, v in (("Voir le salon", perms.view_channel),
+                             ("Envoyer des messages", perms.send_messages),
                              ("Intégrer des liens", perms.embed_links)) if not v]
     if manque:
         return False, f"permissions manquantes dans #{salon.name} : {', '.join(manque)}"
     try:
         # Une mise à jour concerne tout le monde : on mentionne @everyone.
-        _mention = "@everyone" if salon.permissions_for(guild.me).mention_everyone else None
+        _mention = "@everyone" if perms.mention_everyone else None
         msg = await salon.send(
             content=_mention, embed=embed,
             allowed_mentions=discord.AllowedMentions(everyone=True))
-        return True, (f"#{salon.name} ({origine}) · message_id={msg.id}"
+        return True, (f"#{salon.name} · message_id={msg.id}"
                       + ("" if _mention else " · ⚠️ sans @everyone, permission manquante"))
     except discord.Forbidden:
         return False, f"envoi refusé par Discord dans #{salon.name}"
     except Exception as e:
         return False, f"{type(e).__name__}: {e}"
+
+_MAJ_LOCK = asyncio.Lock()
+
+async def annoncer_version_au_demarrage():
+    """Au démarrage : publie les notes de BOT_VERSION si elles n'ont pas encore
+    été publiées avec succès, puis se tait aux démarrages suivants. Sous
+    verrou, l'état relu juste avant : deux on_ready rapprochés n'en publient
+    qu'une. La version n'est mémorisée qu'après un envoi réussi."""
+    async with _MAJ_LOCK:
+        ancienne = str(derniere_version.get("v", "")) or "—"
+        print(f"[MAJ] Version actuelle       : {BOT_VERSION}")
+        print(f"[MAJ] Dernière version annoncée : {ancienne}")
+        if get_current_update() is None:
+            print(f"[MAJ] ÉCHEC : aucune entrée UPDATES pour v{BOT_VERSION} — rien publié")
+            return False
+        if ancienne == BOT_VERSION:
+            print(f"[MAJ] v{BOT_VERSION} déjà annoncée — rien à publier")
+            return False
+        ok, detail = await annoncer_maj()
+        if not ok:
+            print(f"[MAJ] ÉCHEC : {detail}")
+            print("[MAJ] Version NON sauvegardée — nouvelle tentative au prochain démarrage")
+            return False
+        derniere_version["v"] = BOT_VERSION
+        print(f"[MAJ] Annonce envoyée : {detail}")
+        if save_all_data():
+            print(f"[MAJ] Version sauvegardée : {BOT_VERSION}")
+        else:
+            print("[MAJ] ⚠️ Version publiée mais non sauvegardée : elle sera republiée au prochain démarrage")
+        return True
 
 
 def _v_tuple(v):
@@ -23148,7 +23819,13 @@ async def forcemaj_cmd(ctx):
             description=(f"Il n'existe aucune entrée `UPDATES` pour **v{BOT_VERSION}**.\n"
                          f"Ajoute-la dans le code avant de publier."),
             color=0xe74c3c))
-    ok, detail = await annoncer_maj(ctx.guild)
+    if ctx.guild is None or ctx.guild.get_channel(SALON_ANNONCES_QG) is None:
+        # Le salon d'annonces est celui du QG : un autre serveur ne publie pas chez lui.
+        return await ctx.send(embed=discord.Embed(
+            description=(f"❌ Publication impossible : le salon d'annonces du QG "
+                         f"(id {SALON_ANNONCES_QG}) n'est pas sur ce serveur. Rien n'a été publié."),
+            color=0xe74c3c))
+    ok, detail = await annoncer_maj()
     if ok:
         # Republication manuelle : la persistance n'est volontairement pas touchée.
         await ctx.send(f"✅ Annonce **v{BOT_VERSION}** publiée dans {detail}.", delete_after=12)
@@ -50826,36 +51503,7 @@ async def on_ready():
         print(f"[Pets] Migration bébés échouée : {type(e).__name__}: {e}")
     # Annonce de mise à jour — uniquement si la version a réellement changé
     try:
-        _ancienne = str(derniere_version.get("v", "")) or "—"
-        print(f"[MAJ] Version actuelle       : {BOT_VERSION}")
-        print(f"[MAJ] Dernière version annoncée : {_ancienne}")
-        print(f"[MAJ] Salon configuré        : {SALON_ANNONCES_ID or 'aucun'}")
-        if get_current_update() is None:
-            print(f"[MAJ] ÉCHEC : aucune entrée UPDATES pour v{BOT_VERSION} — rien publié")
-        elif _ancienne == BOT_VERSION:
-            print(f"[MAJ] v{BOT_VERSION} déjà annoncée — rien à publier")
-        else:
-            _envois, _echecs = 0, []
-            for g in bot.guilds:
-                print(f"[MAJ] Tentative d'envoi sur {g.name}…")
-                try:
-                    _ok, _detail = await annoncer_maj(g)
-                except Exception as e:
-                    _ok, _detail = False, f"{type(e).__name__}: {e}"
-                if _ok:
-                    _envois += 1
-                    print(f"[MAJ] Annonce envoyée : {_detail}")
-                else:
-                    _echecs.append(f"{g.name} : {_detail}")
-                    print(f"[MAJ] ÉCHEC : {_detail}")
-            # La version n'est mémorisée QUE si au moins un envoi a réussi
-            if _envois:
-                derniere_version["v"] = BOT_VERSION
-                save_all_data()
-                print(f"[MAJ] Version sauvegardée : {BOT_VERSION} "
-                      f"({_envois}/{len(bot.guilds)} serveur(s))")
-            else:
-                print(f"[MAJ] Version NON sauvegardée — nouvelle tentative au prochain démarrage")
+        await annoncer_version_au_demarrage()
     except Exception as e:
         print(f"[MAJ] Erreur inattendue : {type(e).__name__}: {e}")
     if drama_saison.get("en_cours") and drama_saison.get("dernier_choix"):
